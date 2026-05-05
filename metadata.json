@@ -1,0 +1,7 @@
+{
+  "name": "11 03 2026 SEO Content Generator",
+  "description": "AI-powered marketing content generator for 3D printing products using Gemini. Generates HTML descriptions, SEO metadata, and translations.",
+  "requestFramePermissions": [
+    "clipboard-read"
+  ]
+}

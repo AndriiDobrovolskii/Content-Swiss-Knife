@@ -1,0 +1,1461 @@
+
+<div class="flex h-screen w-full bg-slate-50 dark:bg-slate-900 text-sm transition-colors duration-200">
+  
+  <!-- Sidebar -->
+  <aside class="w-80 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full shadow-lg z-10 relative transition-colors duration-200">
+    
+    <!-- Sidebar Header -->
+    <div class="p-6 border-b border-slate-100 dark:border-slate-700 space-y-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-cube text-blue-600 dark:text-blue-400"></i>
+            {{ uiLabels().appTitle }}
+          </h1>
+        </div>
+        <div class="flex items-center gap-2">
+           <!-- Language Toggle -->
+           <button (click)="toggleLanguage()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title="Switch Language">
+             {{ uiLanguage() === 'en' ? 'EN' : 'UA' }}
+           </button>
+           <!-- Dark Mode Toggle -->
+           <button (click)="toggleDarkMode()" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-90" title="Toggle Dark Mode">
+            @if (darkMode()) {
+              <i class="fa-solid fa-sun text-yellow-400"></i>
+            } @else {
+              <i class="fa-solid fa-moon"></i>
+            }
+          </button>
+          @if (appMode() === 'generator') {
+            <button (click)="toggleHistory()" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-90" title="History">
+              <i class="fa-solid fa-clock-rotate-left text-lg"></i>
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Mode Switcher -->
+      <div class="space-y-1">
+        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
+          <button 
+            (click)="setMode('generator')"
+            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            [class]="appMode() === 'generator' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().generator }}
+          </button>
+          <button 
+            (click)="setMode('optimizer')"
+            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            [class]="appMode() === 'optimizer' ? 'bg-white dark:bg-slate-600 text-purple-600 dark:text-purple-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().optimizer }}
+          </button>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
+          <button 
+            (click)="setMode('translator')"
+            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            [class]="appMode() === 'translator' ? 'bg-white dark:bg-slate-600 text-emerald-600 dark:text-emerald-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().translator }}
+          </button>
+           <button 
+            (click)="setMode('image-tools')"
+            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            [class]="appMode() === 'image-tools' ? 'bg-white dark:bg-slate-600 text-orange-600 dark:text-orange-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().imageTools }}
+          </button>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
+           <button 
+            (click)="setMode('seo-generator')"
+            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            [class]="appMode() === 'seo-generator' ? 'bg-white dark:bg-slate-600 text-teal-600 dark:text-teal-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().seoGenerator }}
+          </button>
+          <button 
+            (click)="setMode('copywriter')"
+            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            [class]="appMode() === 'copywriter' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().copywriter }}
+          </button>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-1 gap-1">
+          <button 
+            (click)="setMode('readability')"
+            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            [class]="appMode() === 'readability' ? 'bg-white dark:bg-slate-600 text-pink-600 dark:text-pink-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            <i class="fa-solid fa-glasses mr-1"></i> {{ uiLabels().readability }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Panel (Only for Generator) -->
+    @if (showHistory() && appMode() === 'generator') {
+      <div class="absolute inset-0 top-[125px] bg-white dark:bg-slate-800 z-20 flex flex-col animate-in slide-in-from-left duration-200 shadow-xl border-t border-slate-100 dark:border-slate-700">
+        <div class="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
+          <h3 class="font-bold text-slate-700 dark:text-slate-200">{{ uiLabels().historyTitle }}</h3>
+          <button (click)="toggleHistory()" class="text-slate-400 hover:text-red-500 active:scale-90 transition-transform"><i class="fa-solid fa-times"></i></button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-4 space-y-3">
+          @if (historyItems().length === 0) {
+            <p class="text-center text-slate-400 mt-10">{{ uiLabels().noHistory }}</p>
+          }
+          @for (item of historyItems(); track item.id; let i = $index) {
+            <div class="flex items-stretch gap-2 group">
+              <div class="flex items-center justify-center pl-1">
+                 <input type="checkbox" 
+                        [checked]="comparisonIds().includes(item.id)"
+                        (change)="toggleComparisonSelection(item.id, $event)"
+                        class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer">
+              </div>
+              
+              <div class="flex-1 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer transition-all active:scale-[0.98]" 
+                   (click)="restoreHistory(item)">
+                <div class="flex justify-between items-start mb-1 gap-2">
+                  <span class="font-semibold text-slate-800 dark:text-slate-200 line-clamp-1">
+                    <span class="text-slate-400 font-normal mr-1 text-xs">#{{ i + 1 }}</span>{{ item.input.name }}
+                  </span>
+                  <span class="text-[10px] text-slate-400 whitespace-nowrap">{{ item.timestamp | date:'HH:mm dd-MM-yyyy' }}</span>
+                </div>
+                <div class="flex gap-2 text-[10px]">
+                  <span class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300">{{ item.input.website.name }}</span>
+                  <span class="px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">HTML + {{ item.output.seoData?.seo_data?.length || 0 }} SEO</span>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="p-4 border-t border-slate-100 dark:border-slate-700 space-y-2 bg-slate-50 dark:bg-slate-900">
+           @if (comparisonIds().length >= 2) {
+             <button (click)="openComparison()" type="button" class="w-full py-2 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm active:scale-95 transition-transform flex items-center justify-center gap-2">
+               <i class="fa-solid fa-code-compare"></i> {{ uiLabels().compareSelected }} ({{ comparisonIds().length }})
+             </button>
+           }
+           <button (click)="clearHistory()" type="button" class="w-full py-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-red-200 dark:border-red-800 active:scale-95 transition-transform">
+             {{ uiLabels().clearHistory }}
+           </button>
+        </div>
+      </div>
+    }
+
+    <!-- GENERATOR FORM -->
+    @if (appMode() === 'generator') {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().targetWebsite }} <span class="text-red-500">*</span>
+          </label>
+          <select 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+            [class.text-slate-400]="!selectedWebsite()"
+            [class.border-red-300]="!selectedWebsite()"
+            [value]="selectedWebsite()?.name || ''"
+            (change)="onWebsiteChange($event)">
+            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
+            @for (site of websiteOptions; track site.name) {
+              <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
+            }
+          </select>
+        </div>
+
+        <!-- Content Template Selection -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              {{ uiLabels().contentTemplate }}
+            </label>
+            <button (click)="toggleCustomTemplate()" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+              {{ showCustomTemplate() ? 'Hide Custom' : 'Customize' }}
+            </button>
+          </div>
+          <select 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+            [class.text-slate-400]="!selectedTemplateId()"
+            [value]="selectedTemplateId()"
+            (change)="onTemplateChange($event)">
+            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectTemplate }}</option>
+            @for (template of availableTemplates; track template.id) {
+              <option [value]="template.id" class="dark:bg-slate-800">{{ template.name }} ({{ template.niche }})</option>
+            }
+          </select>
+
+          @if (showCustomTemplate()) {
+            <div class="p-3 bg-slate-100 dark:bg-slate-700 rounded-lg space-y-3 animate-in slide-in-from-top-2">
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">{{ uiLabels().titlePattern }}</label>
+                <input type="text" [value]="customTemplate().titlePattern || ''" (input)="updateCustomTemplate('titlePattern', $event)" class="w-full p-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500">
+              </div>
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">{{ uiLabels().headingStructure }}</label>
+                <input type="text" [value]="customTemplate().headingStructure?.join(', ') || ''" (input)="updateCustomTemplate('headingStructure', $event)" class="w-full p-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500">
+              </div>
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">{{ uiLabels().bodyFocus }}</label>
+                <textarea [value]="customTemplate().bodyFocus || ''" (input)="updateCustomTemplate('bodyFocus', $event)" class="w-full p-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500 h-16 resize-none"></textarea>
+              </div>
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">{{ uiLabels().keywordStrategy }}</label>
+                <input type="text" [value]="customTemplate().keywordStrategy || ''" (input)="updateCustomTemplate('keywordStrategy', $event)" class="w-full p-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500">
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                {{ uiLabels().productName }} <span class="text-red-500">*</span>
+             </label>
+             <button (click)="pastePlainText('productName')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
+             </button>
+          </div>
+          <input 
+            type="text" 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [class.border-red-300]="!productName()"
+            [value]="productName()"
+            (input)="updateProductName($event)"
+            [placeholder]="uiLabels().placeholderName">
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              {{ uiLabels().originalDescription }} <span class="text-red-500">*</span>
+            </label>
+            <div class="flex items-center gap-2">
+              <button (click)="pastePlainText('description')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 mr-2">
+                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
+              </button>
+              <div class="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5">
+                <button (click)="inputType.set('text')" [class.bg-white]="inputType() === 'text'" [class.dark:bg-slate-600]="inputType() === 'text'" [class.shadow-sm]="inputType() === 'text'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputText }}</button>
+                <button (click)="inputType.set('pdf')" [class.bg-white]="inputType() === 'pdf'" [class.dark:bg-slate-600]="inputType() === 'pdf'" [class.shadow-sm]="inputType() === 'pdf'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputPdf }}</button>
+                <button (click)="inputType.set('url')" [class.bg-white]="inputType() === 'url'" [class.dark:bg-slate-600]="inputType() === 'url'" [class.shadow-sm]="inputType() === 'url'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputUrl }}</button>
+              </div>
+            </div>
+          </div>
+
+          @if (inputType() === 'text') {
+            <textarea 
+              class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-32 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              [class.border-red-300]="!description()"
+              [value]="description()"
+              (input)="updateDescription($event)"
+              [placeholder]="uiLabels().placeholderDesc"></textarea>
+          }
+          @if (inputType() === 'pdf') {
+            <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative" [class.border-green-300]="description()">
+              <input type="file" accept="application/pdf" (change)="onPdfUpload($event)" class="absolute inset-0 opacity-0 cursor-pointer">
+              <i class="fa-solid fa-file-pdf text-2xl mb-2" [class.text-red-500]="!description()" [class.text-green-500]="description()"></i>
+              <p class="text-xs text-slate-600 dark:text-slate-400">{{ description() ? uiLabels().pdfReady : uiLabels().pdfDrop }}</p>
+              <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{{ uiLabels().pdfHint }}</p>
+            </div>
+          }
+          @if (inputType() === 'url') {
+            <div class="flex gap-2">
+              <input 
+                type="text" 
+                #urlInput
+                class="flex-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                [placeholder]="uiLabels().urlPlaceholder">
+              <button (click)="fetchFromUrl(urlInput.value)" class="px-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 active:scale-95 transition-transform">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </button>
+            </div>
+            <p class="text-[10px]" [class.text-slate-400]="!description()" [class.text-green-600]="description()" [class.dark:text-slate-500]="!description()" [class.dark:text-green-400]="description()">
+              {{ description() ? uiLabels().urlSuccess : uiLabels().urlHint }}
+            </p>
+          }
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().techSpecs }}</label>
+             <button (click)="pastePlainText('specs')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
+             </button>
+          </div>
+          <textarea 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [value]="specs()"
+            (input)="updateSpecs($event)"
+            [placeholder]="uiLabels().placeholderSpecs"></textarea>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().supplementalContent }}</label>
+             <button (click)="pastePlainText('supplementalContent')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
+             </button>
+          </div>
+          <textarea 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [value]="supplementalContent()"
+            (input)="updateSupplementalContent($event)"
+            [placeholder]="uiLabels().placeholderSupplemental"></textarea>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().customInstructions }}</label>
+          <textarea 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [value]="customInstructions()"
+            (input)="updateCustomInstructions($event)"
+            [placeholder]="uiLabels().placeholderInstructions"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+           <div>
+             <span class="block text-xs font-semibold text-slate-800 dark:text-slate-200">Deep Thinking Mode</span>
+             <span class="text-[10px] text-slate-500 dark:text-slate-400">Uses advanced reasoning (Slower)</span>
+           </div>
+           <button 
+             (click)="toggleGeneratorThinking()"
+             class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+             [class]="generatorUseThinking() ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'">
+             <span 
+               class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform"
+               [class]="generatorUseThinking() ? 'translate-x-5' : 'translate-x-1'"></span>
+           </button>
+         </div>
+
+      </div>
+    } 
+
+    <!-- SEO GENERATOR FORM -->
+    @else if (appMode() === 'seo-generator') {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <h2 class="text-sm font-bold text-teal-600 dark:text-teal-400 flex items-center gap-2 mb-4">
+          <i class="fa-solid fa-tags"></i> {{ uiLabels().seoOnlyTitle }}
+        </h2>
+        
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().targetWebsite }} <span class="text-red-500">*</span>
+          </label>
+          <select 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+            [class.text-slate-400]="!selectedWebsite()"
+            [class.border-red-300]="!selectedWebsite()"
+            [value]="selectedWebsite()?.name || ''"
+            (change)="onWebsiteChange($event)">
+            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
+            @for (site of websiteOptions; track site.name) {
+              <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
+            }
+          </select>
+        </div>
+
+        <!-- Content Template Selection (SEO Only) -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              {{ uiLabels().contentTemplate }}
+            </label>
+          </div>
+          <select 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+            [class.text-slate-400]="!selectedTemplateId()"
+            [value]="selectedTemplateId()"
+            (change)="onTemplateChange($event)">
+            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectTemplate }}</option>
+            @for (template of availableTemplates; track template.id) {
+              <option [value]="template.id" class="dark:bg-slate-800">{{ template.name }} ({{ template.niche }})</option>
+            }
+          </select>
+        </div>
+
+        <div class="space-y-2">
+           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              {{ uiLabels().productName }} <span class="text-red-500">*</span>
+           </label>
+          <input 
+            type="text" 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [class.border-red-300]="!productName()"
+            [value]="productName()"
+            (input)="updateProductName($event)"
+            [placeholder]="uiLabels().placeholderName">
+        </div>
+
+        <div class="space-y-2">
+           <div class="flex justify-between items-center">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              Context Description <span class="text-red-500">*</span>
+            </label>
+            <div class="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5">
+               <button (click)="inputType.set('text')" [class.bg-white]="inputType() === 'text'" [class.dark:bg-slate-600]="inputType() === 'text'" [class.shadow-sm]="inputType() === 'text'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputText }}</button>
+               <button (click)="inputType.set('pdf')" [class.bg-white]="inputType() === 'pdf'" [class.dark:bg-slate-600]="inputType() === 'pdf'" [class.shadow-sm]="inputType() === 'pdf'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputPdf }}</button>
+               <button (click)="inputType.set('url')" [class.bg-white]="inputType() === 'url'" [class.dark:bg-slate-600]="inputType() === 'url'" [class.shadow-sm]="inputType() === 'url'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputUrl }}</button>
+             </div>
+           </div>
+
+           @if (inputType() === 'text') {
+            <textarea 
+              class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-32 focus:ring-2 focus:ring-teal-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              [class.border-red-300]="!description()"
+              [value]="description()"
+              (input)="updateDescription($event)"
+              [placeholder]="uiLabels().seoOnlyPlaceholder"></textarea>
+           }
+           @if (inputType() === 'pdf') {
+             <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative" [class.border-green-300]="description()">
+              <input type="file" accept="application/pdf" (change)="onPdfUpload($event)" class="absolute inset-0 opacity-0 cursor-pointer">
+              <i class="fa-solid fa-file-pdf text-2xl mb-2" [class.text-red-500]="!description()" [class.text-green-500]="description()"></i>
+              <p class="text-xs text-slate-600 dark:text-slate-400">{{ description() ? uiLabels().pdfReady : uiLabels().pdfDrop }}</p>
+            </div>
+           }
+           @if (inputType() === 'url') {
+             <div class="flex gap-2">
+              <input 
+                type="text" 
+                #urlInput
+                class="flex-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                [placeholder]="uiLabels().urlPlaceholder">
+              <button (click)="fetchFromUrl(urlInput.value)" class="px-3 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded-lg hover:bg-teal-200 dark:hover:bg-teal-900/50 active:scale-95 transition-transform">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </button>
+            </div>
+            <p class="text-[10px]" [class.text-green-600]="description()" [class.text-slate-400]="!description()">
+               {{ description() ? uiLabels().urlSuccess : uiLabels().urlHint }}
+            </p>
+           }
+        </div>
+
+        <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+          <div class="flex justify-between items-center">
+            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center">
+              <i class="fa-solid fa-key text-teal-500 mr-1.5"></i> {{ uiLabels().seoKeywords }}
+            </label>
+            <button (click)="getKeywords()" 
+                    [disabled]="!productName() || !description() || isSuggestingKeywords()"
+                    class="text-[10px] bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 px-2 py-1 rounded hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors disabled:opacity-50 font-medium">
+              {{ isSuggestingKeywords() ? uiLabels().analyzingKeywords : uiLabels().getKeywords }}
+            </button>
+          </div>
+          
+          @if (suggestedKeywords().length > 0) {
+            <div class="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+              @for (kw of suggestedKeywords(); track kw) {
+                <button (click)="copyToClipboard(kw, $event)" 
+                        class="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-xs text-slate-600 dark:text-slate-300 hover:border-teal-400 hover:text-teal-600 dark:hover:text-teal-400 hover:shadow-sm transition-all active:scale-95 text-left group">
+                  {{ kw }}
+                  <i class="fa-regular fa-copy ml-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px]"></i>
+                </button>
+              }
+            </div>
+          } @else if (!isSuggestingKeywords()) {
+             <p class="text-[10px] text-slate-400 dark:text-slate-500 italic">
+               Click "Get Suggestions" to generate keywords based on your inputs.
+             </p>
+          }
+        </div>
+
+        <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+           <div>
+             <span class="block text-xs font-semibold text-slate-800 dark:text-slate-200">Deep Thinking Mode</span>
+             <span class="text-[10px] text-slate-500 dark:text-slate-400">Uses advanced reasoning (Slower)</span>
+           </div>
+           <button 
+             (click)="toggleSeoThinking()"
+             class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+             [class]="seoUseThinking() ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-600'">
+             <span 
+               class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform"
+               [class]="seoUseThinking() ? 'translate-x-5' : 'translate-x-1'"></span>
+           </button>
+         </div>
+
+      </div>
+    }
+
+    <!-- COPYWRITER FORM -->
+    @else if (appMode() === 'copywriter') {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().targetWebsite }} <span class="text-red-500">*</span>
+          </label>
+          <select 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+            [class.text-slate-400]="!selectedWebsite()"
+            [value]="selectedWebsite()?.name || ''"
+            (change)="onWebsiteChange($event)">
+            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
+            @for (site of websiteOptions; track site.name) {
+              <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
+            }
+          </select>
+        </div>
+        <div class="space-y-2 h-full flex flex-col">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().textToRewrite }} <span class="text-red-500">*</span>
+          </label>
+          <textarea 
+            class="flex-1 w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [value]="copywriterInput()"
+            (input)="updateCopywriterInput($event)"
+            [placeholder]="uiLabels().placeholderRewrite"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+           <div>
+             <span class="block text-xs font-semibold text-slate-800 dark:text-slate-200">Deep Thinking Mode</span>
+             <span class="text-[10px] text-slate-500 dark:text-slate-400">Uses advanced reasoning (Slower)</span>
+           </div>
+           <button 
+             (click)="toggleCopywriterThinking()"
+             class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+             [class]="copywriterUseThinking() ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'">
+             <span 
+               class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform"
+               [class]="copywriterUseThinking() ? 'translate-x-5' : 'translate-x-1'"></span>
+           </button>
+         </div>
+
+      </div>
+    }
+    
+    <!-- OPTIMIZER FORM -->
+    @else if (appMode() === 'optimizer') {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <div class="space-y-2 h-full flex flex-col">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().rawHtmlInput }}
+          </label>
+          <textarea 
+            class="flex-1 w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none font-mono text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [value]="optimizerInputHtml()"
+            (input)="updateOptimizerInput($event)"
+            [placeholder]="uiLabels().placeholderHtml"></textarea>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400">
+            {{ uiLabels().optTasks }}
+            <span class="block">• {{ uiLabels().optTask1 }}</span>
+            <span class="block">• {{ uiLabels().optTask2 }}</span>
+            <span class="block">• {{ uiLabels().optTask3 }}</span>
+          </p>
+        </div>
+
+        <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+           <div>
+             <span class="block text-xs font-semibold text-slate-800 dark:text-slate-200">Deep Thinking Mode</span>
+             <span class="text-[10px] text-slate-500 dark:text-slate-400">Uses advanced reasoning (Slower)</span>
+           </div>
+           <button 
+             (click)="toggleOptimizerThinking()"
+             class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+             [class]="optimizerUseThinking() ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-600'">
+             <span 
+               class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform"
+               [class]="optimizerUseThinking() ? 'translate-x-5' : 'translate-x-1'"></span>
+           </button>
+         </div>
+
+      </div>
+    }
+
+    <!-- TRANSLATOR FORM -->
+    @else if (appMode() === 'translator') {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().targetLang }}
+          </label>
+          <select 
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer text-slate-800 dark:text-slate-200"
+            [value]="translatorTargetLang()"
+            (change)="updateTranslatorLang($event)">
+            @for (lang of translatorLanguages; track lang) {
+              <option [value]="lang" class="dark:bg-slate-800">{{ lang }}</option>
+            }
+          </select>
+        </div>
+        
+        <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+           <div>
+             <span class="block text-xs font-semibold text-slate-800 dark:text-slate-200">Deep Thinking Mode</span>
+             <span class="text-[10px] text-slate-500 dark:text-slate-400">Uses advanced reasoning (Slower)</span>
+           </div>
+           <button 
+             (click)="toggleTranslatorThinking()"
+             class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+             [class]="translatorUseThinking() ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'">
+             <span 
+               class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform"
+               [class]="translatorUseThinking() ? 'translate-x-5' : 'translate-x-1'"></span>
+           </button>
+         </div>
+
+        <div class="space-y-2 flex-1 flex flex-col">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().contentToTrans }}
+          </label>
+          <textarea 
+            class="w-full flex-1 min-h-[300px] p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-mono text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [value]="translatorInput()"
+            (input)="updateTranslatorInput($event)"
+            [placeholder]="uiLabels().placeholderTrans"></textarea>
+           <p class="text-[10px] text-slate-500 dark:text-slate-400">
+            {{ uiLabels().transFeatures }}
+            <span class="block">• {{ uiLabels().transFeat1 }}</span>
+            <span class="block">• {{ uiLabels().transFeat2 }}</span>
+            <span class="block">• {{ uiLabels().transFeat3 }}</span>
+          </p>
+        </div>
+      </div>
+    }
+
+    <!-- READABILITY FORM -->
+    @else if (appMode() === 'readability') {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <h2 class="text-sm font-bold text-pink-600 dark:text-pink-400 flex items-center gap-2 mb-4">
+          <i class="fa-solid fa-glasses"></i> {{ uiLabels().readabilityTitle }}
+        </h2>
+        
+        <div class="space-y-2 h-full flex flex-col">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            Text to Analyze
+          </label>
+          <textarea 
+            class="flex-1 w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-pink-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [value]="readabilityInput()"
+            (input)="updateReadabilityInput($event)"
+            [placeholder]="uiLabels().readabilityPlaceholder"></textarea>
+        </div>
+      </div>
+    }
+
+    <!-- IMAGE TOOLS SIDEBAR -->
+    @else {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+         <div class="space-y-2">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              {{ uiLabels().imgFormat }}
+            </label>
+            <div class="grid grid-cols-3 gap-2">
+              <button 
+                (click)="imgTargetFormat.set('image/jpeg')"
+                class="py-2 rounded-lg text-xs font-medium border transition-all"
+                [class]="imgTargetFormat() === 'image/jpeg' ? 'bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-900/30 dark:border-orange-800 dark:text-orange-300' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'">
+                JPG
+              </button>
+              <button 
+                (click)="imgTargetFormat.set('image/png')"
+                class="py-2 rounded-lg text-xs font-medium border transition-all"
+                [class]="imgTargetFormat() === 'image/png' ? 'bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-900/30 dark:border-orange-800 dark:text-orange-300' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'">
+                PNG
+              </button>
+              <button 
+                (click)="imgTargetFormat.set('image/webp')"
+                class="py-2 rounded-lg text-xs font-medium border transition-all"
+                [class]="imgTargetFormat() === 'image/webp' ? 'bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-900/30 dark:border-orange-800 dark:text-orange-300' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'">
+                WEBP
+              </button>
+            </div>
+         </div>
+         <div class="space-y-2">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex justify-between">
+              {{ uiLabels().imgQuality }}
+              <span class="text-orange-600 dark:text-orange-400 font-bold">{{ (imgQuality() * 100).toFixed(0) }}%</span>
+            </label>
+            <input type="range" min="1" max="100" [value]="imgQuality() * 100" (input)="updateQuality($event)" 
+                   class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-orange-600">
+            <div class="flex justify-between text-[10px] text-slate-400 dark:text-slate-500">
+              <span>{{ uiLabels().imgSmaller }}</span>
+              <span>{{ uiLabels().imgBalanced }}</span>
+            </div>
+         </div>
+         <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+           <div>
+             <span class="block text-xs font-semibold text-slate-800 dark:text-slate-200">{{ uiLabels().imgAiAlt }}</span>
+             <span class="text-[10px] text-slate-500 dark:text-slate-400">{{ uiLabels().imgAiAltHint }}</span>
+           </div>
+           <button 
+             (click)="toggleAiAlt()"
+             class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+             [class]="imgUseAiAlt() ? 'bg-orange-600' : 'bg-slate-300 dark:bg-slate-600'">
+             <span 
+               class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform"
+               [class]="imgUseAiAlt() ? 'translate-x-5' : 'translate-x-1'"></span>
+           </button>
+         </div>
+      </div>
+    }
+
+    <!-- Actions Footer -->
+    <div class="p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 space-y-3">
+      @if (appMode() === 'generator') {
+        <button 
+          (click)="generate()"
+          [disabled]="isGenerating() || !isFormValid()"
+          class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+          @if (isGenerating()) {
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ uiLabels().processing }}</span>
+          } @else {
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>{{ uiLabels().generateBtn }}</span>
+          }
+        </button>
+      } @else if (appMode() === 'seo-generator') {
+         <button 
+          (click)="generateSeoOnly()"
+          [disabled]="isGenerating() || !isFormValid()"
+          class="w-full py-3 px-4 bg-teal-600 hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+          @if (isGenerating()) {
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ uiLabels().processing }}</span>
+          } @else {
+            <i class="fa-solid fa-tags"></i>
+            <span>{{ uiLabels().seoGenBtn }}</span>
+          }
+        </button>
+      } @else if (appMode() === 'optimizer') {
+        <div class="flex gap-2">
+          <button 
+            (click)="optimize()"
+            [disabled]="isGenerating() || !isOptimizerValid()"
+            class="flex-[2] py-3 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+            @if (isGenerating()) {
+              <i class="fa-solid fa-circle-notch fa-spin"></i>
+              <span>{{ uiLabels().optimizing }}</span>
+            } @else {
+              <i class="fa-solid fa-bolt"></i>
+              <span>{{ uiLabels().optimizeBtn }}</span>
+            }
+          </button>
+          <button 
+            (click)="cleanStructure()"
+            [disabled]="isGenerating() || !isOptimizerValid()"
+            class="flex-1 py-3 px-4 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-700 dark:text-purple-300 disabled:opacity-70 font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center text-xs text-center leading-tight">
+            {{ uiLabels().cleanStructureBtn }}
+          </button>
+        </div>
+      } @else if (appMode() === 'translator') {
+        <button 
+          (click)="translate()"
+          [disabled]="isGenerating() || !isTranslatorValid()"
+          class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+          @if (isGenerating()) {
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ uiLabels().translating }}</span>
+          } @else {
+            <i class="fa-solid fa-language"></i>
+            <span>{{ uiLabels().translateBtn }}</span>
+          }
+        </button>
+      } @else if (appMode() === 'copywriter') {
+        <button 
+          (click)="rewriteContent()"
+          [disabled]="isGenerating() || !isCopywriterValid()"
+          class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+          @if (isGenerating()) {
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ uiLabels().rewriting }}</span>
+          } @else {
+            <i class="fa-solid fa-pen-nib"></i>
+            <span>{{ uiLabels().rewriteBtn }}</span>
+          }
+        </button>
+      } @else if (appMode() === 'readability') {
+        <button 
+          (click)="analyzeReadability()"
+          [disabled]="isGenerating() || !isReadabilityValid()"
+          class="w-full py-3 px-4 bg-pink-600 hover:bg-pink-700 dark:bg-pink-700 dark:hover:bg-pink-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+          @if (isGenerating()) {
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ uiLabels().processing }}</span>
+          } @else {
+            <i class="fa-solid fa-magnifying-glass-chart"></i>
+            <span>{{ uiLabels().analyzeBtn }}</span>
+          }
+        </button>
+      } @else {
+         <button 
+          (click)="processImages()"
+          [disabled]="isImgProcessing() || imgFiles().length === 0"
+          class="w-full py-3 px-4 bg-orange-600 hover:bg-orange-700 dark:bg-orange-700 dark:hover:bg-orange-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+          @if (isImgProcessing()) {
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ uiLabels().imgProcessing }}</span>
+          } @else {
+            <i class="fa-solid fa-gears"></i>
+            <span>{{ uiLabels().imgProcessBtn }}</span>
+          }
+        </button>
+      }
+      
+      <div class="flex gap-2">
+        <button 
+          (click)="clearAll()"
+          class="flex-1 py-2 px-4 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 text-slate-600 dark:text-slate-300 font-medium rounded-lg shadow-sm transition-transform active:scale-95 text-xs">
+          {{ uiLabels().clearAll }}
+        </button>
+        @if ((appMode() === 'generator' || appMode() === 'seo-generator') && content().seoData) {
+          <button 
+            (click)="downloadZip()"
+            class="flex-1 py-2 px-4 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-lg shadow-sm transition-transform active:scale-95 flex items-center justify-center gap-2 text-xs">
+            <i class="fa-solid fa-file-zipper"></i>
+            ZIP
+          </button>
+           <button 
+            (click)="downloadText()"
+            class="flex-1 py-2 px-4 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-lg shadow-sm transition-transform active:scale-95 flex items-center justify-center gap-2 text-xs">
+            <i class="fa-solid fa-file-lines"></i>
+            TXT
+          </button>
+        }
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 flex flex-col h-full bg-slate-50/50 dark:bg-slate-900/50 relative overflow-hidden transition-colors duration-200">
+    
+    @if (isGenerating()) {
+      <div class="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center animate-in fade-in duration-300">
+        <div class="w-16 h-16 border-4 rounded-full animate-spin mb-4" 
+          [class.border-blue-100]="appMode() === 'generator'" 
+          [class.dark:border-blue-900]="appMode() === 'generator'"
+          [class.border-t-blue-600]="appMode() === 'generator'"
+          [class.dark:border-t-blue-500]="appMode() === 'generator'"
+          [class.border-teal-100]="appMode() === 'seo-generator'" 
+          [class.dark:border-teal-900]="appMode() === 'seo-generator'"
+          [class.border-t-teal-600]="appMode() === 'seo-generator'"
+          [class.dark:border-t-teal-500]="appMode() === 'seo-generator'"
+          [class.border-purple-100]="appMode() === 'optimizer'" 
+          [class.dark:border-purple-900]="appMode() === 'optimizer'"
+          [class.border-t-purple-600]="appMode() === 'optimizer'"
+          [class.dark:border-t-purple-500]="appMode() === 'optimizer'"
+          [class.border-emerald-100]="appMode() === 'translator'" 
+          [class.dark:border-emerald-900]="appMode() === 'translator'"
+          [class.border-t-emerald-600]="appMode() === 'translator'"
+          [class.dark:border-t-emerald-500]="appMode() === 'translator'"
+          [class.border-indigo-100]="appMode() === 'copywriter'" 
+          [class.dark:border-indigo-900]="appMode() === 'copywriter'"
+          [class.border-t-indigo-600]="appMode() === 'copywriter'"
+          [class.dark:border-t-indigo-500]="appMode() === 'copywriter'"></div>
+        <p class="text-lg font-medium text-slate-700 dark:text-slate-200">{{ progressMessage() }}</p>
+      </div>
+    }
+    
+    <!-- COMPARISON MODAL -->
+    @if (showComparison()) {
+      <div class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-8 animate-in fade-in duration-200">
+        <div class="bg-white dark:bg-slate-800 w-full h-full rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+          
+          <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <i class="fa-solid fa-code-compare text-blue-600 dark:text-blue-400"></i> {{ uiLabels().compareTitle }}
+            </h2>
+            <div class="flex bg-white dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700 shadow-sm">
+              <button (click)="comparisonTab.set('html')" [class.bg-slate-100]="comparisonTab() === 'html'" [class.dark:bg-slate-700]="comparisonTab() === 'html'" [class.font-semibold]="comparisonTab() === 'html'" class="px-4 py-1.5 rounded-md text-xs transition-colors text-slate-700 dark:text-slate-300">{{ uiLabels().htmlCode }}</button>
+              <button (click)="comparisonTab.set('seo')" [class.bg-slate-100]="comparisonTab() === 'seo'" [class.dark:bg-slate-700]="comparisonTab() === 'seo'" [class.font-semibold]="comparisonTab() === 'seo'" class="px-4 py-1.5 rounded-md text-xs transition-colors text-slate-700 dark:text-slate-300">{{ uiLabels().seoMeta }}</button>
+            </div>
+            <button (click)="closeComparison()" class="p-2 text-slate-400 hover:text-red-500 transition-colors">
+              <i class="fa-solid fa-times text-xl"></i>
+            </button>
+          </div>
+
+          <div class="flex-1 grid divide-x divide-slate-200 dark:divide-slate-700 overflow-hidden"
+              [class.grid-cols-2]="selectedComparisonItems().length === 2"
+              [class.grid-cols-3]="selectedComparisonItems().length === 3">
+            @for (item of selectedComparisonItems(); track item.id) {
+              <div class="flex flex-col h-full overflow-hidden">
+                <div class="p-3 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                  <span class="font-bold text-xs text-slate-700 dark:text-slate-300">{{ item.input.name }} ({{ item.input.website.name }})</span>
+                  <span class="text-[10px] text-slate-500 dark:text-slate-400">{{ item.timestamp | date:'HH:mm dd-MM-yyyy' }}</span>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-4 bg-white dark:bg-slate-800">
+                  @if (comparisonTab() === 'html') {
+                    <pre class="text-[10px] font-mono text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{{ item.output.mainHtmlEn }}</pre>
+                  } @else {
+                    <div class="space-y-6">
+                      @for (seo of item.output.seoData?.seo_data; track seo.language) {
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                           <div class="mb-2 font-bold text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 inline-block px-2 py-0.5 rounded">{{ seo.language }}</div>
+                           <div class="space-y-2">
+                             <div>
+                               <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">{{ uiLabels().h1Tag }}</div>
+                               <div class="text-xs text-slate-800 dark:text-slate-200">{{ seo.h1 }}</div>
+                             </div>
+                             <div>
+                               <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">{{ uiLabels().metaTitle }}</div>
+                               <div class="text-xs text-slate-800 dark:text-slate-200">{{ seo.meta_title }}</div>
+                             </div>
+                             <div>
+                               <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">{{ uiLabels().metaDesc }}</div>
+                               <div class="text-xs text-slate-800 dark:text-slate-200">{{ seo.meta_description }}</div>
+                             </div>
+                           </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- READABILITY RESULT -->
+    @if (appMode() === 'readability' && readabilityResult()) {
+      <div class="flex-1 overflow-y-auto p-6 space-y-8 bg-slate-50 dark:bg-slate-900/50">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center text-pink-600 dark:text-pink-400">
+              <i class="fa-solid fa-chart-line"></i>
+            </div>
+            {{ uiLabels().readabilityResults }}
+          </h2>
+          <div class="flex items-center gap-4">
+            <div class="text-right">
+              <span class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{{ uiLabels().readabilityScore }}</span>
+              <span class="text-2xl font-black text-pink-600 dark:text-pink-400">{{ readabilityResult()?.score }}/100</span>
+            </div>
+            <div class="h-10 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
+            <div class="text-right">
+              <span class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{{ uiLabels().readabilityLevel }}</span>
+              <span class="text-lg font-bold text-slate-700 dark:text-slate-200">{{ readabilityResult()?.level }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Issues -->
+          <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h3 class="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <i class="fa-solid fa-triangle-exclamation"></i> {{ uiLabels().readabilityIssues }}
+            </h3>
+            <ul class="space-y-3">
+              @for (issue of readabilityResult()?.issues; track issue) {
+                <li class="flex gap-3 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  <span class="text-red-500 mt-1">•</span>
+                  {{ issue }}
+                </li>
+              }
+            </ul>
+          </div>
+
+          <!-- Suggestions -->
+          <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h3 class="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <i class="fa-solid fa-lightbulb"></i> {{ uiLabels().readabilitySuggestions }}
+            </h3>
+            <ul class="space-y-3">
+              @for (suggestion of readabilityResult()?.suggestions; track suggestion) {
+                <li class="flex gap-3 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  <span class="text-emerald-500 mt-1">→</span>
+                  {{ suggestion }}
+                </li>
+              }
+            </ul>
+          </div>
+        </div>
+
+        <!-- Optimized Text -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold text-pink-600 dark:text-pink-400 uppercase tracking-widest flex items-center gap-2">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> {{ uiLabels().readabilityOptimized }}
+            </h3>
+            <button 
+              (click)="copyToClipboard(readabilityResult()?.optimizedText || '')"
+              class="p-2 text-slate-400 hover:text-pink-600 transition-colors"
+              title="Copy optimized text">
+              <i class="fa-solid fa-copy"></i>
+            </button>
+          </div>
+          <div class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap italic">
+            {{ readabilityResult()?.optimizedText }}
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- GENERATOR VIEW / SEO VIEW -->
+    @if (appMode() === 'generator' || appMode() === 'seo-generator') {
+      <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200">
+        <div class="flex items-center gap-6 overflow-x-auto no-scrollbar">
+          @if (appMode() === 'generator') {
+             <button 
+              (click)="activeTab.set('html')"
+              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
+              [class]="activeTab() === 'html' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+              {{ uiLabels().englishOutput }}
+            </button>
+          }
+          <button 
+            (click)="activeTab.set('seo')"
+            class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
+            [class]="activeTab() === 'seo' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().seoMeta }}
+          </button>
+          
+          @for (key of getTranslationKeys(); track key) {
+            <button 
+              (click)="activeTab.set('trans-' + key)"
+              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
+              [class]="activeTab() === 'trans-' + key ? 'border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+              {{ key }} {{ uiLabels().translation }}
+            </button>
+          }
+        </div>
+      </header>
+
+      <div class="flex-1 overflow-y-auto p-8 relative">
+        @if (!content().mainHtmlEn && !content().seoData && !isGenerating()) {
+          <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
+            <i class="fa-regular fa-file-code text-6xl mb-4 opacity-50"></i>
+            <p class="text-lg font-medium">{{ uiLabels().noContentYet }}</p>
+            <p class="text-sm">{{ uiLabels().fillFormStart }}</p>
+          </div>
+        }
+
+        @if (activeTab() === 'html' && content().mainHtmlEn) {
+          <div class="max-w-5xl mx-auto space-y-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ uiLabels().englishOutput }}</h2>
+              <button (click)="copyToClipboard(content().mainHtmlEn, $event)" class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium transition-transform active:scale-90">
+                <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyCode }}
+              </button>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+               <div class="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 h-fit">
+                   <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-4 flex items-center gap-2">
+                      <i class="fa-solid fa-chart-simple text-blue-500"></i> {{ uiLabels().keywordAnalysis }}
+                   </h3>
+                   <div class="space-y-3">
+                       @for (kw of keywordAnalysis(); track kw.word) {
+                           <div class="flex justify-between items-center text-xs group cursor-default">
+                               <span class="text-slate-700 dark:text-slate-300 font-medium group-hover:text-blue-600 transition-colors">{{ kw.word }}</span>
+                               <div class="flex items-center gap-3">
+                                   <div class="w-16 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                       <div class="h-full bg-blue-500/80 group-hover:bg-blue-500 transition-colors" [style.width.%]="kw.density * 5"></div>
+                                   </div>
+                                   <span class="text-slate-400 dark:text-slate-500 w-6 text-right font-mono">{{ kw.count }}</span>
+                               </div>
+                           </div>
+                       }
+                       @if (keywordAnalysis().length === 0) {
+                          <p class="text-xs text-slate-400 italic">No keywords data.</p>
+                       }
+                   </div>
+               </div>
+
+               <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                  <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                    <span>{{ uiLabels().htmlSource }}</span>
+                  </div>
+                  <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]">{{ content().mainHtmlEn }}</pre>
+               </div>
+            </div>
+            
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+              <div [innerHTML]="content().mainHtmlEn | safeHtml"></div>
+            </div>
+          </div>
+        }
+
+        @if (activeTab() === 'seo' && content().seoData) {
+          <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+            @for (item of content().seoData?.seo_data; track item.language) {
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 space-y-4">
+                <div class="flex justify-between items-start border-b border-slate-100 dark:border-slate-700 pb-3">
+                  <div>
+                    <span class="px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold">{{ item.language }}</span>
+                  </div>
+                  <button (click)="copySeoItem(item, $event)" class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-75" title="Copy All SEO Fields">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
+                    {{ uiLabels().h1Tag }}
+                    <div class="relative group/tooltip inline-block">
+                      <i class="fa-regular fa-circle-question text-slate-400 hover:text-blue-500 cursor-help"></i>
+                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-10 pointer-events-none normal-case font-normal text-center leading-tight">
+                        Main page heading. Must include Product Name & Model. Only one per page.
+                        <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                      </div>
+                    </div>
+                  </label>
+                  <div class="relative group">
+                    <div class="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200 pr-8 min-h-[38px]">{{ item.h1 }}</div>
+                    <button (click)="copyToClipboard(item.h1, $event)" class="absolute top-2 right-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-75" title="Copy H1">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase flex justify-between items-center">
+                    <div class="flex items-center gap-1">
+                      <span>{{ uiLabels().metaTitle }}</span>
+                      <div class="relative group/tooltip">
+                        <i class="fa-regular fa-circle-question text-slate-400 hover:text-blue-500 cursor-help"></i>
+                        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-10 pointer-events-none normal-case font-normal text-center leading-tight">
+                           Browser title & Search link. Format: Product - USP | Site. Keep under 60 chars.
+                          <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="font-normal" 
+                      [class.text-green-600]="item.meta_title.length <= 60"
+                      [class.dark:text-green-400]="item.meta_title.length <= 60"
+                      [class.text-red-500]="item.meta_title.length > 60"
+                      [class.dark:text-red-400]="item.meta_title.length > 60">
+                      {{ item.meta_title.length }}/60
+                    </span>
+                  </label>
+                  <div class="relative group">
+                    <div class="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200 pr-8 min-h-[38px]">{{ item.meta_title }}</div>
+                    <button (click)="copyToClipboard(item.meta_title, $event)" class="absolute top-2 right-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-75" title="Copy Title">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase flex justify-between items-center">
+                    <div class="flex items-center gap-1">
+                      <span>{{ uiLabels().metaDesc }}</span>
+                      <div class="relative group/tooltip">
+                        <i class="fa-regular fa-circle-question text-slate-400 hover:text-blue-500 cursor-help"></i>
+                        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-10 pointer-events-none normal-case font-normal text-center leading-tight">
+                           Search snippet. Include Hook, Solution, USP & CTA. Keep under 155 chars to avoid truncation.
+                          <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="font-normal" 
+                      [class.text-green-600]="item.meta_description.length <= 160"
+                      [class.dark:text-green-400]="item.meta_description.length <= 160"
+                      [class.text-red-500]="item.meta_description.length > 160"
+                      [class.dark:text-red-400]="item.meta_description.length > 160">
+                      {{ item.meta_description.length }}/160
+                    </span>
+                  </label>
+                  <div class="relative group">
+                    <div class="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200 pr-8 min-h-[38px]">{{ item.meta_description }}</div>
+                    <button (click)="copyToClipboard(item.meta_description, $event)" class="absolute top-2 right-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-75" title="Copy Description">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            }
+          </div>
+        }
+
+        @if (activeTab().startsWith('trans-')) {
+          <div class="max-w-4xl mx-auto">
+            @let langKey = activeTab().split('-')[1];
+            @let transContent = content().translations[langKey];
+            
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ langKey }} {{ uiLabels().translation }}</h2>
+              <button (click)="copyToClipboard(transContent, $event)" class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium transition-transform active:scale-90">
+                <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyCode }}
+              </button>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+               <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                <span>{{ uiLabels().htmlSource }} ({{ langKey }})</span>
+              </div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ transContent }}</pre>
+            </div>
+          </div>
+        }
+      </div>
+    } 
+    
+    <!-- OPTIMIZER VIEW -->
+    @else if (appMode() === 'optimizer') {
+      <div class="flex-1 overflow-y-auto p-8">
+        @if (!optimizerOutput()) {
+          <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
+            <i class="fa-solid fa-bolt text-6xl mb-4 opacity-50"></i>
+            <p class="text-lg font-medium">{{ uiLabels().readyOptimize }}</p>
+            <p class="text-sm">{{ uiLabels().pasteHtmlStart }}</p>
+          </div>
+        } @else {
+          <div class="max-w-4xl mx-auto space-y-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-check-circle text-green-600 dark:text-green-400"></i> {{ uiLabels().optResult }}
+              </h2>
+              <button (click)="copyToClipboard(optimizerOutput(), $event)" class="text-purple-600 dark:text-purple-400 hover:underline text-sm font-medium transition-transform active:scale-90">
+                <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyHtml }}
+              </button>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                <span>{{ uiLabels().optResult }}</span>
+              </div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ optimizerOutput() }}</pre>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+              <div [innerHTML]="optimizerOutput() | safeHtml"></div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- TRANSLATOR VIEW -->
+    @else if (appMode() === 'translator') {
+      <div class="flex-1 overflow-y-auto p-8">
+        @if (!translatorOutput()) {
+          <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
+            <i class="fa-solid fa-language text-6xl mb-4 opacity-50"></i>
+            <p class="text-lg font-medium">{{ uiLabels().readyTranslate }}</p>
+            <p class="text-sm">{{ uiLabels().selectLangStart }}</p>
+          </div>
+        } @else {
+          <div class="max-w-4xl mx-auto space-y-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-check-circle text-emerald-600 dark:text-emerald-400"></i> {{ uiLabels().transResult }}
+              </h2>
+              <button (click)="copyToClipboard(translatorOutput(), $event)" class="text-emerald-600 dark:text-emerald-400 hover:underline text-sm font-medium transition-transform active:scale-90">
+                <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyContent }}
+              </button>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                <span>{{ uiLabels().transResult }}</span>
+              </div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ translatorOutput() }}</pre>
+            </div>
+
+            @if (translatorOutput().includes('<')) {
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+                <div [innerHTML]="translatorOutput() | safeHtml"></div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- COPYWRITER VIEW -->
+    @else if (appMode() === 'copywriter') {
+      <div class="flex-1 overflow-y-auto p-8">
+        @if (!copywriterOutput()) {
+          <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
+            <i class="fa-solid fa-pen-nib text-6xl mb-4 opacity-50"></i>
+            <p class="text-lg font-medium">Ready to Rewrite</p>
+            <p class="text-sm">Select a website and paste your text to begin.</p>
+          </div>
+        } @else {
+          <div class="max-w-4xl mx-auto space-y-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-check-circle text-indigo-600 dark:text-indigo-400"></i> {{ uiLabels().rewriteResult }}
+              </h2>
+              <button (click)="copyToClipboard(copywriterOutput(), $event)" class="text-indigo-600 dark:text-indigo-400 hover:underline text-sm font-medium transition-transform active:scale-90">
+                <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyRewrite }}
+              </button>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert"
+                 [innerHTML]="copywriterOutput() | safeHtml">
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- IMAGE TOOLS VIEW -->
+    @else {
+       <div class="flex-1 overflow-y-auto p-8 relative flex flex-col gap-8">
+          
+          <div 
+            class="border-4 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-8 flex flex-col items-center justify-center transition-colors bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 relative cursor-pointer min-h-[200px]"
+            (drop)="onImageDrop($event)"
+            (dragover)="onDragOver($event)">
+             <input type="file" multiple accept="image/*" (change)="onImageSelect($event)" class="absolute inset-0 opacity-0 cursor-pointer">
+             <div class="text-center space-y-2 pointer-events-none">
+                <div class="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-700 dark:text-slate-200">{{ uiLabels().imgSelectImages }}</h3>
+                <p class="text-slate-400">{{ uiLabels().imgDropZone }}</p>
+             </div>
+          </div>
+
+          @if (imgFiles().length > 0 && imgResults().length === 0) {
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 animate-in fade-in slide-in-from-bottom-4">
+               @for (item of imgFiles(); track item.file.name; let i = $index) {
+                 <div class="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700 relative group">
+                    <button (click)="removeImage(i)" class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs shadow-md hover:scale-110 transition-transform z-10 flex items-center justify-center">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                    <div class="aspect-square bg-slate-100 dark:bg-slate-900 rounded-lg mb-2 flex items-center justify-center overflow-hidden relative">
+                       <img [src]="item.previewUrl" class="w-full h-full object-cover">
+                    </div>
+                    <p class="text-xs font-medium truncate text-slate-700 dark:text-slate-300" [title]="item.file.name">{{ item.file.name }}</p>
+                    <p class="text-[10px] text-slate-400">{{ formatBytes(item.file.size) }}</p>
+                 </div>
+               }
+            </div>
+          }
+
+          @if (imgResults().length > 0) {
+            <div class="space-y-4 animate-in fade-in slide-in-from-bottom-8">
+               <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                     <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100">{{ uiLabels().imgResults }}</h2>
+                     <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-md font-bold">{{ imgResults().length }} processed</span>
+                  </div>
+                  <div class="flex items-center gap-4">
+                    <button (click)="downloadImageDataJson()" class="text-sm text-orange-600 dark:text-orange-400 hover:underline font-medium flex items-center gap-1">
+                      <i class="fa-solid fa-file-code"></i> {{ uiLabels().imgDownloadJson }}
+                    </button>
+                    <button (click)="downloadAllImages()" class="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1">
+                      <i class="fa-solid fa-file-zipper"></i> {{ uiLabels().imgDownloadAll }}
+                    </button>
+                  </div>
+               </div>
+               
+               <div class="grid grid-cols-1 gap-4">
+                  @for (res of imgResults(); track res.id) {
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex gap-4 items-start shadow-sm">
+                       <div class="w-32 h-32 flex-shrink-0 bg-slate-100 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden relative">
+                          <img [src]="res.previewUrl" class="w-full h-full object-contain">
+                       </div>
+
+                       <div class="flex-1 min-w-0 space-y-3">
+                          <div class="flex justify-between items-start">
+                             <div>
+                               <h3 class="font-bold text-slate-800 dark:text-slate-200 truncate pr-4">{{ res.originalName }}</h3>
+                               <div class="flex gap-2 text-xs mt-1">
+                                  <span class="text-slate-400 line-through">{{ formatBytes(res.originalSize) }}</span>
+                                  <i class="fa-solid fa-arrow-right text-slate-300 text-[10px] self-center"></i>
+                                  <span class="text-green-600 dark:text-green-400 font-bold">{{ formatBytes(res.newSize) }}</span>
+                                  <span class="px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded text-[10px] uppercase font-bold">{{ res.format.split('/')[1] === 'jpeg' ? 'jpg' : res.format.split('/')[1] }}</span>
+                               </div>
+                             </div>
+                             <button (click)="downloadImage(res)" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-transform active:scale-95 flex items-center gap-2">
+                                <i class="fa-solid fa-download"></i> {{ uiLabels().imgDownload }}
+                             </button>
+                          </div>
+
+                          @if (res.altText) {
+                            <div class="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 relative group">
+                               <p class="text-xs text-slate-600 dark:text-slate-300 italic">"{{ res.altText }}"</p>
+                               <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button (click)="copyToClipboard(res.altText, $event)" class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400">
+                                    <i class="fa-regular fa-copy"></i>
+                                  </button>
+                                </div>
+                               <span class="absolute -top-2 left-2 px-1 bg-white dark:bg-slate-800 text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">AI Alt Text</span>
+                            </div>
+                          }
+                       </div>
+                    </div>
+                  }
+               </div>
+            </div>
+          }
+       </div>
+    }
+
+  </main>
+
+  <!-- CHAT FAB -->
+  <button 
+    (click)="toggleChat()"
+    class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center z-40">
+    <i class="fa-solid fa-comment-dots text-2xl"></i>
+  </button>
+
+  <!-- CHAT WINDOW -->
+  @if (isChatOpen()) {
+    <div class="fixed bottom-24 right-6 w-96 h-[500px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-40 flex flex-col animate-in slide-in-from-bottom-4 duration-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
+        <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-robot text-blue-600 dark:text-blue-400"></i>
+          {{ uiLabels().chatTitle }}
+        </h3>
+        <button (click)="toggleChat()" class="text-slate-400 hover:text-red-500 transition-colors">
+          <i class="fa-solid fa-times text-lg"></i>
+        </button>
+      </div>
+
+      <div #chatContainer class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-slate-900/50">
+        @for (msg of chatMessages(); track msg) {
+          <div class="flex gap-2" [class.justify-end]="msg.role === 'user'">
+            @if (msg.role === 'model') {
+              <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex-shrink-0 flex items-center justify-center text-blue-600 dark:text-blue-300 text-xs">
+                <i class="fa-solid fa-robot"></i>
+              </div>
+            }
+            <div 
+              class="max-w-[80%] p-3 rounded-2xl text-xs leading-relaxed"
+              [class.bg-blue-600]="msg.role === 'user'"
+              [class.text-white]="msg.role === 'user'"
+              [class.rounded-tr-none]="msg.role === 'user'"
+              [class.bg-white]="msg.role === 'model'"
+              [class.dark:bg-slate-700]="msg.role === 'model'"
+              [class.text-slate-700]="msg.role === 'model'"
+              [class.dark:text-slate-200]="msg.role === 'model'"
+              [class.border]="msg.role === 'model'"
+              [class.border-slate-200]="msg.role === 'model'"
+              [class.dark:border-slate-600]="msg.role === 'model'"
+              [class.rounded-tl-none]="msg.role === 'model'">
+              {{ msg.text }}
+            </div>
+          </div>
+        }
+        @if (isChatThinking()) {
+          <div class="flex gap-2">
+             <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex-shrink-0 flex items-center justify-center text-blue-600 dark:text-blue-300 text-xs">
+                <i class="fa-solid fa-robot"></i>
+              </div>
+              <div class="p-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-2xl rounded-tl-none">
+                <div class="flex gap-1">
+                  <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                  <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-75"></div>
+                  <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150"></div>
+                </div>
+              </div>
+          </div>
+        }
+      </div>
+
+      <div class="p-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 flex gap-2">
+        <textarea 
+          class="flex-1 resize-none bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+          rows="1"
+          [value]="chatInput()"
+          (input)="updateChatInput($event)"
+          (keydown.enter.prevent)="sendChatMessage()"
+          [placeholder]="uiLabels().chatPlaceholder"></textarea>
+        <button 
+          (click)="sendChatMessage()"
+          [disabled]="!chatInput().trim() || isChatThinking()"
+          class="w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-xl flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-paper-plane text-xs"></i>
+        </button>
+      </div>
+    </div>
+  }
+</div>
