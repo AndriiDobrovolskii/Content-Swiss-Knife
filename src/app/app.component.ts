@@ -2,7 +2,7 @@ import { Component, signal, inject, computed, effect, ViewChild, ElementRef, Aft
 import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../services/content-orchestrator.service';
 import { HistoryService } from '../services/history.service';
-import { GeminiService } from '../services/gemini.service';
+import { LlmService } from '../services/llm.service';
 import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate } from './types';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
@@ -292,7 +292,7 @@ const TRANSLATIONS = {
 export class AppComponent implements AfterViewChecked {
   private orchestrator = inject(ContentOrchestratorService);
   private historyService = inject(HistoryService);
-  private geminiService = inject(GeminiService);
+  private llmService = inject(LlmService);
 
   @ViewChild('chatContainer') chatContainer?: ElementRef;
 
@@ -612,7 +612,7 @@ export class AppComponent implements AfterViewChecked {
     this.activeTab.set('html');
     await this.orchestrator.generate(input, this.generatorUseThinking());
     if (this.chatInitialized) {
-      this.geminiService.sendChatMessage(`[System Update] Generation Complete. New content is now available in the preview. User inputs: Name="${this.productName()}", Website="${this.selectedWebsite()?.name}".`);
+      this.llmService.sendChatMessage(`[System Update] Generation Complete. New content is now available in the preview. User inputs: Name="${this.productName()}", Website="${this.selectedWebsite()?.name}".`);
     }
   }
 
@@ -715,7 +715,7 @@ export class AppComponent implements AfterViewChecked {
     this.isChatOpen.update(v => !v);
     if (this.isChatOpen() && !this.chatInitialized) {
       const context = this.buildChatContext();
-      this.geminiService.startChat(context);
+      this.llmService.startChat(context);
       this.chatMessages.set([{ role: 'model', text: 'Hello! I am your context-aware SEO assistant. I can see the content you are working on. I can also restart the generation for you if you update the inputs. How can I help?' }]);
       this.chatInitialized = true;
     }
@@ -730,11 +730,11 @@ export class AppComponent implements AfterViewChecked {
     this.chatMessages.update(msgs => [...msgs, { role: 'user', text: msg }]);
     this.isChatThinking.set(true);
     try {
-      const response = await this.geminiService.sendChatMessage(msg);
-      if (response.toolCall === 'restart_generation') {
-        this.chatMessages.update(msgs => [...msgs, { role: 'model', text: 'Restaring generation based on your updates...' }]);
+      const response = await this.llmService.sendChatMessage(msg);
+      if (response.toolCall?.name === 'restart_generation') {
+        this.chatMessages.update(msgs => [...msgs, { role: 'model', text: 'Restarting generation based on your updates...' }]);
         await this.generate();
-        const finalResponse = await this.geminiService.sendToolResponse('restart_generation', { success: true, message: 'Generation started and completed successfully.' });
+        const finalResponse = await this.llmService.sendToolResponse('restart_generation', { success: true, message: 'Generation started and completed successfully.' });
         this.chatMessages.update(msgs => [...msgs, { role: 'model', text: finalResponse }]);
       } else {
         this.chatMessages.update(msgs => [...msgs, { role: 'model', text: response.text }]);
@@ -916,7 +916,7 @@ export class AppComponent implements AfterViewChecked {
             if (this.imgUseAiAlt()) {
               try {
                 const base64ForApi = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
-                altText = await this.geminiService.generateImageAltText(base64ForApi, 'image/jpeg');
+                altText = await this.llmService.analyzeImage(base64ForApi, 'image/jpeg', this.orchestrator.getImageAltPrompt());
               } catch (err) {
                 console.warn('AI Alt Text failed', err);
                 altText = 'Error generating alt text.';

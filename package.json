@@ -4,10 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "ng serve",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "client": "ng serve",
+    "server": "node server/index.js",
     "build": "ng build",
     "lint": "tsc --noEmit",
-    "preview": "ng serve --configuration=production"
+    "preview": "ng serve --configuration=production",
+    "test": "echo \"no tests configured\""
   },
   "dependencies": {
     "@angular/build": "^21.0.0",
@@ -17,15 +20,22 @@
     "@angular/compiler-cli": "^21.0.0",
     "@angular/core": "^21.0.0",
     "@angular/platform-browser": "^21.0.0",
+    "@anthropic-ai/sdk": "^0.54.0",
     "@google/genai": "^1.43.0",
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",
+    "openai": "^4.103.0",
+    "pdf-parse": "^1.1.1",
     "rxjs": "^7.8.2",
     "tailwindcss": "latest"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
-    "typescript": "~5.8.2",
+    "typescript": "~5.9.3",
     "vite": "^6.2.0"
   },
   "overrides": {
