@@ -65,17 +65,33 @@ function buildImageHandlingBlock(input: ProductInput, imageBaseUrl: string): str
       ? `${imageBaseUrl}${brandPath}${modelPath}${doneEntries[0].urlFilename}`
       : '';
 
-    return `[IMAGE HANDLING]
+    return `[IMAGE HANDLING — MANDATORY ⛔]
 - IGNORE all <img> tags in [Raw Description]. Never reuse original image URLs.
-[Image Manifest] (place in this order):
+
+[Image Manifest] — YOU MUST USE ALL ${doneEntries.length} IMAGES. Every image below must appear exactly once in the output. Skipping any image is a critical error.
 ${manifestLines}
+
+[URL CONSTRUCTION]
 [Brand Folder]: ${input.brandFolder || '(none)'}
 [Model Folder]: ${input.modelFolder || '(none)'}
 Build each src as: {Base URL}{brandFolder}/{modelFolder}/{urlFilename} — no double slashes.
 ${imageBaseUrl ? `Base URL for ${input.website.name}: ${imageBaseUrl}` : ''}
-${exampleUrl ? `Example: ${exampleUrl}` : ''}
-Use each entry's description as the alt attribute value.
-Place images at semantically correct positions following the manifest order.
+${exampleUrl ? `Example of correct URL: ${exampleUrl}` : ''}
+
+[ALT TEXT GENERATION — SEO & A11y]
+The alt attribute is pre-filled from vision analysis (shown after "—" in the manifest above).
+- Use it as-is, or refine it to be more specific about the product name.
+- Format: describe what is visually shown (e.g., "Blue laser IR scanning mode interface of [Product Name]").
+- NEVER keyword-stuff. The alt text must describe image content for screen readers and AI crawlers.
+- If the vision description is empty, infer alt text from the filename (e.g., "high-prec-scan-0-02mm-acc.jpg" → "Demonstration of 0.02 mm high-precision scanning accuracy on [Product Name]").
+
+[PLACEMENT — STRICT RULES ⛔]
+Distribute all ${doneEntries.length} images sequentially to match the logical flow of the description:
+1. MANDATORY LEAD-IN: Every <img> MUST be immediately preceded by a <p> paragraph that introduces or references the image (e.g., "The image below illustrates…", "As seen in this demonstration…").
+2. NO ORPHAN IMAGES: Never insert an <img> without a leading <p> directly above it.
+3. NO CONSECUTIVE IMAGES: Never place two or more <img> tags next to each other. Meaningful text (paragraph, list, or header) MUST separate every image.
+4. SEQUENTIAL ORDER: Follow the manifest order — image #1 goes first, image #2 second, etc.
+
 ${lazyRule}`;
   }
 
