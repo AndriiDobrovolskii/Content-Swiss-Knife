@@ -15,7 +15,10 @@ export function buildPromptC(html: string, targetLang: string, storeName: string
   if (targetLang.includes('American English') || targetLang.includes('American Spanish')) {
     return buildUsPrompt(html, targetLang);
   }
-  if (targetLang === 'Spanish (EXPERT3D)') {
+  if (
+    targetLang === 'Spanish (EXPERT3D)' ||
+    (targetLang === 'ES' && ['EXPERT3D', 'Impresora-3D'].includes(storeName))
+  ) {
     return buildExpert3dSpanishPrompt(html);
   }
 

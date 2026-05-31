@@ -151,6 +151,9 @@ const TRANSLATIONS = {
     headingStructure: 'Heading Structure (comma separated)',
     bodyFocus: 'Body Focus',
     keywordStrategy: 'Keyword Strategy',
+    validationTitle: 'Acceptance criteria check',
+    validationErrorsLabel: 'error(s)',
+    validationWarningsLabel: 'warning(s)',
   },
   uk: {
     appTitle: 'SEO Content',
@@ -282,6 +285,9 @@ const TRANSLATIONS = {
     headingStructure: 'Структура підзаголовків (через кому)',
     bodyFocus: 'Фокус тексту',
     keywordStrategy: 'Стратегія ключових слів',
+    validationTitle: 'Перевірка критеріїв якості',
+    validationErrorsLabel: 'помилок',
+    validationWarningsLabel: 'попереджень',
   }
 };
 
@@ -403,7 +409,12 @@ export class AppComponent implements AfterViewChecked {
   copywriterOutput = this.orchestrator.copywriterOutput;
   suggestedKeywords = this.orchestrator.suggestedKeywords;
   isSuggestingKeywords = this.orchestrator.isSuggestingKeywords;
-  
+
+  // Post-generation acceptance-criteria check results.
+  validationIssues = this.orchestrator.validationIssues;
+  validationErrorCount = computed(() => this.validationIssues().filter(i => i.severity === 'error').length);
+  validationWarningCount = computed(() => this.validationIssues().filter(i => i.severity === 'warning').length);
+
   historyItems = this.historyService.history;
 
   constructor() {

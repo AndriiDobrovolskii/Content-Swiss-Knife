@@ -1108,6 +1108,30 @@
       </header>
 
       <div class="flex-1 overflow-y-auto p-8 relative">
+        @if (validationIssues().length > 0 && !isGenerating()) {
+          <div class="max-w-5xl mx-auto mb-6 rounded-xl border p-4 text-sm"
+               [class]="validationErrorCount() > 0
+                 ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
+                 : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200'">
+            <div class="flex items-center gap-2 font-bold mb-2">
+              <i class="fa-solid" [class]="validationErrorCount() > 0 ? 'fa-circle-exclamation' : 'fa-triangle-exclamation'"></i>
+              <span>{{ uiLabels().validationTitle }}</span>
+              <span class="font-normal opacity-80">
+                — {{ validationErrorCount() }} {{ uiLabels().validationErrorsLabel }}, {{ validationWarningCount() }} {{ uiLabels().validationWarningsLabel }}
+              </span>
+            </div>
+            <ul class="space-y-1">
+              @for (issue of validationIssues(); track $index) {
+                <li class="flex items-start gap-2">
+                  <i class="fa-solid fa-circle mt-1.5 text-[8px]"
+                     [class]="issue.severity === 'error' ? 'text-red-500' : 'text-amber-500'"></i>
+                  <span><span class="font-mono text-xs opacity-70">[{{ issue.context }}]</span> {{ issue.detail }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
         @if (!content().mainHtmlEn && !content().seoData && !isGenerating()) {
           <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
             <i class="fa-regular fa-file-code text-6xl mb-4 opacity-50"></i>

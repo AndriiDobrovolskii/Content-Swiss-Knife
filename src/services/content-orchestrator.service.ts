@@ -4,8 +4,9 @@ import { RetrievalService } from './retrieval.service';
 import { HistoryService } from '@/src/services/history.service';
 import { ProductInput, GeneratedContent, GROUP_CONFIG, WebsiteOption } from '../app/types';
 import { cleanHtmlStructure } from '../utils/html-cleaner';
+import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { buildPromptA } from '../prompts/task-a';
-import { buildPromptB } from '../prompts/task-b';
+import { buildPromptB, resolveCurrencySymbol } from '../prompts/task-b';
 import { buildPromptC } from '../prompts/task-c';
 
 // ── Inline prompts for tools that don't need external templates ─────────────
@@ -123,9 +124,13 @@ export class ContentOrchestratorService {
   copywriterOutput = signal<string>('');
   readabilityScore = signal<any | null>(null);
 
+  // Post-generation acceptance-criteria check results (see output-validator.ts).
+  validationIssues = signal<ValidationIssue[]>([]);
+
   async generate(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
     this.content.set({ mainHtmlEn: '', translations: {}, seoData: null });
+    this.validationIssues.set([]);
 
     try {
       const groupConfig = GROUP_CONFIG[input.website.group];
@@ -138,8 +143,10 @@ export class ContentOrchestratorService {
       this.content.update(c => ({ ...c, mainHtmlEn: htmlEn }));
 
       // Step 2 — Generate SEO Metadata
+      // Pass the freshly generated HTML as context so meta_description can pull a real
+      // hard spec / USP from the product (prompt requires "1 hard spec from context").
       this.progressMessage.set(`Generating SEO Metadata for ${groupConfig.seoLangs.join(', ')}…`);
-      const promptB = buildPromptB(input.website.name, input.name, groupConfig.seoLangs);
+      const promptB = buildPromptB(input.website.name, input.name, groupConfig.seoLangs, htmlEn);
       const seoJson = await this.llm.generateJson(promptB);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
@@ -161,6 +168,9 @@ export class ContentOrchestratorService {
         }));
       }
 
+      // Post-generation acceptance-criteria check (non-blocking — reports only).
+      this.runOutputValidation(input.website.name);
+
       this.historyService.add(input, this.content());
       this.progressMessage.set('Done!');
 
@@ -176,6 +186,7 @@ export class ContentOrchestratorService {
   async generateSeoMetadata(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
     this.content.set({ mainHtmlEn: '', translations: {}, seoData: null });
+    this.validationIssues.set([]);
 
     try {
       const groupConfig = GROUP_CONFIG[input.website.group];
@@ -184,6 +195,11 @@ export class ContentOrchestratorService {
       const promptB = buildPromptB(input.website.name, input.name, groupConfig.seoLangs, input.description);
       const seoJson = await this.llm.generateJson(promptB);
       this.content.update(c => ({ ...c, seoData: seoJson }));
+
+      // Validate just the SEO metadata for this flow (no HTML produced here).
+      this.validationIssues.set(
+        validateSeoMetadata(this.content().seoData, resolveCurrencySymbol(input.website.name))
+      );
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('SEO Generation Done!');
@@ -310,8 +326,32 @@ export class ContentOrchestratorService {
     }
   }
 
+  /**
+   * Runs deterministic acceptance-criteria checks across all generated artifacts and
+   * stores the results in the validationIssues signal. Errors are also logged so they
+   * are visible during development. Never throws — validation is advisory.
+   */
+  private runOutputValidation(storeName: string): void {
+    const c = this.content();
+    const currencySymbol = resolveCurrencySymbol(storeName);
+    const issues: ValidationIssue[] = [
+      ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)'),
+      ...Object.entries(c.translations).flatMap(([lang, html]) =>
+        validateGeneratedHtml(html, `HTML (${lang})`)
+      ),
+      ...validateSeoMetadata(c.seoData, currencySymbol),
+    ];
+
+    this.validationIssues.set(issues);
+    const errors = issues.filter(i => i.severity === 'error');
+    if (errors.length > 0) {
+      console.warn(`[output-validator] ${errors.length} acceptance-criteria error(s):`, errors);
+    }
+  }
+
   resetState() {
     this.content.set({ mainHtmlEn: '', translations: {}, seoData: null });
+    this.validationIssues.set([]);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');
     this.copywriterOutput.set('');
