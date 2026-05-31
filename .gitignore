@@ -17,6 +17,9 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Local knowledge/plan files — not part of the codebase
+Knowlege/
+
 # Angular build cache
 .angular/
 
