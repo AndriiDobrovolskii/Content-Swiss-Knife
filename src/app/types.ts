@@ -23,6 +23,17 @@ export interface ContentTemplate {
   };
 }
 
+export interface ImageManifestEntry {
+  id: string;
+  originalFilename: string;
+  urlFilename: string;
+  previewUrl: string;
+  visionDescription: string;
+  altText: string;
+  order: number;
+  status: 'pending' | 'analyzing' | 'done' | 'error';
+}
+
 export interface ProductInput {
   website: WebsiteOption;
   name: string;
@@ -32,6 +43,9 @@ export interface ProductInput {
   customInstructions?: string;
   templateId?: string;
   customTemplate?: Partial<ContentTemplate['structure']>;
+  imageManifest?: ImageManifestEntry[];
+  brandFolder?: string;
+  modelFolder?: string;
 }
 
 export interface SeoMetaItem {

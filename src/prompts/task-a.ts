@@ -1,4 +1,4 @@
-import { ProductInput, CONTENT_TEMPLATES } from '../app/types';
+import { ProductInput, ImageManifestEntry, CONTENT_TEMPLATES } from '../app/types';
 import { SYSTEM_INSTRUCTION } from './system-instruction';
 
 const IMAGE_BASE_URLS: Record<string, string> = {
@@ -39,6 +39,70 @@ function getOfficialBrand(productName: string, storeName: string): string {
   return brands.find(b => productName.toLowerCase().includes(b.toLowerCase())) ?? '';
 }
 
+function buildImageHandlingBlock(input: ProductInput, imageBaseUrl: string): string {
+  const isExpertUS = input.website.name === 'Expert-3DPrinter';
+  if (isExpertUS) {
+    return `[IMAGE HANDLING]
+- Expert-3DPrinter store: skip all <img> generation entirely. Do not emit any <img> tags.`;
+  }
+
+  const lazyRule = `- Lazy loading rule (strict):
+    First image:  <img src="URL" alt="…" style="max-width: 100%; height: auto; display: block; margin: 15px 0;" />
+    Other images: <img src="URL" alt="…" style="max-width: 100%; height: auto; display: block; margin: 15px 0;" loading="lazy" />
+- Placement: every <img> must be preceded by a <p> lead-in. No orphan images. No two adjacent <img>.`;
+
+  const doneEntries: ImageManifestEntry[] = (input.imageManifest ?? [])
+    .filter(e => e.status === 'done')
+    .sort((a, b) => a.order - b.order);
+
+  if (doneEntries.length > 0) {
+    const brandPath = input.brandFolder ? `${input.brandFolder}/` : '';
+    const modelPath = input.modelFolder ? `${input.modelFolder}/` : '';
+    const manifestLines = doneEntries
+      .map((e, i) => `${i + 1}. ${e.urlFilename} — "${e.altText || e.visionDescription}"`)
+      .join('\n');
+    const exampleUrl = imageBaseUrl
+      ? `${imageBaseUrl}${brandPath}${modelPath}${doneEntries[0].urlFilename}`
+      : '';
+
+    return `[IMAGE HANDLING — MANDATORY ⛔]
+- IGNORE all <img> tags in [Raw Description]. Never reuse original image URLs.
+
+[Image Manifest] — YOU MUST USE ALL ${doneEntries.length} IMAGES. Every image below must appear exactly once in the output. Skipping any image is a critical error.
+${manifestLines}
+
+[URL CONSTRUCTION]
+[Brand Folder]: ${input.brandFolder || '(none)'}
+[Model Folder]: ${input.modelFolder || '(none)'}
+Build each src as: {Base URL}{brandFolder}/{modelFolder}/{urlFilename} — no double slashes.
+${imageBaseUrl ? `Base URL for ${input.website.name}: ${imageBaseUrl}` : ''}
+${exampleUrl ? `Example of correct URL: ${exampleUrl}` : ''}
+
+[ALT TEXT GENERATION — SEO & A11y]
+The alt attribute is pre-filled from vision analysis (shown after "—" in the manifest above).
+- Use it as-is, or refine it to be more specific about the product name.
+- Format: describe what is visually shown (e.g., "Blue laser IR scanning mode interface of [Product Name]").
+- NEVER keyword-stuff. The alt text must describe image content for screen readers and AI crawlers.
+- If the vision description is empty, infer alt text from the filename (e.g., "high-prec-scan-0-02mm-acc.jpg" → "Demonstration of 0.02 mm high-precision scanning accuracy on [Product Name]").
+
+[PLACEMENT — STRICT RULES ⛔]
+Distribute all ${doneEntries.length} images sequentially to match the logical flow of the description:
+1. MANDATORY LEAD-IN: Every <img> MUST be immediately preceded by a <p> paragraph that introduces or references the image (e.g., "The image below illustrates…", "As seen in this demonstration…").
+2. NO ORPHAN IMAGES: Never insert an <img> without a leading <p> directly above it.
+3. NO CONSECUTIVE IMAGES: Never place two or more <img> tags next to each other. Meaningful text (paragraph, list, or header) MUST separate every image.
+4. SEQUENTIAL ORDER: Follow the manifest order — image #1 goes first, image #2 second, etc.
+
+${lazyRule}`;
+  }
+
+  // No manifest — fallback (unchanged behaviour)
+  return `[IMAGE HANDLING]
+- IGNORE all <img> tags in [Raw Description]. Never reuse original image URLs.
+- Generate <img> tags ONLY if [Image Base URL] is non-empty and exact filenames are
+  identifiable from the input or context.
+${lazyRule}`;
+}
+
 /**
  * Builds Task A prompt — generates base-language HTML product description.
  *
@@ -48,7 +112,6 @@ function getOfficialBrand(productName: string, storeName: string): string {
 export function buildPromptA(input: ProductInput): string {
   const storeName = input.website.name;
   const isUsSite = input.website.group === 'US';
-  const isEsSite = ['ES'].includes(input.website.group);
   const baseLanguage = isUsSite ? 'American English (en-US)' : 'European English (en-GB)';
   const imageBaseUrl = IMAGE_BASE_URLS[storeName] ?? '';
   const officialBrand = getOfficialBrand(input.name, storeName);
@@ -185,15 +248,7 @@ TYPE B — direct MP4/CDN/OGV URL:
   </div>
   Detect format by extension. Precede every embed with a lead-in <p>.
 
-[IMAGE HANDLING]
-- IGNORE all <img> tags in [Raw Description]. Never reuse original image URLs.
-- Generate <img> tags ONLY if [Image Base URL] is non-empty and exact filenames are
-  identifiable from the input or context.
-- Lazy loading rule (strict):
-    First image:  <img src="URL" alt="…" style="max-width: 100%; height: auto; display: block; margin: 15px 0;" />
-    Other images: <img src="URL" alt="…" style="max-width: 100%; height: auto; display: block; margin: 15px 0;" loading="lazy" />
-- Placement: every <img> must be preceded by a <p> lead-in. No orphan images.
-${isEsSite ? '- For Expert-3DPrinter: skip all <img> generation.' : ''}
+${buildImageHandlingBlock(input, imageBaseUrl)}
 
 [SEO]
 - Primary keyword: "${input.name}", used naturally ~1–2 times per section.

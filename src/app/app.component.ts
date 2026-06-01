@@ -3,7 +3,9 @@ import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../services/content-orchestrator.service';
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
-import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate } from './types';
+import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry } from './types';
+import { normalizeImageFilename } from '../utils/image-filename';
+import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import saveAs from 'file-saver';
@@ -149,6 +151,9 @@ const TRANSLATIONS = {
     headingStructure: 'Heading Structure (comma separated)',
     bodyFocus: 'Body Focus',
     keywordStrategy: 'Keyword Strategy',
+    validationTitle: 'Acceptance criteria check',
+    validationErrorsLabel: 'error(s)',
+    validationWarningsLabel: 'warning(s)',
   },
   uk: {
     appTitle: 'SEO Content',
@@ -280,6 +285,9 @@ const TRANSLATIONS = {
     headingStructure: 'Структура підзаголовків (через кому)',
     bodyFocus: 'Фокус тексту',
     keywordStrategy: 'Стратегія ключових слів',
+    validationTitle: 'Перевірка критеріїв якості',
+    validationErrorsLabel: 'помилок',
+    validationWarningsLabel: 'попереджень',
   }
 };
 
@@ -364,6 +372,14 @@ export class AppComponent implements AfterViewChecked {
   imgResults = signal<ProcessedImage[]>([]);
   isImgProcessing = signal<boolean>(false);
 
+  // --- GENERATOR IMAGE MANIFEST STATE ---
+  genImgManifest = signal<ImageManifestEntry[]>([]);
+  genBrandFolder = signal<string>('');
+  genModelFolder = signal<string>('');
+  isVisionAnalyzing = signal<boolean>(false);
+  visionAnalyzedCount = signal<number>(0);
+  private genImgFileMap = new Map<string, File>();
+
   // --- READABILITY STATE ---
   readabilityInput = signal<string>('');
   readabilityResult = this.orchestrator.readabilityScore;
@@ -393,7 +409,12 @@ export class AppComponent implements AfterViewChecked {
   copywriterOutput = this.orchestrator.copywriterOutput;
   suggestedKeywords = this.orchestrator.suggestedKeywords;
   isSuggestingKeywords = this.orchestrator.isSuggestingKeywords;
-  
+
+  // Post-generation acceptance-criteria check results.
+  validationIssues = this.orchestrator.validationIssues;
+  validationErrorCount = computed(() => this.validationIssues().filter(i => i.severity === 'error').length);
+  validationWarningCount = computed(() => this.validationIssues().filter(i => i.severity === 'warning').length);
+
   historyItems = this.historyService.history;
 
   constructor() {
@@ -599,6 +620,7 @@ export class AppComponent implements AfterViewChecked {
       alert(this.uiLabels().alertFillFields);
       return;
     }
+    const manifest = this.genImgManifest();
     const input: ProductInput = {
       website: currentSite,
       name: this.productName(),
@@ -607,7 +629,10 @@ export class AppComponent implements AfterViewChecked {
       supplementalContent: this.supplementalContent(),
       customInstructions: this.customInstructions(),
       templateId: this.selectedTemplateId() || undefined,
-      customTemplate: Object.keys(this.customTemplate()).length > 0 ? this.customTemplate() : undefined
+      customTemplate: Object.keys(this.customTemplate()).length > 0 ? this.customTemplate() : undefined,
+      imageManifest: manifest.length > 0 ? manifest : undefined,
+      brandFolder: this.genBrandFolder().trim() || undefined,
+      modelFolder: this.genModelFolder().trim() || undefined,
     };
     this.activeTab.set('html');
     await this.orchestrator.generate(input, this.generatorUseThinking());
@@ -853,6 +878,137 @@ export class AppComponent implements AfterViewChecked {
       setTimeout(() => { icon.className = originalClass; }, 1000);
     }
   }
+
+  // ── Generator Image Manifest ──────────────────────────────────────────────
+
+  onGenImgSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files) return;
+    this.addGenImgFiles(Array.from(input.files));
+    input.value = '';
+  }
+
+  onGenImgDrop(event: DragEvent) {
+    event.preventDefault();
+    const files = Array.from(event.dataTransfer?.files ?? []).filter(f => f.type.startsWith('image/'));
+    this.addGenImgFiles(files);
+  }
+
+  onGenImgDragOver(event: DragEvent) { event.preventDefault(); }
+
+  private addGenImgFiles(files: File[]) {
+    const currentCount = this.genImgManifest().length;
+    const entries: ImageManifestEntry[] = files.map((file, i) => {
+      const id = crypto.randomUUID();
+      this.genImgFileMap.set(id, file);
+      return {
+        id,
+        originalFilename: file.name,
+        urlFilename: normalizeImageFilename(file.name),
+        previewUrl: URL.createObjectURL(file),
+        visionDescription: '',
+        altText: '',
+        order: currentCount + i,
+        status: 'pending',
+      };
+    });
+    this.genImgManifest.update(list => [...list, ...entries]);
+  }
+
+  removeGenImg(id: string) {
+    this.genImgManifest.update(list => {
+      const entry = list.find(e => e.id === id);
+      if (entry) URL.revokeObjectURL(entry.previewUrl);
+      this.genImgFileMap.delete(id);
+      return list.filter(e => e.id !== id).map((e, i) => ({ ...e, order: i }));
+    });
+  }
+
+  updateGenAltText(id: string, value: string) {
+    this.genImgManifest.update(list =>
+      list.map(e => e.id === id ? { ...e, altText: value } : e)
+    );
+  }
+
+  updateGenBrandFolder(event: Event) {
+    this.genBrandFolder.set((event.target as HTMLInputElement).value);
+  }
+
+  updateGenModelFolder(event: Event) {
+    this.genModelFolder.set((event.target as HTMLInputElement).value);
+  }
+
+  clearGenImgManifest() {
+    this.genImgManifest().forEach(e => URL.revokeObjectURL(e.previewUrl));
+    this.genImgManifest.set([]);
+    this.genImgFileMap.clear();
+  }
+
+  async analyzeGenImages() {
+    const pending = this.genImgManifest().filter(e => e.status === 'pending');
+    if (pending.length === 0 || this.isVisionAnalyzing()) return;
+
+    this.isVisionAnalyzing.set(true);
+    this.visionAnalyzedCount.set(0);
+    const concurrency = 3;
+
+    try {
+      for (let i = 0; i < pending.length; i += concurrency) {
+        const batch = pending.slice(i, i + concurrency);
+        await Promise.all(batch.map(async (entry) => {
+          this.genImgManifest.update(list =>
+            list.map(e => e.id === entry.id ? { ...e, status: 'analyzing' } : e)
+          );
+          try {
+            const file = this.genImgFileMap.get(entry.id);
+            if (!file) throw new Error('File not found');
+            const base64 = await this.fileToBase64ForVision(file);
+            const description = await this.llmService.analyzeImage(base64, 'image/jpeg', buildVisionPrepassPrompt());
+            this.genImgManifest.update(list =>
+              list.map(e => e.id === entry.id
+                ? { ...e, status: 'done', visionDescription: description, altText: e.altText || description }
+                : e)
+            );
+          } catch (err) {
+            console.warn('Vision analysis failed for', entry.originalFilename, err);
+            const fallbackAlt = entry.urlFilename.replace('.jpg', '').replace(/-/g, ' ');
+            this.genImgManifest.update(list =>
+              list.map(e => e.id === entry.id
+                ? { ...e, status: 'error', altText: e.altText || fallbackAlt }
+                : e)
+            );
+          }
+          this.visionAnalyzedCount.update(n => n + 1);
+        }));
+      }
+    } finally {
+      this.isVisionAnalyzing.set(false);
+    }
+  }
+
+  private fileToBase64ForVision(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject('Canvas context not supported');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg', 0.6).split(',')[1]);
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // ── Image Tools Tab ───────────────────────────────────────────────────────
 
   onImageSelect(event: Event) {
     const input = event.target as HTMLInputElement;

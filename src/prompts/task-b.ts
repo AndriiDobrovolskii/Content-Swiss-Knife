@@ -1,5 +1,22 @@
 import { SYSTEM_INSTRUCTION } from './system-instruction';
 
+// Currency string per store, used for both prompt generation and output validation.
+const CURRENCY_BY_STORE: Record<string, string> = {
+  '3DDevice':           'UAH (₴)',
+  '3DPrinter':          'UAH (₴)',
+  '3DScanner':          'UAH (₴)',
+  'Center 3D Print':    'PLN (zł) / EUR (€)',
+  'EXPERT3D':           'EUR (€)',
+  'Impresora-3D':       'EUR (€)',
+  'Expert-3DPrinter':   'USD ($)',
+};
+
+/** Resolves the primary currency symbol (₴ / € / $ / zł) for a store. */
+export function resolveCurrencySymbol(storeName: string): string {
+  const currency = CURRENCY_BY_STORE[storeName] ?? 'EUR (€)';
+  return currency.match(/[₴€$£]/)?.[0] ?? '€';
+}
+
 /**
  * Builds Task B prompt — generates SEO metadata JSON for all target languages.
  */
@@ -11,18 +28,7 @@ export function buildPromptB(
 ): string {
   const systemInstruction = SYSTEM_INSTRUCTION.replace('{{STORE_NAME}}', storeName);
 
-  // Resolve currency symbol from store name
-  const currencyMap: Record<string, string> = {
-    '3DDevice':           'UAH (₴)',
-    '3DPrinter':          'UAH (₴)',
-    '3DScanner':          'UAH (₴)',
-    'Center 3D Print':    'PLN (zł) / EUR (€)',
-    'EXPERT3D':           'EUR (€)',
-    'Impresora-3D':       'EUR (€)',
-    'Expert-3DPrinter':   'USD ($)',
-  };
-  const currency = currencyMap[storeName] ?? 'EUR (€)';
-  const currencySymbol = currency.match(/[₴€$£]/)?.[0] ?? '€';
+  const currencySymbol = resolveCurrencySymbol(storeName);
 
   const siteSuffix = ['EXPERT3D', 'Impresora-3D'].includes(storeName) ? '| EXPERT3D' : `| ${storeName}`;
 

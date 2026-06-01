@@ -15,7 +15,10 @@ export function buildPromptC(html: string, targetLang: string, storeName: string
   if (targetLang.includes('American English') || targetLang.includes('American Spanish')) {
     return buildUsPrompt(html, targetLang);
   }
-  if (targetLang === 'Spanish (EXPERT3D)') {
+  if (
+    targetLang === 'Spanish (EXPERT3D)' ||
+    (targetLang === 'ES' && ['EXPERT3D', 'Impresora-3D'].includes(storeName))
+  ) {
     return buildExpert3dSpanishPrompt(html);
   }
 
@@ -61,8 +64,10 @@ Keep <hr> after each </section>. Output the translated HTML body only.
 2. NO BRAND/STORE CHANGES: keep store names and phone numbers as-is.
 3. NO ADDED CLAIMS: do not add warranties, shipping promises, or services not in the source.
 4. HTML Integrity: never translate tag names, IDs, classes, URLs, or hrefs.
-   Only translate visible text and alt="…" / title="…" attribute values.
+   Translate visible text AND alt="…" / title="…" attribute values — including all <img> alt texts
+   that come from the image manifest.
 5. Keep Brand Names (Creality, Formlabs, Bambu Lab) in Latin script. Do NOT transliterate.
+6. IMAGE URLs: never alter <img src="…"> values. Only translate the alt attribute text.
 
 CRITICAL OUTPUT RULE: Return ONLY the raw HTML. No markdown code blocks, no extra text.
 
