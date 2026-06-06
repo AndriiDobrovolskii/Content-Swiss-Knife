@@ -1,0 +1,69 @@
+<div class="space-y-2">
+  <div class="flex justify-between items-center">
+    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+      {{ label }} @if (required) { <span class="text-red-500">*</span> }
+    </label>
+    <div class="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5">
+      <button (click)="setMode('text')" [disabled]="busy()"
+        [class.bg-white]="mode() === 'text'" [class.dark:bg-slate-600]="mode() === 'text'" [class.shadow-sm]="mode() === 'text'"
+        class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300 disabled:opacity-50">{{ labels['inputText'] }}</button>
+      <button (click)="setMode('pdf')" [disabled]="busy()"
+        [class.bg-white]="mode() === 'pdf'" [class.dark:bg-slate-600]="mode() === 'pdf'" [class.shadow-sm]="mode() === 'pdf'"
+        class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300 disabled:opacity-50">{{ labels['inputPdf'] }}</button>
+      <button (click)="setMode('url')" [disabled]="busy()"
+        [class.bg-white]="mode() === 'url'" [class.dark:bg-slate-600]="mode() === 'url'" [class.shadow-sm]="mode() === 'url'"
+        class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300 disabled:opacity-50">{{ labels['inputUrl'] }}</button>
+      <button (click)="setMode('md')" [disabled]="busy()"
+        [class.bg-white]="mode() === 'md'" [class.dark:bg-slate-600]="mode() === 'md'" [class.shadow-sm]="mode() === 'md'"
+        class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300 disabled:opacity-50">{{ labels['inputMd'] }}</button>
+    </div>
+  </div>
+
+  @if (mode() === 'text') {
+    <textarea
+      class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+      [ngClass]="[textHeight, ringClass]"
+      [class.border-red-300]="required && !value"
+      [value]="value"
+      (input)="onTextInput($event)"
+      [placeholder]="placeholder"></textarea>
+  }
+
+  @if (mode() === 'pdf') {
+    <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative" [class.border-green-300]="value">
+      <input type="file" accept="application/pdf" [disabled]="busy()" (change)="onPdfUpload($event)" class="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-wait">
+      <i class="fa-solid fa-file-pdf text-2xl mb-2" [class.text-red-500]="!value" [class.text-green-500]="value"></i>
+      <p class="text-xs text-slate-600 dark:text-slate-400">{{ busy() ? labels['processing'] : (value ? labels['pdfReady'] : labels['pdfDrop']) }}</p>
+      <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{{ labels['pdfHint'] }}</p>
+    </div>
+  }
+
+  @if (mode() === 'url') {
+    <div class="flex gap-2">
+      <input
+        type="text"
+        #urlInput
+        [disabled]="busy()"
+        class="flex-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 outline-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 disabled:opacity-50"
+        [ngClass]="ringClass"
+        [placeholder]="labels['urlPlaceholder']">
+      <button (click)="fetchFromUrl(urlInput.value)" [disabled]="busy()"
+        class="px-3 rounded-lg active:scale-95 transition-transform disabled:opacity-50" [ngClass]="fetchBtnClass">
+        <i class="fa-solid" [class.fa-magnifying-glass]="!busy()" [class.fa-spinner]="busy()" [class.fa-spin]="busy()"></i>
+      </button>
+    </div>
+    <p class="text-[10px]" [class.text-slate-400]="!value" [class.dark:text-slate-500]="!value" [class.text-green-600]="value" [class.dark:text-green-400]="value">
+      {{ value ? labels['urlSuccess'] : labels['urlHint'] }}
+    </p>
+  }
+
+  @if (mode() === 'md') {
+    <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative" [class.border-green-300]="value">
+      <input type="file" accept=".md,.markdown,text/markdown" multiple [disabled]="busy()"
+             (change)="onMarkdownUpload($event)" class="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-wait">
+      <i class="fa-brands fa-markdown text-2xl mb-2" [class.text-slate-400]="!value" [class.text-green-500]="value"></i>
+      <p class="text-xs text-slate-600 dark:text-slate-400">{{ busy() ? labels['processing'] : (value ? labels['mdReady'] : labels['mdDrop']) }}</p>
+      <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{{ labels['mdHint'] }}</p>
+    </div>
+  }
+</div>
