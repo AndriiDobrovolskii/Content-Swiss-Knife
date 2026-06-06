@@ -8,6 +8,7 @@ import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
+import { SourceInputComponent } from './components/source-input/source-input.component';
 import saveAs from 'file-saver';
 
 interface ChatMessage {
@@ -31,6 +32,7 @@ const TRANSLATIONS = {
     copywriter: 'Copywriter',
     seoGenBtn: 'Generate Metadata',
     seoOnlyTitle: 'SEO Metadata Generator',
+    contextDescription: 'Context Description',
     seoOnlyPlaceholder: 'Paste the product description here (Text or HTML) to provide context...',
     targetWebsite: 'Target Website',
     selectWebsite: 'Select Website...',
@@ -40,13 +42,17 @@ const TRANSLATIONS = {
     inputText: 'Text',
     inputPdf: 'PDF',
     inputUrl: 'URL',
+    inputMd: 'MD',
     pdfDrop: 'Click to upload PDF',
     pdfReady: 'PDF processed (Ready)',
     pdfHint: 'Gemini will extract text',
+    mdDrop: 'Click to upload Markdown file(s)',
+    mdReady: 'Markdown loaded',
+    mdHint: 'Reads .md files locally (no upload)',
     urlPlaceholder: 'https://example.com/product',
     fetchUrl: 'Fetch',
     urlSuccess: 'Content fetched successfully',
-    urlHint: 'Uses Google Search Grounding',
+    urlHint: 'Fetches and extracts page content',
     rawHtmlInput: 'Raw HTML Input',
     optTasks: 'Automated tasks:',
     optTask1: 'Generate alt/title for images',
@@ -165,6 +171,7 @@ const TRANSLATIONS = {
     copywriter: 'Копірайтер',
     seoGenBtn: 'Генерувати метадані',
     seoOnlyTitle: 'Генератор SEO метаданих',
+    contextDescription: 'Опис для контексту',
     seoOnlyPlaceholder: 'Вставте опис товару сюди (Текст або HTML) для контексту...',
     targetWebsite: 'Цільовий сайт',
     selectWebsite: 'Оберіть сайт...',
@@ -174,13 +181,17 @@ const TRANSLATIONS = {
     inputText: 'Текст',
     inputPdf: 'PDF',
     inputUrl: 'URL',
+    inputMd: 'MD',
     pdfDrop: 'Натисніть для завантаження PDF',
     pdfReady: 'PDF оброблено (Готово)',
     pdfHint: 'Gemini витягне текст',
+    mdDrop: 'Натисніть, щоб завантажити Markdown-файл(и)',
+    mdReady: 'Markdown завантажено',
+    mdHint: 'Читає .md локально (без вивантаження)',
     urlPlaceholder: 'https://example.com/product',
     fetchUrl: 'Знайти',
     urlSuccess: 'Контент отримано успішно',
-    urlHint: 'Використовує Google Search Grounding',
+    urlHint: 'Завантажує та витягує вміст сторінки',
     rawHtmlInput: 'Вхідний HTML',
     optTasks: 'Автоматичні задачі:',
     optTask1: 'Генерація alt/title для зображень',
@@ -294,7 +305,7 @@ const TRANSLATIONS = {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, SafeHtmlPipe],
+  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent implements AfterViewChecked {
@@ -339,7 +350,6 @@ export class AppComponent implements AfterViewChecked {
   specs = signal<string>('');
   supplementalContent = signal<string>('');
   customInstructions = signal<string>('');
-  inputType = signal<'text' | 'pdf' | 'url'>('text');
   generatorUseThinking = signal<boolean>(true); // Default to true as per original behavior
 
   // --- TEMPLATE STATE ---
@@ -430,7 +440,6 @@ export class AppComponent implements AfterViewChecked {
         if (parsed.description) this.description.set(parsed.description);
         if (parsed.specs) this.specs.set(parsed.specs);
         if (parsed.customInstructions) this.customInstructions.set(parsed.customInstructions);
-        if (parsed.inputType) this.inputType.set(parsed.inputType);
       } catch (e) {
         console.error('Failed to restore form state', e);
       }
@@ -452,8 +461,7 @@ export class AppComponent implements AfterViewChecked {
         productName: this.productName(),
         description: this.description(),
         specs: this.specs(),
-        customInstructions: this.customInstructions(),
-        inputType: this.inputType()
+        customInstructions: this.customInstructions()
       };
       localStorage.setItem('seo_gen_form_state', JSON.stringify(state));
     });
@@ -579,9 +587,6 @@ export class AppComponent implements AfterViewChecked {
   }
 
   updateProductName(event: Event) { this.productName.set((event.target as HTMLInputElement).value); }
-  updateDescription(event: Event) { this.description.set((event.target as HTMLTextAreaElement).value); }
-  updateSpecs(event: Event) { this.specs.set((event.target as HTMLTextAreaElement).value); }
-  updateSupplementalContent(event: Event) { this.supplementalContent.set((event.target as HTMLTextAreaElement).value); }
   updateCustomInstructions(event: Event) { this.customInstructions.set((event.target as HTMLTextAreaElement).value); }
   updateOptimizerInput(event: Event) { this.optimizerInputHtml.set((event.target as HTMLTextAreaElement).value); }
   updateTranslatorInput(event: Event) { this.translatorInput.set((event.target as HTMLTextAreaElement).value); }
@@ -793,38 +798,6 @@ export class AppComponent implements AfterViewChecked {
     return context;
   }
 
-  async fetchFromUrl(url: string) {
-    if (!url) return;
-    try {
-      const extracted = await this.orchestrator.extractContent('url', url);
-      this.description.set(extracted);
-      this.inputType.set('text');
-    } catch (e) {
-      alert('Failed to fetch from URL');
-    }
-  }
-
-  async onPdfUpload(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files[0]) {
-      const file = input.files[0];
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        try {
-          const extracted = await this.orchestrator.extractContent('pdf', base64);
-          this.description.set(extracted);
-          this.inputType.set('text');
-        } catch (e) {
-          alert('Failed to process PDF');
-        } finally {
-          input.value = '';
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  }
-
   clearAll() {
     if (this.appMode() === 'generator' || this.appMode() === 'seo-generator') {
       this.productName.set('');
@@ -833,7 +806,6 @@ export class AppComponent implements AfterViewChecked {
       this.supplementalContent.set('');
       this.customInstructions.set('');
       this.selectedWebsite.set(null);
-      this.inputType.set('text');
       if (this.appMode() === 'generator') this.activeTab.set('html');
       else this.activeTab.set('seo');
     } else if (this.appMode() === 'optimizer') {

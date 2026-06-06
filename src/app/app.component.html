@@ -221,83 +221,32 @@
             [placeholder]="uiLabels().placeholderName">
         </div>
 
-        <div class="space-y-2">
-          <div class="flex justify-between items-center">
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              {{ uiLabels().originalDescription }} <span class="text-red-500">*</span>
-            </label>
-            <div class="flex items-center gap-2">
-              <button (click)="pastePlainText('description')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 mr-2">
-                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
-              </button>
-              <div class="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5">
-                <button (click)="inputType.set('text')" [class.bg-white]="inputType() === 'text'" [class.dark:bg-slate-600]="inputType() === 'text'" [class.shadow-sm]="inputType() === 'text'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputText }}</button>
-                <button (click)="inputType.set('pdf')" [class.bg-white]="inputType() === 'pdf'" [class.dark:bg-slate-600]="inputType() === 'pdf'" [class.shadow-sm]="inputType() === 'pdf'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputPdf }}</button>
-                <button (click)="inputType.set('url')" [class.bg-white]="inputType() === 'url'" [class.dark:bg-slate-600]="inputType() === 'url'" [class.shadow-sm]="inputType() === 'url'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputUrl }}</button>
-              </div>
-            </div>
-          </div>
+        <app-source-input
+          [label]="uiLabels().originalDescription"
+          [placeholder]="uiLabels().placeholderDesc"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [required]="true"
+          [value]="description()"
+          (valueChange)="description.set($event)" />
 
-          @if (inputType() === 'text') {
-            <textarea 
-              class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-32 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-              [class.border-red-300]="!description()"
-              [value]="description()"
-              (input)="updateDescription($event)"
-              [placeholder]="uiLabels().placeholderDesc"></textarea>
-          }
-          @if (inputType() === 'pdf') {
-            <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative" [class.border-green-300]="description()">
-              <input type="file" accept="application/pdf" (change)="onPdfUpload($event)" class="absolute inset-0 opacity-0 cursor-pointer">
-              <i class="fa-solid fa-file-pdf text-2xl mb-2" [class.text-red-500]="!description()" [class.text-green-500]="description()"></i>
-              <p class="text-xs text-slate-600 dark:text-slate-400">{{ description() ? uiLabels().pdfReady : uiLabels().pdfDrop }}</p>
-              <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{{ uiLabels().pdfHint }}</p>
-            </div>
-          }
-          @if (inputType() === 'url') {
-            <div class="flex gap-2">
-              <input 
-                type="text" 
-                #urlInput
-                class="flex-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                [placeholder]="uiLabels().urlPlaceholder">
-              <button (click)="fetchFromUrl(urlInput.value)" class="px-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 active:scale-95 transition-transform">
-                <i class="fa-solid fa-magnifying-glass"></i>
-              </button>
-            </div>
-            <p class="text-[10px]" [class.text-slate-400]="!description()" [class.text-green-600]="description()" [class.dark:text-slate-500]="!description()" [class.dark:text-green-400]="description()">
-              {{ description() ? uiLabels().urlSuccess : uiLabels().urlHint }}
-            </p>
-          }
-        </div>
+        <app-source-input
+          [label]="uiLabels().techSpecs"
+          [placeholder]="uiLabels().placeholderSpecs"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [textHeight]="'h-24'"
+          [value]="specs()"
+          (valueChange)="specs.set($event)" />
 
-        <div class="space-y-2">
-          <div class="flex justify-between items-center">
-             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().techSpecs }}</label>
-             <button (click)="pastePlainText('specs')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
-                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
-             </button>
-          </div>
-          <textarea 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            [value]="specs()"
-            (input)="updateSpecs($event)"
-            [placeholder]="uiLabels().placeholderSpecs"></textarea>
-        </div>
-
-        <div class="space-y-2">
-          <div class="flex justify-between items-center">
-             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().supplementalContent }}</label>
-             <button (click)="pastePlainText('supplementalContent')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
-                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
-             </button>
-          </div>
-          <textarea 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            [value]="supplementalContent()"
-            (input)="updateSupplementalContent($event)"
-            [placeholder]="uiLabels().placeholderSupplemental"></textarea>
-        </div>
+        <app-source-input
+          [label]="uiLabels().supplementalContent"
+          [placeholder]="uiLabels().placeholderSupplemental"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [textHeight]="'h-24'"
+          [value]="supplementalContent()"
+          (valueChange)="supplementalContent.set($event)" />
 
         <div class="space-y-2">
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().customInstructions }}</label>
@@ -479,49 +428,14 @@
             [placeholder]="uiLabels().placeholderName">
         </div>
 
-        <div class="space-y-2">
-           <div class="flex justify-between items-center">
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              Context Description <span class="text-red-500">*</span>
-            </label>
-            <div class="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5">
-               <button (click)="inputType.set('text')" [class.bg-white]="inputType() === 'text'" [class.dark:bg-slate-600]="inputType() === 'text'" [class.shadow-sm]="inputType() === 'text'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputText }}</button>
-               <button (click)="inputType.set('pdf')" [class.bg-white]="inputType() === 'pdf'" [class.dark:bg-slate-600]="inputType() === 'pdf'" [class.shadow-sm]="inputType() === 'pdf'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputPdf }}</button>
-               <button (click)="inputType.set('url')" [class.bg-white]="inputType() === 'url'" [class.dark:bg-slate-600]="inputType() === 'url'" [class.shadow-sm]="inputType() === 'url'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputUrl }}</button>
-             </div>
-           </div>
-
-           @if (inputType() === 'text') {
-            <textarea 
-              class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-32 focus:ring-2 focus:ring-teal-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-              [class.border-red-300]="!description()"
-              [value]="description()"
-              (input)="updateDescription($event)"
-              [placeholder]="uiLabels().seoOnlyPlaceholder"></textarea>
-           }
-           @if (inputType() === 'pdf') {
-             <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative" [class.border-green-300]="description()">
-              <input type="file" accept="application/pdf" (change)="onPdfUpload($event)" class="absolute inset-0 opacity-0 cursor-pointer">
-              <i class="fa-solid fa-file-pdf text-2xl mb-2" [class.text-red-500]="!description()" [class.text-green-500]="description()"></i>
-              <p class="text-xs text-slate-600 dark:text-slate-400">{{ description() ? uiLabels().pdfReady : uiLabels().pdfDrop }}</p>
-            </div>
-           }
-           @if (inputType() === 'url') {
-             <div class="flex gap-2">
-              <input 
-                type="text" 
-                #urlInput
-                class="flex-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                [placeholder]="uiLabels().urlPlaceholder">
-              <button (click)="fetchFromUrl(urlInput.value)" class="px-3 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded-lg hover:bg-teal-200 dark:hover:bg-teal-900/50 active:scale-95 transition-transform">
-                <i class="fa-solid fa-magnifying-glass"></i>
-              </button>
-            </div>
-            <p class="text-[10px]" [class.text-green-600]="description()" [class.text-slate-400]="!description()">
-               {{ description() ? uiLabels().urlSuccess : uiLabels().urlHint }}
-            </p>
-           }
-        </div>
+        <app-source-input
+          [label]="uiLabels().contextDescription"
+          [placeholder]="uiLabels().seoOnlyPlaceholder"
+          [labels]="uiLabels()"
+          [accent]="'teal'"
+          [required]="true"
+          [value]="description()"
+          (valueChange)="description.set($event)" />
 
         <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
           <div class="flex justify-between items-center">
