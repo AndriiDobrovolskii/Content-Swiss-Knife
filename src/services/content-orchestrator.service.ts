@@ -373,6 +373,7 @@ export class ContentOrchestratorService {
       }
     } finally {
       this.isGenerating.set(false);
+      this.progressMessage.set('');
     }
   }
 
