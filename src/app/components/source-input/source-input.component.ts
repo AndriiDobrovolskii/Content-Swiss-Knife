@@ -54,8 +54,10 @@ export class SourceInputComponent {
       const text = await this.orchestrator.extractContent('url', url);
       this.setText(text);
       this.mode.set('text');                      // show extracted text
-    } catch (e) {
-      alert(`Failed to fetch from URL:\n${(e as Error).message}`);
+    } catch (e: any) {
+      // HttpClient wraps server errors in HttpErrorResponse; backend message is on e.error.error
+      const msg = e?.error?.error || e?.message || 'Failed to fetch from URL';
+      alert(msg);
     } finally {
       this.busy.set(false);
     }
@@ -73,8 +75,9 @@ export class SourceInputComponent {
         const text = await this.orchestrator.extractContent('pdf', base64);
         this.setText(text);
         this.mode.set('text');
-      } catch (e) {
-        alert(`Failed to process PDF:\n${(e as Error).message}`);
+      } catch (e: any) {
+        const msg = e?.error?.error || e?.message || 'Failed to process PDF';
+        alert(msg);
       } finally {
         input.value = '';
         this.busy.set(false);
