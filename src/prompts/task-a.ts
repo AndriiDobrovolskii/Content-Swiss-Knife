@@ -2,12 +2,12 @@ import { ProductInput, ImageManifestEntry, CONTENT_TEMPLATES } from '../app/type
 import { SYSTEM_INSTRUCTION } from './system-instruction';
 
 const IMAGE_BASE_URLS: Record<string, string> = {
-  'EXPERT3D':         'https://impresora-3d.es/image/catalog/products/',
-  'Impresora-3D':     'https://impresora-3d.es/image/catalog/products/',
-  '3DDevice':         'https://3ddevice.com.ua/image/cache/catalog/products/',
-  '3DPrinter':        'https://3dprinter.com.ua/image/cache/catalog/products/',
-  '3DScanner':        'https://3dscanner.com.ua/image/catalog/Products/',
-  'Center 3D Print':  'https://center3dprint.com/image/catalog/magazin/',
+  'EXPERT3D': 'https://impresora-3d.es/image/catalog/products/',
+  'Impresora-3D': 'https://impresora-3d.es/image/catalog/products/',
+  '3DDevice': 'https://3ddevice.com.ua/image/cache/catalog/products/',
+  '3DPrinter': 'https://3dprinter.com.ua/image/cache/catalog/products/',
+  '3DScanner': 'https://3dscanner.com.ua/image/catalog/Products/',
+  'Center 3D Print': 'https://center3dprint.com/image/catalog/magazin/',
 };
 
 const US_MEASUREMENT_RULES = `[MEASUREMENT SYSTEM — MIXED US STANDARD]
@@ -194,6 +194,16 @@ ${isUsSite ? US_MEASUREMENT_RULES : '[MEASUREMENT] Use standard Metric units (mm
      <strong>Expert Verdict:</strong> [Professional analysis — 2–3 sentences]
    </div>
 
+3b. EXPERT TECH-TIP (EEAT) — MANDATORY ⛔:
+   In addition to the Expert Verdict above, emit exactly ONE separate <blockquote> containing a
+   concrete, practical tip about using or maintaining this product (e.g. filament handling,
+   retraction settings, calibration, nozzle care). This is a distinct element from the Expert Verdict
+   div — do NOT merge the two. Base the tip on real product facts from the input; never invent specs.
+   Format:
+   <blockquote style="border-left: 4px solid #555; padding: 10px 20px; margin: 20px 0; background: #f5f5f5;">
+     <strong>Tech Tip:</strong> [Actionable professional advice grounded in the product's specs]
+   </blockquote>
+
 4. TECHNICAL SPECIFICATIONS (strict table format):
    Wrapper: <section class="specs">
    Header: <h2>Technical specifications of the ${input.name}</h2>
@@ -206,7 +216,14 @@ ${isUsSite ? US_MEASUREMENT_RULES : '[MEASUREMENT] Use standard Metric units (mm
        <td itemprop="value">Value with Units</td>
      </tr>
    - First column is always <th scope="row">.
-   - DO NOT CUT: if the input has 20 specs, the output has 20 specs.
+   - COMPLETENESS IS MANDATORY ⛔: reproduce EVERY specification row present in [Technical Specs].
+     Before writing the tables, silently count how many distinct categories and how many total
+     rows the input contains, then emit exactly that many. Do NOT summarize, merge, or drop rows
+     to keep the section short. A spec table that contains fewer rows than the input is a critical failure.
+   - Process the input top to bottom; if a category has 11 rows in the source (e.g. a cutting module),
+     the matching output table has 11 rows. Common categories that must NOT be skipped when present:
+     Cooling, Supported Filament Type, Electrical Requirements, Environment, Electronics, Software,
+     Network Control, Wi-Fi, and any optional add-on module (e.g. Cutting Module).
    - DO NOT CHANGE: keep numerical values and units exactly as in the source.
 
 5. PACKAGE CONTENTS:
@@ -214,6 +231,10 @@ ${isUsSite ? US_MEASUREMENT_RULES : '[MEASUREMENT] Use standard Metric units (mm
 
 6. SUPPLEMENTAL CONTENT (FAQ / HowTo) — include ONLY if present in [Supplemental Content]:
    - FAQ (when input has Q/A pairs):
+     YOU MUST REPRODUCE EVERY question/answer pair found in [Supplemental Content] ⛔.
+     If the input lists 10 questions, output exactly 10 <div itemprop="mainEntity"> blocks.
+     Do NOT select a "best few" or summarize the set — each source question becomes one FAQ entry.
+     You may rephrase the question wording for clarity, but never drop a question.
      <section itemscope itemtype="https://schema.org/FAQPage">
        <div itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">
          <h3 itemprop="name">Question</h3>

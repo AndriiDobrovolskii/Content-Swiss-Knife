@@ -42,6 +42,7 @@ OUTPUT: Pure translated HTML body only. No JSON, no Markdown, no code fences.
 
 [LABELS TO TRANSLATE into ${targetLang}]
 - "Expert Verdict:" header
+- "Tech Tip:" label
 - "Technical specifications of the [Product Name]" header
 - "What's in the box" header
 - "Why choose [Store Name]?" header
