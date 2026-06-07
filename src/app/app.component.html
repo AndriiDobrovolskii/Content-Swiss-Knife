@@ -2,7 +2,7 @@
 <div class="flex h-screen w-full bg-slate-50 dark:bg-slate-900 text-sm transition-colors duration-200">
   
   <!-- Sidebar -->
-  <aside class="w-80 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full shadow-lg z-10 relative transition-colors duration-200">
+  <aside class="w-96 xl:w-[26rem] flex-shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full shadow-lg z-10 relative transition-colors duration-200">
     
     <!-- Sidebar Header -->
     <div class="p-6 border-b border-slate-100 dark:border-slate-700 space-y-4">
@@ -39,13 +39,13 @@
         <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
           <button 
             (click)="setMode('generator')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'generator' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().generator }}
           </button>
           <button 
             (click)="setMode('optimizer')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'optimizer' ? 'bg-white dark:bg-slate-600 text-purple-600 dark:text-purple-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().optimizer }}
           </button>
@@ -53,13 +53,13 @@
         <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
           <button 
             (click)="setMode('translator')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'translator' ? 'bg-white dark:bg-slate-600 text-emerald-600 dark:text-emerald-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().translator }}
           </button>
            <button 
             (click)="setMode('image-tools')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'image-tools' ? 'bg-white dark:bg-slate-600 text-orange-600 dark:text-orange-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().imageTools }}
           </button>
@@ -67,13 +67,13 @@
         <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
            <button 
             (click)="setMode('seo-generator')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'seo-generator' ? 'bg-white dark:bg-slate-600 text-teal-600 dark:text-teal-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().seoGenerator }}
           </button>
           <button 
             (click)="setMode('copywriter')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'copywriter' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().copywriter }}
           </button>
@@ -81,7 +81,7 @@
         <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-1 gap-1">
           <button 
             (click)="setMode('readability')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'readability' ? 'bg-white dark:bg-slate-600 text-pink-600 dark:text-pink-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             <i class="fa-solid fa-glasses mr-1"></i> {{ uiLabels().readability }}
           </button>
@@ -140,22 +140,20 @@
       </div>
     }
 
-    <!-- GENERATOR FORM -->
-    @if (appMode() === 'generator') {
-      <div class="flex-1 overflow-y-auto p-6 space-y-6">
-        <div class="space-y-2">
+    <!-- Generator form template — rendered in sidebar post-gen, centred in main pre-gen -->
+    <ng-template #generatorForm>
+      <div class="space-y-2">
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             {{ uiLabels().targetWebsite }} <span class="text-red-500">*</span>
           </label>
-          <select 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+          <select
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-sm text-slate-800 dark:text-slate-200"
             [class.text-slate-400]="!selectedWebsite()"
             [class.border-red-300]="!selectedWebsite()"
-            [value]="selectedWebsite()?.name || ''"
             (change)="onWebsiteChange($event)">
-            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
+            <option value="" [selected]="!selectedWebsite()" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
             @for (site of websiteOptions; track site.name) {
-              <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
+              <option [value]="site.name" [selected]="selectedWebsite()?.name === site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
             }
           </select>
         </div>
@@ -166,18 +164,17 @@
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               {{ uiLabels().contentTemplate }}
             </label>
-            <button (click)="toggleCustomTemplate()" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+            <button (click)="toggleCustomTemplate()" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
               {{ showCustomTemplate() ? 'Hide Custom' : 'Customize' }}
             </button>
           </div>
-          <select 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+          <select
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-sm text-slate-800 dark:text-slate-200"
             [class.text-slate-400]="!selectedTemplateId()"
-            [value]="selectedTemplateId()"
             (change)="onTemplateChange($event)">
-            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectTemplate }}</option>
+            <option value="" [selected]="!selectedTemplateId()" class="dark:bg-slate-800">{{ uiLabels().selectTemplate }}</option>
             @for (template of availableTemplates; track template.id) {
-              <option [value]="template.id" class="dark:bg-slate-800">{{ template.name }} ({{ template.niche }})</option>
+              <option [value]="template.id" [selected]="selectedTemplateId() === template.id" class="dark:bg-slate-800">{{ template.name }} ({{ template.niche }})</option>
             }
           </select>
 
@@ -212,9 +209,9 @@
                 <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
              </button>
           </div>
-          <input 
-            type="text" 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          <input
+            type="text"
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             [class.border-red-300]="!productName()"
             [value]="productName()"
             (input)="updateProductName($event)"
@@ -227,6 +224,7 @@
           [labels]="uiLabels()"
           [accent]="'blue'"
           [required]="true"
+          [textHeight]="'min-h-[200px]'"
           [value]="description()"
           (valueChange)="description.set($event)" />
 
@@ -235,7 +233,7 @@
           [placeholder]="uiLabels().placeholderSpecs"
           [labels]="uiLabels()"
           [accent]="'blue'"
-          [textHeight]="'h-24'"
+          [textHeight]="'min-h-[140px]'"
           [value]="specs()"
           (valueChange)="specs.set($event)" />
 
@@ -244,14 +242,14 @@
           [placeholder]="uiLabels().placeholderSupplemental"
           [labels]="uiLabels()"
           [accent]="'blue'"
-          [textHeight]="'h-24'"
+          [textHeight]="'min-h-[140px]'"
           [value]="supplementalContent()"
           (valueChange)="supplementalContent.set($event)" />
 
         <div class="space-y-2">
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().customInstructions }}</label>
-          <textarea 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          <textarea
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg min-h-[120px] focus:ring-2 focus:ring-blue-500 outline-none resize-y text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             [value]="customInstructions()"
             (input)="updateCustomInstructions($event)"
             [placeholder]="uiLabels().placeholderInstructions"></textarea>
@@ -369,6 +367,12 @@
            </button>
          </div>
 
+    </ng-template>
+
+    <!-- GENERATOR FORM in sidebar (shown only after generation) -->
+    @if (appMode() === 'generator' && hasOutput()) {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <ng-container *ngTemplateOutlet="generatorForm"></ng-container>
       </div>
     }
 
@@ -641,7 +645,7 @@
     }
 
     <!-- IMAGE TOOLS SIDEBAR -->
-    @else {
+    @else if (appMode() === 'image-tools') {
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
          <div class="space-y-2">
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
@@ -993,14 +997,23 @@
 
     <!-- GENERATOR VIEW / SEO VIEW -->
     @if (appMode() === 'generator' || appMode() === 'seo-generator') {
-      <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200">
+      @if (appMode() === 'generator' && !hasOutput()) {
+        <div class="flex-1 overflow-y-auto p-8">
+          <div class="max-w-3xl mx-auto">
+            <ng-container *ngTemplateOutlet="generatorForm"></ng-container>
+          </div>
+        </div>
+      }
+
+      @if (hasOutput() || appMode() === 'seo-generator') {
+        <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200">
         <div class="flex items-center gap-6 overflow-x-auto no-scrollbar">
           @if (appMode() === 'generator') {
-             <button 
+             <button
               (click)="activeTab.set('html')"
               class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
               [class]="activeTab() === 'html' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-              {{ uiLabels().englishOutput }}
+              {{ baseOutputLabel() }}
             </button>
           }
           <button 
@@ -1046,7 +1059,7 @@
           </div>
         }
 
-        @if (!content().mainHtmlEn && !content().seoData && !isGenerating()) {
+        @if (appMode() !== 'generator' && !content().mainHtmlEn && !content().seoData && !isGenerating()) {
           <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
             <i class="fa-regular fa-file-code text-6xl mb-4 opacity-50"></i>
             <p class="text-lg font-medium">{{ uiLabels().noContentYet }}</p>
@@ -1057,7 +1070,7 @@
         @if (activeTab() === 'html' && content().mainHtmlEn) {
           <div class="max-w-5xl mx-auto space-y-6">
             <div class="flex justify-between items-center mb-4">
-              <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ uiLabels().englishOutput }}</h2>
+              <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ baseOutputLabel() }}</h2>
               <button (click)="copyToClipboard(content().mainHtmlEn, $event)" class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium transition-transform active:scale-90">
                 <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyCode }}
               </button>
@@ -1212,11 +1225,21 @@
               </div>
               <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ transContent }}</pre>
             </div>
+
+            @if (transContent) {
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 mt-6 prose prose-sm max-w-none prose-slate dark:prose-invert">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">
+                  {{ uiLabels().livePreview }} ({{ langKey }})
+                </h3>
+                <div [innerHTML]="transContent | safeHtml"></div>
+              </div>
+            }
           </div>
         }
       </div>
-    } 
-    
+      }
+    }
+
     <!-- OPTIMIZER VIEW -->
     @else if (appMode() === 'optimizer') {
       <div class="flex-1 overflow-y-auto p-8">

@@ -129,7 +129,7 @@ export class ContentOrchestratorService {
 
   async generate(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, website: input.website });
     this.validationIssues.set([]);
 
     try {

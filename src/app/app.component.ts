@@ -82,6 +82,7 @@ const TRANSLATIONS = {
     htmlCode: 'HTML Code',
     seoMeta: 'SEO Metadata',
     englishOutput: 'US English Output',
+    englishOutputGeneric: 'English',
     copyCode: 'Copy Code',
     htmlSource: 'HTML Source',
     livePreview: 'Live Preview (Rendered)',
@@ -221,6 +222,7 @@ const TRANSLATIONS = {
     htmlCode: 'HTML код',
     seoMeta: 'SEO метадані',
     englishOutput: 'Результат (Англійська)',
+    englishOutputGeneric: 'Англійська',
     copyCode: 'Копіювати код',
     htmlSource: 'Джерело HTML',
     livePreview: 'Попередній перегляд',
@@ -424,6 +426,19 @@ export class AppComponent implements AfterViewChecked {
   validationIssues = this.orchestrator.validationIssues;
   validationErrorCount = computed(() => this.validationIssues().filter(i => i.severity === 'error').length);
   validationWarningCount = computed(() => this.validationIssues().filter(i => i.severity === 'warning').length);
+
+  // True once any generated artifact exists — drives form placement (centred vs sidebar).
+  hasOutput = computed(() => !!this.content().mainHtmlEn || !!this.content().seoData);
+
+  // "US English Output" only for the US store; plain "English" for all other groups.
+  // Uses website recorded on the generated content so a post-generation dropdown change
+  // does not relabel an already-shown result.
+  baseOutputLabel = computed(() => {
+    const group = this.content().website?.group ?? this.selectedWebsite()?.group;
+    return group === 'US'
+      ? this.uiLabels().englishOutput
+      : this.uiLabels().englishOutputGeneric;
+  });
 
   historyItems = this.historyService.history;
 

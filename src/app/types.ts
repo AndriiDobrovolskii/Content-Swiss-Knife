@@ -72,6 +72,7 @@ export interface GeneratedContent {
   mainHtmlEn: string;
   translations: Record<string, string>; // e.g., 'UA': '<html>...</html>'
   seoData: SeoResponse | null;
+  website?: WebsiteOption; // store this content was generated for (optional for backward compat)
 }
 
 export interface HistoryItem {
