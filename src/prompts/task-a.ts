@@ -4,10 +4,10 @@ import { SYSTEM_INSTRUCTION } from './system-instruction';
 const IMAGE_BASE_URLS: Record<string, string> = {
   'EXPERT3D': 'https://impresora-3d.es/image/catalog/products/',
   'Impresora-3D': 'https://impresora-3d.es/image/catalog/products/',
-  '3DDevice': 'https://3ddevice.com.ua/image/cache/catalog/products/',
-  '3DPrinter': 'https://3dprinter.com.ua/image/cache/catalog/products/',
+  '3DDevice': 'https://3ddevice.com.ua/image/catalog/products/',
+  '3DPrinter': 'https://3dprinter.com.ua/image/catalog/products/',
   '3DScanner': 'https://3dscanner.com.ua/image/catalog/Products/',
-  'Center 3D Print': 'https://center3dprint.com/image/catalog/magazin/',
+  'Center 3D Print': 'https://center3dprint.com/image/catalog/Products/',
 };
 
 const US_MEASUREMENT_RULES = `[MEASUREMENT SYSTEM — MIXED US STANDARD]
@@ -179,10 +179,17 @@ ${isUsSite ? US_MEASUREMENT_RULES : '[MEASUREMENT] Use standard Metric units (mm
 - Rhythm & burstiness: mix short punchy sentences with longer descriptive ones.
 - LSI keywords: use industry terminology ("Z-axis stability", "thermal runaway protection").
 - Prohibited clichés unless strictly factual: "ideal solution", "cutting-edge", "perfect choice".
+- NO AUDIENCE ATTRIBUTION ⛔: do NOT state or imply who the product is "for" (e.g. "for beginners",
+  "for professionals", "for enthusiasts") unless the source input explicitly names a target audience.
+  Describe what the product does and how it does it — let the reader self-qualify.
 
 [CONTENT STRUCTURE]
 1. HOOK PARAGRAPH (40–75 words, plain HTML — no microdata, no wrapper div):
-   "[Product Name] is a [Category] designed for [Application], featuring [Key Specs]."
+   "[Product Name] is a [Category] [designed for / built for / that enables] [Application or Use-Case],
+   featuring [Key Specs]."
+   [Application] = a concrete use-case or workflow (e.g. "large-format FDM printing", "multi-material
+   production runs"), NOT a user type. Do not write "for beginners", "for professionals", etc. unless
+   the source input explicitly states a target audience.
 
 2. QUICK SPECS TABLE (3–4 killer specs):
    <div class="table-responsive"><table class="table table-striped table-hover table-bordered">
@@ -225,6 +232,9 @@ ${isUsSite ? US_MEASUREMENT_RULES : '[MEASUREMENT] Use standard Metric units (mm
      Cooling, Supported Filament Type, Electrical Requirements, Environment, Electronics, Software,
      Network Control, Wi-Fi, and any optional add-on module (e.g. Cutting Module).
    - DO NOT CHANGE: keep numerical values and units exactly as in the source.
+   - DIMENSION SEPARATOR ⛔: always use the multiplication sign × (U+00D7) between dimension values,
+     never an asterisk * or the letter x. Apply this consistently in both spec table cells and
+     running text: "330 × 320 × 325 mm", not "330*320*325 mm" or "330x320x325 mm".
 
 5. PACKAGE CONTENTS:
    <h2>What's in the box</h2> followed by a <ul> list (only if package contents are in the input).
