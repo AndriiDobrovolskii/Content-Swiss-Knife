@@ -91,12 +91,21 @@ Do NOT output the same text unchanged.
 [LOCALIZATION RULES]
 - STRICTLY British/European English: "colour", "customise", "fibre", "optimise". NOT American English.
 - Metric units only (mm, °C, kg). Do NOT use Imperial.
+- SPACING ⛔: always put a single space between number and unit: "1.75 mm", "200 °C", "-5 °C – 50 °C".
 - Tone: Direct, confident, professional but accessible.
+
+[LABELS TO ADAPT (European English)]
+- "Expert Verdict:" → keep as "Expert Verdict:" (British capitalisation)
+- "Tech Tip:" → keep as "Tech Tip:"
+- "Technical specifications of the [Product Name]" → keep in English, British style
+- "What's in the Box" → keep (capitalise "Box")
+- "Why choose [Store]?" → keep
 
 [NEGATIVE CONSTRAINTS]
 - Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab → keep in English).
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add marketing claims not in the source.
+- Do NOT use <br> for spacing or to separate list items — use <ul><li> inside table cells if needed.
 
 [HTML RULES]
 - Return ONLY the HTML content. No markdown code blocks.
@@ -116,6 +125,15 @@ Translate the input into high-converting Ukrainian for a product sold in the US 
 [MEASUREMENT CONSTRAINT — CRITICAL]
 If the source contains Imperial units (inches, lbs), the Ukrainian translation MUST preserve
 those Imperial units (дюйми, фунти). Do NOT convert them to Metric.
+SPACING ⛔: always put a single space between number and unit: "1.75 mm", "-5 °C – 50 °C".
+
+[LABELS TO TRANSLATE (Ukrainian)]
+- "Expert Verdict:" → "Експертний висновок:"
+- "Tech Tip:" → "Порада фахівця:"
+- "Technical specifications of the [Product Name]" → "Технічні характеристики [Product Name]"
+- "What's in the box" → "Комплектація"
+- "Why choose [Store]?" → "Чому обрати [Store]?"
+- Brand-guarantee sentence → translate fully
 
 [STYLE RULES]
 - Tone: Direct, confident, professional but accessible.
@@ -125,6 +143,7 @@ those Imperial units (дюйми, фунти). Do NOT convert them to Metric.
 - Do NOT translate Brand/Model Names.
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add new information.
+- Do NOT use <br> for spacing or to separate list items — use <ul><li> inside table cells if needed.
 
 [HTML RULES]
 - Return ONLY the HTML content. No markdown code blocks.
@@ -143,6 +162,21 @@ function buildUsPrompt(html: string, targetLang: string): string {
   const isEnglish = targetLang.includes('American English');
   const languageLabel = isEnglish ? 'American English (en-US)' : 'US/Latin American Spanish (es-US)';
 
+  const labelsBlock = isEnglish
+    ? `[LABELS TO ADAPT (American English)]
+- "Expert Verdict:" → keep as "Expert Verdict:"
+- "Tech Tip:" → keep as "Tech Tip:"
+- "Technical specifications of the [Product Name]" → keep in English
+- "What's in the box" → "What's in the Box"
+- "Why choose [Store]?" → keep`
+    : `[LABELS TO TRANSLATE (US Spanish es-MX)]
+- "Expert Verdict:" → "Veredicto del experto:"
+- "Tech Tip:" → "Consejo técnico:"
+- "Technical specifications of the [Product Name]" → "Especificaciones técnicas del [Product Name]"
+- "What's in the box" → "Contenido del paquete"
+- "Why choose [Store]?" → "¿Por qué elegir [Store]?"
+- Brand-guarantee sentence → translate fully`;
+
   return `[ROLE]
 You are a Native US Marketing Copywriter & Localization Expert based in Houston, Texas.
 Translate/adapt the input into ${languageLabel} for the US market.
@@ -152,6 +186,9 @@ If the input is already in the target language, treat it as Copy Editing & Polis
 apply all US localization rules, improve flow, ensure "native US marketing" feel.
 
 ${US_MEASUREMENT_RULES}
+SPACING ⛔: always put a single space between number and unit: "1.75 mm", "-5 °C – 50 °C", "10.5 kg".
+
+${labelsBlock}
 
 [LOCALIZATION TABLE]
 | Source Concept       | Action / Replacement                              |
@@ -172,6 +209,7 @@ ${US_MEASUREMENT_RULES}
 - Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab).
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add new information.
+- Do NOT use <br> for spacing or to separate list items — use <ul><li> inside table cells if needed.
 
 [HTML RULES]
 - Return ONLY the HTML content. No markdown code blocks.
@@ -191,6 +229,14 @@ Translate/adapt the input into natural, persuasive Castilian Spanish (es-ES) for
 [EDGE CASE — SAME LANGUAGE]
 If the input is already in Spanish, apply Castilian style improvements and SEO optimization.
 
+[LABELS TO TRANSLATE (Castilian Spanish)]
+- "Expert Verdict:" → "Veredicto del experto:"
+- "Tech Tip:" → "Consejo técnico:"
+- "Technical specifications of the [Product Name]" → "Especificaciones técnicas del [Product Name]"
+- "What's in the box" → "Contenido del paquete"
+- "Why choose EXPERT3D?" → "¿Por qué elegir EXPERT3D?"
+- Brand-guarantee sentence → translate fully
+
 [LOCALIZATION TABLE]
 | Source Concept       | Action / Replacement                              |
 |----------------------|---------------------------------------------------|
@@ -209,11 +255,13 @@ If the input is already in Spanish, apply Castilian style improvements and SEO o
 - Focus on "acabados profesionales" and "fiabilidad".
 
 [MEASUREMENT] Keep mm, cm, kg, °C. Do NOT use Imperial.
+SPACING ⛔: always put a single space between number and unit: "1.75 mm", "-5 °C – 50 °C".
 
 [NEGATIVE CONSTRAINTS]
 - Keep brand/model names in original Latin script (Creality, Bambu Lab).
 - Do NOT alter <img src="…"> URLs or change hrefs to "#".
 - Do NOT add information not in the source.
+- Do NOT use <br> for spacing or to separate list items — use <ul><li> inside table cells if needed.
 
 [HTML RULES]
 - Return ONLY the HTML content. No markdown code blocks.

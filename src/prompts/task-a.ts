@@ -167,7 +167,11 @@ The description body MUST NOT contain a second Product entity.
 - The hook paragraph is plain HTML with absolutely no microdata attributes.
 Allowed schema in the body: PropertyValue (spec rows), FAQPage, HowTo.
 
-${isUsSite ? US_MEASUREMENT_RULES : '[MEASUREMENT] Use standard Metric units (mm, kg, °C).'}
+${isUsSite ? US_MEASUREMENT_RULES : `[MEASUREMENT] Use standard Metric units (mm, kg, °C).
+   SPACING IS MANDATORY ⛔: always put a single space between number and unit in ALL output locations —
+   body text, spec table cells (itemprop="value"), quick-specs table, and alt text.
+   ✅ "1.75 mm", "200 °C", "-5 °C – 50 °C", "10.5 kg"
+   ❌ "1.75mm", "200°C", "-5°C – 50°C", "10.5kg"`}
 
 [STYLE & GEO GUIDELINES]
 - Featured-snippet opening: first sentence is a "What is / Best for" statement.
@@ -235,6 +239,10 @@ ${isUsSite ? US_MEASUREMENT_RULES : '[MEASUREMENT] Use standard Metric units (mm
    - DIMENSION SEPARATOR ⛔: always use the multiplication sign × (U+00D7) between dimension values,
      never an asterisk * or the letter x. Apply this consistently in both spec table cells and
      running text: "330 × 320 × 325 mm", not "330*320*325 mm" or "330x320x325 mm".
+   - MULTI-VALUE CELLS ⛔: if a spec row contains multiple items (e.g. safety features, supported
+     materials, connectivity options), render them as a <ul><li> list inside the <td>.
+     NEVER use <br> to separate items within a table cell. Example:
+     <td itemprop="value"><ul><li>Active Position Protection</li><li>Flame Detection</li></ul></td>
 
 5. PACKAGE CONTENTS:
    <h2>What's in the box</h2> followed by a <ul> list (only if package contents are in the input).

@@ -11,15 +11,18 @@ and screen readers can easily parse, cite, and rank.
 [MEASUREMENT & STANDARDIZATION RULES]
 - Use standard Metric units (mm, kg, °C) unless the regional strategy specifies otherwise.
 - CRITICAL: Always put a single space between the number and the unit
-  ("1.75 mm", "200 °C" — NOT "1.75mm" or "200°C"). This is required for consistent
-  database indexing and Schema.org accuracy.
+  ("1.75 mm", "200 °C", "-5 °C – 50 °C" — NOT "1.75mm", "200°C", "-5°C").
+  This applies to ALL occurrences including spec table cells (itemprop="value").
+  This is required for consistent database indexing and Schema.org accuracy.
 - The visible text and the HTML Microdata values (itemprop="value") must match
   perfectly to maintain AI trust.
 
 [GLOBAL FORMAT REQUIREMENTS]
 - HTML ONLY. No Markdown (no ** or ###). Do not wrap output in code fences.
-- CMS spacing: do NOT use <br> for spacing. Rely on semantic elements
+- CMS spacing: do NOT use <br> for spacing — anywhere. Rely on semantic elements
   (<p>, <h2>, <h3>, <div>, <section>) for natural spacing.
+  SPEC TABLE CELLS: if a cell must list multiple items (e.g., safety features, supported materials),
+  use a <ul><li> list inside the <td> — NEVER <br> separators.
 - DOM purity: never emit empty tags (<span></span>, empty <div>). Every tag carries meaning.
 - Emphasis budget: use <strong> ONLY for brands, the main model, and core USPs —
   max 2–3 <strong> per 500 characters. For visual scannability of technical parameters
