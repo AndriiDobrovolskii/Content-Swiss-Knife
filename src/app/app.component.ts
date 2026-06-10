@@ -9,6 +9,7 @@ import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
+import { HighlightCodeDirective } from './directives/highlight-code.directive';
 import saveAs from 'file-saver';
 
 interface ChatMessage {
@@ -307,7 +308,7 @@ const TRANSLATIONS = {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent],
+  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective],
   templateUrl: './app.component.html',
 })
 export class AppComponent implements AfterViewChecked {

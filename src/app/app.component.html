@@ -1076,6 +1076,11 @@
               </button>
             </div>
             
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+              <div [innerHTML]="content().mainHtmlEn | safeHtml"></div>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                <div class="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 h-fit">
                    <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-4 flex items-center gap-2">
@@ -1103,13 +1108,8 @@
                   <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
                     <span>{{ uiLabels().htmlSource }}</span>
                   </div>
-                  <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]">{{ content().mainHtmlEn }}</pre>
+                  <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="content().mainHtmlEn" class="hljs language-xml"></code></pre>
                </div>
-            </div>
-            
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
-              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
-              <div [innerHTML]="content().mainHtmlEn | safeHtml"></div>
             </div>
           </div>
         }
@@ -1260,16 +1260,16 @@
               </button>
             </div>
 
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+              <div [innerHTML]="optimizerOutput() | safeHtml"></div>
+            </div>
+
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
                 <span>{{ uiLabels().optResult }}</span>
               </div>
-              <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ optimizerOutput() }}</pre>
-            </div>
-
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
-              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
-              <div [innerHTML]="optimizerOutput() | safeHtml"></div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap"><code [appHighlightCode]="optimizerOutput()" class="hljs language-xml"></code></pre>
             </div>
           </div>
         }
@@ -1296,19 +1296,19 @@
               </button>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
-                <span>{{ uiLabels().transResult }}</span>
-              </div>
-              <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ translatorOutput() }}</pre>
-            </div>
-
             @if (translatorOutput().includes('<')) {
               <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
                 <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
                 <div [innerHTML]="translatorOutput() | safeHtml"></div>
               </div>
             }
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                <span>{{ uiLabels().transResult }}</span>
+              </div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap"><code [appHighlightCode]="translatorOutput()" class="hljs language-xml"></code></pre>
+            </div>
           </div>
         }
       </div>

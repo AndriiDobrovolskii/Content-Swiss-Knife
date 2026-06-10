@@ -1,0 +1,23 @@
+/* highlight.js — GitHub light theme (default) */
+@import 'highlight.js/styles/github.min.css';
+
+/* highlight.js — GitHub Dark overrides (Tailwind dark: class strategy) */
+.dark .hljs                          { background: #0d1117; color: #e6edf3; }
+.dark .hljs-comment,
+.dark .hljs-meta                     { color: #8b949e; }
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-template-tag             { color: #ff7b72; }
+.dark .hljs-name                     { color: #7ee787; }
+.dark .hljs-attr                     { color: #79c0ff; }
+.dark .hljs-string,
+.dark .hljs-doctag                   { color: #a5d6ff; }
+.dark .hljs-number,
+.dark .hljs-literal,
+.dark .hljs-variable,
+.dark .hljs-template-variable        { color: #79c0ff; }
+.dark .hljs-title,
+.dark .hljs-section,
+.dark .hljs-built_in                 { color: #d2a8ff; }
+.dark .hljs-addition                 { color: #aff5b4; background: #033a16; }
+.dark .hljs-deletion                 { color: #ffdcd7; background: #67060c; }

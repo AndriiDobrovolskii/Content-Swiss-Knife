@@ -31,6 +31,7 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "file-saver": "^2.0.5",
+    "highlight.js": "^11.11.1",
     "jszip": "^3.10.1",
     "linkedom": "^0.18.12",
     "openai": "^4.103.0",
