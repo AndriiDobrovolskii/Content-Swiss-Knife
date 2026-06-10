@@ -95,7 +95,7 @@ export interface ProcessedImage {
 
 export const WEBSITE_OPTIONS: WebsiteOption[] = [
   { name: '3DDevice', group: 'UA', url: '3ddevice.com.ua' },
-  { name: '3DPrinter', group: 'UA', url: '3dprinter.ua' },
+  { name: '3DPrinter', group: 'UA', url: '3dprinter.com.ua' },
   { name: '3DScanner', group: 'UA', url: '3dscanner.com.ua' },
   { name: 'Center 3D Print', group: 'EU', url: 'center3dprint.com' },
   { name: 'EXPERT3D', group: 'ES', url: 'expert3d.es' },
@@ -144,21 +144,5 @@ export const CONTENT_TEMPLATES: ContentTemplate[] = [
   }
 ];
 
-export const GROUP_CONFIG: Record<WebsiteGroup, { seoLangs: string[], transLangs: string[] }> = {
-  'UA': {
-    seoLangs: ['EN', 'UA', 'RU'],
-    transLangs: ['UA', 'RU']
-  },
-  'EU': {
-    seoLangs: ['EN', 'PL', 'DE', 'UA', 'RU'],
-    transLangs: ['PL', 'DE', 'UA', 'RU']
-  },
-  'ES': {
-    seoLangs: ['EN', 'ES', 'en-ES', 'uk-UA'],
-    transLangs: ['ES', 'European English', 'Ukrainian']
-  },
-  'US': {
-    seoLangs: ['en-US', 'es-US', 'uk-UA'],
-    transLangs: ['American Spanish', 'Ukrainian']
-  }
-};
+// Re-exported from prompt-core/constants for back-compat.
+export { GROUP_CONFIG } from '../prompt-core/constants';

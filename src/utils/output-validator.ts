@@ -29,10 +29,17 @@ function charLength(s: string): number {
 
 /**
  * Validates a single generated HTML body artifact.
- * @param html  the HTML body
- * @param context label for reporting, e.g. "HTML (base/en)" or "HTML (UA)"
+ * @param html        the HTML body
+ * @param context     label for reporting, e.g. "HTML (base/en)" or "HTML (UA)"
+ * @param productName optional product name; occurrences are excluded from the
+ *                    unit-spacing check to avoid false positives on model-name
+ *                    suffixes like "Ortur R2 Smart Laser Engraver 10W".
  */
-export function validateGeneratedHtml(html: string, context: string): ValidationIssue[] {
+export function validateGeneratedHtml(
+  html: string,
+  context: string,
+  productName?: string,
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!html || !html.trim()) {
     issues.push({ severity: 'error', rule: 'empty-output', detail: 'Generated HTML is empty.', context });
@@ -61,7 +68,14 @@ export function validateGeneratedHtml(html: string, context: string): Validation
   }
 
   // Number glued to a unit, e.g. "1.75mm" or "200°C" (must be "1.75 mm" / "200 °C").
-  const gluedUnit = html.match(/\d(?:mm|cm|°C|kg|µm|μm|mm\/s|MPa|GPa)\b/);
+  // Strip product name first to avoid false positives on model-name suffixes like
+  // "Ortur R2 Smart Laser Engraver 10W" or "xTool S1 40W" where the wattage is
+  // part of the proper noun, not a standalone measurement.
+  const htmlForUnitCheck = productName?.trim()
+    ? html.replaceAll(productName.trim(), '\x00PRODUCT_NAME\x00')
+    : html;
+
+  const gluedUnit = htmlForUnitCheck.match(/\d(?:W|mm|cm|°C|kg|µm|μm|mm\/s|MPa|GPa)\b/);
   if (gluedUnit) {
     issues.push({
       severity: 'warning',

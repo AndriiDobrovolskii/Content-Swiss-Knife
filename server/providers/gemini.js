@@ -8,12 +8,16 @@ export class GeminiProvider {
     this.thinkingModel = 'gemini-2.5-flash-preview-05-20';
   }
 
-  async generate(prompt, mode = 'text') {
+  async generate(payload, mode = 'text') {
     return withRetry(async () => {
+      const { systemBlocks = [], userContent = '' } =
+        typeof payload === 'string' ? { systemBlocks: [], userContent: payload } : payload;
+      const contents = [systemBlocks.map(b => b.text).join('\n\n'), userContent].filter(Boolean).join('\n\n');
+
       if (mode === 'creative') {
         const response = await this.ai.models.generateContent({
           model: this.thinkingModel,
-          contents: prompt,
+          contents,
           config: { thinkingConfig: { thinkingBudget: 8000 } }
         });
         return response.text || '';
@@ -22,7 +26,7 @@ export class GeminiProvider {
       if (mode === 'json') {
         const response = await this.ai.models.generateContent({
           model: this.flashModel,
-          contents: prompt,
+          contents,
           config: { responseMimeType: 'application/json' }
         });
         const text = response.text || '{}';
@@ -32,7 +36,7 @@ export class GeminiProvider {
 
       const response = await this.ai.models.generateContent({
         model: this.flashModel,
-        contents: prompt
+        contents
       });
       return response.text || '';
     });

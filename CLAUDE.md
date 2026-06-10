@@ -1,5 +1,26 @@
 # CLAUDE.md
 
+## ⛔ FROZEN FILES — Claude Code MUST NOT modify without explicit user instruction
+
+The following files contain production-calibrated prompt text and validation logic.
+These files are FROZEN. Claude Code must NOT edit them unless the user explicitly
+says "modify [filename]" for that specific file in the current session.
+
+Refactoring a service that IMPORTS these files does NOT authorize editing them.
+Fixing a bug elsewhere does NOT authorize editing them.
+
+FROZEN list:
+- src/prompts/task-a.ts
+- src/prompts/task-b.ts
+- src/prompts/task-c.ts
+- src/prompt-core/master-system-prompt.ts
+- src/utils/output-validator.ts
+
+If Claude Code needs to change any frozen file to complete a task, it MUST:
+1. STOP
+2. Tell the user EXACTLY what change is needed and WHY
+3. Wait for explicit approval before proceeding
+
 Instructions for Claude Code in this repository. Read before making any change.
 
 ## What this project is

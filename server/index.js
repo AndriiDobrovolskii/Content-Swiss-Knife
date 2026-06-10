@@ -21,8 +21,8 @@ const serper = new SerperRetrieval(process.env.SERPER_API_KEY);
 
 app.post('/api/llm/generate', async (req, res) => {
   try {
-    const { prompt, mode = 'text' } = req.body;
-    const result = await provider.generate(prompt, mode);
+    const { systemBlocks = [], userContent = '', mode = 'text' } = req.body;
+    const result = await provider.generate({ systemBlocks, userContent }, mode);
     res.json({ result });
   } catch (error) {
     console.error('[LLM] generate error:', error.message);
