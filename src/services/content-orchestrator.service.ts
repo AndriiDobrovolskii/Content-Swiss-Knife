@@ -2,11 +2,12 @@ import { Injectable, signal, inject } from '@angular/core';
 import { LlmService } from './llm.service';
 import { RetrievalService } from './retrieval.service';
 import { HistoryService } from '@/src/services/history.service';
-import { ProductInput, GeneratedContent, GROUP_CONFIG, WebsiteOption } from '../app/types';
+import { ProductInput, GeneratedContent, WebsiteOption } from '../app/types';
 import { cleanHtmlStructure } from '../utils/html-cleaner';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB, resolveCurrencySymbol } from '../prompts/task-b';
+import { getStore, getLangsForStore, US_MEASUREMENT_RULES } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 
 // ── Inline prompts for tools that don't need external templates ─────────────
@@ -133,7 +134,7 @@ export class ContentOrchestratorService {
     this.validationIssues.set([]);
 
     try {
-      const groupConfig = GROUP_CONFIG[input.website.group];
+      const { seoLangs, transLangs } = getLangsForStore(input.website.name);
 
       // Step 1 — Generate base English HTML
       this.progressMessage.set(useThinking ? 'Generating HTML Description (Deep Thinking)…' : 'Generating HTML Description…');
@@ -145,13 +146,13 @@ export class ContentOrchestratorService {
       // Step 2 — Generate SEO Metadata
       // Pass the freshly generated HTML as context so meta_description can pull a real
       // hard spec / USP from the product (prompt requires "1 hard spec from context").
-      this.progressMessage.set(`Generating SEO Metadata for ${groupConfig.seoLangs.join(', ')}…`);
-      const promptB = buildPromptB(input.website.name, input.name, groupConfig.seoLangs, htmlEn);
+      this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
+      const promptB = buildPromptB(input.website.name, input.name, seoLangs, htmlEn);
       const seoJson = await this.llm.generateJson(promptB);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
       // Step 3 — Translations
-      for (const lang of groupConfig.transLangs) {
+      for (const lang of transLangs) {
         this.progressMessage.set(`Translating to ${lang}…`);
         const promptC = buildPromptC(htmlEn, lang, input.website.name, input.website.group);
         let translatedHtml = await this.llm.generateText(promptC, false);
@@ -169,7 +170,7 @@ export class ContentOrchestratorService {
       }
 
       // Post-generation acceptance-criteria check (non-blocking — reports only).
-      this.runOutputValidation(input.website.name);
+      this.runOutputValidation(input.website.name, input.name);
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Done!');
@@ -189,10 +190,10 @@ export class ContentOrchestratorService {
     this.validationIssues.set([]);
 
     try {
-      const groupConfig = GROUP_CONFIG[input.website.group];
-      this.progressMessage.set(`Generating SEO Metadata for ${groupConfig.seoLangs.join(', ')}…`);
+      const { seoLangs } = getLangsForStore(input.website.name);
+      this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
 
-      const promptB = buildPromptB(input.website.name, input.name, groupConfig.seoLangs, input.description);
+      const promptB = buildPromptB(input.website.name, input.name, seoLangs, input.description);
       const seoJson = await this.llm.generateJson(promptB);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
@@ -331,13 +332,13 @@ export class ContentOrchestratorService {
    * stores the results in the validationIssues signal. Errors are also logged so they
    * are visible during development. Never throws — validation is advisory.
    */
-  private runOutputValidation(storeName: string): void {
+  private runOutputValidation(storeName: string, productName?: string): void {
     const c = this.content();
     const currencySymbol = resolveCurrencySymbol(storeName);
     const issues: ValidationIssue[] = [
-      ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)'),
+      ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)', productName),
       ...Object.entries(c.translations).flatMap(([lang, html]) =>
-        validateGeneratedHtml(html, `HTML (${lang})`)
+        validateGeneratedHtml(html, `HTML (${lang})`, productName)
       ),
       ...validateSeoMetadata(c.seoData, currencySymbol),
     ];
@@ -432,41 +433,25 @@ export class ContentOrchestratorService {
     return result;
   }
 
-  private getUsMeasurementRules(): string {
-    return `### Measurement System (Mixed US Standard)
-CONVERT to Imperial:
-- Printer Dimensions → inches
-- Build Volume → inches
-- Printer Weight → lbs
-- Filament Spool Weight → lbs (or oz for small samples)
-
-KEEP in Metric:
-- Layer Thickness → microns (μm)
-- Filament Diameter → mm (e.g., 1.75 mm)
-- Nozzle Diameter → mm
-- Temperature → °C
-- Print Speed → mm/s
-- Resin Volume → L or ml`;
-  }
-
   private buildCopywriterPrompt(website: WebsiteOption, text: string): string {
     const siteName = website.name;
+    const store = getStore(siteName);
     let localizationContext = '';
 
-    if (['3DDevice', '3DPrinter', '3DScanner'].includes(siteName)) {
+    if (store.group === 'UA') {
       localizationContext = `### Context for ${siteName} (UA Market)
 - Language Priority: Ukrainian (uk-UA), Russian (ru-UA).
 - Tone: Professional, clear, and trustworthy. Expert voice.`;
-    } else if (siteName === 'Center 3D Print') {
+    } else if (store.group === 'EU') {
       localizationContext = `### Context for ${siteName} (EU Market)
 - Language Priority: Polish (pl-PL), English (en-GB), German (de-DE).
 - Tone: Professional, direct, and technically accurate.`;
-    } else if (siteName === 'EXPERT3D' || siteName === 'Impresora-3D') {
+    } else if (store.group === 'ES') {
       localizationContext = `### Context for ${siteName} (Spain Market)
 - Language Priority: Spanish (es-ES).
 - Tone: "Cercano y Profesional". Engaging and direct. Use "Tú".`;
-    } else if (siteName === 'Expert-3DPrinter') {
-      localizationContext = `${this.getUsMeasurementRules()}
+    } else if (store.group === 'US') {
+      localizationContext = `${US_MEASUREMENT_RULES}
 
 ### Context for ${siteName} (US Market)
 - Language Priority: English (en-US), Spanish (es-MX).
