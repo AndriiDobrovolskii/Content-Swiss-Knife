@@ -8,11 +8,17 @@ export class OpenAiProvider {
     this.model = model;
   }
 
-  async generate(prompt, mode = 'text') {
+  async generate(payload, mode = 'text') {
     return withRetry(async () => {
+      const { systemBlocks = [], userContent = '' } =
+        typeof payload === 'string' ? { systemBlocks: [], userContent: payload } : payload;
+      const system = systemBlocks.map(b => b.text).join('\n\n');
+      const openaiMessages = [];
+      if (system) openaiMessages.push({ role: 'system', content: system });
+      openaiMessages.push({ role: 'user', content: userContent });
       const config = {
         model: this.model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: openaiMessages,
       };
 
       if (mode === 'json') {
@@ -20,9 +26,10 @@ export class OpenAiProvider {
         config.temperature = 0.15;
       } else if (mode === 'creative') {
         config.temperature = 0.8;
-        config.max_tokens = 8192;
+        config.max_tokens = 16384;
       } else {
         config.temperature = 0.4;
+        config.max_tokens = 8192;
       }
 
       const response = await this.client.chat.completions.create(config);
