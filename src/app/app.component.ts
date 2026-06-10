@@ -7,6 +7,7 @@ import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, HistoryItem,
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
+import { getStore, taskLangToIso } from '../prompt-core/constants';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
@@ -119,7 +120,6 @@ const TRANSLATIONS = {
     placeholderSupplemental: 'Paste How-To guides or FAQs here...',
     customInstructions: 'Custom Instructions (Optional)',
     placeholderInstructions: 'e.g., "Write in a more casual tone", "Focus on durability for industrial use."',
-    keywordAnalysis: 'Keyword Density',
     imgSelectImages: 'Select Images',
     imgDropZone: 'Drag & Drop or Click to Upload',
     imgFormat: 'Format',
@@ -259,7 +259,6 @@ const TRANSLATIONS = {
     placeholderSupplemental: 'Вставте інструкції (How-To) або FAQ сюди...',
     customInstructions: 'Додаткові інструкції (Опціонально)',
     placeholderInstructions: 'напр., "Писати в більш неформальному стилі", "Зосередитись на міцності для промислового використання."',
-    keywordAnalysis: 'Щільність ключових слів',
     imgSelectImages: 'Обрати зображення',
     imgDropZone: 'Перетягніть або натисніть',
     imgFormat: 'Формат',
@@ -522,38 +521,30 @@ export class AppComponent implements AfterViewChecked {
   
   isCopywriterValid = computed(() => this.selectedWebsite() && this.copywriterInput().trim().length > 0);
 
-  keywordAnalysis = computed(() => {
-    const html = this.content().mainHtmlEn;
-    if (!html) return [];
-
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const text = doc.body.textContent || '';
-    
-    const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 2);
-    const totalWords = words.length;
-    if (totalWords === 0) return [];
-
-    const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'you', 'are', 'not', 'have', 'was', 'but', 'all', 'can', 'will', 'has', 'one', 'out', 'into', 'about', 'our', 'your', 'more', 'its', 'they', 'their', 'what', 'which', 'when', 'who', 'how', 'why', 'any', 'some', 'than', 'then', 'now', 'also', 'use', 'using', 'used', 'new', 'only', 'just', 'like', 'see', 'get', 'make', 'made', 'does', 'did', 'done', 'been', 'being', 'very', 'much', 'many', 'most', 'such', 'other', 'over', 'under', 'between', 'through', 'where', 'while', 'since', 'after', 'before', 'during', 'without', 'within']);
-    const counts: Record<string, number> = {};
-    
-    words.forEach(w => {
-      if (!STOP_WORDS.has(w) && !/^\d+$/.test(w)) {
-        counts[w] = (counts[w] || 0) + 1;
-      }
-    });
-
-    return Object.entries(counts)
-        .map(([word, count]) => ({ word, count, density: (count / totalWords) * 100 }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10);
-  });
-
   selectedComparisonItems = computed(() => {
     return this.historyItems().filter(h => this.comparisonIds().includes(h.id));
   });
 
   getTranslationKeys() {
     return Object.keys(this.content().translations);
+  }
+
+  getUaTranslationKey(): string | null {
+    const keys = Object.keys(this.content().translations);
+    return keys.find(k => k === 'UA' || k === 'Ukrainian') ?? null;
+  }
+
+  getNonUaTranslationKeys(): string[] {
+    return Object.keys(this.content().translations).filter(k => k !== 'UA' && k !== 'Ukrainian');
+  }
+
+  getIsoForLang(langKey: string): string {
+    return taskLangToIso(langKey, this.content().website?.name ?? '');
+  }
+
+  getEnglishIso(): string {
+    const storeName = this.content().website?.name ?? '';
+    return getStore(storeName).languages.find(l => l.startsWith('en-')) ?? 'en-GB';
   }
 
   toggleDarkMode() {

@@ -1008,23 +1008,30 @@
       @if (hasOutput() || appMode() === 'seo-generator') {
         <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200">
         <div class="flex items-center gap-6 overflow-x-auto no-scrollbar">
+          @if (getUaTranslationKey()) {
+            <button
+              (click)="activeTab.set('trans-' + getUaTranslationKey())"
+              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
+              [class]="activeTab() === 'trans-' + getUaTranslationKey() ? 'border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+              {{ getUaTranslationKey() }} {{ uiLabels().translation }}
+            </button>
+          }
+          <button
+            (click)="activeTab.set('seo')"
+            class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
+            [class]="activeTab() === 'seo' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().seoMeta }}
+          </button>
           @if (appMode() === 'generator') {
-             <button
+            <button
               (click)="activeTab.set('html')"
               class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
               [class]="activeTab() === 'html' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
               {{ baseOutputLabel() }}
             </button>
           }
-          <button 
-            (click)="activeTab.set('seo')"
-            class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
-            [class]="activeTab() === 'seo' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().seoMeta }}
-          </button>
-          
-          @for (key of getTranslationKeys(); track key) {
-            <button 
+          @for (key of getNonUaTranslationKeys(); track key) {
+            <button
               (click)="activeTab.set('trans-' + key)"
               class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
               [class]="activeTab() === 'trans-' + key ? 'border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
@@ -1081,36 +1088,40 @@
               <div [innerHTML]="content().mainHtmlEn | safeHtml"></div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-               <div class="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 h-fit">
-                   <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-4 flex items-center gap-2">
-                      <i class="fa-solid fa-chart-simple text-blue-500"></i> {{ uiLabels().keywordAnalysis }}
-                   </h3>
-                   <div class="space-y-3">
-                       @for (kw of keywordAnalysis(); track kw.word) {
-                           <div class="flex justify-between items-center text-xs group cursor-default">
-                               <span class="text-slate-700 dark:text-slate-300 font-medium group-hover:text-blue-600 transition-colors">{{ kw.word }}</span>
-                               <div class="flex items-center gap-3">
-                                   <div class="w-16 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                       <div class="h-full bg-blue-500/80 group-hover:bg-blue-500 transition-colors" [style.width.%]="kw.density * 5"></div>
-                                   </div>
-                                   <span class="text-slate-400 dark:text-slate-500 w-6 text-right font-mono">{{ kw.count }}</span>
-                               </div>
-                           </div>
-                       }
-                       @if (keywordAnalysis().length === 0) {
-                          <p class="text-xs text-slate-400 italic">No keywords data.</p>
-                       }
-                   </div>
-               </div>
-
-               <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-                  <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
-                    <span>{{ uiLabels().htmlSource }}</span>
-                  </div>
-                  <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="content().mainHtmlEn" class="hljs language-xml"></code></pre>
-               </div>
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                <span>{{ uiLabels().htmlSource }}</span>
+              </div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="content().mainHtmlEn" class="hljs language-xml"></code></pre>
             </div>
+
+            @if (content().howtoArtifacts?.[getEnglishIso()]) {
+              @let howtoHtmlEn = content().howtoArtifacts![getEnglishIso()];
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">HowTo – {{ uiLabels().livePreview }}</h3>
+                <div [innerHTML]="howtoHtmlEn | safeHtml"></div>
+              </div>
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                  <span>HowTo – {{ uiLabels().htmlSource }}</span>
+                </div>
+                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="howtoHtmlEn" class="hljs language-xml"></code></pre>
+              </div>
+            }
+
+            @if (content().faqArtifacts?.[getEnglishIso()]) {
+              @let faqHtmlEn = content().faqArtifacts![getEnglishIso()];
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">FAQ – {{ uiLabels().livePreview }}</h3>
+                <div [innerHTML]="faqHtmlEn | safeHtml"></div>
+              </div>
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                  <span>FAQ – {{ uiLabels().htmlSource }}</span>
+                </div>
+                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="faqHtmlEn" class="hljs language-xml"></code></pre>
+              </div>
+            }
           </div>
         }
 
@@ -1208,10 +1219,11 @@
         }
 
         @if (activeTab().startsWith('trans-')) {
-          <div class="max-w-4xl mx-auto">
-            @let langKey = activeTab().split('-')[1];
+          <div class="max-w-5xl mx-auto space-y-6">
+            @let langKey = activeTab().slice(6);
             @let transContent = content().translations[langKey];
-            
+            @let isoCode = getIsoForLang(langKey);
+
             <div class="flex justify-between items-center mb-4">
               <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ langKey }} {{ uiLabels().translation }}</h2>
               <button (click)="copyToClipboard(transContent, $event)" class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium transition-transform active:scale-90">
@@ -1219,19 +1231,47 @@
               </button>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-               <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
-                <span>{{ uiLabels().htmlSource }} ({{ langKey }})</span>
-              </div>
-              <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ transContent }}</pre>
-            </div>
-
             @if (transContent) {
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 mt-6 prose prose-sm max-w-none prose-slate dark:prose-invert">
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
                 <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">
                   {{ uiLabels().livePreview }} ({{ langKey }})
                 </h3>
                 <div [innerHTML]="transContent | safeHtml"></div>
+              </div>
+            }
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                <span>{{ uiLabels().htmlSource }} ({{ langKey }})</span>
+              </div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="transContent" class="hljs language-xml"></code></pre>
+            </div>
+
+            @if (content().howtoArtifacts?.[isoCode]) {
+              @let howtoHtmlTrans = content().howtoArtifacts![isoCode];
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">HowTo – {{ uiLabels().livePreview }}</h3>
+                <div [innerHTML]="howtoHtmlTrans | safeHtml"></div>
+              </div>
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                  <span>HowTo – {{ uiLabels().htmlSource }} ({{ langKey }})</span>
+                </div>
+                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="howtoHtmlTrans" class="hljs language-xml"></code></pre>
+              </div>
+            }
+
+            @if (content().faqArtifacts?.[isoCode]) {
+              @let faqHtmlTrans = content().faqArtifacts![isoCode];
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">FAQ – {{ uiLabels().livePreview }}</h3>
+                <div [innerHTML]="faqHtmlTrans | safeHtml"></div>
+              </div>
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                  <span>FAQ – {{ uiLabels().htmlSource }} ({{ langKey }})</span>
+                </div>
+                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="faqHtmlTrans" class="hljs language-xml"></code></pre>
               </div>
             }
           </div>
