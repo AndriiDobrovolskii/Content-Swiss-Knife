@@ -83,11 +83,23 @@ TYPE A iframe (YouTube/Vimeo): preserve verbatim, place in Deep Dive. TYPE B dir
 Detect format by extension. Every embed needs a lead-in <p>. One copy per language version.
 
 [IMAGE HANDLING]
-Ignore and never reuse <img> from the raw input. Generate <img> only when an [Image Manifest] is
-provided. Expert-3DPrinter: emit NO <img> at all. URL = {Base URL}{brandFolder}/{modelFolder}/{filename},
-no double slashes, preserve Base-URL casing. First image: NO loading="lazy". All later images: loading="lazy".
-Every <img> preceded by a lead-in <p>; no orphan images; no two adjacent images; sequential order.
-alt text: from manifest/vision or inferred from filename; describe content for screen readers; never keyword-stuff.
+IGNORE SOURCE IMAGES: strip all <img> from [Raw Description]; never reuse their URLs.
+CONDITIONAL: emit <img> ONLY when an [IMAGE MANIFEST] block appears in the user message.
+Expert-3DPrinter: NEVER emit any <img> regardless of manifest.
+
+IMG TAG FORMAT — copy exactly, no deviations:
+  Image #1 (LCP, no lazy): <img src="URL" alt="DESCRIPTION" style="max-width: 100%; height: auto; display: block; margin: 15px 0;" />
+  Images #2+ (lazy):        <img src="URL" alt="DESCRIPTION" style="max-width: 100%; height: auto; display: block; margin: 15px 0;" loading="lazy" />
+
+URL construction: {Base URL from manifest}{brandFolder}/{modelFolder}/{filename} — no double slashes; preserve Base-URL casing exactly.
+
+PLACEMENT — STRICT RULES:
+- MANDATORY LEAD-IN: every <img> MUST be immediately preceded by a <p> that introduces or references the image (e.g. "The image below demonstrates…"). This <p> MUST NOT be skipped.
+- NO ORPHAN IMAGES: NEVER insert <img> without the lead-in <p> directly above it.
+- NO CONSECUTIVE IMAGES: NEVER place two <img> tags next to each other; separate every image with meaningful text.
+- Use ALL manifest entries exactly once, in listed order, distributed to match the logical text flow.
+
+ALT TEXT: use the manifest vision description; if absent, infer from filename (e.g. "high-prec-scan.jpg" → "High precision scanning demonstration"). Describe image content for screen readers; never keyword-stuff.
 
 [FORMAT]
 HTML only. No Markdown. No <br> for spacing — use <p>/<h2>/<h3>/<div>/<section>; <hr> after each </section>.
