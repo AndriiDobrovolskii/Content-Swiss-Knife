@@ -32,7 +32,10 @@ export class AnthropicProvider {
       };
       if (mode === 'creative') config.thinking = { type: 'enabled', budget_tokens: 6000 };
 
-      const stream = this.client.messages.stream(config);
+      const hasCacheBlocks = systemBlocks.some(b => b?.cache);
+      const stream = hasCacheBlocks
+        ? this.client.beta.messages.stream({ betas: ['prompt-caching-2024-07-31'], ...config })
+        : this.client.messages.stream(config);
       const response = await stream.finalMessage();
 
       const u = response.usage || {};
