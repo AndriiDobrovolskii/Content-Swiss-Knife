@@ -547,6 +547,32 @@ export class AppComponent implements AfterViewChecked {
     return getStore(storeName).languages.find(l => l.startsWith('en-')) ?? 'en-GB';
   }
 
+  getHowToIntro(html: string): string {
+    if (!html) return '';
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const h2 = doc.querySelector('body > h2');
+    const p = doc.querySelector('body > p');
+    return (h2?.outerHTML ?? '') + (p?.outerHTML ?? '');
+  }
+
+  parseHowToSteps(html: string): Array<{ innerHtml: string; textContent: string }> {
+    if (!html) return [];
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return Array.from(doc.querySelectorAll('li')).map(li => ({
+      innerHtml: li.innerHTML,
+      textContent: (li.textContent ?? '').trim()
+    }));
+  }
+
+  parseFaqItems(html: string): Array<{ question: string; answer: string }> {
+    if (!html) return [];
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return Array.from(doc.querySelectorAll('.faq-item')).map(item => ({
+      question: (item.querySelector('h3')?.textContent ?? '').trim(),
+      answer: (item.querySelector('p')?.textContent ?? '').trim()
+    }));
+  }
+
   toggleDarkMode() {
     this.darkMode.update(v => !v);
   }
