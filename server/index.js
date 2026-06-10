@@ -32,8 +32,8 @@ app.post('/api/llm/generate', async (req, res) => {
 
 app.post('/api/llm/vision', async (req, res) => {
   try {
-    const { base64Data, mimeType, prompt } = req.body;
-    const result = await provider.analyzeImage(base64Data, mimeType, prompt);
+    const { base64Data, mimeType, prompt, useThinking = false } = req.body;
+    const result = await provider.analyzeImage(base64Data, mimeType, prompt, useThinking);
     res.json({ result });
   } catch (error) {
     console.error('[LLM] vision error:', error.message);

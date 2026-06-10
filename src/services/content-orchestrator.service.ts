@@ -150,7 +150,7 @@ export class ContentOrchestratorService {
       // hard spec / USP from the product (prompt requires "1 hard spec from context").
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
       const promptB = buildPromptB(input.website.name, input.name, seoLangs, htmlEn);
-      const seoJson = await this.llm.generateJson(promptB);
+      const seoJson = await this.llm.generateJson(promptB, useThinking);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
       // Step 3 — Translations (Ukrainian always first)
@@ -164,7 +164,7 @@ export class ContentOrchestratorService {
       for (const lang of sortedTransLangs) {
         this.progressMessage.set(`Translating to ${lang}…`);
         const promptC = buildPromptC(htmlEn, lang, input.website.name, input.website.group);
-        let translatedHtml = await this.llm.generateText(promptC, false);
+        let translatedHtml = await this.llm.generateText(promptC, useThinking);
         translatedHtml = translatedHtml.replace(/```html/g, '').replace(/```/g, '').trim();
 
         // EXPERT3D Spanish URL replacement
@@ -185,14 +185,14 @@ export class ContentOrchestratorService {
           const humanLang = isoToHumanLang(isoCode);
 
           this.progressMessage.set(`Generating FAQ artifact (${isoCode})…`);
-          let faqHtml = await this.llm.generateText(buildPromptFaq(input.supplementalContent, humanLang), false);
+          let faqHtml = await this.llm.generateText(buildPromptFaq(input.supplementalContent, humanLang), useThinking);
           faqHtml = faqHtml.replace(/```html/g, '').replace(/```/g, '').trim();
           if (faqHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
           }
 
           this.progressMessage.set(`Generating HowTo artifact (${isoCode})…`);
-          let howtoHtml = await this.llm.generateText(buildPromptHowTo(input.supplementalContent, humanLang), false);
+          let howtoHtml = await this.llm.generateText(buildPromptHowTo(input.supplementalContent, humanLang), useThinking);
           howtoHtml = howtoHtml.replace(/```html/g, '').replace(/```/g, '').trim();
           if (howtoHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, howtoArtifacts: { ...c.howtoArtifacts, [isoCode]: howtoHtml } }));
@@ -225,7 +225,7 @@ export class ContentOrchestratorService {
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
 
       const promptB = buildPromptB(input.website.name, input.name, seoLangs, input.description);
-      const seoJson = await this.llm.generateJson(promptB);
+      const seoJson = await this.llm.generateJson(promptB, useThinking);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
       // Validate just the SEO metadata for this flow (no HTML produced here).

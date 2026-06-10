@@ -37,15 +37,16 @@ export class LlmService implements LlmProvider {
     return this.generate<string>(toPayload(input), 'creative');
   }
 
-  async generateJson<T = any>(input: PromptPayload | string): Promise<T> {
-    return this.generate<T>(toPayload(input), 'json');
+  async generateJson<T = any>(input: PromptPayload | string, useThinking = false): Promise<T> {
+    return this.generate<T>(toPayload(input), useThinking ? 'creative-json' : 'json');
   }
 
-  async analyzeImage(base64Data: string, mimeType: string, prompt: string): Promise<string> {
+  async analyzeImage(base64Data: string, mimeType: string, prompt: string, useThinking = false): Promise<string> {
     const { result } = await this.post<{ result: string }>('/llm/vision', {
       base64Data,
       mimeType,
-      prompt
+      prompt,
+      useThinking
     });
     return result;
   }

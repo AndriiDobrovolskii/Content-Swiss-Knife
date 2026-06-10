@@ -968,7 +968,7 @@ export class AppComponent implements AfterViewChecked {
             const file = this.genImgFileMap.get(entry.id);
             if (!file) throw new Error('File not found');
             const base64 = await this.fileToBase64ForVision(file);
-            const description = await this.llmService.analyzeImage(base64, 'image/jpeg', buildVisionPrepassPrompt());
+            const description = await this.llmService.analyzeImage(base64, 'image/jpeg', buildVisionPrepassPrompt(), this.generatorUseThinking());
             this.genImgManifest.update(list =>
               list.map(e => e.id === entry.id
                 ? { ...e, status: 'done', visionDescription: description, altText: e.altText || description }
@@ -1077,7 +1077,7 @@ export class AppComponent implements AfterViewChecked {
             if (this.imgUseAiAlt()) {
               try {
                 const base64ForApi = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
-                altText = await this.llmService.analyzeImage(base64ForApi, 'image/jpeg', this.orchestrator.getImageAltPrompt());
+                altText = await this.llmService.analyzeImage(base64ForApi, 'image/jpeg', this.orchestrator.getImageAltPrompt(), this.generatorUseThinking());
               } catch (err) {
                 console.warn('AI Alt Text failed', err);
                 altText = 'Error generating alt text.';
