@@ -1,24 +1,65 @@
 import JSZip from 'jszip';
 import saveAs from 'file-saver';
 import { GeneratedContent, ProcessedImage } from '../app/types';
+import { getStore, taskLangToIso } from '../prompt-core/constants';
+
+function buildTimestamp(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
 
 export const downloadPackage = async (content: GeneratedContent, productName: string) => {
   const zip = new JSZip();
   const safeName = productName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  const ts = buildTimestamp();
+  const storeName = content.website?.name ?? '';
+  const store = getStore(storeName);
 
-  // 1. Add English HTML
-  zip.file(`${safeName}_en.html`, content.mainHtmlEn);
+  // Determine English ISO code for this store (e.g. 'en-GB', 'en-ES', 'en-US')
+  const enIso = store.languages.find(l => l.startsWith('en-')) ?? 'en-GB';
 
-  // 2. Add Translations
-  Object.entries(content.translations).forEach(([lang, html]) => {
-    zip.file(`${safeName}_${lang.toLowerCase()}.html`, html);
+  // 1. Base English description
+  zip.file(`description_${enIso}.html`, content.mainHtmlEn);
+
+  // 2. Translations — sort so Ukrainian comes first
+  const sortedKeys = Object.keys(content.translations).sort((a, b) => {
+    const aIsUk = a === 'UA' || a === 'Ukrainian';
+    const bIsUk = b === 'UA' || b === 'Ukrainian';
+    if (aIsUk && !bIsUk) return -1;
+    if (!aIsUk && bIsUk) return 1;
+    return 0;
+  });
+  sortedKeys.forEach(key => {
+    const iso = taskLangToIso(key, storeName);
+    zip.file(`description_${iso}.html`, content.translations[key]);
   });
 
-  // 3. Add SEO JSON
+  // 3. FAQ artifacts — schema-free, for Journal theme FAQ module
+  if (content.faqArtifacts) {
+    const faqEntries = Object.entries(content.faqArtifacts).sort(([a], [b]) => {
+      if (a === 'uk-UA') return -1;
+      if (b === 'uk-UA') return 1;
+      return 0;
+    });
+    faqEntries.forEach(([iso, html]) => { if (html) zip.file(`faq_${iso}.html`, html); });
+  }
+
+  // 4. HowTo artifacts — schema-free, for Journal theme HowTo module
+  if (content.howtoArtifacts) {
+    const howtoEntries = Object.entries(content.howtoArtifacts).sort(([a], [b]) => {
+      if (a === 'uk-UA') return -1;
+      if (b === 'uk-UA') return 1;
+      return 0;
+    });
+    howtoEntries.forEach(([iso, html]) => { if (html) zip.file(`howto_${iso}.html`, html); });
+  }
+
+  // 5. SEO JSON
   if (content.seoData) {
     zip.file('seo_metadata.json', JSON.stringify(content.seoData, null, 2));
 
-    // 4. Readable SEO Text
+    // 6. Readable SEO text
     let seoText = `SEO Report for ${content.seoData.site_name}\n\n`;
     content.seoData.seo_data.forEach(item => {
       seoText += `[${item.language}]\n`;
@@ -31,7 +72,7 @@ export const downloadPackage = async (content: GeneratedContent, productName: st
   }
 
   const blob = await zip.generateAsync({ type: 'blob' });
-  saveAs(blob, `${safeName}_content_pack.zip`);
+  saveAs(blob, `${safeName}_content_${ts}.zip`);
 };
 
 export const downloadTextPackage = (content: GeneratedContent, productName: string) => {

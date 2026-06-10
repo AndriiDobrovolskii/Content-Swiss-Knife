@@ -10,8 +10,8 @@
  * — before any real LLM call is made.
  *
  * COVERAGE TARGETS (9 rules total)
- *   HTML checks:   empty-output, duplicate-product-schema, markdown-fence,
- *                  br-spacing, unit-spacing, lcp-image-lazy, image-not-lazy
+ *   HTML checks:   empty-output, duplicate-product-schema, no-faqpage-in-body, no-howto-in-body,
+ *                  markdown-fence, br-spacing, unit-spacing, lcp-image-lazy, image-not-lazy
  *   SEO checks:    seo-empty, meta-title-length, meta-description-length,
  *                  meta-description-cta, meta-description-currency
  *
@@ -106,7 +106,7 @@ describe('validateGeneratedHtml — Rule: duplicate-product-schema', () => {
     expectNoRule(validateGeneratedHtml(html, 'test'), 'duplicate-product-schema');
   });
 
-  it('does NOT flag schema.org/FAQPage (safe microdata)', () => {
+  it('does NOT fire duplicate-product-schema for FAQPage (fires no-faqpage-in-body instead)', () => {
     const html = `<section itemscope itemtype="https://schema.org/FAQPage"><p>FAQ</p></section>`;
     expectNoRule(validateGeneratedHtml(html, 'test'), 'duplicate-product-schema');
   });
@@ -116,9 +116,67 @@ describe('validateGeneratedHtml — Rule: duplicate-product-schema', () => {
     expectNoRule(validateGeneratedHtml(html, 'test'), 'duplicate-product-schema');
   });
 
-  it('does NOT flag schema.org/HowTo (safe microdata)', () => {
+  it('does NOT fire duplicate-product-schema for HowTo (fires no-howto-in-body instead)', () => {
     const html = `<section itemscope itemtype="https://schema.org/HowTo"><p>Step 1</p></section>`;
     expectNoRule(validateGeneratedHtml(html, 'test'), 'duplicate-product-schema');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: no-faqpage-in-body', () => {
+  it('flags FAQPage in body with https://', () => {
+    const html = `<section itemscope itemtype="https://schema.org/FAQPage"><p>FAQ</p></section>`;
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'no-faqpage-in-body')?.severity).toBe('error');
+  });
+
+  it('flags FAQPage in body with http://', () => {
+    const html = `<section itemscope itemtype="http://schema.org/FAQPage"><p>FAQ</p></section>`;
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'no-faqpage-in-body')?.severity).toBe('error');
+  });
+
+  it('does NOT flag PropertyValue (safe microdata)', () => {
+    const html = `<tr itemprop="additionalProperty" itemscope itemtype="https://schema.org/PropertyValue">
+      <th scope="row" itemprop="name">Nozzle</th>
+      <td itemprop="value">0.4 mm</td></tr>`;
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'no-faqpage-in-body');
+  });
+
+  it('does NOT flag clean HTML with no microdata', () => {
+    const html = '<section><p>No FAQ here.</p></section>';
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'no-faqpage-in-body');
+  });
+
+  it('propagates context to the issue', () => {
+    const html = `<section itemscope itemtype="https://schema.org/FAQPage"><p>Q?</p></section>`;
+    const issue = findRule(validateGeneratedHtml(html, 'HTML (UA)'), 'no-faqpage-in-body');
+    expect(issue?.context).toBe('HTML (UA)');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: no-howto-in-body', () => {
+  it('flags HowTo in body with https://', () => {
+    const html = `<section itemscope itemtype="https://schema.org/HowTo"><p>Step 1</p></section>`;
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'no-howto-in-body')?.severity).toBe('error');
+  });
+
+  it('flags HowTo in body with http://', () => {
+    const html = `<section itemscope itemtype="http://schema.org/HowTo"><p>Step 1</p></section>`;
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'no-howto-in-body')?.severity).toBe('error');
+  });
+
+  it('does NOT fire on HowToStep (the (?![A-Za-z]) guard prevents false positives)', () => {
+    const html = `<div itemscope itemtype="https://schema.org/HowToStep"><p>Step</p></div>`;
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'no-howto-in-body');
+  });
+
+  it('does NOT flag clean HTML with no microdata', () => {
+    const html = '<ol><li>Step 1</li><li>Step 2</li></ol>';
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'no-howto-in-body');
+  });
+
+  it('propagates context to the issue', () => {
+    const html = `<section itemscope itemtype="https://schema.org/HowTo"><p>Step 1</p></section>`;
+    const issue = findRule(validateGeneratedHtml(html, 'HTML (ES)'), 'no-howto-in-body');
+    expect(issue?.context).toBe('HTML (ES)');
   });
 });
 

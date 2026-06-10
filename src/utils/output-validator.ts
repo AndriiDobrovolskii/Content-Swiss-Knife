@@ -57,6 +57,27 @@ export function validateGeneratedHtml(
     });
   }
 
+  // CRITICAL: FAQPage in body duplicates Journal theme's native FAQPage module
+  // (GSC "Duplicate field 'FAQPage'"). Externalize as faq_[ISO].html instead.
+  if (/itemtype\s*=\s*["']https?:\/\/schema\.org\/FAQPage(?![A-Za-z])/i.test(html)) {
+    issues.push({
+      severity: 'error',
+      rule: 'no-faqpage-in-body',
+      detail: 'Body contains itemtype="schema.org/FAQPage" — Journal module emits this; use faq_[ISO].html artifact instead.',
+      context,
+    });
+  }
+
+  // CRITICAL: HowTo in body duplicates Journal theme's native HowTo module.
+  if (/itemtype\s*=\s*["']https?:\/\/schema\.org\/HowTo(?![A-Za-z])/i.test(html)) {
+    issues.push({
+      severity: 'error',
+      rule: 'no-howto-in-body',
+      detail: 'Body contains itemtype="schema.org/HowTo" — Journal module emits this; use howto_[ISO].html artifact instead.',
+      context,
+    });
+  }
+
   // Leftover markdown fences.
   if (/```/.test(html)) {
     issues.push({ severity: 'error', rule: 'markdown-fence', detail: 'Output contains ``` markdown code fences.', context });

@@ -7,8 +7,10 @@ import { cleanHtmlStructure } from '../utils/html-cleaner';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB, resolveCurrencySymbol } from '../prompts/task-b';
-import { getStore, getLangsForStore, US_MEASUREMENT_RULES } from '../prompt-core/constants';
+import { getStore, getLangsForStore, US_MEASUREMENT_RULES, isoToHumanLang } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
+import { buildPromptFaq } from '../prompts/task-faq';
+import { buildPromptHowTo } from '../prompts/task-howto';
 
 // ── Inline prompts for tools that don't need external templates ─────────────
 
@@ -130,7 +132,7 @@ export class ContentOrchestratorService {
 
   async generate(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, website: input.website });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, website: input.website, faqArtifacts: {}, howtoArtifacts: {} });
     this.validationIssues.set([]);
 
     try {
@@ -151,8 +153,15 @@ export class ContentOrchestratorService {
       const seoJson = await this.llm.generateJson(promptB);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      // Step 3 — Translations
-      for (const lang of transLangs) {
+      // Step 3 — Translations (Ukrainian always first)
+      const sortedTransLangs = [...transLangs].sort((a, b) => {
+        const aIsUk = a === 'UA' || a === 'Ukrainian';
+        const bIsUk = b === 'UA' || b === 'Ukrainian';
+        if (aIsUk && !bIsUk) return -1;
+        if (!aIsUk && bIsUk) return 1;
+        return 0;
+      });
+      for (const lang of sortedTransLangs) {
         this.progressMessage.set(`Translating to ${lang}…`);
         const promptC = buildPromptC(htmlEn, lang, input.website.name, input.website.group);
         let translatedHtml = await this.llm.generateText(promptC, false);
@@ -167,6 +176,28 @@ export class ContentOrchestratorService {
           ...c,
           translations: { ...c.translations, [lang]: translatedHtml }
         }));
+      }
+
+      // Step 4 — FAQ / HowTo artifacts (schema-free, for Journal theme native module fields)
+      if (input.supplementalContent?.trim()) {
+        const store = getStore(input.website.name);
+        for (const isoCode of store.languages) {
+          const humanLang = isoToHumanLang(isoCode);
+
+          this.progressMessage.set(`Generating FAQ artifact (${isoCode})…`);
+          let faqHtml = await this.llm.generateText(buildPromptFaq(input.supplementalContent, humanLang), false);
+          faqHtml = faqHtml.replace(/```html/g, '').replace(/```/g, '').trim();
+          if (faqHtml.startsWith('<')) {
+            this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
+          }
+
+          this.progressMessage.set(`Generating HowTo artifact (${isoCode})…`);
+          let howtoHtml = await this.llm.generateText(buildPromptHowTo(input.supplementalContent, humanLang), false);
+          howtoHtml = howtoHtml.replace(/```html/g, '').replace(/```/g, '').trim();
+          if (howtoHtml.startsWith('<')) {
+            this.content.update(c => ({ ...c, howtoArtifacts: { ...c.howtoArtifacts, [isoCode]: howtoHtml } }));
+          }
+        }
       }
 
       // Post-generation acceptance-criteria check (non-blocking — reports only).
@@ -351,7 +382,7 @@ export class ContentOrchestratorService {
   }
 
   resetState() {
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, faqArtifacts: {}, howtoArtifacts: {} });
     this.validationIssues.set([]);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');

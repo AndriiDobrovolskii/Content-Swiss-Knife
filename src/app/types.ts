@@ -73,6 +73,8 @@ export interface GeneratedContent {
   translations: Record<string, string>; // e.g., 'UA': '<html>...</html>'
   seoData: SeoResponse | null;
   website?: WebsiteOption; // store this content was generated for (optional for backward compat)
+  faqArtifacts?: Record<string, string>;   // ISO code → schema-free faq_[ISO].html
+  howtoArtifacts?: Record<string, string>; // ISO code → schema-free howto_[ISO].html
 }
 
 export interface HistoryItem {

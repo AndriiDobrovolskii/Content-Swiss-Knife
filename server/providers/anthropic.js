@@ -32,7 +32,8 @@ export class AnthropicProvider {
       };
       if (mode === 'creative') config.thinking = { type: 'enabled', budget_tokens: 6000 };
 
-      const response = await this.client.messages.create(config);
+      const stream = this.client.messages.stream(config);
+      const response = await stream.finalMessage();
 
       const u = response.usage || {};
       console.log('[anthropic]', config.model, mode,

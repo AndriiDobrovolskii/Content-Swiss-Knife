@@ -30,8 +30,10 @@ contain a second Product entity.
 - DO NOT include any element with itemtype="https://schema.org/Product".
 - DO NOT include itemprop="name" / "category" / "description" on a Product.
 - The hook paragraph is plain HTML, no microdata.
-SAFE in the body: PropertyValue (spec rows), FAQPage, HowTo. FORBIDDEN: Product, BreadcrumbList,
-VideoObject, ImageObject, Article.
+SAFE in the body: PropertyValue (spec rows) only.
+FORBIDDEN in the body: Product, FAQPage, HowTo, BreadcrumbList, VideoObject, ImageObject, Article.
+The Journal theme emits FAQPage/HowTo schema from its own native module fields — a duplicate in the
+body causes GSC "Duplicate field" critical errors.
 
 [STYLE & GEO]
 - Featured-snippet opening: first sentence is a "What is / Best for" fact. Ban fluff openers
@@ -70,9 +72,9 @@ VideoObject, ImageObject, Article.
    - DIMENSION SEPARATOR: use × (U+00D7), never * or x → "330 × 320 × 325 mm".
    - MULTI-VALUE CELLS: render as <ul><li> inside the <td>, never <br>.
 5. PACKAGE CONTENTS: <h2>What's in the box</h2> + <ul> (only if present in input).
-6. SUPPLEMENTAL (only if present): FAQ → <section itemscope itemtype="https://schema.org/FAQPage">
-   with one <div itemprop="mainEntity"> per Q/A (reproduce EVERY pair). HowTo →
-   <section itemscope itemtype="https://schema.org/HowTo"> with <div itemprop="step">. Never fabricate steps.
+6. SUPPLEMENTAL: FAQ and HowTo content must NOT appear in the description body. They are generated
+   as separate, schema-free artifacts in dedicated steps. If supplemental input contains Q&A pairs
+   or numbered procedures, do not render them inline — omit from description body entirely.
 7. TRUST SECTION: <h2>Why choose [Store]?</h2>, body in <p class="cta">, mention expert experience since 2012.
    If [Product] contains an applicable brand, include: "As an official representative of [Brand], we
    guarantee the best price, authorized service, and official warranty."

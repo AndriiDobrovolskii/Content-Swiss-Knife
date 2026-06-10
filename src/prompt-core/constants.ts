@@ -49,6 +49,31 @@ export function getLangsForStore(storeName: string): { seoLangs: string[]; trans
   };
 }
 
+/** Reverse mapping: internal task label → BCP47 ISO code, given the store name. */
+export function taskLangToIso(taskLabel: string, storeName: string): string {
+  const store = getStore(storeName);
+  for (const lang of store.languages) {
+    if (bcp47ToTaskCLang(lang, store.group) === taskLabel) return lang;
+  }
+  return taskLabel;
+}
+
+/** Human-readable language name for LLM prompts, keyed by BCP47 ISO code. */
+export function isoToHumanLang(iso: string): string {
+  const map: Record<string, string> = {
+    'en-GB': 'British English',
+    'en-ES': 'English (for Spain, European style)',
+    'en-US': 'American English',
+    'uk-UA': 'Ukrainian',
+    'ru-UA': 'Russian',
+    'pl-PL': 'Polish',
+    'de-DE': 'German',
+    'es-ES': 'Castilian Spanish',
+    'es-MX': 'Mexican Spanish',
+  };
+  return map[iso] ?? iso;
+}
+
 /** Per-group language config. */
 export const GROUP_CONFIG: Record<WebsiteGroup, { seoLangs: string[]; transLangs: string[] }> = {
   UA: { seoLangs: ['EN','UA','RU'],                 transLangs: ['UA','RU'] },
