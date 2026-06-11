@@ -1,92 +1,44 @@
-import { SYSTEM_INSTRUCTION } from './system-instruction';
+import { getStore } from '../prompt-core/constants';
+import { PromptPayload } from '../prompt-core/payload';
 
-// Currency string per store, used for both prompt generation and output validation.
-const CURRENCY_BY_STORE: Record<string, string> = {
-  '3DDevice':           'UAH (₴)',
-  '3DPrinter':          'UAH (₴)',
-  '3DScanner':          'UAH (₴)',
-  'Center 3D Print':    'PLN (zł) / EUR (€)',
-  'EXPERT3D':           'EUR (€)',
-  'Impresora-3D':       'EUR (€)',
-  'Expert-3DPrinter':   'USD ($)',
-};
-
-/** Resolves the primary currency symbol (₴ / € / $ / zł) for a store. */
 export function resolveCurrencySymbol(storeName: string): string {
-  const currency = CURRENCY_BY_STORE[storeName] ?? 'EUR (€)';
-  return currency.match(/[₴€$£]/)?.[0] ?? '€';
+  return getStore(storeName).currencySymbol;
 }
 
-/**
- * Builds Task B prompt — generates SEO metadata JSON for all target languages.
- */
+const TASK_B_SYSTEM = `You are an SEO specialist for 3D-technology e-commerce stores.
+Output is always raw JSON only — no preamble, no Markdown fences, no explanations.`;
+
+const TASK_B_INSTRUCTION = `TASK B — GENERATE SEO METADATA (RAW JSON ONLY, no Markdown, no fences).
+H1: "[Product] [Model/Series]", strip fluff (Buy/Best Price/New).
+meta_title: "[Product] - [Benefit] | [SiteSuffix]" (suffix mandatory). If [Product] > 50 chars drop
+the benefit. MAX 55 chars. One allowed symbol max from ✨ ✅ ➔ ! + % | ; no flag/package emoji.
+meta_description: Hook+Solution+Spec+CTA, starts with a verb, includes one hard spec AND the
+[Currency Symbol] value (MANDATORY — shorten Hook or Spec first if over limit), ends with CTA + ➔.
+MAX 155 chars. Count characters before returning; shorten if over.
+Return one entry per requested language.
+Output shape:
+{"site_name":"…","seo_data":[{"language":"…","h1":"…","meta_title":"…","meta_description":"…"}]}`;
+
 export function buildPromptB(
   storeName: string,
   productName: string,
   languages: string[],
-  contextHtmlOrDescription?: string
-): string {
-  const systemInstruction = SYSTEM_INSTRUCTION.replace('{{STORE_NAME}}', storeName);
-
-  const currencySymbol = resolveCurrencySymbol(storeName);
-
-  const siteSuffix = ['EXPERT3D', 'Impresora-3D'].includes(storeName) ? '| EXPERT3D' : `| ${storeName}`;
-
-  const contextBlock = contextHtmlOrDescription
-    ? `\n[CONTEXT — extract USPs from here]:\n${contextHtmlOrDescription.substring(0, 1000)}`
-    : '';
-
-  const safeSymbols = '✨, ✅, ➔, !, +, %, |';
-
-  return `${systemInstruction}
-
-TASK B — GENERATE SEO METADATA (JSON ONLY)
-OUTPUT: Raw JSON only. No HTML, no Markdown, no code fences.
-
-[INPUT DATA]
-[Product Name]: "${productName}"
+  contextHtmlOrDescription?: string,
+): PromptPayload {
+  const store = getStore(storeName);
+  const context = contextHtmlOrDescription
+    ? `\n[CONTEXT — extract a USP/spec from here]:\n${contextHtmlOrDescription.substring(0, 1000)}` : '';
+  const userContent = `[INPUT DATA]
 [Store Name]: "${storeName}"
-[Target Languages]: ${languages.join(', ')}
-[Currency Symbol]: ${currencySymbol}
-${contextBlock}
-
-[H1 RULE]
-- Syntax: "[Product Name] [Model/Series]".
-- Strip marketing fluff ("Buy", "Best Price", "New"). Strictly technical.
-- Example: "Creality K1 Max" (NOT "Buy Creality K1 Max Cheap").
-
-[META TITLE RULE]
-- Formula: "[Product] - [Benefit] ${siteSuffix}". The suffix is mandatory.
-- If [Product Name] > 50 chars, drop the benefit: "[Product Name] ${siteSuffix}".
-- MAX 55 characters total (strict).
-- Allowed symbols, ONE max per title: ${safeSymbols}
-- FORBIDDEN: flag emojis, package emoji, any emoji not listed above.
-
-[META DESCRIPTION RULE]
-- Pattern: Hook + Solution + Spec + CTA.
-- Start with a verb or a problem statement.
-- Include one hard spec (size, speed, material) from context.
-- MUST include the currency symbol: ${currencySymbol}
-- MUST end with a CTA and an arrow: "Buy now ➔" (or equivalent in the target language).
-- MAX 155 characters.
-
-⚠️ TECHNICAL CONSTRAINTS:
-- Count characters for EVERY meta_title and meta_description before returning.
-- If any exceeds its limit, shorten it. Then return.
-
-[OUTPUT FORMAT — raw JSON]
-{
-  "site_name": "${storeName}",
-  "seo_data": [
-    {
-      "language": "ISO code (e.g. en-ES, es-ES, uk-UA, en-US)",
-      "h1": "Clean Product Name",
-      "meta_title": "Max 55 chars",
-      "meta_description": "Max 155 chars, ends with CTA ➔"
-    }
-  ]
-}
-
-Generate one entry for each of the following languages: ${languages.join(', ')}.
-Return JSON only.`;
+[Site Suffix]: "${store.siteSuffix}"
+[Product Name]: "${productName}"
+[Currency Symbol]: ${store.currencySymbol}
+[Target Languages]: ${languages.join(', ')}${context}`;
+  return {
+    systemBlocks: [
+      { text: TASK_B_SYSTEM,        cache: true },
+      { text: TASK_B_INSTRUCTION,   cache: true },
+    ],
+    userContent,
+  };
 }

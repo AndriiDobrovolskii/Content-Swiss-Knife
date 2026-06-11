@@ -2,7 +2,7 @@
 <div class="flex h-screen w-full bg-slate-50 dark:bg-slate-900 text-sm transition-colors duration-200">
   
   <!-- Sidebar -->
-  <aside class="w-80 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full shadow-lg z-10 relative transition-colors duration-200">
+  <aside class="w-96 xl:w-[26rem] flex-shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full shadow-lg z-10 relative transition-colors duration-200">
     
     <!-- Sidebar Header -->
     <div class="p-6 border-b border-slate-100 dark:border-slate-700 space-y-4">
@@ -39,13 +39,13 @@
         <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
           <button 
             (click)="setMode('generator')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'generator' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().generator }}
           </button>
           <button 
             (click)="setMode('optimizer')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'optimizer' ? 'bg-white dark:bg-slate-600 text-purple-600 dark:text-purple-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().optimizer }}
           </button>
@@ -53,13 +53,13 @@
         <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
           <button 
             (click)="setMode('translator')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'translator' ? 'bg-white dark:bg-slate-600 text-emerald-600 dark:text-emerald-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().translator }}
           </button>
            <button 
             (click)="setMode('image-tools')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'image-tools' ? 'bg-white dark:bg-slate-600 text-orange-600 dark:text-orange-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().imageTools }}
           </button>
@@ -67,13 +67,13 @@
         <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
            <button 
             (click)="setMode('seo-generator')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'seo-generator' ? 'bg-white dark:bg-slate-600 text-teal-600 dark:text-teal-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().seoGenerator }}
           </button>
           <button 
             (click)="setMode('copywriter')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'copywriter' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().copywriter }}
           </button>
@@ -81,7 +81,7 @@
         <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-1 gap-1">
           <button 
             (click)="setMode('readability')"
-            class="py-1.5 rounded-md text-[10px] font-semibold transition-all text-center"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'readability' ? 'bg-white dark:bg-slate-600 text-pink-600 dark:text-pink-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             <i class="fa-solid fa-glasses mr-1"></i> {{ uiLabels().readability }}
           </button>
@@ -140,22 +140,20 @@
       </div>
     }
 
-    <!-- GENERATOR FORM -->
-    @if (appMode() === 'generator') {
-      <div class="flex-1 overflow-y-auto p-6 space-y-6">
-        <div class="space-y-2">
+    <!-- Generator form template — rendered in sidebar post-gen, centred in main pre-gen -->
+    <ng-template #generatorForm>
+      <div class="space-y-2">
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             {{ uiLabels().targetWebsite }} <span class="text-red-500">*</span>
           </label>
-          <select 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+          <select
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-sm text-slate-800 dark:text-slate-200"
             [class.text-slate-400]="!selectedWebsite()"
             [class.border-red-300]="!selectedWebsite()"
-            [value]="selectedWebsite()?.name || ''"
             (change)="onWebsiteChange($event)">
-            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
+            <option value="" [selected]="!selectedWebsite()" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
             @for (site of websiteOptions; track site.name) {
-              <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
+              <option [value]="site.name" [selected]="selectedWebsite()?.name === site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
             }
           </select>
         </div>
@@ -166,18 +164,17 @@
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               {{ uiLabels().contentTemplate }}
             </label>
-            <button (click)="toggleCustomTemplate()" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+            <button (click)="toggleCustomTemplate()" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
               {{ showCustomTemplate() ? 'Hide Custom' : 'Customize' }}
             </button>
           </div>
-          <select 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+          <select
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer text-sm text-slate-800 dark:text-slate-200"
             [class.text-slate-400]="!selectedTemplateId()"
-            [value]="selectedTemplateId()"
             (change)="onTemplateChange($event)">
-            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectTemplate }}</option>
+            <option value="" [selected]="!selectedTemplateId()" class="dark:bg-slate-800">{{ uiLabels().selectTemplate }}</option>
             @for (template of availableTemplates; track template.id) {
-              <option [value]="template.id" class="dark:bg-slate-800">{{ template.name }} ({{ template.niche }})</option>
+              <option [value]="template.id" [selected]="selectedTemplateId() === template.id" class="dark:bg-slate-800">{{ template.name }} ({{ template.niche }})</option>
             }
           </select>
 
@@ -212,97 +209,47 @@
                 <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
              </button>
           </div>
-          <input 
-            type="text" 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          <input
+            type="text"
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             [class.border-red-300]="!productName()"
             [value]="productName()"
             (input)="updateProductName($event)"
             [placeholder]="uiLabels().placeholderName">
         </div>
 
-        <div class="space-y-2">
-          <div class="flex justify-between items-center">
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              {{ uiLabels().originalDescription }} <span class="text-red-500">*</span>
-            </label>
-            <div class="flex items-center gap-2">
-              <button (click)="pastePlainText('description')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 mr-2">
-                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
-              </button>
-              <div class="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5">
-                <button (click)="inputType.set('text')" [class.bg-white]="inputType() === 'text'" [class.dark:bg-slate-600]="inputType() === 'text'" [class.shadow-sm]="inputType() === 'text'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputText }}</button>
-                <button (click)="inputType.set('pdf')" [class.bg-white]="inputType() === 'pdf'" [class.dark:bg-slate-600]="inputType() === 'pdf'" [class.shadow-sm]="inputType() === 'pdf'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputPdf }}</button>
-                <button (click)="inputType.set('url')" [class.bg-white]="inputType() === 'url'" [class.dark:bg-slate-600]="inputType() === 'url'" [class.shadow-sm]="inputType() === 'url'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputUrl }}</button>
-              </div>
-            </div>
-          </div>
+        <app-source-input
+          [label]="uiLabels().originalDescription"
+          [placeholder]="uiLabels().placeholderDesc"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [required]="true"
+          [textHeight]="'min-h-[200px]'"
+          [value]="description()"
+          (valueChange)="description.set($event)" />
 
-          @if (inputType() === 'text') {
-            <textarea 
-              class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-32 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-              [class.border-red-300]="!description()"
-              [value]="description()"
-              (input)="updateDescription($event)"
-              [placeholder]="uiLabels().placeholderDesc"></textarea>
-          }
-          @if (inputType() === 'pdf') {
-            <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative" [class.border-green-300]="description()">
-              <input type="file" accept="application/pdf" (change)="onPdfUpload($event)" class="absolute inset-0 opacity-0 cursor-pointer">
-              <i class="fa-solid fa-file-pdf text-2xl mb-2" [class.text-red-500]="!description()" [class.text-green-500]="description()"></i>
-              <p class="text-xs text-slate-600 dark:text-slate-400">{{ description() ? uiLabels().pdfReady : uiLabels().pdfDrop }}</p>
-              <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{{ uiLabels().pdfHint }}</p>
-            </div>
-          }
-          @if (inputType() === 'url') {
-            <div class="flex gap-2">
-              <input 
-                type="text" 
-                #urlInput
-                class="flex-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                [placeholder]="uiLabels().urlPlaceholder">
-              <button (click)="fetchFromUrl(urlInput.value)" class="px-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 active:scale-95 transition-transform">
-                <i class="fa-solid fa-magnifying-glass"></i>
-              </button>
-            </div>
-            <p class="text-[10px]" [class.text-slate-400]="!description()" [class.text-green-600]="description()" [class.dark:text-slate-500]="!description()" [class.dark:text-green-400]="description()">
-              {{ description() ? uiLabels().urlSuccess : uiLabels().urlHint }}
-            </p>
-          }
-        </div>
+        <app-source-input
+          [label]="uiLabels().techSpecs"
+          [placeholder]="uiLabels().placeholderSpecs"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [textHeight]="'min-h-[140px]'"
+          [value]="specs()"
+          (valueChange)="specs.set($event)" />
 
-        <div class="space-y-2">
-          <div class="flex justify-between items-center">
-             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().techSpecs }}</label>
-             <button (click)="pastePlainText('specs')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
-                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
-             </button>
-          </div>
-          <textarea 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            [value]="specs()"
-            (input)="updateSpecs($event)"
-            [placeholder]="uiLabels().placeholderSpecs"></textarea>
-        </div>
-
-        <div class="space-y-2">
-          <div class="flex justify-between items-center">
-             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().supplementalContent }}</label>
-             <button (click)="pastePlainText('supplementalContent')" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
-                <i class="fa-regular fa-clipboard"></i> {{ uiLabels().pastePlain }}
-             </button>
-          </div>
-          <textarea 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            [value]="supplementalContent()"
-            (input)="updateSupplementalContent($event)"
-            [placeholder]="uiLabels().placeholderSupplemental"></textarea>
-        </div>
+        <app-source-input
+          [label]="uiLabels().supplementalContent"
+          [placeholder]="uiLabels().placeholderSupplemental"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [textHeight]="'min-h-[140px]'"
+          [value]="supplementalContent()"
+          (valueChange)="supplementalContent.set($event)" />
 
         <div class="space-y-2">
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{{ uiLabels().customInstructions }}</label>
-          <textarea 
-            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          <textarea
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg min-h-[120px] focus:ring-2 focus:ring-blue-500 outline-none resize-y text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             [value]="customInstructions()"
             (input)="updateCustomInstructions($event)"
             [placeholder]="uiLabels().placeholderInstructions"></textarea>
@@ -420,6 +367,12 @@
            </button>
          </div>
 
+    </ng-template>
+
+    <!-- GENERATOR FORM in sidebar (shown only after generation) -->
+    @if (appMode() === 'generator' && hasOutput()) {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <ng-container *ngTemplateOutlet="generatorForm"></ng-container>
       </div>
     }
 
@@ -479,49 +432,14 @@
             [placeholder]="uiLabels().placeholderName">
         </div>
 
-        <div class="space-y-2">
-           <div class="flex justify-between items-center">
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              Context Description <span class="text-red-500">*</span>
-            </label>
-            <div class="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5">
-               <button (click)="inputType.set('text')" [class.bg-white]="inputType() === 'text'" [class.dark:bg-slate-600]="inputType() === 'text'" [class.shadow-sm]="inputType() === 'text'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputText }}</button>
-               <button (click)="inputType.set('pdf')" [class.bg-white]="inputType() === 'pdf'" [class.dark:bg-slate-600]="inputType() === 'pdf'" [class.shadow-sm]="inputType() === 'pdf'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputPdf }}</button>
-               <button (click)="inputType.set('url')" [class.bg-white]="inputType() === 'url'" [class.dark:bg-slate-600]="inputType() === 'url'" [class.shadow-sm]="inputType() === 'url'" class="px-2 py-0.5 rounded text-[10px] font-medium transition-all active:scale-95 text-slate-700 dark:text-slate-300">{{ uiLabels().inputUrl }}</button>
-             </div>
-           </div>
-
-           @if (inputType() === 'text') {
-            <textarea 
-              class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg h-32 focus:ring-2 focus:ring-teal-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-              [class.border-red-300]="!description()"
-              [value]="description()"
-              (input)="updateDescription($event)"
-              [placeholder]="uiLabels().seoOnlyPlaceholder"></textarea>
-           }
-           @if (inputType() === 'pdf') {
-             <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative" [class.border-green-300]="description()">
-              <input type="file" accept="application/pdf" (change)="onPdfUpload($event)" class="absolute inset-0 opacity-0 cursor-pointer">
-              <i class="fa-solid fa-file-pdf text-2xl mb-2" [class.text-red-500]="!description()" [class.text-green-500]="description()"></i>
-              <p class="text-xs text-slate-600 dark:text-slate-400">{{ description() ? uiLabels().pdfReady : uiLabels().pdfDrop }}</p>
-            </div>
-           }
-           @if (inputType() === 'url') {
-             <div class="flex gap-2">
-              <input 
-                type="text" 
-                #urlInput
-                class="flex-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                [placeholder]="uiLabels().urlPlaceholder">
-              <button (click)="fetchFromUrl(urlInput.value)" class="px-3 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded-lg hover:bg-teal-200 dark:hover:bg-teal-900/50 active:scale-95 transition-transform">
-                <i class="fa-solid fa-magnifying-glass"></i>
-              </button>
-            </div>
-            <p class="text-[10px]" [class.text-green-600]="description()" [class.text-slate-400]="!description()">
-               {{ description() ? uiLabels().urlSuccess : uiLabels().urlHint }}
-            </p>
-           }
-        </div>
+        <app-source-input
+          [label]="uiLabels().contextDescription"
+          [placeholder]="uiLabels().seoOnlyPlaceholder"
+          [labels]="uiLabels()"
+          [accent]="'teal'"
+          [required]="true"
+          [value]="description()"
+          (valueChange)="description.set($event)" />
 
         <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
           <div class="flex justify-between items-center">
@@ -727,7 +645,7 @@
     }
 
     <!-- IMAGE TOOLS SIDEBAR -->
-    @else {
+    @else if (appMode() === 'image-tools') {
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
          <div class="space-y-2">
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
@@ -1079,25 +997,41 @@
 
     <!-- GENERATOR VIEW / SEO VIEW -->
     @if (appMode() === 'generator' || appMode() === 'seo-generator') {
-      <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200">
+      @if (appMode() === 'generator' && !hasOutput()) {
+        <div class="flex-1 overflow-y-auto p-8">
+          <div class="max-w-3xl mx-auto">
+            <ng-container *ngTemplateOutlet="generatorForm"></ng-container>
+          </div>
+        </div>
+      }
+
+      @if (hasOutput() || appMode() === 'seo-generator') {
+        <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200">
         <div class="flex items-center gap-6 overflow-x-auto no-scrollbar">
-          @if (appMode() === 'generator') {
-             <button 
-              (click)="activeTab.set('html')"
+          @if (getUaTranslationKey()) {
+            <button
+              (click)="activeTab.set('trans-' + getUaTranslationKey())"
               class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
-              [class]="activeTab() === 'html' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-              {{ uiLabels().englishOutput }}
+              [class]="activeTab() === 'trans-' + getUaTranslationKey() ? 'border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+              {{ getUaTranslationKey() }} {{ uiLabels().translation }}
             </button>
           }
-          <button 
+          <button
             (click)="activeTab.set('seo')"
             class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
             [class]="activeTab() === 'seo' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().seoMeta }}
           </button>
-          
-          @for (key of getTranslationKeys(); track key) {
-            <button 
+          @if (appMode() === 'generator') {
+            <button
+              (click)="activeTab.set('html')"
+              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
+              [class]="activeTab() === 'html' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+              {{ baseOutputLabel() }}
+            </button>
+          }
+          @for (key of getNonUaTranslationKeys(); track key) {
+            <button
               (click)="activeTab.set('trans-' + key)"
               class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
               [class]="activeTab() === 'trans-' + key ? 'border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
@@ -1132,7 +1066,7 @@
           </div>
         }
 
-        @if (!content().mainHtmlEn && !content().seoData && !isGenerating()) {
+        @if (appMode() !== 'generator' && !content().mainHtmlEn && !content().seoData && !isGenerating()) {
           <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
             <i class="fa-regular fa-file-code text-6xl mb-4 opacity-50"></i>
             <p class="text-lg font-medium">{{ uiLabels().noContentYet }}</p>
@@ -1142,48 +1076,84 @@
 
         @if (activeTab() === 'html' && content().mainHtmlEn) {
           <div class="max-w-5xl mx-auto space-y-6">
-            <div class="flex justify-between items-center mb-4">
-              <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ uiLabels().englishOutput }}</h2>
-              <button (click)="copyToClipboard(content().mainHtmlEn, $event)" class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium transition-transform active:scale-90">
-                <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyCode }}
-              </button>
-            </div>
-            
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-               <div class="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 h-fit">
-                   <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-4 flex items-center gap-2">
-                      <i class="fa-solid fa-chart-simple text-blue-500"></i> {{ uiLabels().keywordAnalysis }}
-                   </h3>
-                   <div class="space-y-3">
-                       @for (kw of keywordAnalysis(); track kw.word) {
-                           <div class="flex justify-between items-center text-xs group cursor-default">
-                               <span class="text-slate-700 dark:text-slate-300 font-medium group-hover:text-blue-600 transition-colors">{{ kw.word }}</span>
-                               <div class="flex items-center gap-3">
-                                   <div class="w-16 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                       <div class="h-full bg-blue-500/80 group-hover:bg-blue-500 transition-colors" [style.width.%]="kw.density * 5"></div>
-                                   </div>
-                                   <span class="text-slate-400 dark:text-slate-500 w-6 text-right font-mono">{{ kw.count }}</span>
-                               </div>
-                           </div>
-                       }
-                       @if (keywordAnalysis().length === 0) {
-                          <p class="text-xs text-slate-400 italic">No keywords data.</p>
-                       }
-                   </div>
-               </div>
+            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ baseOutputLabel() }}</h2>
 
-               <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-                  <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
-                    <span>{{ uiLabels().htmlSource }}</span>
-                  </div>
-                  <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]">{{ content().mainHtmlEn }}</pre>
-               </div>
-            </div>
-            
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
               <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
               <div [innerHTML]="content().mainHtmlEn | safeHtml"></div>
             </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
+                <span>{{ uiLabels().htmlSource }}</span>
+                <button (click)="copyToClipboard(content().mainHtmlEn, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="content().mainHtmlEn" class="hljs language-xml"></code></pre>
+            </div>
+
+            @if (content().howtoArtifacts?.[getEnglishIso()]) {
+              @let howtoHtmlEn = content().howtoArtifacts![getEnglishIso()];
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">HowTo – {{ uiLabels().livePreview }}</h3>
+                <div class="prose prose-sm max-w-none prose-slate dark:prose-invert mb-4" [innerHTML]="getHowToIntro(howtoHtmlEn) | safeHtml"></div>
+                <ol class="space-y-3">
+                  @for (step of parseHowToSteps(howtoHtmlEn); track $index) {
+                    <li class="flex items-start gap-3 group">
+                      <span class="shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center mt-0.5">{{ $index + 1 }}</span>
+                      <div class="flex-1 prose prose-sm max-w-none prose-slate dark:prose-invert" [innerHTML]="step.innerHtml | safeHtml"></div>
+                      <button (click)="copyToClipboard(step.textContent, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75 mt-0.5" [title]="uiLabels().copyCode">
+                        <i class="fa-regular fa-copy text-xs"></i>
+                      </button>
+                    </li>
+                  }
+                </ol>
+              </div>
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
+                  <span>HowTo – {{ uiLabels().htmlSource }}</span>
+                  <button (click)="copyToClipboard(howtoHtmlEn, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="howtoHtmlEn" class="hljs language-xml"></code></pre>
+              </div>
+            }
+
+            @if (content().faqArtifacts?.[getEnglishIso()]) {
+              @let faqHtmlEn = content().faqArtifacts![getEnglishIso()];
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">FAQ – {{ uiLabels().livePreview }}</h3>
+                <div class="space-y-4">
+                  @for (item of parseFaqItems(faqHtmlEn); track $index) {
+                    <div class="border border-slate-100 dark:border-slate-700 rounded-lg p-4 space-y-2">
+                      <div class="flex items-start gap-3 group">
+                        <p class="flex-1 font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">{{ item.question }}</p>
+                        <button (click)="copyToClipboard(item.question, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
+                          <i class="fa-regular fa-copy text-xs"></i>
+                        </button>
+                      </div>
+                      <div class="flex items-start gap-3 group">
+                        <p class="flex-1 text-slate-600 dark:text-slate-300 text-sm leading-relaxed">{{ item.answer }}</p>
+                        <button (click)="copyToClipboard(item.answer, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
+                          <i class="fa-regular fa-copy text-xs"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
+                  <span>FAQ – {{ uiLabels().htmlSource }}</span>
+                  <button (click)="copyToClipboard(faqHtmlEn, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="faqHtmlEn" class="hljs language-xml"></code></pre>
+              </div>
+            }
           </div>
         }
 
@@ -1281,28 +1251,99 @@
         }
 
         @if (activeTab().startsWith('trans-')) {
-          <div class="max-w-4xl mx-auto">
-            @let langKey = activeTab().split('-')[1];
+          <div class="max-w-5xl mx-auto space-y-6">
+            @let langKey = activeTab().slice(6);
             @let transContent = content().translations[langKey];
-            
-            <div class="flex justify-between items-center mb-4">
-              <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ langKey }} {{ uiLabels().translation }}</h2>
-              <button (click)="copyToClipboard(transContent, $event)" class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium transition-transform active:scale-90">
-                <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyCode }}
-              </button>
+            @let isoCode = getIsoForLang(langKey);
+
+            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ langKey }} {{ uiLabels().translation }}</h2>
+
+            @if (transContent) {
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">
+                  {{ uiLabels().livePreview }} ({{ langKey }})
+                </h3>
+                <div [innerHTML]="transContent | safeHtml"></div>
+              </div>
+            }
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
+                <span>{{ uiLabels().htmlSource }} ({{ langKey }})</span>
+                <button (click)="copyToClipboard(transContent, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="transContent" class="hljs language-xml"></code></pre>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-               <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
-                <span>{{ uiLabels().htmlSource }} ({{ langKey }})</span>
+            @if (content().howtoArtifacts?.[isoCode]) {
+              @let howtoHtmlTrans = content().howtoArtifacts![isoCode];
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">HowTo – {{ uiLabels().livePreview }}</h3>
+                <div class="prose prose-sm max-w-none prose-slate dark:prose-invert mb-4" [innerHTML]="getHowToIntro(howtoHtmlTrans) | safeHtml"></div>
+                <ol class="space-y-3">
+                  @for (step of parseHowToSteps(howtoHtmlTrans); track $index) {
+                    <li class="flex items-start gap-3 group">
+                      <span class="shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center mt-0.5">{{ $index + 1 }}</span>
+                      <div class="flex-1 prose prose-sm max-w-none prose-slate dark:prose-invert" [innerHTML]="step.innerHtml | safeHtml"></div>
+                      <button (click)="copyToClipboard(step.textContent, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75 mt-0.5" [title]="uiLabels().copyCode">
+                        <i class="fa-regular fa-copy text-xs"></i>
+                      </button>
+                    </li>
+                  }
+                </ol>
               </div>
-              <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ transContent }}</pre>
-            </div>
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
+                  <span>HowTo – {{ uiLabels().htmlSource }} ({{ langKey }})</span>
+                  <button (click)="copyToClipboard(howtoHtmlTrans, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="howtoHtmlTrans" class="hljs language-xml"></code></pre>
+              </div>
+            }
+
+            @if (content().faqArtifacts?.[isoCode]) {
+              @let faqHtmlTrans = content().faqArtifacts![isoCode];
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">FAQ – {{ uiLabels().livePreview }}</h3>
+                <div class="space-y-4">
+                  @for (item of parseFaqItems(faqHtmlTrans); track $index) {
+                    <div class="border border-slate-100 dark:border-slate-700 rounded-lg p-4 space-y-2">
+                      <div class="flex items-start gap-3 group">
+                        <p class="flex-1 font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">{{ item.question }}</p>
+                        <button (click)="copyToClipboard(item.question, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
+                          <i class="fa-regular fa-copy text-xs"></i>
+                        </button>
+                      </div>
+                      <div class="flex items-start gap-3 group">
+                        <p class="flex-1 text-slate-600 dark:text-slate-300 text-sm leading-relaxed">{{ item.answer }}</p>
+                        <button (click)="copyToClipboard(item.answer, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
+                          <i class="fa-regular fa-copy text-xs"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
+                  <span>FAQ – {{ uiLabels().htmlSource }} ({{ langKey }})</span>
+                  <button (click)="copyToClipboard(faqHtmlTrans, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="faqHtmlTrans" class="hljs language-xml"></code></pre>
+              </div>
+            }
           </div>
         }
       </div>
-    } 
-    
+      }
+    }
+
     <!-- OPTIMIZER VIEW -->
     @else if (appMode() === 'optimizer') {
       <div class="flex-1 overflow-y-auto p-8">
@@ -1323,16 +1364,16 @@
               </button>
             </div>
 
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+              <div [innerHTML]="optimizerOutput() | safeHtml"></div>
+            </div>
+
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
                 <span>{{ uiLabels().optResult }}</span>
               </div>
-              <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ optimizerOutput() }}</pre>
-            </div>
-
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
-              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
-              <div [innerHTML]="optimizerOutput() | safeHtml"></div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap"><code [appHighlightCode]="optimizerOutput()" class="hljs language-xml"></code></pre>
             </div>
           </div>
         }
@@ -1359,19 +1400,19 @@
               </button>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
-                <span>{{ uiLabels().transResult }}</span>
-              </div>
-              <pre class="p-4 overflow-x-auto text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap">{{ translatorOutput() }}</pre>
-            </div>
-
             @if (translatorOutput().includes('<')) {
               <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
                 <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
                 <div [innerHTML]="translatorOutput() | safeHtml"></div>
               </div>
             }
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+                <span>{{ uiLabels().transResult }}</span>
+              </div>
+              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap"><code [appHighlightCode]="translatorOutput()" class="hljs language-xml"></code></pre>
+            </div>
           </div>
         }
       </div>

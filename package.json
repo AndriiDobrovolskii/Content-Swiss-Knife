@@ -10,7 +10,9 @@
     "build": "ng build",
     "lint": "tsc --noEmit",
     "preview": "ng serve --configuration=production",
-    "test": "echo \"no tests configured\""
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@angular/build": "^21.0.0",
@@ -22,12 +24,16 @@
     "@angular/platform-browser": "^21.0.0",
     "@anthropic-ai/sdk": "^0.54.0",
     "@google/genai": "^1.43.0",
+    "@mozilla/readability": "^0.6.0",
+    "cheerio": "^1.2.0",
     "concurrently": "^9.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "file-saver": "^2.0.5",
+    "highlight.js": "^11.11.1",
     "jszip": "^3.10.1",
+    "linkedom": "^0.18.12",
     "openai": "^4.103.0",
     "pdf-parse": "^1.1.1",
     "rxjs": "^7.8.2",
@@ -35,8 +41,11 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "happy-dom": "^20.10.2",
     "typescript": "~5.9.3",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "vitest": "^4.1.8"
   },
   "overrides": {
     "node-domexception": "^2.0.2",

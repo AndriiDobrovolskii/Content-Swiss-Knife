@@ -2,6 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { LlmProvider, ChatMessage, ChatTool, ChatResponse } from './providers/llm-provider.interface';
+import { PromptPayload } from '../prompt-core/payload';
+
+function toPayload(input: PromptPayload | string): PromptPayload {
+  if (typeof input === 'string') return { systemBlocks: [], userContent: input };
+  return input;
+}
 
 @Injectable({ providedIn: 'root' })
 export class LlmService implements LlmProvider {
@@ -15,31 +21,32 @@ export class LlmService implements LlmProvider {
     return firstValueFrom(this.http.post<T>(`/api${path}`, body));
   }
 
-  async generateText(prompt: string, useThinking = false): Promise<string> {
-    const { result } = await this.post<{ result: string }>('/llm/generate', {
-      prompt,
-      mode: useThinking ? 'creative' : 'text'
-    });
-    return result;
+  private generate<T>(payload: PromptPayload, mode: string): Promise<T> {
+    return this.post<{ result: T }>('/llm/generate', {
+      systemBlocks: payload.systemBlocks,
+      userContent: payload.userContent,
+      mode,
+    }).then((r: any) => r.result);
   }
 
-  async generateCreativeContent(prompt: string): Promise<string> {
-    return this.generateText(prompt, true);
+  async generateText(input: PromptPayload | string, useThinking = false): Promise<string> {
+    return this.generate<string>(toPayload(input), useThinking ? 'creative' : 'text');
   }
 
-  async generateJson<T = any>(prompt: string): Promise<T> {
-    const { result } = await this.post<{ result: T }>('/llm/generate', {
-      prompt,
-      mode: 'json'
-    });
-    return result;
+  async generateCreativeContent(input: PromptPayload | string): Promise<string> {
+    return this.generate<string>(toPayload(input), 'creative');
   }
 
-  async analyzeImage(base64Data: string, mimeType: string, prompt: string): Promise<string> {
+  async generateJson<T = any>(input: PromptPayload | string, useThinking = false): Promise<T> {
+    return this.generate<T>(toPayload(input), useThinking ? 'creative-json' : 'json');
+  }
+
+  async analyzeImage(base64Data: string, mimeType: string, prompt: string, useThinking = false): Promise<string> {
     const { result } = await this.post<{ result: string }>('/llm/vision', {
       base64Data,
       mimeType,
-      prompt
+      prompt,
+      useThinking
     });
     return result;
   }

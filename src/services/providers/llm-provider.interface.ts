@@ -1,3 +1,7 @@
+import { PromptPayload } from '../../prompt-core/payload';
+
+export type { PromptPayload };
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'tool';
   content: string;
@@ -17,10 +21,10 @@ export interface ChatResponse {
 }
 
 export interface LlmProvider {
-  generateText(prompt: string, useThinking?: boolean): Promise<string>;
-  generateCreativeContent(prompt: string): Promise<string>;
-  generateJson<T = any>(prompt: string): Promise<T>;
-  analyzeImage(base64Data: string, mimeType: string, prompt: string): Promise<string>;
+  generateText(payload: PromptPayload | string, useThinking?: boolean): Promise<string>;
+  generateCreativeContent(payload: PromptPayload | string): Promise<string>;
+  generateJson<T = any>(payload: PromptPayload | string, useThinking?: boolean): Promise<T>;
+  analyzeImage(base64Data: string, mimeType: string, prompt: string, useThinking?: boolean): Promise<string>;
   extractFromPdf(base64Data: string): Promise<string>;
   startChat(systemInstruction: string, tools?: ChatTool[]): void;
   sendChatMessage(message: string): Promise<ChatResponse>;
