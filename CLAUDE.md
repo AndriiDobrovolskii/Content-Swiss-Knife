@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 ## ⛔ FROZEN FILES — Claude Code MUST NOT modify without explicit user instruction
 
 The following files contain production-calibrated prompt text and validation logic.
@@ -39,12 +41,16 @@ The detailed migration plan is in `REFACTOR_PLAN.md`. This file holds operationa
 ## Commands
 
 ```bash
-npm install          # dependencies
-npm run dev          # local run (frontend + proxy)
-npm run build        # production build
-npm run lint         # linter — run before every commit
-npm run test         # tests
+npm install            # dependencies
+npm run dev            # local run (frontend + proxy)
+npm run build          # production build
+npm run lint           # tsc --noEmit — run before every commit
+npm run test           # vitest run (one-shot)
+npm run test:watch     # vitest watch mode
+npm run test:coverage  # vitest + V8 coverage report
 ```
+
+**After every Claude Code session:** `bash arch-guard.sh` — verifies the 4 architecture rules and frozen-file checksums. Run `bash arch-guard.sh --rebaseline` only after an intentional frozen-file change that was explicitly approved.
 
 Before considering a task done: `npm run lint && npm run build` must pass with no errors.
 
@@ -59,6 +65,40 @@ Before considering a task done: `npm run lint && npm run build` must pass with n
 4. **Secrets.** `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SERPER_API_KEY` (opt. `GEMINI_API_KEY`) — server-side only, through the proxy. **Never** import keys into Angular code or put them in the bundle. Remove the legacy `declare const GEMINI_API_KEY` pattern. Keep `.env.example` current; the real `.env` stays in `.gitignore`.
 
 5. **Behavioral compatibility.** The retry/backoff wrapper must stay provider-independent. Don't break existing features: Generator, Optimizer, Translator, Image Tools, SEO Meta, Copywriter, Readability, the chat assistant (function calling `restart_generation`).
+
+## Generation pipeline
+
+`ContentOrchestratorService.generate()` runs four sequential steps:
+
+1. **Task A** (`buildPromptA`) — generates the base English HTML description.
+2. **Task B** (`buildPromptB`) — generates SEO metadata JSON (multilingual, one object per language). Uses the Task A HTML as grounding context.
+3. **Task C** (`buildPromptC`) — translates the base HTML into each non-English language defined for the store. Ukrainian always runs first.
+4. **FAQ / HowTo** (`buildPromptFaq` / `buildPromptHowTo`) — optional; runs only when `input.supplementalContent` is present. Produces schema-free HTML artifacts for the CMS native FAQ/HowTo module fields.
+
+All prompt builders return a `PromptPayload` (`src/prompt-core/payload.ts`):
+
+```ts
+{ systemBlocks: SystemBlock[];  // [0]=master (cache:true), [1]=task (cache:true)
+  userContent: string; }        // dynamic per call — never cached
+```
+
+The `cache: true` flag on system blocks enables Anthropic prompt caching. Do not collapse `systemBlocks` into `userContent` — it breaks caching economics.
+
+## Store registry
+
+`STORE_REGISTRY` in `src/prompt-core/constants.ts` is the **single source of truth** for every store's group, currency, languages, and image base URL. `getLangsForStore()` derives `seoLangs` and `transLangs` from it. Do not hard-code language lists or currency symbols anywhere else — derive them from the registry.
+
+## Server / frontend split
+
+- **`server/providers/`** — the real LLM implementations (OpenAI, Anthropic, Gemini). These run in Node.js, have access to env secrets, and are selected by `LLM_PROVIDER` env var via `server/providers/factory.js`. The server exposes `/api/llm/*` and `/api/retrieval/*` routes on port 3001.
+- **`src/services/providers/`** — contains only the `LlmProvider` TypeScript interface and type exports. No real provider logic lives here.
+- **`src/services/llm.service.ts`** — implements `LlmProvider` by delegating every call to the Express proxy via `HttpClient`. Angular never touches an SDK directly.
+
+Adding a provider means: a new class in `server/providers/`, a new `case` in `factory.js`, and new env vars in `.env.example`. No Angular changes needed.
+
+## Known accepted tech debt
+
+`content-orchestrator.service.ts` contains several inline prompt functions (`buildOptimizerPrompt`, `buildReadabilityPrompt`, `buildKeywordsPrompt`, `buildImageAltPrompt`, `buildCopywriterPrompt`). These are flagged as warnings (not errors) by `arch-guard.sh` — they are tracked debt, not violations. Do not treat them as a pattern to follow; new prompts go in `src/prompts/`.
 
 ## Hard rules for output HTML (acceptance criteria)
 

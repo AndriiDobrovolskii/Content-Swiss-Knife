@@ -33,3 +33,5 @@ Knowlege/
 *.njsproj
 *.sln
 *.sw?
+.env.example
+*.example

@@ -119,7 +119,7 @@ CHECKSUM_FILE=".arch-guard-checksums"
 CURRENT_SUMS=""
 for f in "${FROZEN_FILES[@]}"; do
   if [ -f "$f" ]; then
-    SUM=$(sha256sum "$f" 2>/dev/null || shasum -a 256 "$f" 2>/dev/null | awk '{print $1}')
+    SUM=$(sha256sum "$f" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$f" 2>/dev/null | awk '{print $1}')
     CURRENT_SUMS+="$SUM  $f\n"
   else
     echo -e "  ${YELLOW}⚠ File not found (skipped): $f${NC}"
@@ -137,7 +137,7 @@ else
   while IFS= read -r line; do
     SAVED_SUM=$(echo "$line" | awk '{print $1}')
     SAVED_FILE=$(echo "$line" | awk '{print $2}')
-    CURR_SUM=$(printf "%b" "$CURRENT_SUMS" | grep "$SAVED_FILE" | awk '{print $1}')
+    CURR_SUM=$(printf "%b" "$CURRENT_SUMS" | grep -F "$SAVED_FILE" | awk '{print $1}' || true)
     if [ -n "$CURR_SUM" ] && [ "$CURR_SUM" != "$SAVED_SUM" ]; then
       echo -e "  ${RED}✗ CHANGED (unauthorized?): $SAVED_FILE${NC}"
       CHANGED=1

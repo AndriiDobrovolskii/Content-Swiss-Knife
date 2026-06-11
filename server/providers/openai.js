@@ -4,8 +4,14 @@ import { withRetry } from '../utils/retry.js';
 
 export class OpenAiProvider {
   constructor(apiKey, model = 'gpt-4o') {
-    this.client = new OpenAI({ apiKey });
+    this._apiKey = apiKey;
+    this._client = null;
     this.model = model;
+  }
+
+  get client() {
+    if (!this._client) this._client = new OpenAI({ apiKey: this._apiKey });
+    return this._client;
   }
 
   async generate(payload, mode = 'text') {
