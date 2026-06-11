@@ -1044,6 +1044,13 @@ export class AppComponent implements AfterViewChecked {
   toggleAiAlt() { this.imgUseAiAlt.update(v => !v); }
   updateQuality(event: Event) { this.imgQuality.set(parseInt((event.target as HTMLInputElement).value, 10) / 100); }
 
+  updateQualityFromInput(event: Event) {
+    const raw = parseInt((event.target as HTMLInputElement).value, 10);
+    const clamped = Math.min(100, Math.max(1, isNaN(raw) ? 85 : raw));
+    (event.target as HTMLInputElement).value = String(clamped);
+    this.imgQuality.set(clamped / 100);
+  }
+
   async processImages() {
     if (this.imgFiles().length === 0) return;
     this.isImgProcessing.set(true);
@@ -1070,6 +1077,10 @@ export class AppComponent implements AfterViewChecked {
           canvas.height = img.height;
           const ctx = canvas.getContext('2d');
           if (!ctx) return reject('Canvas context not supported');
+          if (this.imgTargetFormat() === 'image/jpeg') {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
           ctx.drawImage(img, 0, 0);
           canvas.toBlob(async (blob) => {
             if (!blob) return reject('Blob generation failed');
