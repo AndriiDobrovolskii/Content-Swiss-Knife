@@ -52,17 +52,6 @@ app.post('/api/llm/pdf', async (req, res) => {
   }
 });
 
-app.post('/api/llm/chat', async (req, res) => {
-  try {
-    const { messages, systemInstruction, tools } = req.body;
-    const result = await provider.chat(messages, systemInstruction, tools);
-    res.json(result);
-  } catch (error) {
-    console.error('[LLM] chat error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ── Retrieval routes ────────────────────────────────────────────────────────
 
 app.post('/api/retrieval/url', async (req, res) => {

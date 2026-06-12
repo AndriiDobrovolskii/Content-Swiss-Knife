@@ -71,16 +71,4 @@ export class GeminiProvider {
       return response.text || '';
     });
   }
-
-  async chat(messages, systemInstruction, tools) {
-    // Stateless Gemini chat: reconstruct history as a flat prompt
-    const lines = messages
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-      .join('\n');
-
-    const fullPrompt = [systemInstruction, lines].filter(Boolean).join('\n\n');
-    const text = await this.generate(fullPrompt, 'text');
-    return { text };
-  }
 }

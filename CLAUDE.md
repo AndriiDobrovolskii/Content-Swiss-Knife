@@ -58,7 +58,7 @@ Before considering a task done: `npm run lint && npm run build` must pass with n
 
 4. **Secrets.** `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SERPER_API_KEY` (opt. `GEMINI_API_KEY`) — server-side only, through the proxy. **Never** import keys into Angular code or put them in the bundle. Remove the legacy `declare const GEMINI_API_KEY` pattern. Keep `.env.example` current; the real `.env` stays in `.gitignore`.
 
-5. **Behavioral compatibility.** The retry/backoff wrapper must stay provider-independent. Don't break existing features: Generator, Optimizer, Translator, Image Tools, SEO Meta, Copywriter, Readability, the chat assistant (function calling `restart_generation`).
+5. **Behavioral compatibility.** The retry/backoff wrapper must stay provider-independent. Don't break existing features: Generator, Optimizer, Translator, Image Tools, SEO Meta, Copywriter, Readability.
 
 ## Hard rules for output HTML (acceptance criteria)
 

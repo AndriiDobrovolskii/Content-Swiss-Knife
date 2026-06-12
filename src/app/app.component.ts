@@ -1,4 +1,4 @@
-import { Component, signal, inject, computed, effect, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, signal, inject, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../services/content-orchestrator.service';
 import { HistoryService } from '../services/history.service';
@@ -12,11 +12,6 @@ import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
 import saveAs from 'file-saver';
-
-interface ChatMessage {
-  role: 'user' | 'model';
-  text: string;
-}
 
 interface InputImage {
   file: File;
@@ -98,8 +93,6 @@ const TRANSLATIONS = {
     copyContent: 'Copy Content',
     rewriteResult: 'Rewritten Content',
     copyRewrite: 'Copy Rewritten Text',
-    chatTitle: 'Context Assistant',
-    chatPlaceholder: 'Ask about your content...',
     alertFillFields: 'Please fill in all mandatory fields:\n- Target Website\n- Product Name\n- Original Description',
     alertHistoryClear: 'Are you sure you want to delete all generated history? This cannot be undone.',
     readyOptimize: 'Ready to Optimize',
@@ -237,8 +230,6 @@ const TRANSLATIONS = {
     copyContent: 'Копіювати контент',
     rewriteResult: 'Результат переписування',
     copyRewrite: 'Копіювати текст',
-    chatTitle: 'Асистент контексту',
-    chatPlaceholder: 'Запитайте про ваш контент...',
     alertFillFields: 'Будь ласка, заповніть обов\'язкові поля:\n- Цільовий сайт\n- Назва товару\n- Оригінальний опис',
     alertHistoryClear: 'Ви впевнені, що хочете видалити всю історію? Цю дію неможливо відмінити.',
     readyOptimize: 'Готовий до оптимізації',
@@ -310,12 +301,10 @@ const TRANSLATIONS = {
   imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective],
   templateUrl: './app.component.html',
 })
-export class AppComponent implements AfterViewChecked {
+export class AppComponent {
   private orchestrator = inject(ContentOrchestratorService);
   private historyService = inject(HistoryService);
   private llmService = inject(LlmService);
-
-  @ViewChild('chatContainer') chatContainer?: ElementRef;
 
   // App Mode
   appMode = signal<AppMode>('generator');
@@ -405,13 +394,6 @@ export class AppComponent implements AfterViewChecked {
   showComparison = signal(false);
   comparisonTab = signal<'html' | 'seo'>('html');
 
-  // --- CHAT STATE ---
-  isChatOpen = signal(false);
-  isChatThinking = signal(false);
-  chatMessages = signal<ChatMessage[]>([]);
-  chatInput = signal('');
-  private chatInitialized = false;
-
   // Orchestrator Signals Proxies
   isGenerating = this.orchestrator.isGenerating;
   progressMessage = this.orchestrator.progressMessage;
@@ -493,17 +475,6 @@ export class AppComponent implements AfterViewChecked {
     effect(() => {
       localStorage.setItem('seo_gen_ui_lang', this.uiLanguage());
     });
-  }
-
-  ngAfterViewChecked() {
-    this.scrollToBottom();
-  }
-
-  scrollToBottom() {
-    if (this.chatContainer) {
-      const el = this.chatContainer.nativeElement;
-      el.scrollTop = el.scrollHeight;
-    }
   }
 
   isFormValid = computed(() => {
@@ -674,9 +645,6 @@ export class AppComponent implements AfterViewChecked {
     };
     this.activeTab.set('html');
     await this.orchestrator.generate(input, this.generatorUseThinking());
-    if (this.chatInitialized) {
-      this.llmService.sendChatMessage(`[System Update] Generation Complete. New content is now available in the preview. User inputs: Name="${this.productName()}", Website="${this.selectedWebsite()?.name}".`);
-    }
   }
 
   async generateSeoOnly() {
@@ -774,63 +742,6 @@ export class AppComponent implements AfterViewChecked {
 
   closeComparison() { this.showComparison.set(false); }
 
-  toggleChat() {
-    this.isChatOpen.update(v => !v);
-    if (this.isChatOpen() && !this.chatInitialized) {
-      const context = this.buildChatContext();
-      this.llmService.startChat(context);
-      this.chatMessages.set([{ role: 'model', text: 'Hello! I am your context-aware SEO assistant. I can see the content you are working on. I can also restart the generation for you if you update the inputs. How can I help?' }]);
-      this.chatInitialized = true;
-    }
-  }
-
-  updateChatInput(event: Event) { this.chatInput.set((event.target as HTMLTextAreaElement).value); }
-
-  async sendChatMessage() {
-    const msg = this.chatInput().trim();
-    if (!msg || this.isChatThinking()) return;
-    this.chatInput.set('');
-    this.chatMessages.update(msgs => [...msgs, { role: 'user', text: msg }]);
-    this.isChatThinking.set(true);
-    try {
-      const response = await this.llmService.sendChatMessage(msg);
-      if (response.toolCall?.name === 'restart_generation') {
-        this.chatMessages.update(msgs => [...msgs, { role: 'model', text: 'Restarting generation based on your updates...' }]);
-        await this.generate();
-        const finalResponse = await this.llmService.sendToolResponse('restart_generation', { success: true, message: 'Generation started and completed successfully.' });
-        this.chatMessages.update(msgs => [...msgs, { role: 'model', text: finalResponse }]);
-      } else {
-        this.chatMessages.update(msgs => [...msgs, { role: 'model', text: response.text }]);
-      }
-    } catch (e) {
-      this.chatMessages.update(msgs => [...msgs, { role: 'model', text: 'Sorry, I encountered an error. Please try again.' }]);
-      console.error(e);
-    } finally {
-      this.isChatThinking.set(false);
-    }
-  }
-
-  private buildChatContext(): string {
-    let context = 'You are a helpful SEO Content Assistant expert in 3D printing equipment.\n';
-    if (this.appMode() === 'generator') {
-      context += `Current Product: ${this.productName() || 'Not set'}\n`;
-      context += `Target Website: ${this.selectedWebsite()?.name || 'Not set'}\n`;
-      if (this.content().mainHtmlEn) context += `\nCURRENT GENERATED HTML:\n${this.content().mainHtmlEn}\n`;
-      else if (this.description()) context += `\nORIGINAL DESCRIPTION:\n${this.description()}\n`;
-    } else if (this.appMode() === 'optimizer') {
-      context += `User is optimizing HTML. Current Input length: ${this.optimizerInputHtml().length} chars.\n`;
-      if(this.optimizerOutput()) context += `Optimized Output: ${this.optimizerOutput()}\n`;
-    } else if (this.appMode() === 'translator') {
-      context += `User is translating to ${this.translatorTargetLang()}.\n`;
-    } else {
-      context += `User is using Image Tools (Converter/Optimizer).\n`;
-    }
-    context += `\nInstructions: Answer the user's questions about the content. You can help rewrite sections, suggest SEO improvements, or explain technical terms. 
-    If the user asks to "Regenerate" or says they have updated the inputs (Description/Name/Specs) based on your advice, call the "restart_generation" tool immediately.
-    Be concise and professional.`;
-    return context;
-  }
-
   clearAll() {
     if (this.appMode() === 'generator' || this.appMode() === 'seo-generator') {
       this.productName.set('');
@@ -856,9 +767,6 @@ export class AppComponent implements AfterViewChecked {
     }
 
     this.orchestrator.resetState();
-    this.chatMessages.set([]);
-    this.isChatOpen.set(false);
-    this.chatInitialized = false;
   }
 
   async downloadZip() { await downloadPackage(this.content(), this.productName()); }
