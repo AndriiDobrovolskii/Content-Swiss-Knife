@@ -27,11 +27,16 @@ export function buildPromptC(html: string, targetLang: string, storeName: string
   }
 
   return pack(`TASK C — TRANSLATE HTML TO ${targetLang} (pure HTML body only).
-Standalone, complete description. Specs/values/units IDENTICAL. Preserve structure, classes, inline
+Standalone, complete description. Numeric values IDENTICAL. Preserve structure, classes, inline
 styles, microdata, <hr> after </section>. Translate visible text + alt="" / title="". Never translate
 tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script. Never alter <img src="">.
+[UNITS] If ${targetLang} is Ukrainian or Russian: cyrillize ONLY mm→мм, cm→см, kg→кг, g→г.
+Keep W/V/A/mAh/μm/mm/s/dpi/Hz/L/ml in Latin and °C unchanged. For any other language keep all units
+in Latin. Never change the numeric value.
 Translate labels: Expert Verdict / Tech Tip / "Technical specifications of the [Product]" /
-"What's in the box" / "Why choose [Store]?" / brand-guarantee sentence / FAQ & HowTo headers.
+"What's in the box" / brand-guarantee sentence / FAQ & HowTo headers.
+COMMERCIAL CLOSING H2: keep it transactional (Buy/Order + Product + geo) and translate to ${targetLang}
+with commercial triggers (buy/order/price/price-list equivalents). Do NOT revert it to "Why choose…".
 No geographic, brand/store, or added-claim changes. Return ONLY raw HTML.`, html);
 }
 
@@ -53,8 +58,7 @@ Do NOT output the same text unchanged.
 - "Tech Tip:" → keep as "Tech Tip:"
 - "Technical specifications of the [Product Name]" → keep in English, British style
 - "What's in the Box" → keep (capitalise "Box")
-- "Why choose [Store]?" → keep
-
+- Commercial closing H2 → transactional British/European English: "Buy the [Product] — Price & delivery in [Region]" (NOT "Why choose…"). Keep buy/order/price triggers in the body.
 [CONSTRAINTS]
 - Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab).
 - Do NOT alter <img src="…"> URLs.
@@ -68,13 +72,15 @@ Translate the input into high-converting Ukrainian for a product sold in the US 
 [MEASUREMENT CONSTRAINT — CRITICAL]
 If the source contains Imperial units (inches, lbs), the Ukrainian translation MUST preserve
 those Imperial units (дюйми, фунти). Do NOT convert them to Metric.
+[UNITS — CYRILLIZE] Cyrillize ONLY mm→мм, cm→см, kg→кг, g→г (plus дюйми/фунти for Imperial as above).
+Keep W/V/A/μm/mm/s/Hz/ml/L in Latin and °C unchanged. Never change numeric values.
 
 [LABELS TO TRANSLATE (Ukrainian)]
 - "Expert Verdict:" → "Експертний висновок:"
 - "Tech Tip:" → "Порада фахівця:"
 - "Technical specifications of the [Product Name]" → "Технічні характеристики [Product Name]"
 - "What's in the box" → "Комплектація"
-- "Why choose [Store]?" → "Чому обрати [Store]?"
+- Commercial closing H2 → transactional Ukrainian: "Купити [Product] — ціна та доставка" (NOT "Чому обрати [Store]?"). Keep купити/замовити/ціна/прайс triggers in the body.
 - Brand-guarantee sentence → translate fully
 
 [STYLE]
@@ -99,7 +105,7 @@ If the input is already in Spanish, apply Castilian style improvements and SEO o
 - "Tech Tip:" → "Consejo técnico:"
 - "Technical specifications of the [Product Name]" → "Especificaciones técnicas del [Product Name]"
 - "What's in the box" → "Contenido del paquete"
-- "Why choose EXPERT3D?" → "¿Por qué elegir EXPERT3D?"
+- Commercial closing H2 → transactional Castilian: "Comprar [Product] — precio y envío en España" (NOT "¿Por qué elegir EXPERT3D?"). Keep comprar/pedir/precio triggers in the body.
 - Brand-guarantee sentence → translate fully
 
 [LOCALIZATION TABLE]
@@ -135,13 +141,13 @@ function usInstruction(targetLang: string): string {
 - "Tech Tip:" → keep as "Tech Tip:"
 - "Technical specifications of the [Product Name]" → keep in English
 - "What's in the box" → "What's in the Box"
-- "Why choose [Store]?" → keep`
+- Commercial closing H2 → transactional American English: "Buy the [Product] in Houston, TX — Order online, fast US shipping" (NOT "Why choose…"). Keep buy/order/price triggers in the body.`
     : `[LABELS TO TRANSLATE (US Spanish es-MX)]
 - "Expert Verdict:" → "Veredicto del experto:"
 - "Tech Tip:" → "Consejo técnico:"
 - "Technical specifications of the [Product Name]" → "Especificaciones técnicas del [Product Name]"
 - "What's in the box" → "Contenido del paquete"
-- "Why choose [Store]?" → "¿Por qué elegir [Store]?"
+- Commercial closing H2 → transactional Spanish: "Comprar [Product] — precio y envío en EE. UU." (NOT "¿Por qué elegir [Store]?"). Keep comprar/pedir/precio triggers in the body.
 - Brand-guarantee sentence → translate fully`;
 
   return `TASK C — ${languageLabel.toUpperCase()} LOCALIZATION FOR US MARKET (pure HTML body only).

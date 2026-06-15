@@ -22,6 +22,13 @@ no Markdown code fences.
 ${METRIC_MEASUREMENT_RULES}
 For the US store (Expert-3DPrinter) apply instead:
 ${US_MEASUREMENT_RULES}
+[CYRILLIC UNITS — Ukrainian & Russian output ONLY]
+When the target language is Ukrainian or Russian, cyrillize ONLY these unit abbreviations:
+mm→мм, cm→см, kg→кг, g→г (including inside composite units, e.g. "kg" part of any unit).
+KEEP IN LATIN (never cyrillize): W, V, A, mAh, μm, mm/s, dpi, Hz, kHz, L, ml, fps, px, and any
+unit not in the cyrillize list. The °C degree symbol stays unchanged.
+NEVER change the numeric value — only the unit abbreviation. Spacing rule still applies
+("200 mm" → "200 мм"). For English/Polish/German/Spanish output: keep ALL units in Latin.
 The visible text and Microdata values (itemprop="value") must match exactly.
 
 [MICRODATA ARCHITECTURE — CRITICAL]
@@ -68,16 +75,34 @@ body causes GSC "Duplicate field" critical errors.
    - COMPLETENESS: reproduce EVERY spec row from input — count categories & rows first, emit exactly
      that many. Never summarize/merge/drop. Include Cooling, Supported Filament, Electrical, Environment,
      Electronics, Software, Network/Wi-Fi, and any add-on module when present.
-   - DO NOT change numbers/units. ALWAYS normalize spacing ("10W"→"10 W").
+   - DO NOT change numeric values. ALWAYS normalize spacing ("10W"→"10 W").
+     Unit abbreviations follow [CYRILLIC UNITS] above when translating to Ukrainian/Russian.
    - DIMENSION SEPARATOR: use × (U+00D7), never * or x → "330 × 320 × 325 mm".
    - MULTI-VALUE CELLS: render as <ul><li> inside the <td>, never <br>.
 5. PACKAGE CONTENTS: <h2>What's in the box</h2> + <ul> (only if present in input).
 6. SUPPLEMENTAL: FAQ and HowTo content must NOT appear in the description body. They are generated
    as separate, schema-free artifacts in dedicated steps. If supplemental input contains Q&A pairs
    or numbered procedures, do not render them inline — omit from description body entirely.
-7. TRUST SECTION: <h2>Why choose [Store]?</h2>, body in <p class="cta">, mention expert experience since 2012.
-   If [Product] contains an applicable brand, include: "As an official representative of [Brand], we
-   guarantee the best price, authorized service, and official warranty."
+7. COMMERCIAL CLOSING SECTION (replaces the former "Why choose" block):
+   The H2 MUST be a transactional, geo-anchored buying query — NOT "Why choose…".
+   Pattern: [Buy/Order verb] + [Product] + (optional key spec) + [geo location].
+   The H2 AND the body must naturally include commercial-intent triggers localized to the
+   target language (buy / order / price / price list) plus the store's region. No keyword stuffing.
+   Localized H2 templates (adapt [Product], optional spec, and geo to the store's region):
+     en-GB / en-ES: "Buy the [Product] — [spec] | Price & delivery in [Region]"
+     en-US:         "Buy the [Product] in [City, State] — Order online, fast US shipping"
+     uk-UA:         "Купити [Product] — ціна та доставка в Україні"
+     ru-UA:         "Купить [Product] — цена и доставка в Украине"
+     pl-PL:         "Kup [Product] — cena i dostawa w Polsce"
+     de-DE:         "[Product] kaufen — Preis und Lieferung in der EU"
+     es-ES:         "Comprar [Product] — precio y envío en España"
+     es-MX:         "Comprar [Product] — precio y envío en EE. UU."
+   Body in <p class="cta">: answer WHAT to buy, WHERE (store + region), and WHY (expert
+   experience since 2012, official warranty). Use the localized commercial triggers
+   (купити / замовити / ціна / прайс and equivalents) naturally.
+   BRAND LOGIC PRESERVED: if [Product] contains an applicable brand, still include the localized:
+   "As an official representative of [Brand], we guarantee the best price, authorized service,
+   and official warranty."
 
 [VIDEO]
 TYPE A iframe (YouTube/Vimeo): preserve verbatim, place in Deep Dive. TYPE B direct MP4/CDN/OGV:
