@@ -15,7 +15,7 @@ function buildImageBlock(input: ProductInput, baseUrl: string): string {
   if (done.length === 0) return '[IMAGE MANIFEST]\nNone provided — do not emit <img> tags.';
   const brand = input.brandFolder ? input.brandFolder + '/' : '';
   const model = input.modelFolder ? input.modelFolder + '/' : '';
-  const lines = done.map((e, i) => `${i + 1}. ${e.urlFilename} — "${e.altText || e.visionDescription}"`).join('\n');
+  const lines = done.map((e, i) => `${i + 1}. ${e.urlFilename} — figcaption: "${e.altText || e.visionDescription}"`).join('\n');
   const example = baseUrl ? `${baseUrl}${brand}${model}${done[0].urlFilename}` : '';
   return `[IMAGE MANIFEST] — use ALL ${done.length}; each exactly once; sequential order:
 ${lines}

@@ -107,7 +107,7 @@ Any change to the prompt/generation is checked against these. If the output viol
 - **Forbidden** `itemtype="https://schema.org/Product"` in the description body (the CMS already emits Product via JSON-LD; a duplicate = a critical error in GSC). Allowed only: `PropertyValue`, `FAQPage`, `HowTo`.
 - Space between number and unit: `1.75 mm`, `200 °C` (not `1.75mm`).
 - Spec count on output = spec count on input. Don't change values or units.
-- First image — without `loading="lazy"`; every subsequent one — with it. No orphan images (each is preceded by a `<p>` lead-in).
+- Each image wrapped in a `<figure>` with a `<figcaption>` (figcaption sourced from the manifest caption). First image's `<img>` — without `loading="lazy"`; every subsequent one — with it; `decoding="async"` on all. No orphan images (each `<figure>` is preceded by a `<p>` lead-in). The lead-in `<p>` must not duplicate the `<figcaption>`; `alt` must not duplicate the `<figcaption>`.
 - SEO: meta_title ≤ 55 chars; meta_description ≤ 155, ends with CTA ➔, includes the currency symbol.
 - Non-EN languages: no anglicisms ("друк" not "прінт", "ПЗ" not "софт").
 - HTML only, no Markdown. No `<br>` for spacing; `<hr>` after each `</section>`.
