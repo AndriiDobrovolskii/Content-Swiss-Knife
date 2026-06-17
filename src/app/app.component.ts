@@ -6,6 +6,7 @@ import { LlmService } from '../services/llm.service';
 import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry } from './types';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
+import { parseVisionResult } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
 import { getStore, taskLangToIso } from '../prompt-core/constants';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
@@ -876,10 +877,20 @@ export class AppComponent {
             const file = this.genImgFileMap.get(entry.id);
             if (!file) throw new Error('File not found');
             const base64 = await this.fileToBase64ForVision(file);
-            const description = await this.llmService.analyzeImage(base64, 'image/jpeg', buildVisionPrepassPrompt(), this.generatorUseThinking());
+            const specsExcerpt = this.specs().trim().slice(0, 400);
+            const prompt = buildVisionPrepassPrompt(this.productName(), specsExcerpt);
+            const raw = await this.llmService.analyzeImage(base64, 'image/jpeg', prompt, this.generatorUseThinking());
+            const result = parseVisionResult(raw);
             this.genImgManifest.update(list =>
               list.map(e => e.id === entry.id
-                ? { ...e, status: 'done', visionDescription: description, altText: e.altText || description }
+                ? {
+                    ...e,
+                    status: 'done',
+                    visionDescription: result.caption,
+                    altText: e.altText || result.caption,
+                    consistent: result.consistent,
+                    observedSubject: result.observed,
+                  }
                 : e)
             );
           } catch (err) {
@@ -911,7 +922,7 @@ export class AppComponent {
           const ctx = canvas.getContext('2d');
           if (!ctx) return reject('Canvas context not supported');
           ctx.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/jpeg', 0.6).split(',')[1]);
+          resolve(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]);
         };
         img.onerror = reject;
         img.src = e.target?.result as string;

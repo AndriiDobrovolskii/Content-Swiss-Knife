@@ -332,7 +332,13 @@
                             } @else if (entry.status === 'error') {
                               <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"><i class="fa-solid fa-triangle-exclamation"></i> error</span>
                             }
+                            @if (entry.consistent === false) {
+                              <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" [title]="'Vision model sees a different subject — verify the alt text matches the product.'"><i class="fa-solid fa-circle-question"></i> mismatch?</span>
+                            }
                           </div>
+                          @if (entry.consistent === false) {
+                            <p class="text-[9px] text-amber-700 dark:text-amber-400 mt-0.5">Model sees: {{ entry.observedSubject || 'a different subject' }} — does this match the product?</p>
+                          }
                         </div>
                         <button (click)="removeGenImg(entry.id)" class="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 flex-shrink-0 active:scale-90 transition-transform">
                           <i class="fa-solid fa-times text-xs"></i>
