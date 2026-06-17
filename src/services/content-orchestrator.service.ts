@@ -4,6 +4,7 @@ import { RetrievalService } from './retrieval.service';
 import { HistoryService } from '@/src/services/history.service';
 import { ProductInput, GeneratedContent, WebsiteOption } from '../app/types';
 import { cleanHtmlStructure } from '../utils/html-cleaner';
+import { wrapVideoFigures } from '../utils/video-figure';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB, resolveCurrencySymbol } from '../prompts/task-b';
@@ -143,6 +144,7 @@ export class ContentOrchestratorService {
       const promptA = buildPromptA(input);
       let htmlEn = await this.llm.generateText(promptA, useThinking);
       htmlEn = htmlEn.replace(/```html/g, '').replace(/```/g, '').trim();
+      htmlEn = wrapVideoFigures(htmlEn, input.name);
       this.content.update(c => ({ ...c, mainHtmlEn: htmlEn }));
 
       // Step 2 — Generate SEO Metadata
