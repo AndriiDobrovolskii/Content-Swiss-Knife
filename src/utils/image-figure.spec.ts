@@ -25,7 +25,7 @@ describe('wrapImageFigures', () => {
 
     const figure = doc.querySelector('figure');
     expect(figure).not.toBeNull();
-    expect(figure!.getAttribute('style')).toBe('display: block; width: max-content; max-width: 100%; margin: 4px auto;');
+    expect(figure!.getAttribute('style')).toBe('display: block; width: fit-content; max-width: 100%; margin: 4px auto;');
 
     const img = figure!.querySelector(':scope > img');
     expect(img).not.toBeNull();
@@ -37,7 +37,7 @@ describe('wrapImageFigures', () => {
       `<figcaption style="z"><b>Result:</b> copper structures</figcaption></figure>`;
     const figure = parse(wrapImageFigures(html)).querySelector('figure')!;
 
-    expect(figure.getAttribute('style')).toContain('width: max-content');
+    expect(figure.getAttribute('style')).toContain('width: fit-content');
     const figcaption = figure.querySelector(':scope > figcaption')!;
     expect(figcaption.getAttribute('style')).toBe('text-align: left;');
     expect(figcaption.innerHTML).toBe('<b>Result:</b> copper structures');

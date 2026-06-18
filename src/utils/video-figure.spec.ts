@@ -19,18 +19,18 @@ function parse(html: string): Document {
 }
 
 describe('wrapVideoFigures', () => {
-  it('wraps a YouTube embed in figure > div(aspect-ratio) > iframe + figcaption', () => {
+  it('wraps a YouTube embed in figure(aspect-ratio) > iframe + figcaption', () => {
     const html = `<p>Watch it in action.</p><p><iframe src="https://www.youtube.com/embed/abc123"></iframe></p>`;
     const doc = parse(wrapVideoFigures(html, PRODUCT));
 
     const figure = doc.querySelector('figure');
     expect(figure).not.toBeNull();
     expect(figure!.getAttribute('style')).toContain('max-width: 1140px');
+    expect(figure!.getAttribute('style')).toContain('aspect-ratio: 16 / 9');
 
-    const aspectDiv = figure!.querySelector(':scope > div');
-    expect(aspectDiv!.getAttribute('style')).toContain('aspect-ratio: 16 / 9');
-
-    const iframe = aspectDiv!.querySelector('iframe');
+    // iframe is now a direct child of the figure — no intermediate <div>.
+    expect(figure!.querySelector(':scope > div')).toBeNull();
+    const iframe = figure!.querySelector(':scope > iframe');
     expect(iframe).not.toBeNull();
     expect(iframe!.getAttribute('style')).toBe('width: 100%; height: 100%; border: 0;');
 

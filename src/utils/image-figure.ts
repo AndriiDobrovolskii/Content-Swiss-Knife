@@ -16,7 +16,7 @@
  */
 
 /** Canonical inline styles every image figure must end up with (from the spec example). */
-const FIGURE_STYLE = 'display: block; width: max-content; max-width: 100%; margin: 4px auto;';
+const FIGURE_STYLE = 'display: block; width: fit-content; max-width: 100%; margin: 4px auto;';
 const IMG_STYLE = 'max-width: 100%; height: auto; display: block;';
 const FIGCAPTION_STYLE = 'text-align: left;';
 

@@ -25,8 +25,7 @@ const ALLOW_VALUE =
   'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
 const REFERRERPOLICY_VALUE = 'strict-origin-when-cross-origin';
 
-const FIGURE_STYLE = 'width: 100%; max-width: 1140px; margin: 0 auto 20px;';
-const ASPECT_DIV_STYLE = 'aspect-ratio: 16 / 9;';
+const FIGURE_STYLE = 'width: 100%; max-width: 1140px; margin: 0 auto 20px; aspect-ratio: 16 / 9;';
 const FIGCAPTION_STYLE = 'text-align: center; font-size: 14px; color: #666; margin-top: 10px;';
 
 function isVideoSrc(src: string): boolean {
@@ -89,12 +88,9 @@ export function wrapVideoFigures(html: string, productName: string): string {
     iframe.setAttribute('referrerpolicy', REFERRERPOLICY_VALUE);
     iframe.setAttribute('allowfullscreen', '');
 
-    // 3. Build figure > div(aspect-ratio) > iframe, + figcaption below the box.
+    // 3. Build figure(aspect-ratio) > iframe + figcaption.
     const figure = doc.createElement('figure');
     figure.setAttribute('style', FIGURE_STYLE);
-
-    const aspectDiv = doc.createElement('div');
-    aspectDiv.setAttribute('style', ASPECT_DIV_STYLE);
 
     const figcaption = doc.createElement('figcaption');
     figcaption.setAttribute('style', FIGCAPTION_STYLE);
@@ -109,8 +105,7 @@ export function wrapVideoFigures(html: string, productName: string): string {
     } else {
       iframe.replaceWith(figure);
     }
-    aspectDiv.appendChild(iframe);
-    figure.appendChild(aspectDiv);
+    figure.appendChild(iframe);
     figure.appendChild(figcaption);
   });
 
