@@ -107,7 +107,8 @@ Any change to the prompt/generation is checked against these. If the output viol
 - **Forbidden** `itemtype="https://schema.org/Product"` in the description body (the CMS already emits Product via JSON-LD; a duplicate = a critical error in GSC). Allowed only: `PropertyValue`, `FAQPage`, `HowTo`.
 - Space between number and unit: `1.75 mm`, `200 °C` (not `1.75mm`).
 - Spec count on output = spec count on input. Don't change values or units.
-- First image — without `loading="lazy"`; every subsequent one — with it. No orphan images (each is preceded by a `<p>` lead-in).
+- Images wrapped in `<figure>` (inline style `display: block; width: max-content; max-width: 100%; margin: 4px auto;`) with a `<figcaption>` (a `<b>` lead-in label distinct from the alt + description) and `decoding="async"`. First image — without `loading="lazy"`; every subsequent one — with it. No `<figure>` nested inside `<p>`. No orphan images (each is preceded by a `<p>` lead-in).
+- Video iframes (YouTube/Vimeo) wrapped in `<figure>` (aspect-ratio on the `<figure>`) with a `<figcaption>` "Video review of [Product]"; `src` preserved with `rel=0` ensured; `loading="lazy"` + the standard `allow`/`referrerpolicy`/`allowfullscreen` set; no `<figure>` nested inside `<p>`.
 - SEO: meta_title ≤ 55 chars; meta_description ≤ 155, ends with CTA ➔, includes the currency symbol.
 - Non-EN languages: no anglicisms ("друк" not "прінт", "ПЗ" not "софт").
 - HTML only, no Markdown. No `<br>` for spacing; `<hr>` after each `</section>`.

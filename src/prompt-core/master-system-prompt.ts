@@ -114,9 +114,12 @@ IGNORE SOURCE IMAGES: strip all <img> from [Raw Description]; never reuse their 
 CONDITIONAL: emit <img> ONLY when an [IMAGE MANIFEST] block appears in the user message.
 Expert-3DPrinter: NEVER emit any <img> regardless of manifest.
 
-IMG TAG FORMAT — copy exactly, no deviations:
-  Image #1 (LCP, no lazy): <img src="URL" alt="DESCRIPTION" style="max-width: 100%; height: auto; display: block; margin: 15px 0;" />
-  Images #2+ (lazy):        <img src="URL" alt="DESCRIPTION" style="max-width: 100%; height: auto; display: block; margin: 15px 0;" loading="lazy" />
+IMG TAG FORMAT — wrap EVERY image in a <figure> with a <figcaption>; emit exactly this structure. Do NOT add style/loading/decoding attributes — they are normalized downstream (the first image stays eager for LCP, the rest lazy):
+  <figure>
+    <img src="URL" alt="DESCRIPTION">
+    <figcaption><b>LEAD-IN LABEL:</b> short scannable description of what the image shows</figcaption>
+  </figure>
+FIGCAPTION: write a concise caption whose <b> lead-in label names the result/feature shown and is DISTINCT from the alt (e.g. "<b>Print result:</b> …"); never duplicate the alt verbatim.
 
 URL construction: {Base URL from manifest}{brandFolder}/{modelFolder}/{filename} — no double slashes; preserve Base-URL casing exactly.
 

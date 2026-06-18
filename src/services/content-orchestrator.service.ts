@@ -4,6 +4,8 @@ import { RetrievalService } from './retrieval.service';
 import { HistoryService } from '@/src/services/history.service';
 import { ProductInput, GeneratedContent, WebsiteOption } from '../app/types';
 import { cleanHtmlStructure } from '../utils/html-cleaner';
+import { wrapVideoFigures } from '../utils/video-figure';
+import { wrapImageFigures } from '../utils/image-figure';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB, resolveCurrencySymbol } from '../prompts/task-b';
@@ -143,6 +145,8 @@ export class ContentOrchestratorService {
       const promptA = buildPromptA(input);
       let htmlEn = await this.llm.generateText(promptA, useThinking);
       htmlEn = htmlEn.replace(/```html/g, '').replace(/```/g, '').trim();
+      htmlEn = wrapVideoFigures(htmlEn, input.name);
+      htmlEn = wrapImageFigures(htmlEn);
       this.content.update(c => ({ ...c, mainHtmlEn: htmlEn }));
 
       // Step 2 — Generate SEO Metadata
@@ -171,6 +175,10 @@ export class ContentOrchestratorService {
         if (input.website.name === 'EXPERT3D' && lang === 'ES') {
           translatedHtml = this.applySpanishExpert3dReplacements(translatedHtml);
         }
+
+        // Re-assert the image figure structure: Task C can drift styles/attrs
+        // while translating, so normalize each language output (idempotent).
+        translatedHtml = wrapImageFigures(translatedHtml);
 
         this.content.update(c => ({
           ...c,
