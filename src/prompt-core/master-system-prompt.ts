@@ -58,16 +58,7 @@ body causes GSC "Duplicate field" critical errors.
 1. HOOK (40–75 words, plain HTML, no microdata): "[Product] is a [Category] designed for [use-case],
    featuring [key specs]." Use-case = a workflow, not a user type.
 2. QUICK SPECS TABLE (3–4 killer specs): <div class="table-responsive"><table class="table table-striped table-hover table-bordered">.
-3. EXPERT DEEP DIVE + VERDICT. EEAT block:
-   <div class="expert-insight" style="background:#f9f9f9;padding:15px;border-left:4px solid #333;margin:20px 0;">
-     <strong>Expert Verdict:</strong> [2–3 sentences]
-   </div>
-   (Translate the "Expert Verdict:" label per target language.)
-3b. TECH TIP — a SEPARATE element (do not merge with the Verdict): exactly one
-   <blockquote style="border-left:4px solid #555;padding:10px 20px;margin:20px 0;background:#f5f5f5;">
-     <strong>Tech Tip:</strong> [actionable advice grounded in real specs]
-   </blockquote>
-4. TECHNICAL SPECIFICATIONS: wrapper <section class="specs">, header <h2>Technical specifications of the [Product]</h2>;
+3. TECHNICAL SPECIFICATIONS: wrapper <section class="specs">, header <h2>Technical specifications of the [Product]</h2>;
    one <h3>+table per category; wrap each table in <div class="table-responsive">; classes
    "table table-striped table-hover table-bordered". Every row:
      <tr itemprop="additionalProperty" itemscope itemtype="https://schema.org/PropertyValue">
@@ -79,11 +70,11 @@ body causes GSC "Duplicate field" critical errors.
      Unit abbreviations follow [CYRILLIC UNITS] above when translating to Ukrainian/Russian.
    - DIMENSION SEPARATOR: use × (U+00D7), never * or x → "330 × 320 × 325 mm".
    - MULTI-VALUE CELLS: render as <ul><li> inside the <td>, never <br>.
-5. PACKAGE CONTENTS: <h2>What's in the box</h2> + <ul> (only if present in input).
-6. SUPPLEMENTAL: FAQ and HowTo content must NOT appear in the description body. They are generated
+4. PACKAGE CONTENTS: <h2>What's in the box</h2> + <ul> (only if present in input).
+5. SUPPLEMENTAL: FAQ and HowTo content must NOT appear in the description body. They are generated
    as separate, schema-free artifacts in dedicated steps. If supplemental input contains Q&A pairs
    or numbered procedures, do not render them inline — omit from description body entirely.
-7. COMMERCIAL CLOSING SECTION (replaces the former "Why choose" block):
+6. COMMERCIAL CLOSING SECTION (replaces the former "Why choose" block):
    The H2 MUST be a transactional, geo-anchored buying query — NOT "Why choose…".
    Pattern: [Buy/Order verb] + [Product] + (optional key spec) + [geo location].
    The H2 AND the body must naturally include commercial-intent triggers localized to the

@@ -33,7 +33,7 @@ tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script. Never alter
 [UNITS] If ${targetLang} is Ukrainian or Russian: cyrillize ONLY mm→мм, cm→см, kg→кг, g→г.
 Keep W/V/A/mAh/μm/mm/s/dpi/Hz/L/ml in Latin and °C unchanged. For any other language keep all units
 in Latin. Never change the numeric value.
-Translate labels: Expert Verdict / Tech Tip / "Technical specifications of the [Product]" /
+Translate labels: "Technical specifications of the [Product]" /
 "What's in the box" / brand-guarantee sentence / FAQ & HowTo headers.
 COMMERCIAL CLOSING H2: keep it transactional (Buy/Order + Product + geo) and translate to ${targetLang}
 with commercial triggers (buy/order/price/price-list equivalents). Do NOT revert it to "Why choose…".
@@ -54,8 +54,6 @@ Do NOT output the same text unchanged.
 - Tone: Direct, confident, professional but accessible.
 
 [LABELS TO ADAPT (European English)]
-- "Expert Verdict:" → keep as "Expert Verdict:" (British capitalisation)
-- "Tech Tip:" → keep as "Tech Tip:"
 - "Technical specifications of the [Product Name]" → keep in English, British style
 - "What's in the Box" → keep (capitalise "Box")
 - Commercial closing H2 → transactional British/European English: "Buy the [Product] — Price & delivery in [Region]" (NOT "Why choose…"). Keep buy/order/price triggers in the body.
@@ -76,8 +74,6 @@ those Imperial units (дюйми, фунти). Do NOT convert them to Metric.
 Keep W/V/A/μm/mm/s/Hz/ml/L in Latin and °C unchanged. Never change numeric values.
 
 [LABELS TO TRANSLATE (Ukrainian)]
-- "Expert Verdict:" → "Експертний висновок:"
-- "Tech Tip:" → "Порада фахівця:"
 - "Technical specifications of the [Product Name]" → "Технічні характеристики [Product Name]"
 - "What's in the box" → "Комплектація"
 - Commercial closing H2 → transactional Ukrainian: "Купити [Product] — ціна та доставка" (NOT "Чому обрати [Store]?"). Keep купити/замовити/ціна/прайс triggers in the body.
@@ -101,8 +97,6 @@ Translate/adapt into natural, persuasive Castilian Spanish (es-ES) for EXPERT3D 
 If the input is already in Spanish, apply Castilian style improvements and SEO optimization.
 
 [LABELS TO TRANSLATE (Castilian Spanish)]
-- "Expert Verdict:" → "Veredicto del experto:"
-- "Tech Tip:" → "Consejo técnico:"
 - "Technical specifications of the [Product Name]" → "Especificaciones técnicas del [Product Name]"
 - "What's in the box" → "Contenido del paquete"
 - Commercial closing H2 → transactional Castilian: "Comprar [Product] — precio y envío en España" (NOT "¿Por qué elegir EXPERT3D?"). Keep comprar/pedir/precio triggers in the body.
@@ -137,14 +131,10 @@ function usInstruction(targetLang: string): string {
   const languageLabel = isEnglish ? 'American English (en-US)' : 'US/Latin American Spanish (es-US)';
   const labelsBlock = isEnglish
     ? `[LABELS TO ADAPT (American English)]
-- "Expert Verdict:" → keep as "Expert Verdict:"
-- "Tech Tip:" → keep as "Tech Tip:"
 - "Technical specifications of the [Product Name]" → keep in English
 - "What's in the box" → "What's in the Box"
 - Commercial closing H2 → transactional American English: "Buy the [Product] in Houston, TX — Order online, fast US shipping" (NOT "Why choose…"). Keep buy/order/price triggers in the body.`
     : `[LABELS TO TRANSLATE (US Spanish es-MX)]
-- "Expert Verdict:" → "Veredicto del experto:"
-- "Tech Tip:" → "Consejo técnico:"
 - "Technical specifications of the [Product Name]" → "Especificaciones técnicas del [Product Name]"
 - "What's in the box" → "Contenido del paquete"
 - Commercial closing H2 → transactional Spanish: "Comprar [Product] — precio y envío en EE. UU." (NOT "¿Por qué elegir [Store]?"). Keep comprar/pedir/precio triggers in the body.
