@@ -63,8 +63,23 @@ describe('parseVisionResult', () => {
     expect(() => parseVisionResult(JSON.stringify({ caption, consistent: true }))).toThrow();
   });
 
-  it('throws when consistent is not a boolean', () => {
-    expect(() => parseVisionResult(JSON.stringify({ caption: 'A device', consistent: 'yes' }))).toThrow();
+  it('coerces "true"/"false" string forms of consistent', () => {
+    expect(parseVisionResult(JSON.stringify({ caption: 'A device', consistent: 'true' })).consistent).toBe(true);
+    expect(parseVisionResult(JSON.stringify({ caption: 'A device', consistent: 'false' })).consistent).toBe(false);
+  });
+
+  it('coerces yes/no spellings of consistent', () => {
+    expect(parseVisionResult(JSON.stringify({ caption: 'A device', consistent: 'yes' })).consistent).toBe(true);
+    expect(parseVisionResult(JSON.stringify({ caption: 'A device', consistent: 'no' })).consistent).toBe(false);
+  });
+
+  it('defaults missing consistent to true and still parses the caption', () => {
+    const result = parseVisionResult(JSON.stringify({ caption: 'A device' }));
+    expect(result).toEqual({ caption: 'A device', consistent: true });
+  });
+
+  it('defaults an uninterpretable consistent value to true', () => {
+    expect(parseVisionResult(JSON.stringify({ caption: 'A device', consistent: {} })).consistent).toBe(true);
   });
 
   it('throws when observed is present but not a string', () => {

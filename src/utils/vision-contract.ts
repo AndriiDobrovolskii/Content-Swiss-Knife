@@ -36,6 +36,18 @@ function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length;
 }
 
+/** Coerce common LLM boolean spellings; undefined when not interpretable. */
+function coerceBoolean(v: unknown): boolean | undefined {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v === 1 ? true : v === 0 ? false : undefined;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (s === 'true' || s === 'yes' || s === 'y') return true;
+    if (s === 'false' || s === 'no' || s === 'n') return false;
+  }
+  return undefined;
+}
+
 /**
  * Parse + validate a raw Vision response string into a VisionResult.
  * @throws Error on invalid JSON or a shape/constraint violation.
@@ -64,10 +76,9 @@ export function parseVisionResult(raw: string): VisionResult {
     throw new Error(`vision-contract: "caption" exceeds ${MAX_CAPTION_WORDS} words`);
   }
 
-  const consistent = obj['consistent'];
-  if (typeof consistent !== 'boolean') {
-    throw new Error('vision-contract: "consistent" must be a boolean');
-  }
+  // Resilient: coerce string/number forms; default a missing/garbage value to
+  // `consistent: true` (no mismatch warning) so a valid caption is never lost.
+  const consistent = coerceBoolean(obj['consistent']) ?? true;
 
   const observedRaw = obj['observed'];
   if (observedRaw !== undefined && typeof observedRaw !== 'string') {
