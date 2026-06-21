@@ -888,8 +888,6 @@ export class AppComponent {
                     status: 'done',
                     visionDescription: result.caption,
                     altText: e.altText || result.caption,
-                    consistent: result.consistent,
-                    observedSubject: result.observed,
                   }
                 : e)
             );

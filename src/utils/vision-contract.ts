@@ -14,10 +14,6 @@
 export interface VisionResult {
   /** <= 20 words, English, objective. Used as default alt text / vision description. */
   caption: string;
-  /** Does the visible subject plausibly match the named product? */
-  consistent: boolean;
-  /** Present only when consistent === false: what the model actually sees. */
-  observed?: string;
 }
 
 /** Caption is the constrained field — hard ceiling on word count. */
@@ -34,18 +30,6 @@ function stripFences(raw: string): string {
 
 function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length;
-}
-
-/** Coerce common LLM boolean spellings; undefined when not interpretable. */
-function coerceBoolean(v: unknown): boolean | undefined {
-  if (typeof v === 'boolean') return v;
-  if (typeof v === 'number') return v === 1 ? true : v === 0 ? false : undefined;
-  if (typeof v === 'string') {
-    const s = v.trim().toLowerCase();
-    if (s === 'true' || s === 'yes' || s === 'y') return true;
-    if (s === 'false' || s === 'no' || s === 'n') return false;
-  }
-  return undefined;
 }
 
 /**
@@ -76,19 +60,6 @@ export function parseVisionResult(raw: string): VisionResult {
     throw new Error(`vision-contract: "caption" exceeds ${MAX_CAPTION_WORDS} words`);
   }
 
-  // Resilient: coerce string/number forms; default a missing/garbage value to
-  // `consistent: true` (no mismatch warning) so a valid caption is never lost.
-  const consistent = coerceBoolean(obj['consistent']) ?? true;
-
-  const observedRaw = obj['observed'];
-  if (observedRaw !== undefined && typeof observedRaw !== 'string') {
-    throw new Error('vision-contract: "observed" must be a string when present');
-  }
-  const observed = typeof observedRaw === 'string' ? observedRaw.trim() : undefined;
-
-  return {
-    caption: caption.trim(),
-    consistent,
-    ...(observed ? { observed } : {}),
-  };
+  // Any other fields the model emits (e.g. a stray "consistent") are ignored.
+  return { caption: caption.trim() };
 }
