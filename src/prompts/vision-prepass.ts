@@ -23,7 +23,6 @@ Describe what is actually visible in the image, grounded by the product above.
 Grounding rules:
 - Do NOT assert a device class (e.g. "3D printer", "laser engraver", "scanner") that contradicts the named product. The named product is the source of truth for what the device is.
 - If the visible subject is unclear or generic, describe it generically (shape, color, controls, ports) rather than guessing a device class.
-- Decide whether the visible subject plausibly matches the named product.
 
 Style rules for "caption":
 - Objective and technical — no marketing adjectives ("amazing", "beautiful", "innovative").
@@ -32,8 +31,6 @@ Style rules for "caption":
 
 Output contract — return ONLY this JSON object, no prose, no code fences:
 {
-  "caption": "string (<= 20 words, English, objective)",
-  "consistent": true,
-  "observed": "string (OPTIONAL — include only when consistent is false: what the device actually appears to be)"
+  "caption": "string (<= 20 words, English, objective)"
 }`;
 }
