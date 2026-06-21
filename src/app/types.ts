@@ -32,10 +32,6 @@ export interface ImageManifestEntry {
   altText: string;
   order: number;
   status: 'pending' | 'analyzing' | 'done' | 'error';
-  /** Whether the visible subject plausibly matches the named product (Vision contract). */
-  consistent?: boolean;
-  /** What the Vision model reports seeing when consistent === false. */
-  observedSubject?: string;
 }
 
 export interface ProductInput {
