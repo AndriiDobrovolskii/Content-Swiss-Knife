@@ -13,64 +13,49 @@ import { describe, it, expect } from 'vitest';
 import { parseVisionResult } from './vision-contract';
 
 describe('parseVisionResult', () => {
-  it('parses valid JSON with consistent=true', () => {
+  it('parses valid JSON into a caption-only result', () => {
     const raw = JSON.stringify({
       caption: 'Blue laser engraver with gantry rails and controller box',
-      consistent: true,
     });
     expect(parseVisionResult(raw)).toEqual({
       caption: 'Blue laser engraver with gantry rails and controller box',
-      consistent: true,
     });
   });
 
-  it('parses consistent=false and retains observed', () => {
+  it('ignores extra fields the model may still emit', () => {
     const raw = JSON.stringify({
       caption: 'Compact desktop machine with a moving laser head',
-      consistent: false,
+      consistent: 'yes',
       observed: 'laser engraver',
     });
     expect(parseVisionResult(raw)).toEqual({
       caption: 'Compact desktop machine with a moving laser head',
-      consistent: false,
-      observed: 'laser engraver',
     });
   });
 
   it('strips ```json code fences before parsing', () => {
-    const raw = '```json\n{"caption":"Black resin 3D printer with build plate","consistent":true}\n```';
+    const raw = '```json\n{"caption":"Black resin 3D printer with build plate"}\n```';
     expect(parseVisionResult(raw)).toEqual({
       caption: 'Black resin 3D printer with build plate',
-      consistent: true,
     });
   });
 
   it('strips bare ``` fences before parsing', () => {
-    const raw = '```\n{"caption":"Handheld 3D scanner with blue sensor array","consistent":true}\n```';
+    const raw = '```\n{"caption":"Handheld 3D scanner with blue sensor array"}\n```';
     expect(parseVisionResult(raw).caption).toBe('Handheld 3D scanner with blue sensor array');
   });
 
   it('throws on missing caption', () => {
-    expect(() => parseVisionResult(JSON.stringify({ consistent: true }))).toThrow();
+    expect(() => parseVisionResult(JSON.stringify({ foo: 'bar' }))).toThrow();
   });
 
   it('throws on empty caption', () => {
-    expect(() => parseVisionResult(JSON.stringify({ caption: '   ', consistent: true }))).toThrow();
+    expect(() => parseVisionResult(JSON.stringify({ caption: '   ' }))).toThrow();
   });
 
   it('throws on over-length caption (> 20 words)', () => {
     const caption = Array.from({ length: 21 }, () => 'word').join(' ');
-    expect(() => parseVisionResult(JSON.stringify({ caption, consistent: true }))).toThrow();
-  });
-
-  it('throws when consistent is not a boolean', () => {
-    expect(() => parseVisionResult(JSON.stringify({ caption: 'A device', consistent: 'yes' }))).toThrow();
-  });
-
-  it('throws when observed is present but not a string', () => {
-    expect(() =>
-      parseVisionResult(JSON.stringify({ caption: 'A device', consistent: false, observed: 42 })),
-    ).toThrow();
+    expect(() => parseVisionResult(JSON.stringify({ caption }))).toThrow();
   });
 
   it('throws on non-JSON garbage', () => {
