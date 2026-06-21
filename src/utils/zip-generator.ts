@@ -45,16 +45,6 @@ export const downloadPackage = async (content: GeneratedContent, productName: st
     faqEntries.forEach(([iso, html]) => { if (html) zip.file(`faq_${iso}.html`, html); });
   }
 
-  // 4. HowTo artifacts — schema-free, for Journal theme HowTo module
-  if (content.howtoArtifacts) {
-    const howtoEntries = Object.entries(content.howtoArtifacts).sort(([a], [b]) => {
-      if (a === 'uk-UA') return -1;
-      if (b === 'uk-UA') return 1;
-      return 0;
-    });
-    howtoEntries.forEach(([iso, html]) => { if (html) zip.file(`howto_${iso}.html`, html); });
-  }
-
   // 5. SEO JSON
   if (content.seoData) {
     zip.file('seo_metadata.json', JSON.stringify(content.seoData, null, 2));

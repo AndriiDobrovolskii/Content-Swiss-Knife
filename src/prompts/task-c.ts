@@ -30,11 +30,11 @@ export function buildPromptC(html: string, targetLang: string, storeName: string
 Standalone, complete description. Numeric values IDENTICAL. Preserve structure, classes, inline
 styles, microdata, <hr> after </section>. Translate visible text + alt="" / title="". Never translate
 tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script. Never alter <img src="">.
-[UNITS] If ${targetLang} is Ukrainian or Russian: cyrillize ONLY mm→мм, cm→см, kg→кг, g→г.
-Keep W/V/A/mAh/μm/mm/s/dpi/Hz/L/ml in Latin and °C unchanged. For any other language keep all units
+[UNITS] If ${targetLang} is Ukrainian or Russian: cyrillize ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с.
+Keep W/V/A/mAh/μm/dpi/Hz/L/ml in Latin and °C unchanged. For any other language keep all units
 in Latin. Never change the numeric value.
 Translate labels: "Technical specifications of the [Product]" /
-"What's in the box" / brand-guarantee sentence / FAQ & HowTo headers.
+"What's in the box" / brand-guarantee sentence / FAQ headers.
 COMMERCIAL CLOSING H2: keep it transactional (Buy/Order + Product + geo) and translate to ${targetLang}
 with commercial triggers (buy/order/price/price-list equivalents). Do NOT revert it to "Why choose…".
 No geographic, brand/store, or added-claim changes. Return ONLY raw HTML.`, html);
@@ -70,8 +70,8 @@ Translate the input into high-converting Ukrainian for a product sold in the US 
 [MEASUREMENT CONSTRAINT — CRITICAL]
 If the source contains Imperial units (inches, lbs), the Ukrainian translation MUST preserve
 those Imperial units (дюйми, фунти). Do NOT convert them to Metric.
-[UNITS — CYRILLIZE] Cyrillize ONLY mm→мм, cm→см, kg→кг, g→г (plus дюйми/фунти for Imperial as above).
-Keep W/V/A/μm/mm/s/Hz/ml/L in Latin and °C unchanged. Never change numeric values.
+[UNITS — CYRILLIZE] Cyrillize ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с (plus дюйми/фунти for Imperial as above).
+Keep W/V/A/μm/Hz/ml/L in Latin and °C unchanged. Never change numeric values.
 
 [LABELS TO TRANSLATE (Ukrainian)]
 - "Technical specifications of the [Product Name]" → "Технічні характеристики [Product Name]"
