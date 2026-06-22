@@ -1,4 +1,4 @@
-import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES } from './constants';
+import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, BRAND_GUARANTEE_EN } from './constants';
 
 /**
  * STATIC system prompt shared by Task A / B / C and all translations.
@@ -30,6 +30,8 @@ unit not in the cyrillize list. The °C degree symbol stays unchanged.
 NEVER change the numeric value — only the unit abbreviation. Spacing rule still applies
 ("200 mm" → "200 мм"). For English/Polish/German/Spanish output: keep ALL units in Latin.
 The visible text and Microdata values (itemprop="value") must match exactly.
+
+${NUMBER_FORMAT_RULES}
 
 [MICRODATA ARCHITECTURE — CRITICAL]
 The store CMS already emits a complete JSON-LD Product at page level. The description body MUST NOT
@@ -84,15 +86,19 @@ never assume or invent.
 
 4. APPLICATIONS (80–250 words, H2 + list):
    <h2>Applications</h2>
-   <ul><li><strong>[Industry / Scenario]:</strong> 1–2 sentences on HOW the product solves the task here.</li></ul>
+   <ul><li><b>[Industry / Scenario]:</b> 1–2 sentences on HOW the product solves the task here.</li></ul>
    4–8 entries. Each explains the concrete value in context — never merely names the industry.
+   The industry list is not exhaustive — add other relevant fields or synonyms when they fit.
 
 5. COMPATIBILITY (CONDITIONAL, 30–100 words) — include ONLY if the source/datasheet provides it:
-   <h2>Compatibility</h2> + <ul> covering, as available: Software, Export formats, Import formats,
-   Operating system, Hardware/Materials. Never assume or invent.
+   Product-specific H2 naming the subject, e.g. <h2>Compatibility of the [Product]</h2>, followed by a
+   <ul> whose items use a <b> lead-in label: <li><b>[Aspect label]</b> [value(s)]</li>. Structure the
+   aspects around what the source actually states (e.g. compatible printers/hardware, software, export/
+   import formats, operating system, materials) — do NOT force a fixed checklist. Never assume or invent.
 
 6. PACKAGE CONTENTS (CONDITIONAL) — include ONLY if present in input:
-   <h2>What's in the box</h2> + <ul>. Never invent box contents.
+   <h2>What's in the box</h2> + <ul>. List the NAMES of the main kit components without over-detailing
+   what each component is made of — unless the source explicitly provides that detail. Never invent box contents.
 
 7. TECHNICAL SPECIFICATIONS:
    Header <h2>Technical specifications of the [Product]</h2>. One logical category = one <h3> + one
@@ -174,8 +180,7 @@ never assume or invent.
    experience since 2012, official warranty). Use the localized commercial triggers
    (купити / замовити / ціна / прайс and equivalents) naturally.
    BRAND LOGIC PRESERVED: if [Product] contains an applicable brand, still include the localized:
-   "As an official representative of [Brand], we guarantee the best price, authorized service,
-   and official warranty."
+   "${BRAND_GUARANTEE_EN}"
 
 [VIDEO]
 TYPE A iframe (YouTube/Vimeo): preserve verbatim, place in Deep Dive. TYPE B direct MP4/CDN/OGV:
