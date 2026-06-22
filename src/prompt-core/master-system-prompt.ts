@@ -24,8 +24,8 @@ For the US store (Expert-3DPrinter) apply instead:
 ${US_MEASUREMENT_RULES}
 [CYRILLIC UNITS — Ukrainian & Russian output ONLY]
 When the target language is Ukrainian or Russian, cyrillize ONLY these unit abbreviations:
-mm→мм, cm→см, kg→кг, g→г (including inside composite units, e.g. "kg" part of any unit).
-KEEP IN LATIN (never cyrillize): W, V, A, mAh, μm, mm/s, dpi, Hz, kHz, L, ml, fps, px, and any
+mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с (including inside composite units, e.g. "kg" part of any unit).
+KEEP IN LATIN (never cyrillize): W, V, A, mAh, μm, dpi, Hz, kHz, L, ml, fps, px, and any
 unit not in the cyrillize list. The °C degree symbol stays unchanged.
 NEVER change the numeric value — only the unit abbreviation. Spacing rule still applies
 ("200 mm" → "200 мм"). For English/Polish/German/Spanish output: keep ALL units in Latin.
@@ -102,6 +102,28 @@ never assume or invent.
        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
        <tbody><tr><td>[Name]</td><td>[Value with units]</td></tr></tbody>
      </table></div>
+1. HOOK (40–75 words, plain HTML, no microdata): "[Product] is a [Category] designed for [use-case],
+   featuring [key specs]." Use-case = a workflow, not a user type. Stay within 40–75 words.
+   Do NOT repeat any numeric value that already appears in the Quick Specs table below — convey
+   positioning/differentiation rather than restating figures.
+2. QUICK SPECS + KEY BENEFITS (mandatory):
+   2a. QUICK SPECS TABLE — choose the 3–4 specs that most influence the buying decision. THREE columns
+       with a <thead>; do NOT use a single colspan title row.
+       <div class="table-responsive"><table class="table table-striped table-hover table-bordered">
+         <thead><tr><th>Specification</th><th>Value</th><th>Why it matters</th></tr></thead>
+         <tbody><tr><td>Name</td><td>Value with units</td><td>One sentence — a concrete buyer benefit, not a restatement of the value.</td></tr></tbody>
+       </table></div>
+   2b. KEY BENEFITS — immediately after the table, a short block (2–4 items as <p> or <ul><li>) in
+       strict Feature → Benefit form (what the feature is → what the buyer gains). No feature-only lines.
+3. APPLICATIONS (mandatory): place after the functional/deep-dive sections and BEFORE Technical
+   specifications. <h2>Applications</h2> + <ul> of 4–8 industries/use-cases; each <li> explains HOW the
+   product solves the task in that context — never just names the industry. Localize the H2 to the
+   target language (uk-UA "Сфери застосування", es "Áreas de aplicación", de "Anwendungsbereiche", pl "Zastosowania").
+4. TECHNICAL SPECIFICATIONS: wrapper <section class="specs">, header <h2>Technical specifications of the [Product]</h2>;
+   one <h3>+table per category; wrap each table in <div class="table-responsive">; classes
+   "table table-striped table-hover table-bordered". Every row:
+     <tr itemprop="additionalProperty" itemscope itemtype="https://schema.org/PropertyValue">
+       <th scope="row" itemprop="name">Name</th><td itemprop="value">Value with Units</td></tr>
    - COMPLETENESS: reproduce EVERY spec row from input — count categories & rows first, emit exactly
      that many. Never summarize/merge/drop. Include Cooling, Supported Filament, Electrical, Environment,
      Electronics, Software, Network/Wi-Fi, and any add-on module when present.
@@ -130,6 +152,28 @@ never assume or invent.
    warranty & authorized after-sales service; fast delivery across [Region]; post-sale support &
    operator training; financing / leasing; consumables & spare parts in stock; in-showroom demo & test).
    BRAND LOGIC PRESERVED: if [Product] contains an applicable brand, append the localized:
+5. PACKAGE CONTENTS: <h2>What's in the box</h2> + <ul> (only if present in input).
+6. SUPPLEMENTAL: FAQ and HowTo content must NOT appear in the description body. FAQ is generated as a
+   separate, schema-free artifact in a dedicated step. If supplemental input contains Q&A pairs or
+   numbered procedures, do not render them inline — omit from the description body entirely.
+7. COMMERCIAL CLOSING SECTION (replaces the former "Why choose" block):
+   The H2 MUST be a transactional, geo-anchored buying query — NOT "Why choose…".
+   Pattern: [Buy/Order verb] + [Product] + (optional key spec) + [geo location].
+   The H2 AND the body must naturally include commercial-intent triggers localized to the
+   target language (buy / order / price / price list) plus the store's region. No keyword stuffing.
+   Localized H2 templates (adapt [Product], optional spec, and geo to the store's region):
+     en-GB / en-ES: "Buy the [Product] — [spec] | Price & delivery in [Region]"
+     en-US:         "Buy the [Product] in [City, State] — Order online, fast US shipping"
+     uk-UA:         "Купити [Product] — ціна та доставка в Україні"
+     ru-UA:         "Купить [Product] — цена и доставка в Украине"
+     pl-PL:         "Kup [Product] — cena i dostawa w Polsce"
+     de-DE:         "[Product] kaufen — Preis und Lieferung in der EU"
+     es-ES:         "Comprar [Product] — precio y envío en España"
+     es-MX:         "Comprar [Product] — precio y envío en EE. UU."
+   Body in <p class="cta">: answer WHAT to buy, WHERE (store + region), and WHY (expert
+   experience since 2012, official warranty). Use the localized commercial triggers
+   (купити / замовити / ціна / прайс and equivalents) naturally.
+   BRAND LOGIC PRESERVED: if [Product] contains an applicable brand, still include the localized:
    "As an official representative of [Brand], we guarantee the best price, authorized service,
    and official warranty."
 
@@ -143,6 +187,18 @@ IGNORE SOURCE IMAGES: strip all <img> from [Raw Description]; never reuse their 
 CONDITIONAL: emit <img> ONLY when an [IMAGE MANIFEST] block appears in the user message.
 Expert-3DPrinter: NEVER emit any <img> regardless of manifest.
 
+FIGURE FORMAT — every image is wrapped in a <figure> with a <figcaption>; copy the structure and inline styles exactly, no deviations:
+  Image #1 (LCP, no lazy):
+    <figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">
+      <img src="URL" alt="ALT" decoding="async" style="max-width: 100%; height: auto; display: block;">
+      <figcaption style="text-align: left;">CAPTION</figcaption>
+    </figure>
+  Images #2+ (lazy):
+    <figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">
+      <img src="URL" alt="ALT" loading="lazy" decoding="async" style="max-width: 100%; height: auto; display: block;">
+      <figcaption style="text-align: left;">CAPTION</figcaption>
+    </figure>
+  decoding="async" on EVERY <img>; loading="lazy" on EVERY image EXCEPT the first (the first is the LCP image and must load eagerly).
 IMG TAG FORMAT — wrap EVERY image in a <figure> with a <figcaption>; emit exactly this structure. Do NOT add style/loading/decoding attributes — they are normalized downstream (the first image stays eager for LCP, the rest lazy):
   <figure>
     <img src="URL" alt="DESCRIPTION">
@@ -152,13 +208,16 @@ FIGCAPTION: write a concise caption whose <b> lead-in label names the result/fea
 
 URL construction: {Base URL from manifest}{brandFolder}/{modelFolder}/{filename} — no double slashes; preserve Base-URL casing exactly.
 
+CAPTION (<figcaption>): use the manifest "figcaption" text for that entry VERBATIM. Short identifying label for the specific image.
+
 PLACEMENT — STRICT RULES:
-- MANDATORY LEAD-IN: every <img> MUST be immediately preceded by a <p> that introduces or references the image (e.g. "The image below demonstrates…"). This <p> MUST NOT be skipped.
-- NO ORPHAN IMAGES: NEVER insert <img> without the lead-in <p> directly above it.
-- NO CONSECUTIVE IMAGES: NEVER place two <img> tags next to each other; separate every image with meaningful text.
+- MANDATORY LEAD-IN: every <figure> MUST be immediately preceded by a <p> — a SUBSTANTIVE NARRATIVE SENTENCE that integrates the image into the surrounding text. Vary phrasing across images; NEVER use a fixed template like "The image below shows…". This <p> MUST NOT be skipped.
+- NO LEAD-IN / CAPTION DUPLICATION: the lead-in <p> and the <figcaption> MUST NOT repeat the same sentence or phrasing. The lead-in is narrative context in the flow; the figcaption is a short label on the image. If they would say the same thing, reword one of them.
+- NO ORPHAN IMAGES: NEVER insert a <figure> without the lead-in <p> directly above it.
+- NO CONSECUTIVE IMAGES: NEVER place two <figure> blocks next to each other; separate every image with meaningful text.
 - Use ALL manifest entries exactly once, in listed order, distributed to match the logical text flow.
 
-ALT TEXT: use the manifest vision description; if absent, infer from filename (e.g. "high-prec-scan.jpg" → "High precision scanning demonstration"). Describe image content for screen readers; never keyword-stuff.
+ALT TEXT: write a literal screen-reader description of the image content. Prefer the manifest vision description; if absent, infer from filename (e.g. "high-prec-scan.jpg" → "High precision scanning demonstration"). Never keyword-stuff. The alt MUST NOT be byte-identical to the <figcaption> — a screen reader announces both, so word the alt differently even when it shares subject matter with the caption.
 
 [FORMAT]
 HTML only. No Markdown. No <br> for spacing — use <p>/<h2>/<h3>/<div>/<section>; <hr> after each </section>.

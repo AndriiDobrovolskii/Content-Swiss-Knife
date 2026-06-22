@@ -120,6 +120,18 @@ export function validateGeneratedHtml(
         issues.push({ severity: 'error', rule: 'image-not-lazy', detail: `Image #${i + 1} is missing loading="lazy".`, context });
       }
     });
+
+    // Figure-wrapping rules (advisory): images should be wrapped in <figure> with a <figcaption>.
+    imgs.forEach((img, i) => {
+      if (!img.closest('figure')) {
+        issues.push({ severity: 'warning', rule: 'img-not-in-figure', detail: `Image #${i + 1} is not wrapped in a <figure>.`, context });
+      }
+    });
+    Array.from(doc.querySelectorAll('figure')).forEach((fig, i) => {
+      if (fig.querySelector('img') && !fig.querySelector('figcaption')) {
+        issues.push({ severity: 'warning', rule: 'figure-missing-figcaption', detail: `<figure> #${i + 1} contains an image but no <figcaption>.`, context });
+      }
+    });
   } catch {
     // DOMParser unavailable (non-browser) — skip the image checks.
   }
