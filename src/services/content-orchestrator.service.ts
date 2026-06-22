@@ -201,6 +201,8 @@ export class ContentOrchestratorService {
           faqHtml = faqHtml.replace(/```html/g, '').replace(/```/g, '').trim();
           if (faqHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
+          } else {
+            console.warn(`[FAQ] No usable artifact for ${isoCode}: model returned ${faqHtml ? 'non-HTML output' : 'an empty response'}. Skipped.`);
           }
         }
       }

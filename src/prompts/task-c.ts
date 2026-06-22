@@ -33,14 +33,15 @@ tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script. Never alter
 [UNITS] If ${targetLang} is Ukrainian or Russian: cyrillize ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с.
 Keep W/V/A/mAh/μm/dpi/Hz/L/ml in Latin and °C unchanged. For any other language keep all units
 in Latin. Never change the numeric value.
+[NUMBERS — BODY PROSE ONLY] Use this locale's decimal separator in running text:
+Ukrainian/Russian/Polish/Spanish/German → comma ("1.75 mm" → "1,75 mm", "0.30 %" → "0,30 %").
+NEVER change a numeric value or unit, and NEVER reformat numbers inside spec-table <td> cells —
+those are reproduced verbatim.
 Translate labels: "Technical specifications of the [Product]" /
 "What's in the box" / brand-guarantee sentence / FAQ headers.
 COMMERCIAL CLOSING H2: it is a "why-buy from store" question. Translate it naturally to ${targetLang}
 as such (e.g. "Why buy [Product] from [Store]?"). Keep trust signals + the brand-guarantee sentence in
 the body. Do NOT rewrite it into a transactional "Buy [Product] — price…" headline.
-"What's in the box" / brand-guarantee sentence / FAQ headers.
-COMMERCIAL CLOSING H2: keep it transactional (Buy/Order + Product + geo) and translate to ${targetLang}
-with commercial triggers (buy/order/price/price-list equivalents). Do NOT revert it to "Why choose…".
 No geographic, brand/store, or added-claim changes. Return ONLY raw HTML.`, html);
 }
 
@@ -76,6 +77,9 @@ If the source contains Imperial units (inches, lbs), the Ukrainian translation M
 those Imperial units (дюйми, фунти). Do NOT convert them to Metric.
 [UNITS — CYRILLIZE] Cyrillize ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с (plus дюйми/фунти for Imperial as above).
 Keep W/V/A/μm/Hz/ml/L in Latin and °C unchanged. Never change numeric values.
+[NUMBERS — BODY PROSE ONLY] In Ukrainian running text use a decimal comma ("1.75 mm" → "1,75 мм",
+"0.30 %" → "0,30 %"). NEVER change a numeric value or unit, and NEVER reformat numbers inside
+spec-table <td> cells — those are reproduced verbatim.
 
 [LABELS TO TRANSLATE (Ukrainian)]
 - "Technical specifications of the [Product Name]" → "Технічні характеристики [Product Name]"
@@ -115,6 +119,10 @@ If the input is already in Spanish, apply Castilian style improvements and SEO o
 | UA Phone Numbers     | Replace with "nuestro soporte técnico"                 |
 | Prices in UAH/USD    | REMOVE specific prices; use "excelente calidad-precio" |
 | "3D Plastic"         | Replace with "Filamento"                               |
+
+[NUMBERS — BODY PROSE ONLY] In Castilian Spanish running text use a decimal comma ("1.75 mm" → "1,75 mm",
+"0.30 %" → "0,30 %"). NEVER change a numeric value or unit, and NEVER reformat numbers inside spec-table
+<td> cells — those are reproduced verbatim.
 
 [STYLE — CASTILIAN SPANISH]
 - Use "Tú" (Tuteo). Creates trust in Spain.
