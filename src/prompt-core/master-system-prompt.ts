@@ -119,6 +119,18 @@ IGNORE SOURCE IMAGES: strip all <img> from [Raw Description]; never reuse their 
 CONDITIONAL: emit <img> ONLY when an [IMAGE MANIFEST] block appears in the user message.
 Expert-3DPrinter: NEVER emit any <img> regardless of manifest.
 
+FIGURE FORMAT — every image is wrapped in a <figure> with a <figcaption>; copy the structure and inline styles exactly, no deviations:
+  Image #1 (LCP, no lazy):
+    <figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">
+      <img src="URL" alt="ALT" decoding="async" style="max-width: 100%; height: auto; display: block;">
+      <figcaption style="text-align: left;">CAPTION</figcaption>
+    </figure>
+  Images #2+ (lazy):
+    <figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">
+      <img src="URL" alt="ALT" loading="lazy" decoding="async" style="max-width: 100%; height: auto; display: block;">
+      <figcaption style="text-align: left;">CAPTION</figcaption>
+    </figure>
+  decoding="async" on EVERY <img>; loading="lazy" on EVERY image EXCEPT the first (the first is the LCP image and must load eagerly).
 IMG TAG FORMAT — wrap EVERY image in a <figure> with a <figcaption>; emit exactly this structure. Do NOT add style/loading/decoding attributes — they are normalized downstream (the first image stays eager for LCP, the rest lazy):
   <figure>
     <img src="URL" alt="DESCRIPTION">
@@ -128,13 +140,16 @@ FIGCAPTION: write a concise caption whose <b> lead-in label names the result/fea
 
 URL construction: {Base URL from manifest}{brandFolder}/{modelFolder}/{filename} — no double slashes; preserve Base-URL casing exactly.
 
+CAPTION (<figcaption>): use the manifest "figcaption" text for that entry VERBATIM. Short identifying label for the specific image.
+
 PLACEMENT — STRICT RULES:
-- MANDATORY LEAD-IN: every <img> MUST be immediately preceded by a <p> that introduces or references the image (e.g. "The image below demonstrates…"). This <p> MUST NOT be skipped.
-- NO ORPHAN IMAGES: NEVER insert <img> without the lead-in <p> directly above it.
-- NO CONSECUTIVE IMAGES: NEVER place two <img> tags next to each other; separate every image with meaningful text.
+- MANDATORY LEAD-IN: every <figure> MUST be immediately preceded by a <p> — a SUBSTANTIVE NARRATIVE SENTENCE that integrates the image into the surrounding text. Vary phrasing across images; NEVER use a fixed template like "The image below shows…". This <p> MUST NOT be skipped.
+- NO LEAD-IN / CAPTION DUPLICATION: the lead-in <p> and the <figcaption> MUST NOT repeat the same sentence or phrasing. The lead-in is narrative context in the flow; the figcaption is a short label on the image. If they would say the same thing, reword one of them.
+- NO ORPHAN IMAGES: NEVER insert a <figure> without the lead-in <p> directly above it.
+- NO CONSECUTIVE IMAGES: NEVER place two <figure> blocks next to each other; separate every image with meaningful text.
 - Use ALL manifest entries exactly once, in listed order, distributed to match the logical text flow.
 
-ALT TEXT: use the manifest vision description; if absent, infer from filename (e.g. "high-prec-scan.jpg" → "High precision scanning demonstration"). Describe image content for screen readers; never keyword-stuff.
+ALT TEXT: write a literal screen-reader description of the image content. Prefer the manifest vision description; if absent, infer from filename (e.g. "high-prec-scan.jpg" → "High precision scanning demonstration"). Never keyword-stuff. The alt MUST NOT be byte-identical to the <figcaption> — a screen reader announces both, so word the alt differently even when it shares subject matter with the caption.
 
 [FORMAT]
 HTML only. No Markdown. No <br> for spacing — use <p>/<h2>/<h3>/<div>/<section>; <hr> after each </section>.

@@ -319,6 +319,33 @@ describe('validateGeneratedHtml — Rules: lcp-image-lazy / image-not-lazy', () 
   });
 });
 
+describe('validateGeneratedHtml — Rules: img-not-in-figure / figure-missing-figcaption', () => {
+  const fig1 = `<figure style="margin:4px auto;"><img src="a.jpg" alt="A" decoding="async"><figcaption>Cap A</figcaption></figure>`;
+  const fig2 = `<figure style="margin:4px auto;"><img src="b.jpg" alt="B" loading="lazy" decoding="async"><figcaption>Cap B</figcaption></figure>`;
+
+  it('does NOT flag lazy rules for figure-wrapped images (first eager, rest lazy)', () => {
+    const html = `<p>A</p>${fig1}<p>B</p>${fig2}`;
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'lcp-image-lazy');
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'image-not-lazy');
+  });
+
+  it('does NOT flag a correct full figure block', () => {
+    const html = `<p>A</p>${fig1}<p>B</p>${fig2}`;
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'img-not-in-figure');
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'figure-missing-figcaption');
+  });
+
+  it('flags an <img> outside any <figure>', () => {
+    const html = `<p>A</p><img src="a.jpg" alt="A">`;
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'img-not-in-figure')?.severity).toBe('warning');
+  });
+
+  it('flags a <figure> with an <img> but no <figcaption>', () => {
+    const html = `<p>A</p><figure><img src="a.jpg" alt="A" decoding="async"></figure>`;
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'figure-missing-figcaption')?.severity).toBe('warning');
+  });
+});
+
 describe('validateGeneratedHtml — context label is preserved in issues', () => {
   it('propagates context string to every issue', () => {
     const issues = validateGeneratedHtml('', 'HTML (UA)');
