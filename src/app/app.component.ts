@@ -522,9 +522,28 @@ export class AppComponent {
   parseFaqItems(html: string): Array<{ question: string; answer: string }> {
     if (!html) return [];
     const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    // Schema v3 FAQ artifact: repeated <h3>question</h3> followed by the answer HTML
+    // (allowed tags only) up to the next <h3>; no wrapper element. The answer keeps its HTML.
+    const items: Array<{ question: string; answer: string }> = [];
+    let current: { question: string; answer: string } | null = null;
+    for (const node of Array.from(doc.body.children)) {
+      if (node.tagName === 'H3') {
+        if (current) items.push(current);
+        current = { question: (node.textContent ?? '').trim(), answer: '' };
+      } else if (current) {
+        current.answer += node.outerHTML;
+      }
+    }
+    if (current) items.push(current);
+    if (items.length > 0) {
+      return items.map(i => ({ ...i, answer: i.answer.trim() }));
+    }
+
+    // Backward-compat: legacy artifacts wrapped each pair in <div class="faq-item">.
     return Array.from(doc.querySelectorAll('.faq-item')).map(item => ({
       question: (item.querySelector('h3')?.textContent ?? '').trim(),
-      answer: (item.querySelector('p')?.textContent ?? '').trim()
+      answer: (item.querySelector('p')?.innerHTML ?? '').trim(),
     }));
   }
 

@@ -95,6 +95,33 @@ export function officialBrand(productName: string, storeName: string): string {
   return list.find(b => productName.toLowerCase().includes(b.toLowerCase())) ?? '';
 }
 
+/**
+ * Brand-guarantee sentence used in the COMMERCIAL CLOSING / CTA-TRUST block (Schema v3 §9).
+ * Variant: "genuine products" — best for niches with counterfeit risk (3D printing/scanning).
+ * Alternatives if needed:
+ *   - "100% authenticity" — premium brands (Bambu Lab, Formlabs)
+ *   - "expert support"    — complex technical products
+ *   - "transparent pricing" — if price transparency matters
+ */
+export const BRAND_GUARANTEE_EN =
+  `As an official representative of [Brand], we guarantee genuine products, authorized service, and an official warranty.`;
+
+/**
+ * Locale-aware decimal/thousands separator rules (Schema v3 Appendix).
+ * Applies to free-text numbers in body copy ONLY — spec table numeric values and units
+ * are reproduced verbatim from the source and must NEVER be reformatted (CLAUDE.md hard rule).
+ */
+export const NUMBER_FORMAT_RULES = `[NUMBER FORMATTING — by locale, body copy only]
+Format large/decimal numbers in running text per the target locale. NEVER reformat spec-table
+values or change any numeric value — this rule is about separators in prose only.
+- uk-UA / ru-UA: decimal comma, thousands non-breaking space  → 1 234 567,89
+- pl-PL:         decimal comma, thousands non-breaking space  → 1 234 567,89
+- de-DE:         decimal comma, thousands dot (or space)      → 1.234.567,89
+- es-ES:         decimal comma, thousands dot (or space)      → 1.234.567,89
+- en-GB / en-ES: decimal dot, thousands comma                 → 1,234,567.89
+- en-US:         decimal dot, thousands comma                 → 1,234,567.89
+- es-US / es-MX (US market, CLDR): decimal dot, thousands comma → 1,234,567.89`;
+
 /** US mixed measurement rule — the ONLY copy. */
 export const US_MEASUREMENT_RULES = `[MEASUREMENT SYSTEM — MIXED US STANDARD]
 CONVERT to Imperial: Printer Dimensions → inches, Build Volume → inches, Printer Weight → lbs, Filament Spool Weight → lbs (oz for small samples).

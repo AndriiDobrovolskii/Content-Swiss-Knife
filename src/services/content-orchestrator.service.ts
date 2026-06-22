@@ -185,14 +185,19 @@ export class ContentOrchestratorService {
         }));
       }
 
-      // Step 4 — FAQ artifacts (schema-free, for Journal theme native module fields)
-      if (input.supplementalContent?.trim()) {
+      // Step 4 — FAQ artifacts (schema-free, for Journal theme native module fields).
+      // Schema v3: FAQ is drawn from the full product data (description + specs + supplemental),
+      // not supplemental alone — so run whenever any source material is present.
+      if (input.description?.trim() || input.specs?.trim() || input.supplementalContent?.trim()) {
         const store = getStore(input.website.name);
         for (const isoCode of store.languages) {
           const humanLang = isoToHumanLang(isoCode);
 
           this.progressMessage.set(`Generating FAQ artifact (${isoCode})…`);
-          let faqHtml = await this.llm.generateText(buildPromptFaq(input.supplementalContent, humanLang), useThinking);
+          let faqHtml = await this.llm.generateText(
+            buildPromptFaq(input.name, input.description, input.specs, input.supplementalContent ?? '', humanLang),
+            useThinking,
+          );
           faqHtml = faqHtml.replace(/```html/g, '').replace(/```/g, '').trim();
           if (faqHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
