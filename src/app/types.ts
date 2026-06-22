@@ -32,10 +32,6 @@ export interface ImageManifestEntry {
   altText: string;
   order: number;
   status: 'pending' | 'analyzing' | 'done' | 'error';
-  /** Whether the visible subject plausibly matches the named product (Vision contract). */
-  consistent?: boolean;
-  /** What the Vision model reports seeing when consistent === false. */
-  observedSubject?: string;
 }
 
 export interface ProductInput {
@@ -78,7 +74,6 @@ export interface GeneratedContent {
   seoData: SeoResponse | null;
   website?: WebsiteOption; // store this content was generated for (optional for backward compat)
   faqArtifacts?: Record<string, string>;   // ISO code → schema-free faq_[ISO].html
-  howtoArtifacts?: Record<string, string>; // ISO code → schema-free howto_[ISO].html
 }
 
 export interface HistoryItem {

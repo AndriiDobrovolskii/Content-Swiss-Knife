@@ -332,13 +332,7 @@
                             } @else if (entry.status === 'error') {
                               <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"><i class="fa-solid fa-triangle-exclamation"></i> error</span>
                             }
-                            @if (entry.consistent === false) {
-                              <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" [title]="'Vision model sees a different subject — verify the alt text matches the product.'"><i class="fa-solid fa-circle-question"></i> mismatch?</span>
-                            }
                           </div>
-                          @if (entry.consistent === false) {
-                            <p class="text-[9px] text-amber-700 dark:text-amber-400 mt-0.5">Model sees: {{ entry.observedSubject || 'a different subject' }} — does this match the product?</p>
-                          }
                         </div>
                         <button (click)="removeGenImg(entry.id)" class="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 flex-shrink-0 active:scale-90 transition-transform">
                           <i class="fa-solid fa-times text-xs"></i>
@@ -1105,34 +1099,6 @@
               <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="content().mainHtmlEn" class="hljs language-xml"></code></pre>
             </div>
 
-            @if (content().howtoArtifacts?.[getEnglishIso()]) {
-              @let howtoHtmlEn = content().howtoArtifacts![getEnglishIso()];
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
-                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">HowTo – {{ uiLabels().livePreview }}</h3>
-                <div class="prose prose-sm max-w-none prose-slate dark:prose-invert mb-4" [innerHTML]="getHowToIntro(howtoHtmlEn) | safeHtml"></div>
-                <ol class="space-y-3">
-                  @for (step of parseHowToSteps(howtoHtmlEn); track $index) {
-                    <li class="flex items-start gap-3 group">
-                      <span class="shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center mt-0.5">{{ $index + 1 }}</span>
-                      <div class="flex-1 prose prose-sm max-w-none prose-slate dark:prose-invert" [innerHTML]="step.innerHtml | safeHtml"></div>
-                      <button (click)="copyToClipboard(step.textContent, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75 mt-0.5" [title]="uiLabels().copyCode">
-                        <i class="fa-regular fa-copy text-xs"></i>
-                      </button>
-                    </li>
-                  }
-                </ol>
-              </div>
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
-                  <span>HowTo – {{ uiLabels().htmlSource }}</span>
-                  <button (click)="copyToClipboard(howtoHtmlEn, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
-                    <i class="fa-regular fa-copy"></i>
-                  </button>
-                </div>
-                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="howtoHtmlEn" class="hljs language-xml"></code></pre>
-              </div>
-            }
-
             @if (content().faqArtifacts?.[getEnglishIso()]) {
               @let faqHtmlEn = content().faqArtifacts![getEnglishIso()];
               <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
@@ -1288,34 +1254,6 @@
               </div>
               <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="transContent" class="hljs language-xml"></code></pre>
             </div>
-
-            @if (content().howtoArtifacts?.[isoCode]) {
-              @let howtoHtmlTrans = content().howtoArtifacts![isoCode];
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
-                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">HowTo – {{ uiLabels().livePreview }}</h3>
-                <div class="prose prose-sm max-w-none prose-slate dark:prose-invert mb-4" [innerHTML]="getHowToIntro(howtoHtmlTrans) | safeHtml"></div>
-                <ol class="space-y-3">
-                  @for (step of parseHowToSteps(howtoHtmlTrans); track $index) {
-                    <li class="flex items-start gap-3 group">
-                      <span class="shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center mt-0.5">{{ $index + 1 }}</span>
-                      <div class="flex-1 prose prose-sm max-w-none prose-slate dark:prose-invert" [innerHTML]="step.innerHtml | safeHtml"></div>
-                      <button (click)="copyToClipboard(step.textContent, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75 mt-0.5" [title]="uiLabels().copyCode">
-                        <i class="fa-regular fa-copy text-xs"></i>
-                      </button>
-                    </li>
-                  }
-                </ol>
-              </div>
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
-                  <span>HowTo – {{ uiLabels().htmlSource }} ({{ langKey }})</span>
-                  <button (click)="copyToClipboard(howtoHtmlTrans, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
-                    <i class="fa-regular fa-copy"></i>
-                  </button>
-                </div>
-                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="howtoHtmlTrans" class="hljs language-xml"></code></pre>
-              </div>
-            }
 
             @if (content().faqArtifacts?.[isoCode]) {
               @let faqHtmlTrans = content().faqArtifacts![isoCode];

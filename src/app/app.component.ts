@@ -111,7 +111,7 @@ const TRANSLATIONS = {
     placeholderRewrite: 'Paste text or HTML to rewrite here...',
     textToRewrite: 'Text to Rewrite',
     supplementalContent: 'Supplemental Content (Optional)',
-    placeholderSupplemental: 'Paste How-To guides or FAQs here...',
+    placeholderSupplemental: 'Paste FAQs here...',
     customInstructions: 'Custom Instructions (Optional)',
     placeholderInstructions: 'e.g., "Write in a more casual tone", "Focus on durability for industrial use."',
     imgSelectImages: 'Select Images',
@@ -248,7 +248,7 @@ const TRANSLATIONS = {
     placeholderRewrite: 'Вставте текст або HTML для переписування сюди...',
     textToRewrite: 'Текст для переписування',
     supplementalContent: 'Додатковий контент (Опціонально)',
-    placeholderSupplemental: 'Вставте інструкції (How-To) або FAQ сюди...',
+    placeholderSupplemental: 'Вставте FAQ сюди...',
     customInstructions: 'Додаткові інструкції (Опціонально)',
     placeholderInstructions: 'напр., "Писати в більш неформальному стилі", "Зосередитись на міцності для промислового використання."',
     imgSelectImages: 'Обрати зображення',
@@ -517,23 +517,6 @@ export class AppComponent {
   getEnglishIso(): string {
     const storeName = this.content().website?.name ?? '';
     return getStore(storeName).languages.find(l => l.startsWith('en-')) ?? 'en-GB';
-  }
-
-  getHowToIntro(html: string): string {
-    if (!html) return '';
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const h2 = doc.querySelector('body > h2');
-    const p = doc.querySelector('body > p');
-    return (h2?.outerHTML ?? '') + (p?.outerHTML ?? '');
-  }
-
-  parseHowToSteps(html: string): Array<{ innerHtml: string; textContent: string }> {
-    if (!html) return [];
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    return Array.from(doc.querySelectorAll('li')).map(li => ({
-      innerHtml: li.innerHTML,
-      textContent: (li.textContent ?? '').trim()
-    }));
   }
 
   parseFaqItems(html: string): Array<{ question: string; answer: string }> {
@@ -888,8 +871,6 @@ export class AppComponent {
                     status: 'done',
                     visionDescription: result.caption,
                     altText: e.altText || result.caption,
-                    consistent: result.consistent,
-                    observedSubject: result.observed,
                   }
                 : e)
             );

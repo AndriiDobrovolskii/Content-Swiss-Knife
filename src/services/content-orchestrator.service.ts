@@ -4,13 +4,14 @@ import { RetrievalService } from './retrieval.service';
 import { HistoryService } from '@/src/services/history.service';
 import { ProductInput, GeneratedContent, WebsiteOption } from '../app/types';
 import { cleanHtmlStructure } from '../utils/html-cleaner';
+import { wrapVideoFigures } from '../utils/video-figure';
+import { wrapImageFigures } from '../utils/image-figure';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB, resolveCurrencySymbol } from '../prompts/task-b';
 import { getStore, getLangsForStore, US_MEASUREMENT_RULES, isoToHumanLang } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
-import { buildPromptHowTo } from '../prompts/task-howto';
 
 // ── Inline prompts for tools that don't need external templates ─────────────
 
@@ -132,7 +133,7 @@ export class ContentOrchestratorService {
 
   async generate(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, website: input.website, faqArtifacts: {}, howtoArtifacts: {} });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, website: input.website, faqArtifacts: {} });
     this.validationIssues.set([]);
 
     try {
@@ -143,6 +144,8 @@ export class ContentOrchestratorService {
       const promptA = buildPromptA(input);
       let htmlEn = await this.llm.generateText(promptA, useThinking);
       htmlEn = htmlEn.replace(/```html/g, '').replace(/```/g, '').trim();
+      htmlEn = wrapVideoFigures(htmlEn, input.name);
+      htmlEn = wrapImageFigures(htmlEn);
       this.content.update(c => ({ ...c, mainHtmlEn: htmlEn }));
 
       // Step 2 — Generate SEO Metadata
@@ -172,13 +175,17 @@ export class ContentOrchestratorService {
           translatedHtml = this.applySpanishExpert3dReplacements(translatedHtml);
         }
 
+        // Re-assert the image figure structure: Task C can drift styles/attrs
+        // while translating, so normalize each language output (idempotent).
+        translatedHtml = wrapImageFigures(translatedHtml);
+
         this.content.update(c => ({
           ...c,
           translations: { ...c.translations, [lang]: translatedHtml }
         }));
       }
 
-      // Step 4 — FAQ / HowTo artifacts (schema-free, for Journal theme native module fields)
+      // Step 4 — FAQ artifacts (schema-free, for Journal theme native module fields)
       if (input.supplementalContent?.trim()) {
         const store = getStore(input.website.name);
         for (const isoCode of store.languages) {
@@ -189,13 +196,6 @@ export class ContentOrchestratorService {
           faqHtml = faqHtml.replace(/```html/g, '').replace(/```/g, '').trim();
           if (faqHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
-          }
-
-          this.progressMessage.set(`Generating HowTo artifact (${isoCode})…`);
-          let howtoHtml = await this.llm.generateText(buildPromptHowTo(input.supplementalContent, humanLang), useThinking);
-          howtoHtml = howtoHtml.replace(/```html/g, '').replace(/```/g, '').trim();
-          if (howtoHtml.startsWith('<')) {
-            this.content.update(c => ({ ...c, howtoArtifacts: { ...c.howtoArtifacts, [isoCode]: howtoHtml } }));
           }
         }
       }
@@ -382,7 +382,7 @@ export class ContentOrchestratorService {
   }
 
   resetState() {
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, faqArtifacts: {}, howtoArtifacts: {} });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, faqArtifacts: {} });
     this.validationIssues.set([]);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');
