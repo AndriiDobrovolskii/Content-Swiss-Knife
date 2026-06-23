@@ -3,12 +3,12 @@ import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../services/content-orchestrator.service';
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
-import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry } from './types';
+import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry, TabDescriptor } from './types';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { parseVisionResult } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
-import { getStore, taskLangToIso } from '../prompt-core/constants';
+import { getStore, getLangsForStore } from '../prompt-core/constants';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
@@ -81,6 +81,7 @@ const TRANSLATIONS = {
     seoMeta: 'SEO Metadata',
     englishOutput: 'US English Output',
     englishOutputGeneric: 'English',
+    englishFaqTabLabel: 'English FAQ',
     copyCode: 'Copy Code',
     htmlSource: 'HTML Source',
     livePreview: 'Live Preview (Rendered)',
@@ -218,6 +219,7 @@ const TRANSLATIONS = {
     seoMeta: 'SEO метадані',
     englishOutput: 'Результат (Англійська)',
     englishOutputGeneric: 'Англійська',
+    englishFaqTabLabel: 'Англ. FAQ',
     copyCode: 'Копіювати код',
     htmlSource: 'Джерело HTML',
     livePreview: 'Попередній перегляд',
@@ -423,6 +425,58 @@ export class AppComponent {
       : this.uiLabels().englishOutputGeneric;
   });
 
+  // Ordered list of output tabs, derived from STORE_REGISTRY language order and the
+  // presence of faqArtifacts. The template iterates this with @for — no @if guards per tab.
+  // SEO is rendered separately, always last.
+  tabDescriptors = computed<TabDescriptor[]>(() => {
+    const c = this.content();
+    const storeName = c.website?.name ?? this.selectedWebsite()?.name ?? '';
+    if (!storeName) return [];
+
+    const store = getStore(storeName);
+    const { transLangs } = getLangsForStore(storeName);
+    const labels = this.uiLabels();
+
+    // transLangs is derived from the same non-English filter, in the same order, so a
+    // positional zip gives the ISO → task-label mapping without a reverse string search.
+    const nonEnglishIsos = store.languages.filter(iso => !iso.startsWith('en-'));
+    const isoToTaskKey = new Map(nonEnglishIsos.map((iso, i) => [iso, transLangs[i]]));
+
+    const tabs: TabDescriptor[] = [];
+
+    for (const iso of store.languages) {
+      if (iso.startsWith('en-')) {
+        tabs.push({ id: 'html', label: this.baseOutputLabel(), type: 'english', color: 'blue', iso, isFaq: false });
+        if (c.faqArtifacts?.[iso]) {
+          tabs.push({ id: 'faq-html', label: labels.englishFaqTabLabel, type: 'faq-english', color: 'green', iso, isFaq: true });
+        }
+        continue;
+      }
+
+      const taskKey = isoToTaskKey.get(iso);
+      if (!taskKey || !c.translations[taskKey]) continue;
+
+      tabs.push({ id: `trans-${taskKey}`, label: `${taskKey} ${labels.translation}`, type: 'translation', color: 'purple', iso, taskKey, isFaq: false });
+      if (c.faqArtifacts?.[iso]) {
+        tabs.push({ id: `faq-trans-${iso}`, label: `${taskKey} FAQ`, type: 'faq-translation', color: 'green', iso, taskKey, isFaq: true });
+      }
+    }
+
+    return tabs;
+  });
+
+  // If the active tab disappears (e.g. a FAQ artifact wasn't generated), fall back to the
+  // first available tab rather than leaving the panel blank.
+  private readonly _autoSelectTab = effect(() => {
+    const tabs = this.tabDescriptors();
+    if (tabs.length === 0) return;
+    const ids = new Set(tabs.map(t => t.id));
+    ids.add('seo');
+    if (!ids.has(this.activeTab())) {
+      this.activeTab.set(tabs[0].id);
+    }
+  });
+
   historyItems = this.historyService.history;
 
   constructor() {
@@ -499,24 +553,6 @@ export class AppComponent {
 
   getTranslationKeys() {
     return Object.keys(this.content().translations);
-  }
-
-  getUaTranslationKey(): string | null {
-    const keys = Object.keys(this.content().translations);
-    return keys.find(k => k === 'UA' || k === 'Ukrainian') ?? null;
-  }
-
-  getNonUaTranslationKeys(): string[] {
-    return Object.keys(this.content().translations).filter(k => k !== 'UA' && k !== 'Ukrainian');
-  }
-
-  getIsoForLang(langKey: string): string {
-    return taskLangToIso(langKey, this.content().website?.name ?? '');
-  }
-
-  getEnglishIso(): string {
-    const storeName = this.content().website?.name ?? '';
-    return getStore(storeName).languages.find(l => l.startsWith('en-')) ?? 'en-GB';
   }
 
   parseFaqItems(html: string): Array<{ question: string; answer: string }> {

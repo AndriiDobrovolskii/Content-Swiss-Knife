@@ -94,6 +94,17 @@ export interface ProcessedImage {
   altText?: string;
 }
 
+/** Descriptor for a single output tab in the generator header. */
+export interface TabDescriptor {
+  id: string;
+  label: string;
+  type: 'english' | 'translation' | 'faq-english' | 'faq-translation';
+  color: 'blue' | 'purple' | 'green';
+  iso: string;
+  taskKey?: string;
+  isFaq: boolean;
+}
+
 export const WEBSITE_OPTIONS: WebsiteOption[] = [
   { name: '3DDevice', group: 'UA', url: '3ddevice.com.ua' },
   { name: '3DPrinter', group: 'UA', url: '3dprinter.com.ua' },
