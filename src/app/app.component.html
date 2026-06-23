@@ -1012,38 +1012,42 @@
       }
 
       @if (hasOutput() || appMode() === 'seo-generator') {
-        <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200">
-        <div class="flex items-center gap-6 overflow-x-auto no-scrollbar">
-          @if (getUaTranslationKey()) {
+        <header
+          class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200"
+          role="tablist"
+          aria-label="Generated content tabs">
+        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          @for (tab of tabDescriptors(); track tab.id) {
             <button
-              (click)="activeTab.set('trans-' + getUaTranslationKey())"
-              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
-              [class]="activeTab() === 'trans-' + getUaTranslationKey() ? 'border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-              {{ getUaTranslationKey() }} {{ uiLabels().translation }}
+              role="tab"
+              [id]="'tab-' + tab.id"
+              [attr.aria-selected]="activeTab() === tab.id"
+              [attr.aria-controls]="'panel-' + tab.id"
+              (click)="activeTab.set(tab.id)"
+              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70 flex items-center gap-1.5"
+              [class]="activeTab() === tab.id
+                ? (tab.color === 'green'
+                    ? 'border-green-600 text-green-700 dark:text-green-400 dark:border-green-400'
+                    : tab.color === 'purple'
+                      ? 'border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400'
+                      : 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400')
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+              {{ tab.label }}
+              @if (tab.isFaq) {
+                <span class="text-[10px] font-bold px-1 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">FAQ</span>
+              }
             </button>
           }
           <button
+            role="tab"
+            id="tab-seo"
+            [attr.aria-selected]="activeTab() === 'seo'"
+            aria-controls="panel-seo"
             (click)="activeTab.set('seo')"
             class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
             [class]="activeTab() === 'seo' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().seoMeta }}
           </button>
-          @if (appMode() === 'generator') {
-            <button
-              (click)="activeTab.set('html')"
-              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
-              [class]="activeTab() === 'html' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-              {{ baseOutputLabel() }}
-            </button>
-          }
-          @for (key of getNonUaTranslationKeys(); track key) {
-            <button
-              (click)="activeTab.set('trans-' + key)"
-              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
-              [class]="activeTab() === 'trans-' + key ? 'border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-              {{ key }} {{ uiLabels().translation }}
-            </button>
-          }
         </div>
       </header>
 
@@ -1080,63 +1084,100 @@
           </div>
         }
 
-        @if (activeTab() === 'html' && content().mainHtmlEn) {
-          <div class="max-w-5xl mx-auto space-y-6">
-            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ baseOutputLabel() }}</h2>
+        @for (tab of tabDescriptors(); track tab.id) {
+          @if (activeTab() === tab.id) {
 
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
-              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
-              <div [innerHTML]="content().mainHtmlEn | safeHtml"></div>
-            </div>
+            @if (tab.type === 'english' && content().mainHtmlEn) {
+              <div role="tabpanel" [id]="'panel-' + tab.id" [attr.aria-labelledby]="'tab-' + tab.id" class="max-w-5xl mx-auto space-y-6">
+                <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ baseOutputLabel() }}</h2>
 
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
-                <span>{{ uiLabels().htmlSource }}</span>
-                <button (click)="copyToClipboard(content().mainHtmlEn, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
-                  <i class="fa-regular fa-copy"></i>
-                </button>
-              </div>
-              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="content().mainHtmlEn" class="hljs language-xml"></code></pre>
-            </div>
-
-            @if (content().faqArtifacts?.[getEnglishIso()]) {
-              @let faqHtmlEn = content().faqArtifacts![getEnglishIso()];
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
-                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">FAQ – {{ uiLabels().livePreview }}</h3>
-                <div class="space-y-4">
-                  @for (item of parseFaqItems(faqHtmlEn); track $index) {
-                    <div class="border border-slate-100 dark:border-slate-700 rounded-lg p-4 space-y-2">
-                      <div class="flex items-start gap-3 group">
-                        <p class="flex-1 font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">{{ item.question }}</p>
-                        <button (click)="copyToClipboard(item.question, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
-                          <i class="fa-regular fa-copy text-xs"></i>
-                        </button>
-                      </div>
-                      <div class="flex items-start gap-3 group">
-                        <div class="flex-1 text-slate-600 dark:text-slate-300 text-sm leading-relaxed faq-answer" [innerHTML]="item.answer | safeHtml"></div>
-                        <button (click)="copyToClipboard(item.answer, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
-                          <i class="fa-regular fa-copy text-xs"></i>
-                        </button>
-                      </div>
-                    </div>
-                  }
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+                  <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+                  <div [innerHTML]="content().mainHtmlEn | safeHtml"></div>
                 </div>
-              </div>
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
-                  <span>FAQ – {{ uiLabels().htmlSource }}</span>
-                  <button (click)="copyToClipboard(faqHtmlEn, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
-                    <i class="fa-regular fa-copy"></i>
-                  </button>
+
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                  <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
+                    <span>{{ uiLabels().htmlSource }}</span>
+                    <button (click)="copyToClipboard(content().mainHtmlEn, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                  <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="content().mainHtmlEn" class="hljs language-xml"></code></pre>
                 </div>
-                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="faqHtmlEn" class="hljs language-xml"></code></pre>
               </div>
             }
-          </div>
+
+            @if (tab.type === 'translation' && tab.taskKey) {
+              @let transContent = content().translations[tab.taskKey];
+              <div role="tabpanel" [id]="'panel-' + tab.id" [attr.aria-labelledby]="'tab-' + tab.id" class="max-w-5xl mx-auto space-y-6">
+                <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ tab.taskKey }} {{ uiLabels().translation }}</h2>
+
+                @if (transContent) {
+                  <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
+                    <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">
+                      {{ uiLabels().livePreview }} ({{ tab.taskKey }})
+                    </h3>
+                    <div [innerHTML]="transContent | safeHtml"></div>
+                  </div>
+
+                  <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                    <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
+                      <span>{{ uiLabels().htmlSource }} ({{ tab.taskKey }})</span>
+                      <button (click)="copyToClipboard(transContent, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
+                        <i class="fa-regular fa-copy"></i>
+                      </button>
+                    </div>
+                    <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="transContent" class="hljs language-xml"></code></pre>
+                  </div>
+                }
+              </div>
+            }
+
+            @if ((tab.type === 'faq-english' || tab.type === 'faq-translation') && content().faqArtifacts?.[tab.iso]) {
+              @let faqHtml = content().faqArtifacts![tab.iso];
+              <div role="tabpanel" [id]="'panel-' + tab.id" [attr.aria-labelledby]="'tab-' + tab.id" aria-live="polite" class="max-w-5xl mx-auto space-y-6">
+                <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ tab.label }}</h2>
+
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
+                  <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">FAQ – {{ uiLabels().livePreview }}</h3>
+                  <div class="space-y-4">
+                    @for (item of parseFaqItems(faqHtml); track $index) {
+                      <div class="border border-slate-100 dark:border-slate-700 rounded-lg p-4 space-y-2">
+                        <div class="flex items-start gap-3 group">
+                          <p class="flex-1 font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">{{ item.question }}</p>
+                          <button (click)="copyToClipboard(item.question, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
+                            <i class="fa-regular fa-copy text-xs"></i>
+                          </button>
+                        </div>
+                        <div class="flex items-start gap-3 group">
+                          <div class="flex-1 text-slate-600 dark:text-slate-300 text-sm leading-relaxed faq-answer" [innerHTML]="item.answer | safeHtml"></div>
+                          <button (click)="copyToClipboard(item.answer, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
+                            <i class="fa-regular fa-copy text-xs"></i>
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
+                  <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
+                    <span>FAQ – {{ uiLabels().htmlSource }} ({{ tab.iso }})</span>
+                    <button (click)="copyToClipboard(faqHtml, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                  <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="faqHtml" class="hljs language-xml"></code></pre>
+                </div>
+              </div>
+            }
+
+          }
         }
 
         @if (activeTab() === 'seo' && content().seoData) {
-          <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div role="tabpanel" id="panel-seo" aria-labelledby="tab-seo" class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
             @for (item of content().seoData?.seo_data; track item.language) {
               <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 space-y-4">
                 <div class="flex justify-between items-start border-b border-slate-100 dark:border-slate-700 pb-3">
@@ -1228,68 +1269,6 @@
           </div>
         }
 
-        @if (activeTab().startsWith('trans-')) {
-          <div class="max-w-5xl mx-auto space-y-6">
-            @let langKey = activeTab().slice(6);
-            @let transContent = content().translations[langKey];
-            @let isoCode = getIsoForLang(langKey);
-
-            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ langKey }} {{ uiLabels().translation }}</h2>
-
-            @if (transContent) {
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
-                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">
-                  {{ uiLabels().livePreview }} ({{ langKey }})
-                </h3>
-                <div [innerHTML]="transContent | safeHtml"></div>
-              </div>
-            }
-
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
-                <span>{{ uiLabels().htmlSource }} ({{ langKey }})</span>
-                <button (click)="copyToClipboard(transContent, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
-                  <i class="fa-regular fa-copy"></i>
-                </button>
-              </div>
-              <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="transContent" class="hljs language-xml"></code></pre>
-            </div>
-
-            @if (content().faqArtifacts?.[isoCode]) {
-              @let faqHtmlTrans = content().faqArtifacts![isoCode];
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
-                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">FAQ – {{ uiLabels().livePreview }}</h3>
-                <div class="space-y-4">
-                  @for (item of parseFaqItems(faqHtmlTrans); track $index) {
-                    <div class="border border-slate-100 dark:border-slate-700 rounded-lg p-4 space-y-2">
-                      <div class="flex items-start gap-3 group">
-                        <p class="flex-1 font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">{{ item.question }}</p>
-                        <button (click)="copyToClipboard(item.question, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
-                          <i class="fa-regular fa-copy text-xs"></i>
-                        </button>
-                      </div>
-                      <div class="flex items-start gap-3 group">
-                        <div class="flex-1 text-slate-600 dark:text-slate-300 text-sm leading-relaxed faq-answer" [innerHTML]="item.answer | safeHtml"></div>
-                        <button (click)="copyToClipboard(item.answer, $event)" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 active:scale-75" [title]="uiLabels().copyCode">
-                          <i class="fa-regular fa-copy text-xs"></i>
-                        </button>
-                      </div>
-                    </div>
-                  }
-                </div>
-              </div>
-              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-                <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
-                  <span>FAQ – {{ uiLabels().htmlSource }} ({{ langKey }})</span>
-                  <button (click)="copyToClipboard(faqHtmlTrans, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
-                    <i class="fa-regular fa-copy"></i>
-                  </button>
-                </div>
-                <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap max-h-[500px]"><code [appHighlightCode]="faqHtmlTrans" class="hljs language-xml"></code></pre>
-              </div>
-            }
-          </div>
-        }
       </div>
       }
     }
