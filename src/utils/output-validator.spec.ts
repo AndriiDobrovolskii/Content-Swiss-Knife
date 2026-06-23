@@ -9,9 +9,10 @@
  * or changes severity from 'error' to 'warning', these tests catch it immediately
  * — before any real LLM call is made.
  *
- * COVERAGE TARGETS (9 rules total)
+ * COVERAGE TARGETS (11 rules total)
  *   HTML checks:   empty-output, duplicate-product-schema, no-faqpage-in-body, no-howto-in-body,
- *                  markdown-fence, br-spacing, unit-spacing, lcp-image-lazy, image-not-lazy
+ *                  markdown-fence, br-spacing, unit-spacing, decimal-separator,
+ *                  thousands-separator, lcp-image-lazy, image-not-lazy
  *   SEO checks:    seo-empty, meta-title-length, meta-description-length,
  *                  meta-description-cta, meta-description-currency
  *
@@ -283,6 +284,86 @@ describe('validateGeneratedHtml — Rule: unit-spacing', () => {
     const productName = 'xTool S1 40W Laser Cutter';
     const html = `<p>${productName} has a nozzle of 0.4mm.</p>`;
     expect(findRule(validateGeneratedHtml(html, 'test', productName), 'unit-spacing')).toBeDefined();
+  });
+});
+
+describe('validateGeneratedHtml — Rule: decimal-separator', () => {
+  it('flags a dot decimal in prose for a comma-decimal locale (es-ES)', () => {
+    const html = '<p>Diámetro de 1.75 mm garantiza una reproducción consistente.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'decimal-separator')?.severity).toBe('warning');
+  });
+
+  it('flags a dot decimal inside a spec-table <td> for a comma-decimal locale (uk-UA)', () => {
+    const html = '<table><tr><td>Diâmetro</td><td>1.75 mm</td></tr></table>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'decimal-separator')).toBeDefined();
+  });
+
+  it('flags a dot decimal embedded in a repeated Product Name heading', () => {
+    const productName = 'Bambu Lab PLA Basic Filament, 1.75 mm, 1 kg x 4';
+    const html = `<h2>Especificaciones técnicas del ${productName}</h2>`;
+    expect(findRule(validateGeneratedHtml(html, 'test', productName, 'es-ES'), 'decimal-separator')).toBeDefined();
+  });
+
+  it('does NOT flag a correctly comma-formatted decimal (es-ES)', () => {
+    const html = '<p>Diámetro de 1,75 mm garantiza una reproducción consistente.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'decimal-separator');
+  });
+
+  it('does NOT flag a multi-part version number (1.2.3)', () => {
+    const html = '<p>Compatible con Bambu Studio 1.2.3 y versiones posteriores.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'decimal-separator');
+  });
+
+  it('does NOT flag a v-prefixed version number (v1.5)', () => {
+    const html = '<p>Requiere firmware v1.5 o superior.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'decimal-separator');
+  });
+
+  it('does NOT check dot-decimal locales (es-US)', () => {
+    const html = '<p>Diameter of 1.75 mm guarantees consistent reproduction.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-US'), 'decimal-separator');
+  });
+
+  it('does NOT check when no locale is passed (backward compatible)', () => {
+    const html = '<p>Diameter of 1.75 mm guarantees consistent reproduction.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'decimal-separator');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: thousands-separator', () => {
+  it('flags unambiguous EN-style comma grouping with 2+ groups (uk-UA)', () => {
+    const html = '<p>Об’єм друку: 1,234,567 мм³.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'thousands-separator')?.severity).toBe('warning');
+  });
+
+  it('flags a comma thousands group followed by a dot-decimal tail (uk-UA)', () => {
+    const html = '<p>Вартість деталі: 1,234.56 м.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'thousands-separator')).toBeDefined();
+  });
+
+  it('does NOT flag a single comma group — it is a valid decimal in uk-UA ("1,234 kg" = 1.234 kg)', () => {
+    const html = '<p>Вага: 1,234 kg.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'thousands-separator');
+  });
+
+  it('flags a regular space used as thousands grouping instead of a non-breaking space (uk-UA)', () => {
+    const html = `<p>Об'єм: 1${' '}234${' '}567 мм³.</p>`; // explicit U+0020, not U+00A0
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'thousands-separator')).toBeDefined();
+  });
+
+  it('does NOT flag a correctly non-breaking-space-grouped number (uk-UA)', () => {
+    const html = '<p>Об’єм: 1 234 567 мм³.</p>'; // explicit U+00A0 non-breaking spaces
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'thousands-separator');
+  });
+
+  it('does NOT flag dot-or-space grouping for de-DE/es-ES (regular space allowed there)', () => {
+    const html = '<p>Volumen: 1 234 567 mm³.</p>'; // regular space is valid for de-DE/es-ES thousands
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'thousands-separator');
+  });
+
+  it('does NOT check dot-decimal locales (es-US)', () => {
+    const html = '<p>Volume: 1,234,567 mm³.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-US'), 'thousands-separator');
   });
 });
 

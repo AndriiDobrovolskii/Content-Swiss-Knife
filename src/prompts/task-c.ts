@@ -6,7 +6,7 @@ function pack(instruction: string, html: string): PromptPayload {
   return {
     systemBlocks: [
       { text: MASTER_SYSTEM_PROMPT, cache: true },
-      { text: instruction,          cache: true },
+      { text: instruction, cache: true },
     ],
     userContent: `[BASE HTML]:\n${html}`,
   };
@@ -22,23 +22,27 @@ export function buildPromptC(html: string, targetLang: string, storeName: string
   if (targetLang.includes('American English') || targetLang.includes('American Spanish')) {
     return pack(usInstruction(targetLang), html);
   }
-  if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && ['EXPERT3D','Impresora-3D'].includes(storeName))) {
+  if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && ['EXPERT3D', 'Impresora-3D'].includes(storeName))) {
     return pack(EXPERT3D_ES_INSTRUCTION, html);
   }
 
   return pack(`TASK C — TRANSLATE HTML TO ${targetLang} (pure HTML body only).
 Standalone, complete description. Numeric values IDENTICAL. Preserve structure, classes, inline
-styles, microdata, <hr> after </section>. Translate visible text + alt="" / title="". Never translate
+styles, <hr> after </section>. Translate visible text + alt="" / title="". Never translate
 tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script. Never alter <img src="">.
-[UNITS] If ${targetLang} is Ukrainian or Russian: cyrillize ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с.
+[UNITS] If ${targetLang} is Ukrainian or Russian: cyrillize unit abbreviations in ALL visible text
+including spec-table cells — ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с.
 Keep W/V/A/mAh/μm/dpi/Hz/L/ml in Latin and °C unchanged. For any other language keep all units
-in Latin. Never change the numeric value.
-[NUMBERS — BODY PROSE ONLY] Use this locale's decimal separator in running text:
-Ukrainian/Russian/Polish/Spanish/German → comma ("1.75 mm" → "1,75 mm", "0.30 %" → "0,30 %").
-NEVER change a numeric value or unit, and NEVER reformat numbers inside spec-table <td> cells —
-those are reproduced verbatim.
-Translate labels: "Technical specifications of the [Product]" /
-"What's in the box" / brand-guarantee sentence / FAQ headers.
+in Latin. NEVER change the numeric value — only the unit abbreviation.
+[NUMBERS] Use the locale decimal/thousands separator everywhere — body prose, headings, captions,
+AND spec-table <td> cells alike (Ukrainian/Russian/Polish/Spanish/German → decimal comma). This
+includes numbers embedded in a repeated Product Name (e.g. in the spec-table heading or closing
+CTA). Never change the digits themselves or the unit — only the separator punctuation localizes.
+[LABELS TO TRANSLATE]
+- "Technical specifications of the [Product Name]" → translate naturally to ${targetLang}
+- "What's in the box" → Ukrainian: "Комплектація" | Russian: "Комплектация" | Polish: "Co w zestawie"
+  | German: "Lieferumfang" | Spanish: "Contenido del paquete"
+- Brand-guarantee sentence → translate fully
 COMMERCIAL CLOSING H2: it is a "why-buy from store" question. Translate it naturally to ${targetLang}
 as such (e.g. "Why buy [Product] from [Store]?"). Keep trust signals + the brand-guarantee sentence in
 the body. Do NOT rewrite it into a transactional "Buy [Product] — price…" headline.
@@ -75,11 +79,12 @@ Translate the input into high-converting Ukrainian for a product sold in the US 
 [MEASUREMENT CONSTRAINT — CRITICAL]
 If the source contains Imperial units (inches, lbs), the Ukrainian translation MUST preserve
 those Imperial units (дюйми, фунти). Do NOT convert them to Metric.
-[UNITS — CYRILLIZE] Cyrillize ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с (plus дюйми/фунти for Imperial as above).
-Keep W/V/A/μm/Hz/ml/L in Latin and °C unchanged. Never change numeric values.
-[NUMBERS — BODY PROSE ONLY] In Ukrainian running text use a decimal comma ("1.75 mm" → "1,75 мм",
-"0.30 %" → "0,30 %"). NEVER change a numeric value or unit, and NEVER reformat numbers inside
-spec-table <td> cells — those are reproduced verbatim.
+[UNITS — CYRILLIZE] Cyrillize in ALL visible text including spec-table cells:
+ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с (plus дюйми/фунти for Imperial as above).
+Keep W/V/A/μm/Hz/ml/L in Latin and °C unchanged. NEVER change the numeric value.
+[NUMBERS] Use a decimal comma everywhere in Ukrainian output — running text, headings, captions,
+AND spec-table <td> cells alike ("1.75 mm" → "1,75 мм"). This includes numbers embedded in a
+repeated Product Name. Never change the digits or the unit — only the separator localizes.
 
 [LABELS TO TRANSLATE (Ukrainian)]
 - "Technical specifications of the [Product Name]" → "Технічні характеристики [Product Name]"
@@ -108,6 +113,7 @@ If the input is already in Spanish, apply Castilian style improvements and SEO o
 - "Technical specifications of the [Product Name]" → "Especificaciones técnicas del [Product Name]"
 - "What's in the box" → "Contenido del paquete"
 - Commercial closing H2 → "why-buy" Castilian: "¿Por qué comprar [Product] en EXPERT3D?". Keep the store-trust signals and brand guarantee in the body.
+- SHOWROOM EXCLUSION: EXPERT3D has no physical showroom — remove any showroom/visit/demo benefit if present in the source CTA.
 - Brand-guarantee sentence → translate fully
 
 [LOCALIZATION TABLE]
@@ -120,9 +126,9 @@ If the input is already in Spanish, apply Castilian style improvements and SEO o
 | Prices in UAH/USD    | REMOVE specific prices; use "excelente calidad-precio" |
 | "3D Plastic"         | Replace with "Filamento"                               |
 
-[NUMBERS — BODY PROSE ONLY] In Castilian Spanish running text use a decimal comma ("1.75 mm" → "1,75 mm",
-"0.30 %" → "0,30 %"). NEVER change a numeric value or unit, and NEVER reformat numbers inside spec-table
-<td> cells — those are reproduced verbatim.
+[NUMBERS] Use a decimal comma everywhere in Castilian Spanish output — running text, headings,
+captions, AND spec-table <td> cells alike ("1.75 mm" → "1,75 mm"). This includes numbers embedded
+in a repeated Product Name. Never change the digits or the unit — only the separator localizes.
 
 [STYLE — CASTILIAN SPANISH]
 - Use "Tú" (Tuteo). Creates trust in Spain.
