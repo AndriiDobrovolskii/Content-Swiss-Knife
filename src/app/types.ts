@@ -99,6 +99,7 @@ export const WEBSITE_OPTIONS: WebsiteOption[] = [
   { name: '3DPrinter', group: 'UA', url: '3dprinter.com.ua' },
   { name: '3DScanner', group: 'UA', url: '3dscanner.com.ua' },
   { name: 'Center 3D Print', group: 'EU', url: 'center3dprint.com' },
+  { name: 'Drukarka 3D', group: 'EU', url: 'drukarka-3d.com.pl' },
   { name: 'EXPERT3D', group: 'ES', url: 'expert3d.es' },
   { name: 'Expert-3DPrinter', group: 'US', url: 'expert-3dprinter.com' }
 ];
