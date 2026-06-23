@@ -9,7 +9,7 @@ import { wrapImageFigures } from '../utils/image-figure';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB, resolveCurrencySymbol } from '../prompts/task-b';
-import { getStore, getLangsForStore, US_MEASUREMENT_RULES, isoToHumanLang } from '../prompt-core/constants';
+import { getStore, getLangsForStore, US_MEASUREMENT_RULES, isoToHumanLang, taskLangToIso } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
 
@@ -376,7 +376,7 @@ export class ContentOrchestratorService {
     const issues: ValidationIssue[] = [
       ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)', productName),
       ...Object.entries(c.translations).flatMap(([lang, html]) =>
-        validateGeneratedHtml(html, `HTML (${lang})`, productName)
+        validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName))
       ),
       ...validateSeoMetadata(c.seoData, currencySymbol),
     ];

@@ -109,12 +109,15 @@ export const BRAND_GUARANTEE_EN =
 
 /**
  * Locale-aware decimal/thousands separator rules (Schema v3 Appendix).
- * Applies to free-text numbers in body copy ONLY — spec table numeric values and units
- * are reproduced verbatim from the source and must NEVER be reformatted (CLAUDE.md hard rule).
+ * Applies EVERYWHERE a number is written — body prose, headings, captions, CTA copy, AND
+ * spec-table cells alike — for every generated language. Only the separator punctuation
+ * localizes; the digits themselves and the unit must stay identical to the source
+ * (CLAUDE.md "don't change values or units" governs the quantity, not its notation).
  */
-export const NUMBER_FORMAT_RULES = `[NUMBER FORMATTING — by locale, body copy only]
-Format large/decimal numbers in running text per the target locale. NEVER reformat spec-table
-values or change any numeric value — this rule is about separators in prose only.
+export const NUMBER_FORMAT_RULES = `[NUMBER FORMATTING — by locale, applies everywhere]
+Format every decimal/large number per the target locale's separator convention — in running
+text, headings, captions, AND spec-table <td> cells alike. Never change the digits or the
+unit; only the separator punctuation localizes.
 - uk-UA / ru-UA: decimal comma, thousands non-breaking space  → 1 234 567,89
 - pl-PL:         decimal comma, thousands non-breaking space  → 1 234 567,89
 - de-DE:         decimal comma, thousands dot (or space)      → 1.234.567,89

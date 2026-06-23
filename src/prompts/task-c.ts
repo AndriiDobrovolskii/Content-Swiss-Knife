@@ -34,8 +34,10 @@ tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script. Never alter
 including spec-table cells — ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с.
 Keep W/V/A/mAh/μm/dpi/Hz/L/ml in Latin and °C unchanged. For any other language keep all units
 in Latin. NEVER change the numeric value — only the unit abbreviation.
-[NUMBERS] Body prose: use locale decimal separator (Ukrainian/Russian/Polish/Spanish/German → comma).
-Spec-table <td> values: reproduce numeric values verbatim (no decimal separator change).
+[NUMBERS] Use the locale decimal/thousands separator everywhere — body prose, headings, captions,
+AND spec-table <td> cells alike (Ukrainian/Russian/Polish/Spanish/German → decimal comma). This
+includes numbers embedded in a repeated Product Name (e.g. in the spec-table heading or closing
+CTA). Never change the digits themselves or the unit — only the separator punctuation localizes.
 [LABELS TO TRANSLATE]
 - "Technical specifications of the [Product Name]" → translate naturally to ${targetLang}
 - "What's in the box" → Ukrainian: "Комплектація" | Russian: "Комплектация" | Polish: "Co w zestawie"
@@ -80,8 +82,9 @@ those Imperial units (дюйми, фунти). Do NOT convert them to Metric.
 [UNITS — CYRILLIZE] Cyrillize in ALL visible text including spec-table cells:
 ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с (plus дюйми/фунти for Imperial as above).
 Keep W/V/A/μm/Hz/ml/L in Latin and °C unchanged. NEVER change the numeric value.
-[NUMBERS — BODY PROSE ONLY] In Ukrainian running text use a decimal comma ("1.75 mm" → "1,75 мм").
-Spec-table <td> values: reproduce numeric values verbatim (no decimal separator change).
+[NUMBERS] Use a decimal comma everywhere in Ukrainian output — running text, headings, captions,
+AND spec-table <td> cells alike ("1.75 mm" → "1,75 мм"). This includes numbers embedded in a
+repeated Product Name. Never change the digits or the unit — only the separator localizes.
 
 [LABELS TO TRANSLATE (Ukrainian)]
 - "Technical specifications of the [Product Name]" → "Технічні характеристики [Product Name]"
@@ -123,8 +126,9 @@ If the input is already in Spanish, apply Castilian style improvements and SEO o
 | Prices in UAH/USD    | REMOVE specific prices; use "excelente calidad-precio" |
 | "3D Plastic"         | Replace with "Filamento"                               |
 
-[NUMBERS — BODY PROSE ONLY] In Castilian Spanish running text use a decimal comma ("1.75 mm" → "1,75 mm").
-Spec-table <td> values: reproduce numeric values verbatim (no decimal separator change).
+[NUMBERS] Use a decimal comma everywhere in Castilian Spanish output — running text, headings,
+captions, AND spec-table <td> cells alike ("1.75 mm" → "1,75 mm"). This includes numbers embedded
+in a repeated Product Name. Never change the digits or the unit — only the separator localizes.
 
 [STYLE — CASTILIAN SPANISH]
 - Use "Tú" (Tuteo). Creates trust in Spain.

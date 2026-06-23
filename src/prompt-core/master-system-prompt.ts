@@ -128,9 +128,11 @@ never assume or invent.
      Electronics, Software, Network/Wi-Fi, and any add-on module when present.
    - Units live in the Value column, never in the Parameter name. Skip empty / N/A rows; drop the whole
      category if it would be empty. Do NOT merge categories into one table.
-   - DO NOT change numeric values. ALWAYS normalize spacing ("10W"→"10 W"). Unit abbreviations follow
-     [CYRILLIC UNITS] above when translating to Ukrainian/Russian — cyrillize units in spec cells too
-     (only the unit abbreviation changes; the numeric value is reproduced verbatim).
+   - DO NOT change the digits or the unit. ALWAYS normalize spacing ("10W"→"10 W"). Unit abbreviations
+     follow [CYRILLIC UNITS] above when translating to Ukrainian/Russian — cyrillize units in spec
+     cells too (only the unit abbreviation changes; the digits stay identical). Apply
+     [NUMBER FORMATTING] above to spec-table cells too — the decimal/thousands separator localizes
+     here exactly like everywhere else in the description.
    - DIMENSION SEPARATOR: use × (U+00D7), never * or x → "330 × 320 × 325 mm".
    - MULTI-VALUE CELLS: render as <ul><li> inside the <td>, never <br>.
 

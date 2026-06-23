@@ -22,6 +22,61 @@ export interface ValidationIssue {
 const MAX_META_TITLE = 55;
 const MAX_META_DESCRIPTION = 155;
 
+const COMMA_DECIMAL_LOCALES = new Set(['uk-UA', 'ru-UA', 'pl-PL', 'de-DE', 'es-ES']);
+const NBSP_THOUSANDS_LOCALES = new Set(['uk-UA', 'ru-UA', 'pl-PL']); // de-DE/es-ES allow dot OR space
+
+/**
+ * Heuristic check for the locale decimal/thousands separator (Schema v3 Appendix), run on the
+ * full HTML including spec-table cells — the separator localizes everywhere, not just in prose.
+ * Dot-decimal locales (en-*, es-US, es-MX) need no check: the source's dot is already correct.
+ */
+function checkNumberFormatting(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
+  if (!locale || !COMMA_DECIMAL_LOCALES.has(locale)) return;
+
+  const text = html.replace(/\s(?:href|src)="[^"]*"/gi, ''); // drop URLs to cut false positives
+
+  // Decimal point where a comma is required. Excludes multi-part versions (1.2.3) and
+  // v-prefixed versions (v1.5). Known limitation: a bare two-part version like "AMS 2.0"
+  // can still false-positive — accepted, severity stays 'warning'.
+  const dotDecimal = text.match(/(?<![\w.])\d+\.\d+(?!\.\d)/);
+  if (dotDecimal) {
+    issues.push({
+      severity: 'warning',
+      rule: 'decimal-separator',
+      detail: `Decimal point used where ${locale} requires a comma (e.g. "${dotDecimal[0]}").`,
+      context,
+    });
+  }
+
+  // EN-style comma-grouped thousands. A single ",ddd" group (e.g. "1,234") is a VALID decimal
+  // number in a comma-decimal locale ("1,234 kg" = 1.234 kg) — must not flag that. Only flag
+  // when unambiguous: two+ comma groups ("1,234,567") or a comma group followed by a
+  // dot-decimal tail ("1,234.56" — mixes EN thousands with a dot decimal).
+  const commaThousands = text.match(/\d{1,3}(?:,\d{3}){2,}\b|\d{1,3},\d{3}\.\d+\b/);
+  if (commaThousands) {
+    issues.push({
+      severity: 'warning',
+      rule: 'thousands-separator',
+      detail: `English-style comma-grouped thousands found where ${locale} expects space/dot grouping (e.g. "${commaThousands[0]}").`,
+      context,
+    });
+  }
+
+  // Regular space (U+0020) instead of the required non-breaking space (U+00A0) between
+  // thousands groups — uk-UA / ru-UA / pl-PL only (de-DE/es-ES allow a plain dot or space).
+  if (NBSP_THOUSANDS_LOCALES.has(locale)) {
+    const regularSpaceGrouping = text.match(/\d{1,3}[ ]\d{3}(?![\d,])/); // literal U+0020, not \s
+    if (regularSpaceGrouping) {
+      issues.push({
+        severity: 'warning',
+        rule: 'thousands-separator',
+        detail: `Regular space used as thousands separator instead of a non-breaking space (e.g. "${regularSpaceGrouping[0]}").`,
+        context,
+      });
+    }
+  }
+}
+
 /** Counts visible characters by code point (so emoji/➔ count as 1, matching CMS limits). */
 function charLength(s: string): number {
   return Array.from(s).length;
@@ -34,11 +89,15 @@ function charLength(s: string): number {
  * @param productName optional product name; occurrences are excluded from the
  *                    unit-spacing check to avoid false positives on model-name
  *                    suffixes like "Ortur R2 Smart Laser Engraver 10W".
+ * @param locale      optional BCP47 locale (e.g. "uk-UA", "es-ES") for the decimal/thousands
+ *                    separator check. Must be the real locale, not the internal task label —
+ *                    "es-ES" (comma) and "es-US"/"es-MX" (dot) need different expectations.
  */
 export function validateGeneratedHtml(
   html: string,
   context: string,
   productName?: string,
+  locale?: string,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!html || !html.trim()) {
@@ -132,6 +191,10 @@ export function validateGeneratedHtml(
       context,
     });
   }
+
+  // Decimal/thousands separator per locale — runs on the raw html (not the productName-stripped
+  // variant above): a wrong separator inside a repeated Product Name must still be flagged.
+  checkNumberFormatting(html, locale, issues, context);
 
   // Image lazy-loading rule: first <img> must NOT be lazy; every subsequent one must be.
   try {
