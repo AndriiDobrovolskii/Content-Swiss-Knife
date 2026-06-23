@@ -6,7 +6,9 @@ import { PromptPayload } from '../prompt-core/payload';
 const TASK_A_INSTRUCTION = `TASK A — GENERATE BASE-LANGUAGE HTML DESCRIPTION
 OUTPUT: pure HTML body only (no JSON, no Markdown, no code fences).
 Rewrite the input into an attractive, high-fact-density description: ~80% linguistic uniqueness,
-100% technical fidelity. Add <hr> after each </section>. Follow [CONTENT STRUCTURE] exactly.`;
+100% technical fidelity. Add <hr> after each </section>. Follow [CONTENT STRUCTURE] exactly.
+CRITICAL: §2 (Killer Specs table) has NO H2 heading and NO <section> wrapper — place the Killer
+Specs table directly after the hook paragraph without any surrounding heading or section element.`;
 
 function buildImageBlock(input: ProductInput, baseUrl: string): string {
   if (input.website.name === 'Expert-3DPrinter') return '[IMAGE MANIFEST]\nNone — skip all <img>.';
@@ -50,7 +52,7 @@ Generate the description in ${baseLanguage}. Primary keyword "${input.name}" use
   return {
     systemBlocks: [
       { text: MASTER_SYSTEM_PROMPT, cache: true },
-      { text: TASK_A_INSTRUCTION,   cache: true },
+      { text: TASK_A_INSTRUCTION, cache: true },
     ],
     userContent,
   };

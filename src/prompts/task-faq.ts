@@ -6,12 +6,16 @@ FAQ blocks for product pages. Always argue the advantages of the specific produc
 No preamble, no explanations — output the FAQ artifact only.`;
 
 /**
- * Generates a schema-free FAQ artifact for one language, per Schema v3 Appendix "Промт FAQ".
+ * Generates a schema-free FAQ artifact for one language, per Schema v3.0 §8.
  * The Journal theme native FAQ module supplies the FAQPage schema — do NOT add any here.
  *
  * Output format (v3): each item is a plain-text question in <h3> followed immediately by an
- * HTML answer (allowed tags only). No wrapper <div>/class — the app parser walks <h3> + siblings.
+ * HTML answer (allowed tags: <p>, <strong>, <b>, <ul>, <li>). No wrapper <div>/class —
+ * the app parser walks <h3> + siblings.
  * If the inputs contain nothing answerable, the model returns an empty response.
+ *
+ * @param currencySymbol  Store's currency symbol (e.g. "€", "₴", "zł", "$").
+ *                        Used to enforce correct currency formatting for any prices in the FAQ.
  */
 export function buildPromptFaq(
   productName: string,
@@ -19,6 +23,7 @@ export function buildPromptFaq(
   techSpecs: string,
   supplementalContent: string,
   humanLang: string,
+  currencySymbol: string,
 ): PromptPayload {
   return {
     systemBlocks: [{ text: TASK_FAQ_SYSTEM, cache: true }],
@@ -30,11 +35,14 @@ Create an expert FAQ block for "${productName}" in ${humanLang}, based ONLY on t
   argued advantages come after.
 - Conciseness & UX: keep questions short (≈5–7 words) and phrased like a real person solving a practical
   task — not encyclopedic. Focus on the outcome for the buyer.
-- Count: 5–7 question/answer pairs (adapt down if the sources are thin).
+- Count: 3–5 question/answer pairs. 5 is the absolute maximum per Schema v3.0 §8 — do NOT exceed it.
 - Sources: use ONLY facts from [Original Description], [Tech Specs] and [Supplemental Content]. No "water",
   no generic filler (e.g. "it depends on your needs"). If a question cannot be answered from the input,
   do NOT invent it — choose a different question. Answers must be self-sufficient (understandable without
   reading the main description).
+- CURRENCY: if source content includes prices, always format them using the store currency symbol
+  "${currencySymbol}". Do NOT copy USD ($) prices for non-USD stores — either convert using the symbol
+  "${currencySymbol}" or omit the price if the exact local price is unknown.
 
 [QUESTION TYPES — pick the most relevant for this product]
 - Use-cases: which tasks, industries (prototyping, dentistry, jewellery, engineering) or conditions it
@@ -46,26 +54,24 @@ Create an expert FAQ block for "${productName}" in ${humanLang}, based ONLY on t
 - Advantages & package: why this brand/model beats alternatives; what's in the box (does it work out of
   the box?); comparison questions ("How does A differ from B?").
 
-[OUTPUT FORMAT — STRICT]
-Emit one block per pair, in this exact shape, with NO wrapper element:
-<h3>[Question in ${humanLang} — plain text, no HTML]</h3>
-<p>[Answer in ${humanLang} — first sentence is the direct answer.]</p>
+[QUESTION RULES]
+- Formulate as real customers ask — not as technical documentation.
+- Each answer: 2–4 sentences, factual, no filler. Answer-first principle.
+- Avoid: "It depends on your needs" — that answer has no value.
+- Answers must be self-contained — understandable without reading the main description.
 
-- Question (Q): plain text only, no HTML tags.
-- Answer (A): clean HTML using ONLY these tags: <b>, <strong>, <ul>, <li>, <p>, <a>.
-- <table> is STRICTLY FORBIDDEN (CMS FAQ tables do not scroll on mobile) — render every comparison or
-  list as <ul>/<li>.
-- Do NOT use <div>, class, style, itemscope/itemtype/itemprop, or Markdown / code fences (no \`\`\`).
-- Translate visible text to ${humanLang}. Never translate brand/model names — keep them in Latin script.
-- If NO answerable questions can be formed from the input, output nothing at all (empty response).
+[OUTPUT FORMAT — Schema v3.0 §8 artifact]
+Each item: <h3>Question text?</h3> followed immediately by <p>Answer text.</p>
+Allowed answer tags: <p>, <strong>, <b>, <ul>, <li>.
+NO wrapper divs, NO class attributes, NO FAQPage/schema.org markup.
 
-[Original Description]
-${originalDescription || 'None provided.'}
+[Original Description]:
+${originalDescription || 'Not provided.'}
 
-[Tech Specs]
-${techSpecs || 'None provided.'}
+[Tech Specs]:
+${techSpecs || 'Not provided.'}
 
-[Supplemental Content]
-${supplementalContent || 'None provided.'}`,
+[Supplemental Content]:
+${supplementalContent || 'Not provided.'}`,
   };
 }

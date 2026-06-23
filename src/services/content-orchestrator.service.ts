@@ -195,7 +195,7 @@ export class ContentOrchestratorService {
 
           this.progressMessage.set(`Generating FAQ artifact (${isoCode})…`);
           let faqHtml = await this.llm.generateText(
-            buildPromptFaq(input.name, input.description, input.specs, input.supplementalContent ?? '', humanLang),
+            buildPromptFaq(input.name, input.description, input.specs, input.supplementalContent ?? '', humanLang, store.currencySymbol),
             useThinking,
           );
           faqHtml = faqHtml.replace(/```html/g, '').replace(/```/g, '').trim();

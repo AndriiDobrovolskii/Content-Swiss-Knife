@@ -12,14 +12,14 @@ export interface StoreProfile {
 }
 
 export const STORE_REGISTRY: Record<string, StoreProfile> = {
-  '3DDevice':         { group: 'UA', region: 'Ukraine 🇺🇦',        currency: 'UAH (₴)',            currencySymbol: '₴',  languages: ['en-GB','uk-UA','ru-UA'],                 imageBaseUrl: 'https://3ddevice.com.ua/image/catalog/products/',   siteSuffix: '3DDevice' },
-  '3DPrinter':        { group: 'UA', region: 'Ukraine 🇺🇦',        currency: 'UAH (₴)',            currencySymbol: '₴',  languages: ['en-GB','uk-UA','ru-UA'],                 imageBaseUrl: 'https://3dprinter.com.ua/image/catalog/Products/',  siteSuffix: '3DPrinter' },
-  '3DScanner':        { group: 'UA', region: 'Ukraine 🇺🇦',        currency: 'UAH (₴)',            currencySymbol: '₴',  languages: ['en-GB','uk-UA','ru-UA'],                 imageBaseUrl: 'https://3dscanner.com.ua/image/catalog/Products/',  siteSuffix: '3DScanner' },
-  'Center 3D Print':  { group: 'EU', region: 'Poland & EU 🇵🇱',    currency: 'PLN (zł) / EUR (€)', currencySymbol: 'zł', languages: ['pl-PL','en-GB','de-DE','uk-UA','ru-UA'], imageBaseUrl: 'https://center3dprint.com/image/catalog/Products/', siteSuffix: 'Center 3D Print' },
-  'Drukarka 3D':      { group: 'EU', region: 'Poland 🇵🇱',         currency: 'PLN (zł)',           currencySymbol: 'zł', languages: ['pl-PL','uk-UA'],                         imageBaseUrl: 'https://drukarka-3d.com.pl/image/catalog/products/', siteSuffix: 'Drukarka 3D' },
-  'EXPERT3D':         { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)',            currencySymbol: '€',  languages: ['en-ES','es-ES','uk-UA'],                 imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/',   siteSuffix: 'EXPERT3D' },
-  'Impresora-3D':     { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)',            currencySymbol: '€',  languages: ['en-ES','es-ES','uk-UA'],                 imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/',   siteSuffix: 'EXPERT3D' },
-  'Expert-3DPrinter': { group: 'US', region: 'Houston, TX 🇺🇸',    currency: 'USD ($)',            currencySymbol: '$',  languages: ['en-US','es-MX','uk-UA'],                 imageBaseUrl: '',                                                  siteSuffix: 'Expert-3DPrinter' },
+  '3DDevice': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3ddevice.com.ua/image/catalog/products/', siteSuffix: '3DDevice' },
+  '3DPrinter': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dprinter.com.ua/image/catalog/Products/', siteSuffix: '3DPrinter' },
+  '3DScanner': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dscanner.com.ua/image/catalog/Products/', siteSuffix: '3DScanner' },
+  'Center 3D Print': { group: 'EU', region: 'Poland & EU 🇵🇱', currency: 'PLN (zł) / EUR (€)', currencySymbol: 'zł', languages: ['pl-PL', 'en-GB', 'de-DE', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://center3dprint.com/image/catalog/Products/', siteSuffix: 'Center 3D Print' },
+  'Drukarka 3D': { group: 'EU', region: 'Poland 🇵🇱', currency: 'PLN (zł)', currencySymbol: 'zł', languages: ['pl-PL', 'uk-UA'], imageBaseUrl: 'https://drukarka-3d.com.pl/image/catalog/products/', siteSuffix: 'Drukarka 3D' },
+  'EXPERT3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', siteSuffix: 'EXPERT3D' },
+  'Impresora-3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', siteSuffix: 'EXPERT3D' },
+  'Expert-3DPrinter': { group: 'US', region: 'Houston, TX 🇺🇸', currency: 'USD ($)', currencySymbol: '$', languages: ['en-US', 'es-MX', 'uk-UA'], imageBaseUrl: '', siteSuffix: 'Expert-3DPrinter' },
 };
 
 export function getStore(name: string): StoreProfile {
@@ -77,35 +77,35 @@ export function isoToHumanLang(iso: string): string {
 
 /** Per-group language config. */
 export const GROUP_CONFIG: Record<WebsiteGroup, { seoLangs: string[]; transLangs: string[] }> = {
-  UA: { seoLangs: ['EN','UA','RU'],                 transLangs: ['UA','RU'] },
-  EU: { seoLangs: ['EN','PL','DE','UA','RU'],       transLangs: ['PL','DE','UA','RU'] },
-  ES: { seoLangs: ['EN','ES','en-ES','uk-UA'],      transLangs: ['ES','European English','Ukrainian'] },
-  US: { seoLangs: ['en-US','es-US','uk-UA'],        transLangs: ['American Spanish','Ukrainian'] },
+  UA: { seoLangs: ['EN', 'UA', 'RU'], transLangs: ['UA', 'RU'] },
+  EU: { seoLangs: ['EN', 'PL', 'DE', 'UA', 'RU'], transLangs: ['PL', 'DE', 'UA', 'RU'] },
+  ES: { seoLangs: ['EN', 'ES', 'en-ES', 'uk-UA'], transLangs: ['ES', 'European English', 'Ukrainian'] },
+  US: { seoLangs: ['en-US', 'es-US', 'uk-UA'], transLangs: ['American Spanish', 'Ukrainian'] },
 };
 
 /** Brand lists per store group. */
-export const BRANDS_ES = ['Raise3D','Formlabs','xTool','Shining3D','XGRIDS','PUDU','Metal3D'];
+export const BRANDS_ES = ['Raise3D', 'Formlabs', 'xTool', 'Shining3D', 'XGRIDS', 'PUDU', 'Metal3D'];
 export const BRANDS_DEFAULT = [
-  'KLEMA','Formlabs','CreatBot','Raise3D','UltiMaker','MakerBot','Markforged','Omni 3D',
-  'Shining3D','Peel 3D','Creaform','Revopoint','Scantech','Surphaser','Thunk3D','E-PLUS 3D',
-  'Fastform','xTool','Magigoo','Aesub','Bambu Lab','PUDU','Metal3D',
+  'KLEMA', 'Formlabs', 'CreatBot', 'Raise3D', 'UltiMaker', 'MakerBot', 'Markforged', 'Omni 3D',
+  'Shining3D', 'Peel 3D', 'Creaform', 'Revopoint', 'Scantech', 'Surphaser', 'Thunk3D', 'E-PLUS 3D',
+  'Fastform', 'xTool', 'Magigoo', 'Aesub', 'Bambu Lab', 'PUDU', 'Metal3D',
 ];
 
 export function officialBrand(productName: string, storeName: string): string {
-  const list = ['EXPERT3D','Impresora-3D'].includes(storeName) ? BRANDS_ES : BRANDS_DEFAULT;
+  const list = ['EXPERT3D', 'Impresora-3D'].includes(storeName) ? BRANDS_ES : BRANDS_DEFAULT;
   return list.find(b => productName.toLowerCase().includes(b.toLowerCase())) ?? '';
 }
 
 /**
  * Brand-guarantee sentence used in the COMMERCIAL CLOSING / CTA-TRUST block (Schema v3 §9).
- * Variant: "genuine products" — best for niches with counterfeit risk (3D printing/scanning).
+ * Variant: "100% authenticity + fair price" — niches with counterfeit risk (3D printing/scanning).
  * Alternatives if needed:
- *   - "100% authenticity" — premium brands (Bambu Lab, Formlabs)
+ *   - "genuine products"   — if price transparency not needed
  *   - "expert support"    — complex technical products
  *   - "transparent pricing" — if price transparency matters
  */
 export const BRAND_GUARANTEE_EN =
-  `As an official representative of [Brand], we guarantee genuine products, authorized service, and an official warranty.`;
+  `As an official representative of [Brand], we guarantee 100% authenticity, fair price, authorized service, and an official warranty.`;
 
 /**
  * Locale-aware decimal/thousands separator rules (Schema v3 Appendix).
