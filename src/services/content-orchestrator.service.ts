@@ -7,11 +7,15 @@ import { cleanHtmlStructure } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
+import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB, resolveCurrencySymbol } from '../prompts/task-b';
+import { buildPromptSlug } from '../prompts/task-slug';
+import { normalizeSlug, ensureUniqueSlugs } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, US_MEASUREMENT_RULES, isoToHumanLang, taskLangToIso } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
+import { SlugResponse } from '../app/types';
 
 // ── Inline prompts for tools that don't need external templates ─────────────
 
@@ -120,7 +124,8 @@ export class ContentOrchestratorService {
   content = signal<GeneratedContent>({
     mainHtmlEn: '',
     translations: {},
-    seoData: null
+    seoData: null,
+    slugData: null
   });
 
   optimizerOutput = signal<string>('');
@@ -133,7 +138,7 @@ export class ContentOrchestratorService {
 
   async generate(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, website: input.website, faqArtifacts: {} });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {} });
     this.validationIssues.set([]);
 
     try {
@@ -155,6 +160,17 @@ export class ContentOrchestratorService {
       const promptB = buildPromptB(input.website.name, input.name, seoLangs, htmlEn);
       const seoJson = await this.llm.generateJson(promptB, useThinking);
       this.content.update(c => ({ ...c, seoData: seoJson }));
+
+      // Step 2.5 — SEO slugs (BCP-47 keyed, aligned with seoData). Non-blocking: a slug
+      // failure must not abort translations/FAQ, so it gets its own try/catch.
+      try {
+        this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
+        const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, htmlEn);
+        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
+        this.content.update(c => ({ ...c, slugData: this.normalizeSlugResponse(rawSlug) }));
+      } catch (e) {
+        console.warn('[Slugs] Generation failed; continuing without slugs.', e);
+      }
 
       // Step 3 — Translations (Ukrainian always first)
       const sortedTransLangs = [...transLangs].sort((a, b) => {
@@ -224,7 +240,7 @@ export class ContentOrchestratorService {
 
   async generateSeoMetadata(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null });
     this.validationIssues.set([]);
 
     try {
@@ -250,6 +266,43 @@ export class ContentOrchestratorService {
     } finally {
       this.isGenerating.set(false);
     }
+  }
+
+  async generateSlugs(input: ProductInput, useThinking = false): Promise<void> {
+    this.isGenerating.set(true);
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null });
+    this.validationIssues.set([]);
+
+    try {
+      const { seoLangs } = getLangsForStore(input.website.name);
+      this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
+
+      const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, input.description);
+      const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
+      const slugData = this.normalizeSlugResponse(rawSlug);
+      this.content.update(c => ({ ...c, slugData }));
+
+      this.validationIssues.set(validateSlugs(slugData));
+
+      this.historyService.add(input, this.content());
+      this.progressMessage.set('Slug Generation Done!');
+
+    } catch (error) {
+      this.progressMessage.set('Error during slug generation.');
+      console.error(error);
+      alert('Slug Generation failed.');
+    } finally {
+      this.isGenerating.set(false);
+    }
+  }
+
+  private normalizeSlugResponse(raw: SlugResponse): SlugResponse {
+    const slugs = (raw.slugs ?? []).map(s => ({ ...s, slug: normalizeSlug(s.slug || s.name) }));
+    const unique = ensureUniqueSlugs(slugs);
+    return {
+      site_name: raw.site_name ?? '',
+      slugs: slugs.map((s, i) => ({ ...s, slug: unique[i] })),
+    };
   }
 
   async generateKeywords(name: string, description: string): Promise<void> {
@@ -379,6 +432,7 @@ export class ContentOrchestratorService {
         validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName))
       ),
       ...validateSeoMetadata(c.seoData, currencySymbol),
+      ...validateSlugs(c.slugData ?? null),
     ];
 
     this.validationIssues.set(issues);
@@ -389,7 +443,7 @@ export class ContentOrchestratorService {
   }
 
   resetState() {
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, faqArtifacts: {} });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, faqArtifacts: {} });
     this.validationIssues.set([]);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');

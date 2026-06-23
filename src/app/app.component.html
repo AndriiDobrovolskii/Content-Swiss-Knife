@@ -78,12 +78,18 @@
             {{ uiLabels().copywriter }}
           </button>
         </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-1 gap-1">
-          <button 
+        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
+          <button
             (click)="setMode('readability')"
             class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'readability' ? 'bg-white dark:bg-slate-600 text-pink-600 dark:text-pink-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             <i class="fa-solid fa-glasses mr-1"></i> {{ uiLabels().readability }}
+          </button>
+          <button
+            (click)="setMode('slug-generator')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'slug-generator' ? 'bg-white dark:bg-slate-600 text-cyan-600 dark:text-cyan-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            <i class="fa-solid fa-link mr-1"></i> {{ uiLabels().slugGenerator }}
           </button>
         </div>
       </div>
@@ -488,6 +494,45 @@
       </div>
     }
 
+    <!-- SLUG GENERATOR FORM -->
+    @else if (appMode() === 'slug-generator') {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <h2 class="text-sm font-bold text-cyan-600 dark:text-cyan-400 flex items-center gap-2 mb-4">
+          <i class="fa-solid fa-link"></i> {{ uiLabels().slugOnlyTitle }}
+        </h2>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().targetWebsite }} <span class="text-red-500">*</span>
+          </label>
+          <select
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+            [class.text-slate-400]="!selectedWebsite()"
+            [class.border-red-300]="!selectedWebsite()"
+            [value]="selectedWebsite()?.name || ''"
+            (change)="onWebsiteChange($event)">
+            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
+            @for (site of websiteOptions; track site.name) {
+              <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
+            }
+          </select>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().productName }} <span class="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [class.border-red-300]="!productName()"
+            [value]="productName()"
+            (input)="updateProductName($event)"
+            [placeholder]="uiLabels().placeholderName">
+        </div>
+      </div>
+    }
+
     <!-- COPYWRITER FORM -->
     @else if (appMode() === 'copywriter') {
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
@@ -735,6 +780,19 @@
             <span>{{ uiLabels().seoGenBtn }}</span>
           }
         </button>
+      } @else if (appMode() === 'slug-generator') {
+         <button
+          (click)="generateSlugsOnly()"
+          [disabled]="isGenerating() || !selectedWebsite() || !productName().trim()"
+          class="w-full py-3 px-4 bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-700 dark:hover:bg-cyan-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+          @if (isGenerating()) {
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ uiLabels().processing }}</span>
+          } @else {
+            <i class="fa-solid fa-link"></i>
+            <span>{{ uiLabels().slugGenBtn }}</span>
+          }
+        </button>
       } @else if (appMode() === 'optimizer') {
         <div class="flex gap-2">
           <button 
@@ -859,7 +917,11 @@
           [class.border-indigo-100]="appMode() === 'copywriter'" 
           [class.dark:border-indigo-900]="appMode() === 'copywriter'"
           [class.border-t-indigo-600]="appMode() === 'copywriter'"
-          [class.dark:border-t-indigo-500]="appMode() === 'copywriter'"></div>
+          [class.dark:border-t-indigo-500]="appMode() === 'copywriter'"
+          [class.border-cyan-100]="appMode() === 'slug-generator'"
+          [class.dark:border-cyan-900]="appMode() === 'slug-generator'"
+          [class.border-t-cyan-600]="appMode() === 'slug-generator'"
+          [class.dark:border-t-cyan-500]="appMode() === 'slug-generator'"></div>
         <p class="text-lg font-medium text-slate-700 dark:text-slate-200">{{ progressMessage() }}</p>
       </div>
     }
@@ -1001,8 +1063,8 @@
       </div>
     }
 
-    <!-- GENERATOR VIEW / SEO VIEW -->
-    @if (appMode() === 'generator' || appMode() === 'seo-generator') {
+    <!-- GENERATOR VIEW / SEO VIEW / SLUG VIEW -->
+    @if (appMode() === 'generator' || appMode() === 'seo-generator' || appMode() === 'slug-generator') {
       @if (appMode() === 'generator' && !hasOutput()) {
         <div class="flex-1 overflow-y-auto p-8">
           <div class="max-w-3xl mx-auto">
@@ -1011,7 +1073,7 @@
         </div>
       }
 
-      @if (hasOutput() || appMode() === 'seo-generator') {
+      @if (hasOutput() || appMode() === 'seo-generator' || appMode() === 'slug-generator') {
         <header
           class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200"
           role="tablist"
@@ -1048,6 +1110,18 @@
             [class]="activeTab() === 'seo' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             {{ uiLabels().seoMeta }}
           </button>
+          @if (content().slugData) {
+            <button
+              role="tab"
+              id="tab-slugs"
+              [attr.aria-selected]="activeTab() === 'slugs'"
+              aria-controls="panel-slugs"
+              (click)="activeTab.set('slugs')"
+              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
+              [class]="activeTab() === 'slugs' ? 'border-cyan-600 text-cyan-600 dark:text-cyan-400 dark:border-cyan-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+              {{ uiLabels().slugTab }}
+            </button>
+          }
         </div>
       </header>
 
@@ -1076,7 +1150,7 @@
           </div>
         }
 
-        @if (appMode() !== 'generator' && !content().mainHtmlEn && !content().seoData && !isGenerating()) {
+        @if (appMode() !== 'generator' && !content().mainHtmlEn && !content().seoData && !content().slugData && !isGenerating()) {
           <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
             <i class="fa-regular fa-file-code text-6xl mb-4 opacity-50"></i>
             <p class="text-lg font-medium">{{ uiLabels().noContentYet }}</p>
@@ -1264,6 +1338,41 @@
                   </div>
                 </div>
 
+              </div>
+            }
+          </div>
+        }
+
+        @if (activeTab() === 'slugs' && content().slugData) {
+          <div role="tabpanel" id="panel-slugs" aria-labelledby="tab-slugs" class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+            @for (item of content().slugData?.slugs; track item.language) {
+              <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 space-y-4">
+                <div class="flex justify-between items-start border-b border-slate-100 dark:border-slate-700 pb-3">
+                  <span class="px-2 py-1 rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 text-xs font-bold">{{ item.language }}</span>
+                  <button (click)="copySlugItem(item, $event)" class="text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-transform active:scale-75" title="Copy Name + Slug">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">{{ uiLabels().nameLabel }}</label>
+                  <div class="relative group">
+                    <div class="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200 pr-8 min-h-[38px]">{{ item.name }}</div>
+                    <button (click)="copyToClipboard(item.name, $event)" class="absolute top-2 right-2 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-transform active:scale-75" title="Copy Name">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">{{ uiLabels().slugLabel }}</label>
+                  <div class="relative group">
+                    <div class="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-sm font-mono text-slate-800 dark:text-slate-200 pr-8 min-h-[38px]">{{ item.slug }}</div>
+                    <button (click)="copyToClipboard(item.slug, $event)" class="absolute top-2 right-2 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-transform active:scale-75" title="Copy Slug">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
               </div>
             }
           </div>

@@ -1,7 +1,7 @@
 
 export type WebsiteGroup = 'UA' | 'EU' | 'ES' | 'US';
 
-export type AppMode = 'generator' | 'optimizer' | 'translator' | 'image-tools' | 'seo-generator' | 'copywriter' | 'readability';
+export type AppMode = 'generator' | 'optimizer' | 'translator' | 'image-tools' | 'seo-generator' | 'copywriter' | 'readability' | 'slug-generator';
 
 export interface WebsiteOption {
   name: string;
@@ -60,6 +60,17 @@ export interface SeoResponse {
   seo_data: SeoMetaItem[];
 }
 
+export interface SlugItem {
+  language: string;
+  name: string;
+  slug: string;
+}
+
+export interface SlugResponse {
+  site_name: string;
+  slugs: SlugItem[];
+}
+
 export interface ReadabilityScore {
   score: number;
   level: string;
@@ -72,6 +83,7 @@ export interface GeneratedContent {
   mainHtmlEn: string;
   translations: Record<string, string>; // e.g., 'UA': '<html>...</html>'
   seoData: SeoResponse | null;
+  slugData?: SlugResponse | null;
   website?: WebsiteOption; // store this content was generated for (optional for backward compat)
   faqArtifacts?: Record<string, string>;   // ISO code → schema-free faq_[ISO].html
 }

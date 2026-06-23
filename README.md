@@ -31,6 +31,7 @@ Given a product, the app generates a complete, store‑specific content package:
 
 - **Base HTML description** — semantic HTML5 with a fixed section structure (overview, key features, technical specs, applications, etc.), Schema.org Product microdata, sensible heading hierarchy, and disciplined inline highlighting of hard specs.
 - **SEO metadata** — `h1`, `meta_title`, and `meta_description` per target language, with each `meta_description` grounded in a real hard spec pulled from the generated body.
+- **URL slugs** — a localized name + a latin‑only, hyphen‑delimited, cross‑language‑unique slug per target language, deterministically normalized regardless of model output.
 - **Translations** — full localized HTML for every non‑English language a store targets, with Ukrainian generated first.
 - **FAQ / HowTo artifacts** — optional schema‑free HTML blocks for native theme modules, generated per language when supplemental content is supplied.
 - **Validation** — every artifact is passed through deterministic acceptance‑criteria checks (unit spacing, Schema.org rules, lazy‑loading patterns, SEO length constraints) before it reaches the UI.
@@ -91,8 +92,9 @@ A single `generate()` run executes an ordered, multi‑step pipeline. Each step 
 
 1. **Base English HTML (Task A)** — the creative/thinking pass. Builds the full semantic description from the product input. Uses the high‑capability model (Anthropic Sonnet by default), optionally with extended thinking enabled.
 2. **SEO metadata (Task B)** — runs the fast model (Anthropic Haiku) and returns strict JSON. The freshly generated HTML is passed back in as context so each `meta_description` can cite a genuine hard spec rather than generic copy.
-3. **Translations (Task C)** — one fast‑model call per non‑English target language. Ukrainian is always generated first. Store‑specific link/URL rewrites (e.g. Spanish EXPERT3D internal links) are applied as a post‑step.
-4. **FAQ / HowTo artifacts** — generated per language **only** when supplemental content is provided. These are schema‑free HTML blocks intended for native theme module fields.
+3. **URL slugs (Task Slug)** — immediately follows SEO metadata, on the fast model. The LLM proposes a localized `name` + `slug` per target language; a deterministic post‑processing layer (`normalizeSlug` / `ensureUniqueSlugs`) then guarantees the actual URL contract (latin‑only, lowercase, hyphen‑delimited, unique across languages) regardless of what the model returned. A slug failure is logged and skipped — it never aborts the rest of the run.
+4. **Translations (Task C)** — one fast‑model call per non‑English target language. Ukrainian is always generated first. Store‑specific link/URL rewrites (e.g. Spanish EXPERT3D internal links) are applied as a post‑step.
+5. **FAQ / HowTo artifacts** — generated per language **only** when supplemental content is provided. These are schema‑free HTML blocks intended for native theme module fields.
 
 After the pipeline finishes, all artifacts run through `output-validator.ts`. Validation is **advisory**: issues are surfaced to the UI and logged, but never abort a run, so you always get usable output even when a minor acceptance check trips.
 
@@ -106,6 +108,7 @@ Beyond the main generator, the app ships several focused modes:
 
 - **Generator** — the full product‑content pipeline described above.
 - **SEO Generator** — produces SEO metadata standalone.
+- **Slug Generator** — produces localized name + URL slug pairs standalone, for a single product/store, without running the full pipeline.
 - **Optimizer** — refactors dirty/imported HTML into clean, semantic HTML5 (image hygiene, heading cleanup, spec highlighting).
 - **Copywriter** — rewrites existing text to be ~80% unique for a specific target market while preserving technical facts.
 - **Readability** — scores text for clarity/accessibility and returns an optimized rewrite.
