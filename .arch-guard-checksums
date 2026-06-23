@@ -1,5 +1,5 @@
 36d0dabedc7b043ea8249dd4eed6a81775833e4bce67325bfef00cb9a80debac  src/prompts/task-a.ts
 e78965766b48534bdd5e10036e1deb939b5a968234389804536bc7564c6a2c89  src/prompts/task-b.ts
 4524b11623c5d22c19f297a5573a90c70df4ac56da39e681ca11e553db67ee98  src/prompts/task-c.ts
-826db958a711bf4d00ae7db830a0eb50dbf46f1777d8d850e5ee1546ddfa6523  src/prompt-core/master-system-prompt.ts
+89ef504fd22b2a61801381cc2c11423796f14a9e746bdceddbcebe5e6a93cded  src/prompt-core/master-system-prompt.ts
 6641e37370c5655111bfd23eb4a9d7fde7c1574d5f687a1f8de72e865dd309e0  src/utils/output-validator.ts
