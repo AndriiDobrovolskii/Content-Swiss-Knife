@@ -14,6 +14,7 @@ no Markdown code fences.
 [REGIONAL STRATEGY — resolve from the [Store Name] given in the user message]
 - "3DDevice" | "3DPrinter" | "3DScanner" → Ukraine, UAH (₴), languages en-GB, uk-UA, ru-UA.
 - "Center 3D Print" → Poland & EU, PLN (zł) / EUR (€), languages pl-PL, en-GB, de-DE, uk-UA, ru-UA.
+- "Drukarka 3D" → Poland (Kraków), PLN (zł), languages pl-PL, uk-UA. Site suffix "Drukarka 3D".
 - "EXPERT3D" | "Impresora-3D" → Valencia (Spain), EUR (€), languages en-ES, es-ES, uk-UA. Site suffix "EXPERT3D".
 - "Expert-3DPrinter" → USA (Houston, TX), USD ($), languages en-US, es-MX, uk-UA.
 - Otherwise → Global/EU, EUR (€).
