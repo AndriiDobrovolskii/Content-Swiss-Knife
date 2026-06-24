@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../services/content-orchestrator.service';
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
-import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry, TabDescriptor } from './types';
+import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry, TabDescriptor } from './types';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { parseVisionResult } from '../utils/vision-contract';
@@ -30,6 +30,13 @@ const TRANSLATIONS = {
     copywriter: 'Copywriter',
     seoGenBtn: 'Generate Metadata',
     seoOnlyTitle: 'SEO Metadata Generator',
+    slugGenerator: 'Slugs',
+    slugOnlyTitle: 'SEO Slug Generator',
+    slugTab: 'Slugs',
+    slugGenBtn: 'Generate Slugs',
+    copySlug: 'Copy slug',
+    slugLabel: 'URL Slug',
+    nameLabel: 'Localized Name',
     contextDescription: 'Context Description',
     seoOnlyPlaceholder: 'Paste the product description here (Text or HTML) to provide context...',
     targetWebsite: 'Target Website',
@@ -168,6 +175,13 @@ const TRANSLATIONS = {
     copywriter: 'Копірайтер',
     seoGenBtn: 'Генерувати метадані',
     seoOnlyTitle: 'Генератор SEO метаданих',
+    slugGenerator: 'Слаги',
+    slugOnlyTitle: 'Генератор SEO-слагів',
+    slugTab: 'Слаги',
+    slugGenBtn: 'Генерувати слаги',
+    copySlug: 'Копіювати слаг',
+    slugLabel: 'URL-слаг',
+    nameLabel: 'Локалізована назва',
     contextDescription: 'Опис для контексту',
     seoOnlyPlaceholder: 'Вставте опис товару сюди (Текст або HTML) для контексту...',
     targetWebsite: 'Цільовий сайт',
@@ -413,7 +427,7 @@ export class AppComponent {
   validationWarningCount = computed(() => this.validationIssues().filter(i => i.severity === 'warning').length);
 
   // True once any generated artifact exists — drives form placement (centred vs sidebar).
-  hasOutput = computed(() => !!this.content().mainHtmlEn || !!this.content().seoData);
+  hasOutput = computed(() => !!this.content().mainHtmlEn || !!this.content().seoData || !!this.content().slugData);
 
   // "US English Output" only for the US store; plain "English" for all other groups.
   // Uses website recorded on the generated content so a post-generation dropdown change
@@ -472,6 +486,7 @@ export class AppComponent {
     if (tabs.length === 0) return;
     const ids = new Set(tabs.map(t => t.id));
     ids.add('seo');
+    ids.add('slugs');
     if (!ids.has(this.activeTab())) {
       this.activeTab.set(tabs[0].id);
     }
@@ -705,6 +720,26 @@ export class AppComponent {
     await this.orchestrator.generateSeoMetadata(input, this.seoUseThinking());
   }
 
+  async generateSlugsOnly() {
+    const currentSite = this.selectedWebsite();
+    if (!currentSite || !this.productName().trim()) {
+      alert(this.uiLabels().alertFillFields);
+      return;
+    }
+    const input: ProductInput = {
+      website: currentSite,
+      name: this.productName(),
+      description: this.description(),
+      specs: '',
+    };
+    this.activeTab.set('slugs');
+    await this.orchestrator.generateSlugs(input, this.seoUseThinking());
+  }
+
+  copySlugItem(item: SlugItem, ev?: Event) {
+    this.copyToClipboard(`${item.name}\n${item.slug}`, ev);
+  }
+
   async getKeywords() {
     if (!this.productName() || !this.description()) {
       alert('Please enter Product Name and Description first.');
@@ -782,7 +817,7 @@ export class AppComponent {
   closeComparison() { this.showComparison.set(false); }
 
   clearAll() {
-    if (this.appMode() === 'generator' || this.appMode() === 'seo-generator') {
+    if (this.appMode() === 'generator' || this.appMode() === 'seo-generator' || this.appMode() === 'slug-generator') {
       this.productName.set('');
       this.description.set('');
       this.specs.set('');
@@ -790,6 +825,7 @@ export class AppComponent {
       this.customInstructions.set('');
       this.selectedWebsite.set(null);
       if (this.appMode() === 'generator') this.activeTab.set('html');
+      else if (this.appMode() === 'slug-generator') this.activeTab.set('slugs');
       else this.activeTab.set('seo');
     } else if (this.appMode() === 'optimizer') {
       this.optimizerInputHtml.set('');
