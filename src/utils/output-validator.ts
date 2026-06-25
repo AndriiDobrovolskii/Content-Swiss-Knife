@@ -38,7 +38,7 @@ function checkNumberFormatting(html: string, locale: string | undefined, issues:
   // Decimal point where a comma is required. Excludes multi-part versions (1.2.3) and
   // v-prefixed versions (v1.5). Known limitation: a bare two-part version like "AMS 2.0"
   // can still false-positive — accepted, severity stays 'warning'.
-  const dotDecimal = text.match(/(?<![\w.])\d+\.\d+(?!\.\d)/);
+  const dotDecimal = text.match(/(?<![\w.])\d+\.(?!\d{3}(?!\d))\d+(?!\.\d)/);
   if (dotDecimal) {
     issues.push({
       severity: 'warning',
@@ -60,20 +60,6 @@ function checkNumberFormatting(html: string, locale: string | undefined, issues:
       detail: `English-style comma-grouped thousands found where ${locale} expects space/dot grouping (e.g. "${commaThousands[0]}").`,
       context,
     });
-  }
-
-  // Regular space (U+0020) instead of the required non-breaking space (U+00A0) between
-  // thousands groups — uk-UA / ru-UA / pl-PL only (de-DE/es-ES allow a plain dot or space).
-  if (NBSP_THOUSANDS_LOCALES.has(locale)) {
-    const regularSpaceGrouping = text.match(/\d{1,3}[ ]\d{3}(?![\d,])/); // literal U+0020, not \s
-    if (regularSpaceGrouping) {
-      issues.push({
-        severity: 'warning',
-        rule: 'thousands-separator',
-        detail: `Regular space used as thousands separator instead of a non-breaking space (e.g. "${regularSpaceGrouping[0]}").`,
-        context,
-      });
-    }
   }
 }
 

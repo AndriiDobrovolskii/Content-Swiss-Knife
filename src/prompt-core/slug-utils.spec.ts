@@ -26,6 +26,18 @@ describe('normalizeSlug', () => {
     const result = normalizeSlug('Étape  de  finissage—vapeur (V2)');
     expect(result).toMatch(SLUG_PATTERN);
   });
+
+  it('preserves decimal dot between digits (1.75 mm)', () => {
+    expect(normalizeSlug('1.75 mm')).toBe('1.75-mm');
+  });
+
+  it('preserves decimal dot in a full filament name', () => {
+    expect(normalizeSlug('Filament 0.4 mm 1 kg')).toBe('filament-0.4-mm-1-kg');
+  });
+
+  it('decimal slug matches SLUG_PATTERN', () => {
+    expect(normalizeSlug('PETG 1.75 mm 1 kg Orange')).toMatch(SLUG_PATTERN);
+  });
 });
 
 describe('ensureUniqueSlugs', () => {

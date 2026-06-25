@@ -29,7 +29,8 @@ function stripDiacritics(input: string): string {
 export function normalizeSlug(input: string): string {
   return stripDiacritics(transliterateCyrillic(input))
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/[^a-z0-9.]+/g, '-')
+    .replace(/(?<!\d)\.(?!\d)/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
 }
@@ -49,4 +50,4 @@ export function ensureUniqueSlugs(items: { language: string; slug: string }[]): 
   });
 }
 
-export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+export const SLUG_PATTERN = /^[a-z0-9]+(\.[0-9]+)?(-[a-z0-9]+(\.[0-9]+)?)*$/;

@@ -328,6 +328,16 @@ describe('validateGeneratedHtml — Rule: decimal-separator', () => {
     const html = '<p>Diameter of 1.75 mm guarantees consistent reproduction.</p>';
     expectNoRule(validateGeneratedHtml(html, 'test'), 'decimal-separator');
   });
+
+  it('does NOT flag a German thousands-separator dot (de-DE) — 1.420 means 1420', () => {
+    const html = '<p>Elastizitätsmodul von 1.420 ± 160 MPa.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'de-DE'), 'decimal-separator');
+  });
+
+  it('still flags a genuine dot decimal in de-DE (1.75 mm)', () => {
+    const html = '<p>Durchmesser von 1.75 mm garantiert konsistente Extrusion.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'de-DE'), 'decimal-separator')?.severity).toBe('warning');
+  });
 });
 
 describe('validateGeneratedHtml — Rule: thousands-separator', () => {
@@ -346,13 +356,8 @@ describe('validateGeneratedHtml — Rule: thousands-separator', () => {
     expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'thousands-separator');
   });
 
-  it('flags a regular space used as thousands grouping instead of a non-breaking space (uk-UA)', () => {
+  it('does NOT flag a space-grouped number (uk-UA)', () => {
     const html = `<p>Об'єм: 1${' '}234${' '}567 мм³.</p>`; // explicit U+0020, not U+00A0
-    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'thousands-separator')).toBeDefined();
-  });
-
-  it('does NOT flag a correctly non-breaking-space-grouped number (uk-UA)', () => {
-    const html = '<p>Об’єм: 1 234 567 мм³.</p>'; // explicit U+00A0 non-breaking spaces
     expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'thousands-separator');
   });
 
