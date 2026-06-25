@@ -202,9 +202,9 @@ export class ContentOrchestratorService {
       }
 
       // Step 4 — FAQ artifacts (schema-free, for Journal theme native module fields).
-      // Schema v3: FAQ is drawn from the full product data (description + specs + supplemental),
-      // not supplemental alone — so run whenever any source material is present.
-      if (input.description?.trim() || input.specs?.trim() || input.supplementalContent?.trim()) {
+      // Optional: runs only when Supplemental Content is supplied. Description and specs
+      // are still passed to the builder as grounding context, but they do not trigger it.
+      if (input.supplementalContent?.trim()) {
         const store = getStore(input.website.name);
         for (const isoCode of store.languages) {
           const humanLang = isoToHumanLang(isoCode);
