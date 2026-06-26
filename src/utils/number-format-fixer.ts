@@ -5,6 +5,8 @@
  * Tag-aware: processes only text nodes and alt attribute values.
  * src, href, and all other attributes are preserved verbatim.
  * Safe to apply to any HTML string; must be idempotent.
+ * Note: does not handle `>` inside quoted attribute values (e.g. title="a > b").
+ * Safe for LLM-generated product HTML, which does not emit such attributes.
  */
 export function fixNumberFormatting(html: string): string {
   return html
