@@ -10,7 +10,7 @@ import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
-import { buildPromptB, resolveCurrencySymbol } from '../prompts/task-b';
+import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { normalizeSlug, ensureUniqueSlugs } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, US_MEASUREMENT_RULES, isoToHumanLang, taskLangToIso } from '../prompt-core/constants';
@@ -274,7 +274,7 @@ export class ContentOrchestratorService {
 
       // Validate just the SEO metadata for this flow (no HTML produced here).
       this.validationIssues.set(
-        validateSeoMetadata(this.content().seoData, resolveCurrencySymbol(input.website.name))
+        validateSeoMetadata(this.content().seoData, '')
       );
 
       this.historyService.add(input, this.content());
@@ -446,13 +446,12 @@ export class ContentOrchestratorService {
    */
   private runOutputValidation(storeName: string, productName?: string): void {
     const c = this.content();
-    const currencySymbol = resolveCurrencySymbol(storeName);
     const issues: ValidationIssue[] = [
       ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)', productName),
       ...Object.entries(c.translations).flatMap(([lang, html]) =>
         validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName))
       ),
-      ...validateSeoMetadata(c.seoData, currencySymbol),
+      ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
     ];
 
