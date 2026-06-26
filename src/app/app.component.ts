@@ -496,12 +496,13 @@ export class AppComponent {
   // first available tab rather than leaving the panel blank.
   private readonly _autoSelectTab = effect(() => {
     const tabs = this.tabDescriptors();
+    const mode = this.appMode();
     if (tabs.length === 0) return;
     const ids = new Set(tabs.map(t => t.id));
-    ids.add('seo');
-    ids.add('slugs');
+    if (mode !== 'slug-generator') ids.add('seo');
+    if (mode === 'slug-generator') ids.add('slugs');
     if (!ids.has(this.activeTab())) {
-      this.activeTab.set(tabs[0].id);
+      this.activeTab.set(mode === 'seo-generator' ? 'seo' : mode === 'slug-generator' ? 'slugs' : tabs[0].id);
     }
   });
 

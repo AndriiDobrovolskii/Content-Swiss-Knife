@@ -1343,7 +1343,7 @@
           </div>
         }
 
-        @if (activeTab() === 'slugs' && content().slugData) {
+        @if (activeTab() === 'slugs' && content().slugData && appMode() === 'slug-generator') {
           <div role="tabpanel" id="panel-slugs" aria-labelledby="tab-slugs" class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
             @for (item of content().slugData?.slugs; track item.language) {
               <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 space-y-4">
