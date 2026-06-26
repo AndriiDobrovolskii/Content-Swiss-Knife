@@ -6,6 +6,7 @@ import { ProductInput, GeneratedContent, WebsiteOption } from '../app/types';
 import { cleanHtmlStructure } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
+import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
@@ -155,6 +156,7 @@ export class ContentOrchestratorService {
         html = html.replace(/```html/g, '').replace(/```/g, '').trim();
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
+        html = fixNumberFormatting(html);
         return html;
       };
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
@@ -212,6 +214,7 @@ export class ContentOrchestratorService {
         // Re-assert the image figure structure: Task C can drift styles/attrs
         // while translating, so normalize each language output (idempotent).
         translatedHtml = wrapImageFigures(translatedHtml);
+        translatedHtml = fixNumberFormatting(translatedHtml);
 
         this.content.update(c => ({
           ...c,
