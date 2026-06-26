@@ -1,10 +1,26 @@
 ﻿/**
  * Strips locale-specific thousands separators from spec numbers and inserts
  * the required space between numeric values and unit symbols.
+ *
+ * Tag-aware: processes only text nodes and alt attribute values.
+ * src, href, and all other attributes are preserved verbatim.
  * Safe to apply to any HTML string; must be idempotent.
  */
 export function fixNumberFormatting(html: string): string {
-  return ensureUnitSpaces(stripThousandsSeparators(html));
+  return html
+    .split(/(<[^>]*>)/g)
+    .map((segment, i) => (i % 2 === 0 ? processTextNode(segment) : processTag(segment)))
+    .join('');
+}
+
+/** Applied to text nodes — full formatting. */
+function processTextNode(text: string): string {
+  return ensureUnitSpaces(stripThousandsSeparators(text));
+}
+
+/** Applied to raw tag strings — only processes alt="…" values; src/href/etc. untouched. */
+function processTag(tag: string): string {
+  return tag.replace(/\balt="([^"]*)"/g, (_, val) => `alt="${processTextNode(val)}"`);
 }
 
 function stripThousandsSeparators(text: string): string {
