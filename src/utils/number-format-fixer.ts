@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Strips locale-specific thousands separators from spec numbers and inserts
  * the required space between numeric values and unit symbols.
  * Safe to apply to any HTML string; must be idempotent.
@@ -12,7 +12,7 @@ function stripThousandsSeparators(text: string): string {
   text = text.replace(/\b\d{1,3}(?:,\d{3})+/g, m => m.replace(/,/g, ''));
 
   // Space groups (regular, NBSP U+00A0, thin-space U+202F): 1 000 / 1 234 567
-  text = text.replace(/\b\d{1,3}(?:[ ​ ]\d{3})+/g, m => m.replace(/[ ​ ]/g, ''));
+  text = text.replace(/\b\d{1,3}(?:[   ]\d{3})+/g, m => m.replace(/[   ]/g, ''));
 
   // Period groups: 1.000 / 1.234.567 -> 1000 / 1234567
   // Guard: NOT followed by more digit(s) that would indicate a decimal tail
