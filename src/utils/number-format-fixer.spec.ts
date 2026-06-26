@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { fixNumberFormatting } from './number-format-fixer';
 
 describe('fixNumberFormatting — thousands separators', () => {
@@ -26,7 +26,7 @@ describe('fixNumberFormatting — thousands separators', () => {
 
   describe('space (UA / nbsp format)', () => {
     it('strips a regular-space group: 1 000 → 1000', () => {
-      expect(fixNumberFormatting('power 1 000 mW')).toBe('power 1000 mW');
+      expect(fixNumberFormatting('power 1 000 mW')).toBe('power 1000 mW');
     });
 
     it('strips 1 250 → 1250', () => {
@@ -38,11 +38,11 @@ describe('fixNumberFormatting — thousands separators', () => {
     });
 
     it('strips non-breaking space (U+00A0)', () => {
-      expect(fixNumberFormatting('power 1 000 mW')).toBe('power 1000 mW');
+      expect(fixNumberFormatting('power 1 000 mW')).toBe('power 1000 mW');
     });
 
     it('strips thin space (U+202F)', () => {
-      expect(fixNumberFormatting('price 1 000 UAH')).toBe('price 1000 UAH');
+      expect(fixNumberFormatting('price 1 000 UAH')).toBe('price 1000 UAH');
     });
   });
 
@@ -114,6 +114,23 @@ describe('fixNumberFormatting — unit spaces', () => {
   it('processes alt text values (human-readable spec mentions get the space)', () => {
     const html = '<img alt="2mm layer height sample">';
     expect(fixNumberFormatting(html)).toContain('alt="2 mm layer height sample"');
+  });
+
+  it('does NOT add space for display resolution K: 4K stays 4K', () => {
+    expect(fixNumberFormatting('4K mono LCD')).toBe('4K mono LCD');
+    expect(fixNumberFormatting('8K resolution')).toBe('8K resolution');
+  });
+
+  it('does add space for Kelvin K: 6500K → 6500 K', () => {
+    expect(fixNumberFormatting('6500K color temp')).toBe('6500 K color temp');
+  });
+
+  it('adds space for MPa', () => {
+    expect(fixNumberFormatting('tensile 60MPa')).toBe('tensile 60 MPa');
+  });
+
+  it('adds space for GPa', () => {
+    expect(fixNumberFormatting('modulus 1.93GPa')).toBe('modulus 1.93 GPa');
   });
 });
 

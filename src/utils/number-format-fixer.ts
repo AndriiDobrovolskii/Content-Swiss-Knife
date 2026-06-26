@@ -23,13 +23,15 @@ function stripThousandsSeparators(text: string): string {
 
 function ensureUnitSpaces(text: string): string {
   // Multi-character units first (longest match wins).
-  text = text.replace(/(\d)(kHz|MHz|GHz|mW|kW|mA|mV|mm|cm|km|µm|μm|nm|mg|ml)\b/g, '$1 $2');
+  text = text.replace(/(\d)(kHz|MHz|GHz|mW|kW|mA|mV|mm|cm|km|µm|μm|nm|mg|ml|MPa|GPa|kPa|Pa)\b/g, '$1 $2');
   // Single- or double-char units.
   text = text.replace(/(\d)(Hz|kg|px|pt|dpi|bar|psi)\b/g, '$1 $2');
   // Degree units (no word boundary — degree sign is not a word char).
   text = text.replace(/(\d)(°[CF])/g, '$1 $2');
-  // Remaining single-letter SI units: g, l/L (litre), m (metre), W, V, A, K.
-  text = text.replace(/(\d)([glL]|[mWVAK])\b/g, '$1 $2');
+  // Remaining single-letter SI units: g, l/L (litre), m (metre), W, V, A.
+  text = text.replace(/(\d)([glL]|[mWVA])\b/g, '$1 $2');
+  // K (Kelvin): only when preceded by ≥3 digit-sequence (e.g. 6500K → 6500 K), NOT 4K/8K
+  text = text.replace(/(\d{3,})(K)\b/g, '$1 $2');
   // Percentage.
   text = text.replace(/(\d)(%)/g, '$1 $2');
   return text;
