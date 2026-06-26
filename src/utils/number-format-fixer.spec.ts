@@ -40,6 +40,10 @@ describe('fixNumberFormatting — thousands separators', () => {
     it('strips non-breaking space (U+00A0)', () => {
       expect(fixNumberFormatting('power 1 000 mW')).toBe('power 1000 mW');
     });
+
+    it('strips thin space (U+202F)', () => {
+      expect(fixNumberFormatting('price 1 000 UAH')).toBe('price 1000 UAH');
+    });
   });
 
   describe('period (ES / DE format)', () => {
