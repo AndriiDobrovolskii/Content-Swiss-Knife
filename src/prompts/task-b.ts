@@ -22,53 +22,68 @@ const TASK_B_INSTRUCTION = `TASK B — GENERATE SEO METADATA (RAW JSON ONLY, no 
 (✅ ➔ ✨ | + % !) and every accented/Cyrillic character counts as exactly 1.
 
 — H1 —
-Formula: "[Product] [Model/Series]". Strip marketing fluff (Buy / Best Price / New / Cheap / Sale).
-Strictly technical. This exact string is the TITLE CORE — reuse it verbatim at the start of meta_title.
+Formula: "[Product] [Model/Series]". Strip fluff: Buy / Best Price / New / Cheap / Sale.
+Strictly technical. This exact string becomes the TITLE CORE.
 Example: "Creality K1 Max" (NOT "Buy Creality K1 Max Cheap").
 
 — meta_title —
-Base form: "[H1 core] - [Benefit] | [Site Suffix]".
-The title MUST begin with the H1 core, character-for-character (this aligns title↔H1 and resists
-Google rewrites; numbers/model codes present in both are preserved ~97% of the time).
-Apply this DEGRADATION CASCADE in order until the title fits the per-locale Title budget below:
-  1. Full form: "[H1 core] - [Benefit] | [Site Suffix]".
-  2. If over budget → DROP the benefit: "[H1 core] | [Site Suffix]".
-  3. If still over budget → DROP the suffix: "[H1 core]".
-  4. The H1 core is NEVER truncated and NEVER cut mid-word. If even the bare core exceeds budget,
-     return the bare core unchanged (over-budget is acceptable only for the irreducible core).
-Symbols in titles: DEFAULT NONE. Do not add ✅/➔/✨ to titles unless the model name itself contains one.
-No flag/package/complex emoji anywhere.
+MUST begin with the H1 core verbatim (character-for-character). This aligns title↔H1 and
+resists Google rewrites; shared model numbers/specs are preserved ~97% of the time.
+[Site Suffix] comes from [INPUT DATA] — use it VERBATIM. Never copy, infer, or reuse
+suffixes from the examples below; "StoreName" in anchors is a structural placeholder only.
+[Site Suffix] is MANDATORY — present at steps 1 AND 2. Drop only when step 2 still overflows.
+Apply this DEGRADATION CASCADE in order until the result fits the per-locale Title budget:
+  1. "[H1 core] - [Benefit] | [Site Suffix]"    ← normal case
+  2. "[H1 core] | [Site Suffix]"               ← drop benefit, KEEP suffix
+  3. "[H1 core]"                               ← drop suffix (LAST RESORT only)
+  4. H1 core is NEVER truncated mid-word. If bare core itself exceeds budget, return it unchanged.
+Symbols: DEFAULT NONE in titles. Do not add ✅ ➔ ✨ unless already in the product name.
+No flag, package, or complex emoji anywhere.
 
 — meta_description —
-Pattern: Hook + Solution + Spec + CTA. Start with a verb.
-FRONT-LOAD the primary keyword + USP + one hard spec (size / speed / build volume / power) inside the
-first 115 characters (mobile-safe zone — this part must read complete even when truncated on mobile).
-End with a CTA + ➔ (or the locale equivalent), as a desktop bonus tail.
-Do NOT invent prices, discounts, currency values, or availability — that data is not provided here and
-is emitted separately via Schema.org Offer. Never fabricate numbers you were not given.
-Symbols ✅ / ➔ are allowed ONLY in the description, and NEVER at the very start or very end of the string
-(a leading/trailing symbol is ignored or stripped by search engines). One symbol max.
+Pattern: Hook + Solution + Spec + CTA. MUST start with a verb in EVERY locale (including de-DE).
+FRONT-LOAD: primary keyword + USP + one hard spec (size / speed / build volume / power) within the
+first 115 characters — this zone must read as complete even when truncated on mobile (>60% of traffic).
+Close with a locale-native CTA phrase ending in ➔ as a desktop-visible tail:
+  en → "Order now ➔"  |  pl → "Zamów ➔"  |  de → "Jetzt bestellen ➔"
+  uk → "Замовте зараз ➔"  |  ru → "Закажите сейчас ➔"  |  es → "Compra ahora ➔"
+Symbol rules:
+  • ✅ and ➔ allowed only in the description; one symbol max total.
+  • Do NOT place ✅ or ➔ as a standalone character at the very start of the string.
+  • ➔ closing a CTA phrase at the end of the string ("Order now ➔") is EXPLICITLY ALLOWED.
+Do NOT invent prices, discounts, currency values, or availability — not provided here;
+those are emitted separately via Schema.org Offer. Never fabricate numbers not given in the input.
 
 — PER-LOCALE BUDGETS (grapheme counts) —
-Title / Description max. German runs longer and renders wider; Cyrillic is wider than Latin.
+German runs 20–30% longer; Cyrillic renders wider than Latin — budgets reflect this.
   en-GB, en-US, en-ES : Title ≤ 60 | Desc ≤ 150
   es-ES, es-MX        : Title ≤ 60 | Desc ≤ 150
   pl-PL               : Title ≤ 60 | Desc ≤ 150
   uk-UA, ru-UA        : Title ≤ 55 | Desc ≤ 150
   de-DE               : Title ≤ 50 | Desc ≤ 150
   (any other locale)  : Title ≤ 55 | Desc ≤ 150
-Count graphemes before returning. If over budget, apply the title cascade or shorten the description
-Hook/Spec — but always keep the front-loaded keyword + USP intact.
+Count graphemes BEFORE returning. If over budget: apply title cascade; shorten description
+Hook/Spec — never cut the front-loaded keyword + USP.
 
 — FEW-SHOT ANCHORS —
-Short product (benefit kept, en-US, budget 60/150):
-  H1: "Creality K1 Max"
-  meta_title: "Creality K1 Max - 600mm/s CoreXY 3D Printer | 3DDevice"   (54)
-  meta_description: "Print large parts fast with the Creality K1 Max: 300×300×300mm build, 600mm/s, AI camera. Order yours today ➔"   (110)
-Long product (benefit dropped, then suffix dropped to fit de-DE budget 50):
-  H1: "Anycubic Photon Mono M5s Pro 14K"
-  meta_title: "Anycubic Photon Mono M5s Pro 14K"   (32, core only; "- Harz-3D-Drucker | EXPERT3D" would overflow)
-  meta_description: "Drucken Sie hochpräzise Modelle mit dem Anycubic Photon Mono M5s Pro: 14K-Display, 13,6×7,6cm, schneller Harzdruck. Jetzt bestellen ➔"   (133)
+"StoreName" below is a placeholder — always substitute the exact [Site Suffix] from [INPUT DATA].
+
+ANCHOR 1 — short product → step 1 full form (en-US, budget 60 / 150):
+  H1:               "Creality K1 Max"
+  meta_title:       "Creality K1 Max - 600mm/s CoreXY 3D Printer | StoreName"     [55 ✓ step 1]
+  meta_description: "Print large parts fast: Creality K1 Max, 300×300×300mm build, 600mm/s speed, AI lidar camera included. Order now ➔"  [114 ✓ mobile-safe]
+
+ANCHOR 2 — medium product → step 2, suffix kept (en-US, budget 60):
+  H1:               "Bambu Lab PETG Translucent Orange 1.75mm 1kg"                [44]
+  step 1 attempt:   "Bambu Lab PETG Translucent Orange 1.75mm 1kg - AMS Filament | StoreName"  → 70 > 60 ✗
+  step 2 result:    "Bambu Lab PETG Translucent Orange 1.75mm 1kg | StoreName"     [55 ✓ suffix kept]
+  meta_description: "Get crystal-clear PETG parts fast: Bambu Lab PETG Translucent Orange, 1.75mm ±0.03mm, 1kg, RFID chip for AMS. Order now ➔"  [121 ✓ CTA from char 110]
+
+ANCHOR 3 — same product → step 3, bare core (de-DE, budget 50):
+  H1:               "Bambu Lab PETG Translucent Orange 1.75mm 1kg"                [44]
+  step 2 attempt:   "Bambu Lab PETG Translucent Orange 1.75mm 1kg | StoreName"   → 55 > 50 ✗
+  step 3 result:    "Bambu Lab PETG Translucent Orange 1.75mm 1kg"                [44 ✓ bare core]
+  meta_description: "Drucken Sie transparente Bauteile mit Bambu Lab PETG Translucent Orange: 1,75mm ±0,03mm, 1kg, RFID-Chip für AMS. Jetzt bestellen ➔"  [130 ✓ CTA from char 113]
 
 — OUTPUT SHAPE —
 {"site_name":"…","seo_data":[{"language":"…","h1":"…","meta_title":"…","meta_description":"…"}]}
