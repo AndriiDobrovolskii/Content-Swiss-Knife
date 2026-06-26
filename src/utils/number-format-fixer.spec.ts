@@ -164,3 +164,55 @@ describe('fixNumberFormatting — combined', () => {
     expect(twice).toBe(once);
   });
 });
+
+describe('fixNumberFormatting — tag protection', () => {
+  it('leaves src attribute completely unchanged', () => {
+    const html = '<img src="impresora-3d-12mm.jpg">';
+    expect(fixNumberFormatting(html)).toBe('<img src="impresora-3d-12mm.jpg">');
+  });
+
+  it('leaves href attribute completely unchanged', () => {
+    const html = '<a href="/categoria/impresora-3d-1.000mm">';
+    expect(fixNumberFormatting(html)).toBe('<a href="/categoria/impresora-3d-1.000mm">');
+  });
+
+  it('leaves style attribute completely unchanged', () => {
+    const html = '<figure style="width:1000px; margin:12mm auto;">';
+    expect(fixNumberFormatting(html)).toBe('<figure style="width:1000px; margin:12mm auto;">');
+  });
+
+  it('still processes alt attribute value', () => {
+    const html = '<img alt="500mW laser spot 50µm">';
+    expect(fixNumberFormatting(html)).toBe('<img alt="500 mW laser spot 50 µm">');
+  });
+
+  it('processes alt but leaves src untouched in the same tag', () => {
+    const html = '<img src="laser-500mW-module.jpg" alt="500mW module" loading="lazy">';
+    expect(fixNumberFormatting(html)).toBe('<img src="laser-500mW-module.jpg" alt="500 mW module" loading="lazy">');
+  });
+
+  it('still processes text nodes between tags', () => {
+    const html = '<figcaption>Spot size: 50µm, power 1,000mW</figcaption>';
+    expect(fixNumberFormatting(html)).toBe('<figcaption>Spot size: 50 µm, power 1000 mW</figcaption>');
+  });
+
+  it('handles a full figure block: src/href untouched, text and alt formatted', () => {
+    const input = [
+      '<figure>',
+      '<a href="/products/laser-1.000mW-module">',
+      '<img src="laser-1.000mW-12mm.jpg" alt="1.000mW laser 12mm spot">',
+      '</a>',
+      '<figcaption>Laser module — power 1.000mW, spot 12mm</figcaption>',
+      '</figure>',
+    ].join('');
+    const expected = [
+      '<figure>',
+      '<a href="/products/laser-1.000mW-module">',
+      '<img src="laser-1.000mW-12mm.jpg" alt="1000 mW laser 12 mm spot">',
+      '</a>',
+      '<figcaption>Laser module — power 1000 mW, spot 12 mm</figcaption>',
+      '</figure>',
+    ].join('');
+    expect(fixNumberFormatting(input)).toBe(expected);
+  });
+});
