@@ -382,6 +382,15 @@ export class AppComponent {
   // --- SEO GENERATOR STATE ---
   seoUseThinking = signal<boolean>(false);
 
+  // --- SEO META: isolated input state ---
+  seoSelectedWebsite = signal<WebsiteOption | null>(null);
+  seoProductName     = signal<string>('');
+  seoDescription     = signal<string>('');
+
+  // --- SLUG GENERATOR: isolated input state ---
+  slugSelectedWebsite = signal<WebsiteOption | null>(null);
+  slugProductName     = signal<string>('');
+
   // --- IMAGE TOOLS STATE ---
   imgFiles = signal<InputImage[]>([]);
   imgTargetFormat = signal<'image/jpeg' | 'image/png' | 'image/webp'>('image/jpeg');
@@ -426,8 +435,12 @@ export class AppComponent {
   validationErrorCount = computed(() => this.validationIssues().filter(i => i.severity === 'error').length);
   validationWarningCount = computed(() => this.validationIssues().filter(i => i.severity === 'warning').length);
 
-  // True once any generated artifact exists — drives form placement (centred vs sidebar).
-  hasOutput = computed(() => !!this.content().mainHtmlEn || !!this.content().seoData || !!this.content().slugData);
+  // Per-tool output presence — each tool's layout reads ONLY its own slice.
+  hasGeneratorOutput = computed(() => !!this.content().mainHtmlEn);
+  hasSeoOutput       = computed(() => !!this.content().seoData);
+  hasSlugOutput      = computed(() => !!this.content().slugData);
+  // Aggregate for ZIP/TXT download enablement etc. Generator layout MUST use hasGeneratorOutput().
+  hasOutput = computed(() => this.hasGeneratorOutput() || this.hasSeoOutput() || this.hasSlugOutput());
 
   // "US English Output" only for the US store; plain "English" for all other groups.
   // Uses website recorded on the generated content so a post-generation dropdown change
@@ -483,12 +496,13 @@ export class AppComponent {
   // first available tab rather than leaving the panel blank.
   private readonly _autoSelectTab = effect(() => {
     const tabs = this.tabDescriptors();
+    const mode = this.appMode();
     if (tabs.length === 0) return;
     const ids = new Set(tabs.map(t => t.id));
-    ids.add('seo');
-    ids.add('slugs');
+    if (mode !== 'slug-generator') ids.add('seo');
+    if (mode === 'slug-generator') ids.add('slugs');
     if (!ids.has(this.activeTab())) {
-      this.activeTab.set(tabs[0].id);
+      this.activeTab.set(mode === 'seo-generator' ? 'seo' : mode === 'slug-generator' ? 'slugs' : tabs[0].id);
     }
   });
 
@@ -553,6 +567,14 @@ export class AppComponent {
     const hasDescription = this.description().trim().length > 0;
     return hasWebsite && hasName && hasDescription;
   });
+
+  isSeoFormValid = computed(() =>
+    !!this.seoSelectedWebsite() && this.seoProductName().trim().length > 0
+  );
+
+  isSlugFormValid = computed(() =>
+    !!this.slugSelectedWebsite() && this.slugProductName().trim().length > 0
+  );
 
   isOptimizerValid = computed(() => this.optimizerInputHtml().trim().length > 0);
 
@@ -622,6 +644,16 @@ export class AppComponent {
     }
   }
 
+  onSeoWebsiteChange(event: Event) {
+    const name = (event.target as HTMLSelectElement).value;
+    this.seoSelectedWebsite.set(this.websiteOptions.find(w => w.name === name) ?? null);
+  }
+
+  onSlugWebsiteChange(event: Event) {
+    const name = (event.target as HTMLSelectElement).value;
+    this.slugSelectedWebsite.set(this.websiteOptions.find(w => w.name === name) ?? null);
+  }
+
   onTemplateChange(event: Event) {
     const templateId = (event.target as HTMLSelectElement).value;
     this.selectedTemplateId.set(templateId);
@@ -645,6 +677,8 @@ export class AppComponent {
   }
 
   updateProductName(event: Event) { this.productName.set((event.target as HTMLInputElement).value); }
+  updateSeoProductName(event: Event) { this.seoProductName.set((event.target as HTMLInputElement).value); }
+  updateSlugProductName(event: Event) { this.slugProductName.set((event.target as HTMLInputElement).value); }
   updateCustomInstructions(event: Event) { this.customInstructions.set((event.target as HTMLTextAreaElement).value); }
   updateOptimizerInput(event: Event) { this.optimizerInputHtml.set((event.target as HTMLTextAreaElement).value); }
   updateTranslatorInput(event: Event) { this.translatorInput.set((event.target as HTMLTextAreaElement).value); }
@@ -702,34 +736,34 @@ export class AppComponent {
   }
 
   async generateSeoOnly() {
-    const currentSite = this.selectedWebsite();
-    if (!currentSite || !this.isFormValid()) {
+    const currentSite = this.seoSelectedWebsite();
+    if (!currentSite || !this.isSeoFormValid()) {
       alert(this.uiLabels().alertFillFields);
       return;
     }
     const input: ProductInput = {
       website: currentSite,
-      name: this.productName(),
-      description: this.description(),
+      name: this.seoProductName(),
+      description: this.seoDescription(),
       specs: '',
-      supplementalContent: this.supplementalContent(),
+      supplementalContent: '',
       templateId: this.selectedTemplateId() || undefined,
-      customTemplate: Object.keys(this.customTemplate()).length > 0 ? this.customTemplate() : undefined
+      customTemplate: Object.keys(this.customTemplate()).length > 0 ? this.customTemplate() : undefined,
     };
     this.activeTab.set('seo');
     await this.orchestrator.generateSeoMetadata(input, this.seoUseThinking());
   }
 
   async generateSlugsOnly() {
-    const currentSite = this.selectedWebsite();
-    if (!currentSite || !this.productName().trim()) {
+    const currentSite = this.slugSelectedWebsite();
+    if (!currentSite || !this.isSlugFormValid()) {
       alert(this.uiLabels().alertFillFields);
       return;
     }
     const input: ProductInput = {
       website: currentSite,
-      name: this.productName(),
-      description: this.description(),
+      name: this.slugProductName(),
+      description: '',
       specs: '',
     };
     this.activeTab.set('slugs');
@@ -817,31 +851,67 @@ export class AppComponent {
   closeComparison() { this.showComparison.set(false); }
 
   clearAll() {
-    if (this.appMode() === 'generator' || this.appMode() === 'seo-generator' || this.appMode() === 'slug-generator') {
-      this.productName.set('');
-      this.description.set('');
-      this.specs.set('');
-      this.supplementalContent.set('');
-      this.customInstructions.set('');
-      this.selectedWebsite.set(null);
-      if (this.appMode() === 'generator') this.activeTab.set('html');
-      else if (this.appMode() === 'slug-generator') this.activeTab.set('slugs');
-      else this.activeTab.set('seo');
-    } else if (this.appMode() === 'optimizer') {
-      this.optimizerInputHtml.set('');
-    } else if (this.appMode() === 'translator') {
-      this.translatorInput.set('');
-    } else if (this.appMode() === 'readability') {
-      this.readabilityInput.set('');
-    } else if (this.appMode() === 'copywriter') {
-      this.copywriterInput.set('');
-    } else if (this.appMode() === 'image-tools') {
-      this.imgFiles().forEach(img => URL.revokeObjectURL(img.previewUrl));
-      this.imgFiles.set([]);
-      this.imgResults.set([]);
-    }
+    switch (this.appMode()) {
+      case 'generator':
+        this.selectedWebsite.set(null);
+        this.productName.set('');
+        this.description.set('');
+        this.specs.set('');
+        this.supplementalContent.set('');
+        this.customInstructions.set('');
+        this.activeTab.set('html');
+        this.clearGenImgManifest();
+        this.orchestrator.content.update(c => ({
+          ...c,
+          mainHtmlEn: '',
+          translations: {},
+          faqArtifacts: {},
+          website: undefined,
+        }));
+        this.orchestrator.validationIssues.set([]);
+        break;
 
-    this.orchestrator.resetState();
+      case 'seo-generator':
+        this.seoSelectedWebsite.set(null);
+        this.seoProductName.set('');
+        this.seoDescription.set('');
+        this.activeTab.set('seo');
+        this.orchestrator.content.update(c => ({ ...c, seoData: null }));
+        this.orchestrator.validationIssues.set([]);
+        break;
+
+      case 'slug-generator':
+        this.slugSelectedWebsite.set(null);
+        this.slugProductName.set('');
+        this.activeTab.set('slugs');
+        this.orchestrator.content.update(c => ({ ...c, slugData: null }));
+        break;
+
+      case 'optimizer':
+        this.optimizerInputHtml.set('');
+        this.orchestrator.optimizerOutput.set('');
+        break;
+
+      case 'translator':
+        this.translatorInput.set('');
+        this.orchestrator.translatorOutput.set('');
+        break;
+
+      case 'readability':
+        this.readabilityInput.set('');
+        break;
+
+      case 'copywriter':
+        this.copywriterInput.set('');
+        this.orchestrator.copywriterOutput.set('');
+        break;
+
+      case 'image-tools':
+        this.imgFiles().forEach(img => URL.revokeObjectURL(img.previewUrl));
+        this.imgFiles.set([]);
+        this.imgResults.set([]);
+        break;
+    }
   }
 
   async downloadZip() { await downloadPackage(this.content(), this.productName()); }
