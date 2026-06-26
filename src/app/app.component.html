@@ -376,7 +376,7 @@
     </ng-template>
 
     <!-- GENERATOR FORM in sidebar (shown only after generation) -->
-    @if (appMode() === 'generator' && hasOutput()) {
+    @if (appMode() === 'generator' && hasGeneratorOutput()) {
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
         <ng-container *ngTemplateOutlet="generatorForm"></ng-container>
       </div>
@@ -393,12 +393,12 @@
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             {{ uiLabels().targetWebsite }} <span class="text-red-500">*</span>
           </label>
-          <select 
+          <select
             class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
-            [class.text-slate-400]="!selectedWebsite()"
-            [class.border-red-300]="!selectedWebsite()"
-            [value]="selectedWebsite()?.name || ''"
-            (change)="onWebsiteChange($event)">
+            [class.text-slate-400]="!seoSelectedWebsite()"
+            [class.border-red-300]="!seoSelectedWebsite()"
+            [value]="seoSelectedWebsite()?.name || ''"
+            (change)="onSeoWebsiteChange($event)">
             <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
             @for (site of websiteOptions; track site.name) {
               <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
@@ -429,12 +429,12 @@
            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               {{ uiLabels().productName }} <span class="text-red-500">*</span>
            </label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            [class.border-red-300]="!productName()"
-            [value]="productName()"
-            (input)="updateProductName($event)"
+            [class.border-red-300]="!seoProductName()"
+            [value]="seoProductName()"
+            (input)="updateSeoProductName($event)"
             [placeholder]="uiLabels().placeholderName">
         </div>
 
@@ -444,16 +444,16 @@
           [labels]="uiLabels()"
           [accent]="'teal'"
           [required]="true"
-          [value]="description()"
-          (valueChange)="description.set($event)" />
+          [value]="seoDescription()"
+          (valueChange)="seoDescription.set($event)" />
 
         <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
           <div class="flex justify-between items-center">
             <label class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center">
               <i class="fa-solid fa-key text-teal-500 mr-1.5"></i> {{ uiLabels().seoKeywords }}
             </label>
-            <button (click)="getKeywords()" 
-                    [disabled]="!productName() || !description() || isSuggestingKeywords()"
+            <button (click)="getKeywords()"
+                    [disabled]="!seoProductName() || !seoDescription() || isSuggestingKeywords()"
                     class="text-[10px] bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 px-2 py-1 rounded hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors disabled:opacity-50 font-medium">
               {{ isSuggestingKeywords() ? uiLabels().analyzingKeywords : uiLabels().getKeywords }}
             </button>
@@ -507,10 +507,10 @@
           </label>
           <select
             class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
-            [class.text-slate-400]="!selectedWebsite()"
-            [class.border-red-300]="!selectedWebsite()"
-            [value]="selectedWebsite()?.name || ''"
-            (change)="onWebsiteChange($event)">
+            [class.text-slate-400]="!slugSelectedWebsite()"
+            [class.border-red-300]="!slugSelectedWebsite()"
+            [value]="slugSelectedWebsite()?.name || ''"
+            (change)="onSlugWebsiteChange($event)">
             <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
             @for (site of websiteOptions; track site.name) {
               <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
@@ -525,9 +525,9 @@
           <input
             type="text"
             class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            [class.border-red-300]="!productName()"
-            [value]="productName()"
-            (input)="updateProductName($event)"
+            [class.border-red-300]="!slugProductName()"
+            [value]="slugProductName()"
+            (input)="updateSlugProductName($event)"
             [placeholder]="uiLabels().placeholderName">
         </div>
       </div>
@@ -768,9 +768,9 @@
           }
         </button>
       } @else if (appMode() === 'seo-generator') {
-         <button 
+         <button
           (click)="generateSeoOnly()"
-          [disabled]="isGenerating() || !isFormValid()"
+          [disabled]="isGenerating() || !isSeoFormValid()"
           class="w-full py-3 px-4 bg-teal-600 hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
           @if (isGenerating()) {
             <i class="fa-solid fa-circle-notch fa-spin"></i>
@@ -783,7 +783,7 @@
       } @else if (appMode() === 'slug-generator') {
          <button
           (click)="generateSlugsOnly()"
-          [disabled]="isGenerating() || !selectedWebsite() || !productName().trim()"
+          [disabled]="isGenerating() || !isSlugFormValid()"
           class="w-full py-3 px-4 bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-700 dark:hover:bg-cyan-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
           @if (isGenerating()) {
             <i class="fa-solid fa-circle-notch fa-spin"></i>
@@ -1065,7 +1065,7 @@
 
     <!-- GENERATOR VIEW / SEO VIEW / SLUG VIEW -->
     @if (appMode() === 'generator' || appMode() === 'seo-generator' || appMode() === 'slug-generator') {
-      @if (appMode() === 'generator' && !hasOutput()) {
+      @if (appMode() === 'generator' && !hasGeneratorOutput()) {
         <div class="flex-1 overflow-y-auto p-8">
           <div class="max-w-3xl mx-auto">
             <ng-container *ngTemplateOutlet="generatorForm"></ng-container>
@@ -1073,7 +1073,7 @@
         </div>
       }
 
-      @if (hasOutput() || appMode() === 'seo-generator' || appMode() === 'slug-generator') {
+      @if (hasGeneratorOutput() || appMode() === 'seo-generator' || appMode() === 'slug-generator') {
         <header
           class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200"
           role="tablist"
