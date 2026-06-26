@@ -397,11 +397,10 @@
             class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
             [class.text-slate-400]="!seoSelectedWebsite()"
             [class.border-red-300]="!seoSelectedWebsite()"
-            [value]="seoSelectedWebsite()?.name || ''"
             (change)="onSeoWebsiteChange($event)">
-            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
+            <option value="" [selected]="!seoSelectedWebsite()" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
             @for (site of websiteOptions; track site.name) {
-              <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
+              <option [value]="site.name" [selected]="seoSelectedWebsite()?.name === site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
             }
           </select>
         </div>
@@ -509,11 +508,10 @@
             class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
             [class.text-slate-400]="!slugSelectedWebsite()"
             [class.border-red-300]="!slugSelectedWebsite()"
-            [value]="slugSelectedWebsite()?.name || ''"
             (change)="onSlugWebsiteChange($event)">
-            <option value="" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
+            <option value="" [selected]="!slugSelectedWebsite()" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
             @for (site of websiteOptions; track site.name) {
-              <option [value]="site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
+              <option [value]="site.name" [selected]="slugSelectedWebsite()?.name === site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
             }
           </select>
         </div>
@@ -1100,17 +1098,19 @@
               }
             </button>
           }
-          <button
-            role="tab"
-            id="tab-seo"
-            [attr.aria-selected]="activeTab() === 'seo'"
-            aria-controls="panel-seo"
-            (click)="activeTab.set('seo')"
-            class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
-            [class]="activeTab() === 'seo' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().seoMeta }}
-          </button>
-          @if (content().slugData) {
+          @if (appMode() !== 'slug-generator') {
+            <button
+              role="tab"
+              id="tab-seo"
+              [attr.aria-selected]="activeTab() === 'seo'"
+              aria-controls="panel-seo"
+              (click)="activeTab.set('seo')"
+              class="pb-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap active:opacity-70"
+              [class]="activeTab() === 'seo' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+              {{ uiLabels().seoMeta }}
+            </button>
+          }
+          @if (content().slugData && appMode() === 'slug-generator') {
             <button
               role="tab"
               id="tab-slugs"
