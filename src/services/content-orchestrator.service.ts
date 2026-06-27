@@ -16,6 +16,8 @@ import { getStore, getLangsForStore, US_MEASUREMENT_RULES, isoToHumanLang, taskL
 import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { SlugResponse } from '../app/types';
+import { runRepairGate, appendRepairFeedback } from '../utils/repair-gate';
+import { PromptPayload } from '../prompt-core/payload';
 
 // ── Inline prompts for tools that don't need external templates ─────────────
 
@@ -135,6 +137,7 @@ export class ContentOrchestratorService {
 
   // Post-generation acceptance-criteria check results (see output-validator.ts).
   validationIssues = signal<ValidationIssue[]>([]);
+  maxRepairs = signal(1);
 
   async generate(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
@@ -144,14 +147,29 @@ export class ContentOrchestratorService {
     try {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);
 
-      // Step 1 — Generate base English HTML
+      // Step 1 — Generate base English HTML (with one repair attempt on hard errors)
       this.progressMessage.set(useThinking ? 'Generating HTML Description (Deep Thinking)…' : 'Generating HTML Description…');
-      const promptA = buildPromptA(input);
-      let htmlEn = await this.llm.generateText(promptA, useThinking);
-      htmlEn = htmlEn.replace(/```html/g, '').replace(/```/g, '').trim();
-      htmlEn = wrapVideoFigures(htmlEn, input.name);
-      htmlEn = wrapImageFigures(htmlEn);
+      const basePayloadA = buildPromptA(input);
+      const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
+        let html = await this.llm.generateText(payload, useThinking);
+        html = html.replace(/```html/g, '').replace(/```/g, '').trim();
+        html = wrapVideoFigures(html, input.name);
+        html = wrapImageFigures(html);
+        return html;
+      };
+      const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
+        label: 'HTML (base)',
+        maxRepairs: this.maxRepairs(),
+        basePayload: basePayloadA,
+        produce: produceHtmlA,
+        validate: html => validateGeneratedHtml(html, 'HTML (base)', input.name),
+        withFeedback: appendRepairFeedback,
+        onAttempt: (n, c) =>
+          this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+      });
+      if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
       this.content.update(c => ({ ...c, mainHtmlEn: htmlEn }));
+      this.validationIssues.set(htmlIssues);
 
       // Step 2 — Generate SEO Metadata
       // Pass the freshly generated HTML as context so meta_description can pull a real
