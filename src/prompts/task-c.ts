@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { US_MEASUREMENT_RULES } from '../prompt-core/constants';
+import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 function pack(instruction: string, html: string): PromptPayload {
@@ -29,7 +29,9 @@ export function buildPromptC(html: string, targetLang: string, storeName: string
   return pack(`TASK C — TRANSLATE HTML TO ${targetLang} (pure HTML body only).
 Standalone, complete description. Numeric values IDENTICAL. Preserve structure, classes, inline
 styles, <hr> after </section>. Translate visible text + alt="" / title="". Never translate
-tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script. Never alter <img src="">.
+tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script, but TRANSLATE the generic descriptor and reorder it
+category-first, and localize embedded units/quantities — see [PRODUCT NAME LOCALIZATION].
+Never alter <img src="">.
 [UNITS] If ${targetLang} is Ukrainian or Russian: cyrillize unit abbreviations in ALL visible text
 including spec-table cells — ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с.
 Keep W/V/A/mAh/μm/dpi/Hz/L/ml in Latin and °C unchanged. For any other language keep all units
@@ -38,6 +40,7 @@ in Latin. NEVER change the numeric value — only the unit abbreviation.
 AND spec-table <td> cells alike (Ukrainian/Russian/Polish/Spanish/German → decimal comma). This
 includes numbers embedded in a repeated Product Name (e.g. in the spec-table heading or closing
 CTA). Never change the digits themselves or the unit — only the separator punctuation localizes.
+${PRODUCT_NAME_LOCALIZATION}
 [LABELS TO TRANSLATE]
 - "Technical specifications of the [Product Name]" → translate naturally to ${targetLang}
 - "What's in the box" → Ukrainian: "Комплектація" | Russian: "Комплектация" | Polish: "Co w zestawie"
@@ -62,12 +65,14 @@ Do NOT output the same text unchanged.
 - Metric units only (mm, °C, kg). Do NOT use Imperial.
 - Tone: Direct, confident, professional but accessible.
 
+${PRODUCT_NAME_LOCALIZATION}
+
 [LABELS TO ADAPT (European English)]
 - "Technical specifications of the [Product Name]" → keep in English, British style
 - "What's in the Box" → keep (capitalise "Box")
 - Commercial closing H2 → "why-buy" British/European English: "Why buy the [Product] from [Store]?". Keep the store-trust signals and brand guarantee in the body.
 [CONSTRAINTS]
-- Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab).
+- Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab); keep English brand-first order and "pcs" (see [PRODUCT NAME LOCALIZATION]).
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add marketing claims not in the source.
 - Translate alt="…" and title="…" attribute values.
@@ -86,6 +91,8 @@ Keep W/V/A/μm/Hz/ml/L in Latin and °C unchanged. NEVER change the numeric valu
 AND spec-table <td> cells alike ("1.75 mm" → "1,75 мм"). This includes numbers embedded in a
 repeated Product Name. Never change the digits or the unit — only the separator localizes.
 
+${PRODUCT_NAME_LOCALIZATION}
+
 [LABELS TO TRANSLATE (Ukrainian)]
 - "Technical specifications of the [Product Name]" → "Технічні характеристики [Product Name]"
 - "What's in the box" → "Комплектація"
@@ -97,7 +104,7 @@ repeated Product Name. Never change the digits or the unit — only the separato
 - Anti-anglicism: "друк" not "прінт", "ПЗ" not "софт". Established tech terms may stay.
 
 [CONSTRAINTS]
-- Do NOT translate Brand/Model Names.
+- Do NOT translate Brand/Model Names; TRANSLATE the generic descriptor, reorder it category-first, "pcs" → "шт" (see [PRODUCT NAME LOCALIZATION]).
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add new information.
 - Translate alt="…" and title="…".
@@ -130,6 +137,8 @@ If the input is already in Spanish, apply Castilian style improvements and SEO o
 captions, AND spec-table <td> cells alike ("1.75 mm" → "1,75 mm"). This includes numbers embedded
 in a repeated Product Name. Never change the digits or the unit — only the separator localizes.
 
+${PRODUCT_NAME_LOCALIZATION}
+
 [STYLE — CASTILIAN SPANISH]
 - Use "Tú" (Tuteo). Creates trust in Spain.
 - Active voice. Instead of "It is recommended" → "Te recomendamos".
@@ -138,7 +147,7 @@ in a repeated Product Name. Never change the digits or the unit — only the sep
 - Focus on "acabados profesionales" and "fiabilidad".
 
 [CONSTRAINTS]
-- Keep brand/model names in original Latin script (Creality, Bambu Lab).
+- Keep brand/model names in original Latin script (Creality, Bambu Lab); TRANSLATE the generic descriptor, reorder it category-first, es-ES uses "uds" (see [PRODUCT NAME LOCALIZATION]).
 - Do NOT alter <img src="…"> URLs or change hrefs to "#".
 - Do NOT add information not in the source.
 - Translate alt="…" and title="…".
@@ -167,6 +176,8 @@ localization rules, improve flow, ensure "native US marketing" feel.
 
 ${US_MEASUREMENT_RULES}
 
+${PRODUCT_NAME_LOCALIZATION}
+
 ${labelsBlock}
 
 [LOCALIZATION TABLE]
@@ -185,7 +196,7 @@ ${labelsBlock}
 - US tone: Direct, confident, professional. No "It is important to note that…".
 
 [CONSTRAINTS]
-- Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab).
+- Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab); English keeps brand-first + "pcs", es-MX translates descriptor category-first + "pzas" (see [PRODUCT NAME LOCALIZATION]).
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add new information.
 - Translate alt="…" and title="…".
