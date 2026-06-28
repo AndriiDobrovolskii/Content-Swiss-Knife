@@ -140,9 +140,21 @@ export class ContentOrchestratorService {
   validationIssues = signal<ValidationIssue[]>([]);
   maxRepairs = signal(1);
 
+  /** Identifies the exact product+store the current slugData was approved for, so the main
+   *  pipeline and standalone SEO reuse the editor-approved localized name instead of
+   *  regenerating it (and risking LLM drift away from the approved string). */
+  private approvedSlugKey = signal<string | null>(null);
+  private slugKey(input: ProductInput): string {
+    return `${input.website.name}::${input.name.trim()}`;
+  }
+
   async generate(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {} });
+    // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
+    // (from a prior standalone Slug run); otherwise start clean. This makes the approved
+    // localized name authoritative across H1/title/URL without ever reusing a stale name.
+    const reusedSlug = this.approvedSlugKey() === this.slugKey(input) ? this.content().slugData ?? null : null;
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {} });
     this.validationIssues.set([]);
 
     try {
@@ -173,26 +185,36 @@ export class ContentOrchestratorService {
       this.content.update(c => ({ ...c, mainHtmlEn: htmlEn }));
       this.validationIssues.set(htmlIssues);
 
-      // Step 2 — Generate SEO Metadata
-      // Pass the freshly generated HTML as context so meta_description can pull a real
-      // hard spec / USP from the product (prompt requires "1 hard spec from context").
+      // Step 2 — SEO slugs FIRST. The localized `name` per locale is the single source of
+      // truth for the storefront product-name field (→ H1) AND the Task B title core.
+      // Reuse an editor-approved slug if present for THIS product+store; else generate.
+      // Non-blocking either way: a slug failure must not abort SEO/translations/FAQ.
+      let localizedNames: Record<string, string> | undefined;
+      if (reusedSlug?.slugs?.length) {
+        this.progressMessage.set('Reusing approved product name & slugs…');
+        localizedNames = Object.fromEntries(reusedSlug.slugs.map(s => [s.language, s.name]));
+      } else {
+        try {
+          this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
+          const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, htmlEn);
+          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
+          const slugData = this.normalizeSlugResponse(rawSlug);
+          this.content.update(c => ({ ...c, slugData }));
+          this.approvedSlugKey.set(this.slugKey(input));
+          localizedNames = Object.fromEntries(slugData.slugs.map(s => [s.language, s.name]));
+        } catch (e) {
+          console.warn('[Slugs] Generation failed; SEO H1 falls back to formula.', e);
+        }
+      }
+
+      // Step 3 — Generate SEO Metadata. Localized names (if any) are consumed VERBATIM as
+      // h1 + title core; HTML context still feeds meta_description's hard spec.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
-      const promptB = buildPromptB(input.website.name, input.name, seoLangs, htmlEn);
+      const promptB = buildPromptB(input.website.name, input.name, seoLangs, htmlEn, localizedNames);
       const seoJson = await this.llm.generateJson(promptB, useThinking);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      // Step 2.5 — SEO slugs (BCP-47 keyed, aligned with seoData). Non-blocking: a slug
-      // failure must not abort translations/FAQ, so it gets its own try/catch.
-      try {
-        this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
-        const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, htmlEn);
-        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
-        this.content.update(c => ({ ...c, slugData: this.normalizeSlugResponse(rawSlug) }));
-      } catch (e) {
-        console.warn('[Slugs] Generation failed; continuing without slugs.', e);
-      }
-
-      // Step 3 — Translations (Ukrainian always first)
+      // Step 4 — Translations (Ukrainian always first)
       const sortedTransLangs = [...transLangs].sort((a, b) => {
         const aIsUk = a === 'UA' || a === 'Ukrainian';
         const bIsUk = b === 'UA' || b === 'Ukrainian';
@@ -222,7 +244,7 @@ export class ContentOrchestratorService {
         }));
       }
 
-      // Step 4 — FAQ artifacts (schema-free, for Journal theme native module fields).
+      // Step 5 — FAQ artifacts (schema-free, for Journal theme native module fields).
       // Optional: runs only when Supplemental Content is supplied. Description and specs
       // are still passed to the builder as grounding context, but they do not trigger it.
       if (input.supplementalContent?.trim()) {
@@ -261,14 +283,21 @@ export class ContentOrchestratorService {
 
   async generateSeoMetadata(input: ProductInput, useThinking = false): Promise<void> {
     this.isGenerating.set(true);
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null });
+    // Reuse slugData ONLY if it was approved for THIS exact product+store, so a Slug→SEO
+    // standalone run feeds the approved localized name to B as h1 + title core. Otherwise
+    // clear it (and B falls back to the English formula → independence preserved).
+    const existingSlug = this.approvedSlugKey() === this.slugKey(input) ? this.content().slugData ?? null : null;
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: existingSlug });
     this.validationIssues.set([]);
 
     try {
       const { seoLangs } = getLangsForStore(input.website.name);
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
 
-      const promptB = buildPromptB(input.website.name, input.name, seoLangs, input.description);
+      const localizedNames = existingSlug?.slugs?.length
+        ? Object.fromEntries(existingSlug.slugs.map(s => [s.language, s.name]))
+        : undefined;
+      const promptB = buildPromptB(input.website.name, input.name, seoLangs, input.description, localizedNames);
       const seoJson = await this.llm.generateJson(promptB, useThinking);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
@@ -302,6 +331,7 @@ export class ContentOrchestratorService {
       const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
       const slugData = this.normalizeSlugResponse(rawSlug);
       this.content.update(c => ({ ...c, slugData }));
+      this.approvedSlugKey.set(this.slugKey(input));
 
       this.validationIssues.set(validateSlugs(slugData));
 

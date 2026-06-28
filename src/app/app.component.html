@@ -37,59 +37,59 @@
       <!-- Mode Switcher -->
       <div class="space-y-1">
         <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
-          <button 
-            (click)="setMode('generator')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'generator' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().generator }}
-          </button>
-          <button 
-            (click)="setMode('optimizer')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'optimizer' ? 'bg-white dark:bg-slate-600 text-purple-600 dark:text-purple-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().optimizer }}
-          </button>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
-          <button 
-            (click)="setMode('translator')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'translator' ? 'bg-white dark:bg-slate-600 text-emerald-600 dark:text-emerald-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().translator }}
-          </button>
-           <button 
-            (click)="setMode('image-tools')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'image-tools' ? 'bg-white dark:bg-slate-600 text-orange-600 dark:text-orange-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().imageTools }}
-          </button>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
-           <button 
-            (click)="setMode('seo-generator')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'seo-generator' ? 'bg-white dark:bg-slate-600 text-teal-600 dark:text-teal-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().seoGenerator }}
-          </button>
-          <button 
-            (click)="setMode('copywriter')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'copywriter' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().copywriter }}
-          </button>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
-          <button
-            (click)="setMode('readability')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'readability' ? 'bg-white dark:bg-slate-600 text-pink-600 dark:text-pink-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            <i class="fa-solid fa-glasses mr-1"></i> {{ uiLabels().readability }}
-          </button>
           <button
             (click)="setMode('slug-generator')"
             class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
             [class]="appMode() === 'slug-generator' ? 'bg-white dark:bg-slate-600 text-cyan-600 dark:text-cyan-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             <i class="fa-solid fa-link mr-1"></i> {{ uiLabels().slugGenerator }}
+          </button>
+          <button
+            (click)="setMode('generator')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'generator' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().generator }}
+          </button>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
+          <button
+            (click)="setMode('optimizer')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'optimizer' ? 'bg-white dark:bg-slate-600 text-purple-600 dark:text-purple-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().optimizer }}
+          </button>
+          <button
+            (click)="setMode('translator')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'translator' ? 'bg-white dark:bg-slate-600 text-emerald-600 dark:text-emerald-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().translator }}
+          </button>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
+          <button
+            (click)="setMode('image-tools')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'image-tools' ? 'bg-white dark:bg-slate-600 text-orange-600 dark:text-orange-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().imageTools }}
+          </button>
+          <button
+            (click)="setMode('seo-generator')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'seo-generator' ? 'bg-white dark:bg-slate-600 text-teal-600 dark:text-teal-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().seoGenerator }}
+          </button>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
+          <button
+            (click)="setMode('copywriter')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'copywriter' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            {{ uiLabels().copywriter }}
+          </button>
+          <button
+            (click)="setMode('readability')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'readability' ? 'bg-white dark:bg-slate-600 text-pink-600 dark:text-pink-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            <i class="fa-solid fa-glasses mr-1"></i> {{ uiLabels().readability }}
           </button>
         </div>
       </div>
