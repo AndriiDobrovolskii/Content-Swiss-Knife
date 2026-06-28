@@ -152,9 +152,11 @@ export function validateGeneratedHtml(
   }
 
   // Number glued to a unit, e.g. "1.75mm" or "200°C".
-  const htmlForUnitCheck = productName?.trim()
+  // Strip href/src values first so URL slugs (e.g. /product/300mm-s) don't fire false positives.
+  const htmlForUnitCheck = (productName?.trim()
     ? html.replaceAll(productName.trim(), '\x00PRODUCT_NAME\x00')
-    : html;
+    : html
+  ).replace(/\s(?:href|src)="[^"]*"/gi, '');
 
   const gluedUnit = htmlForUnitCheck.match(/\d(?:W|mm|cm|°C|kg|µm|μm|mm\/s|MPa|GPa)\b/);
   if (gluedUnit) {

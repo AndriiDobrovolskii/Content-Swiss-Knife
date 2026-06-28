@@ -285,6 +285,16 @@ describe('validateGeneratedHtml — Rule: unit-spacing', () => {
     const html = `<p>${productName} has a nozzle of 0.4mm.</p>`;
     expect(findRule(validateGeneratedHtml(html, 'test', productName), 'unit-spacing')).toBeDefined();
   });
+
+  it('does NOT flag glued unit inside href attribute (URL slug)', () => {
+    const html = '<a href="/product/300mm-speed">link</a>';
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'unit-spacing');
+  });
+
+  it('does NOT flag glued unit inside src attribute (URL slug)', () => {
+    const html = '<img src="/images/2mm-nozzle.png" alt="nozzle">';
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'unit-spacing');
+  });
 });
 
 describe('validateGeneratedHtml — Rule: decimal-separator', () => {
