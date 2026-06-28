@@ -22,9 +22,16 @@ const TASK_B_INSTRUCTION = `TASK B — GENERATE SEO METADATA (RAW JSON ONLY, no 
 (✅ ➔ ✨ | + % !) and every accented/Cyrillic character counts as exactly 1.
 
 — H1 —
-Formula: "[Product] [Model/Series]". Strip fluff: Buy / Best Price / New / Cheap / Sale.
-Strictly technical. This exact string becomes the TITLE CORE.
-Example: "Creality K1 Max" (NOT "Buy Creality K1 Max Cheap").
+PRIMARY RULE — CONSUME, DO NOT GENERATE: When the [LOCALIZED NAMES] block in [INPUT DATA]
+provides a name for this locale, use that string VERBATIM (character-for-character) as the
+\`h1\` field AND the TITLE CORE. It is already localized upstream (word order, head-noun
+translation, number format, locale decimal separator) and MUST match the storefront
+product-name field byte-for-byte. Never re-order, re-translate, reformat, transliterate,
+or strip it.
+FALLBACK — only when NO localized name is given for this locale: derive the core via the
+formula "[Product] [Model/Series]", strip fluff (Buy / Best Price / New / Cheap / Sale),
+keep it strictly technical. Example: "Creality K1 Max" (NOT "Buy Creality K1 Max Cheap").
+The resulting string (consumed or fallback) is the TITLE CORE used by meta_title below.
 
 — meta_title —
 MUST begin with the H1 core verbatim (character-for-character). This aligns title↔H1 and
@@ -85,6 +92,13 @@ ANCHOR 3 — same product → step 3, bare core (de-DE, budget 50):
   step 3 result:    "Bambu Lab PETG Translucent Orange 1.75mm 1kg"                [44 ✓ bare core]
   meta_description: "Drucken Sie transparente Bauteile mit Bambu Lab PETG Translucent Orange: 1,75mm ±0,03mm, 1kg, RFID-Chip für AMS. Jetzt bestellen ➔"  [130 ✓ CTA from char 113]
 
+ANCHOR 4 — localized name as core (uk-UA, budget 55): localized name PROVIDED = category-first.
+  Localized name: "Сопло Bambu Lab загартована сталь 0,4 мм"
+  h1:               "Сопло Bambu Lab загартована сталь 0,4 мм"                    [verbatim — NOT re-ordered to brand-first, NOT re-translated]
+  meta_title:       "Сопло Bambu Lab загартована сталь 0,4 мм | StoreName"        [≈52 ✓ step 2, suffix kept]
+  meta_description: "Друкуйте точні деталі: сопло Bambu Lab із загартованої сталі 0,4 мм, підвищена зносостійкість. Замовте зараз ➔"
+  Note: the core is the localized name UNCHANGED; the cascade only appends/drops the benefit and suffix around it.
+
 — OUTPUT SHAPE —
 {"site_name":"…","seo_data":[{"language":"…","h1":"…","meta_title":"…","meta_description":"…"}]}
 Return exactly one entry per requested language.`;
@@ -94,15 +108,22 @@ export function buildPromptB(
   productName: string,
   languages: string[],
   contextHtmlOrDescription?: string,
+  localizedNames?: Record<string, string>,   // BCP-47 lang → localized product name (Task Slug)
 ): PromptPayload {
   const store = getStore(storeName);
   const context = contextHtmlOrDescription
     ? `\n[CONTEXT — extract a USP/spec from here]:\n${contextHtmlOrDescription.substring(0, 1000)}` : '';
+  const namesBlock = localizedNames && Object.keys(localizedNames).length
+    ? '\n[LOCALIZED NAMES — use VERBATIM as h1 + title core, one per locale]:\n' +
+      languages
+        .map(l => `  ${l}: "${localizedNames[l] ?? '(none — use formula fallback)'}"`)
+        .join('\n')
+    : '';
   const userContent = `[INPUT DATA]
 [Store Name]: "${storeName}"
 [Site Suffix]: "${store.siteSuffix}"
 [Product Name]: "${productName}"
-[Target Languages]: ${languages.join(', ')}${context}`;
+[Target Languages]: ${languages.join(', ')}${namesBlock}${context}`;
   return {
     systemBlocks: [
       { text: TASK_B_SYSTEM,        cache: true },
