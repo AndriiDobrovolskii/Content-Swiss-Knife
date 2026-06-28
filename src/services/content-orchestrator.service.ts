@@ -140,9 +140,9 @@ export class ContentOrchestratorService {
   validationIssues = signal<ValidationIssue[]>([]);
   maxRepairs = signal(1);
 
-  /** Identifies the exact product+store the current slugData was approved for, so the main
-   *  pipeline and standalone SEO reuse the editor-approved localized name instead of
-   *  regenerating it (and risking LLM drift away from the approved string). */
+  /** Tracks the product+store key of the last successfully generated slug, so the main
+   *  pipeline and standalone SEO can reuse the localized names without a second LLM call.
+   *  Key format: "${website.name}::${name.trim()}". Cleared implicitly on mismatch. */
   private approvedSlugKey = signal<string | null>(null);
   private slugKey(input: ProductInput): string {
     return `${input.website.name}::${input.name.trim()}`;
@@ -191,7 +191,6 @@ export class ContentOrchestratorService {
       // Non-blocking either way: a slug failure must not abort SEO/translations/FAQ.
       let localizedNames: Record<string, string> | undefined;
       if (reusedSlug?.slugs?.length) {
-        this.progressMessage.set('Reusing approved product name & slugs…');
         localizedNames = Object.fromEntries(reusedSlug.slugs.map(s => [s.language, s.name]));
       } else {
         try {
@@ -204,6 +203,10 @@ export class ContentOrchestratorService {
           localizedNames = Object.fromEntries(slugData.slugs.map(s => [s.language, s.name]));
         } catch (e) {
           console.warn('[Slugs] Generation failed; SEO H1 falls back to formula.', e);
+          this.validationIssues.update(issues => [
+            ...issues,
+            { severity: 'warning', rule: 'slug-generation-failed', detail: 'Slug generation failed — H1 and meta_title fall back to the English formula for all locales. Re-run Slug separately or regenerate.', context: 'Slugs' },
+          ]);
         }
       }
 
