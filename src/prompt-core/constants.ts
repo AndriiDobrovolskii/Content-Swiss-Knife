@@ -135,3 +135,55 @@ export const METRIC_MEASUREMENT_RULES = `[MEASUREMENT] Use standard Metric units
 SPACING IS MANDATORY: a single space between number and unit everywhere (body, table cells, alt text).
 ✅ "10 W", "1.75 mm", "200 °C", "-5 °C – 50 °C"   ❌ "10W", "1.75mm", "200°C"
 Normalize spacing even if the source omits it ("10W" → "10 W").`;
+
+/**
+ * Product-name localization rule (Schema v3 §0/§7/§9 consistency) — THE single copy.
+ * Shared by the master system prompt (Task A/B native generation) AND Task C (translation),
+ * so the Product Name localizes identically no matter which path produced the language version.
+ * Behaviour: the GENERIC DESCRIPTIVE CATEGORY (e.g. "Reflective Markers") is TRANSLATED and, for
+ * non-English locales, placed FIRST (category-first); brand/sub-brand/model stay Latin in the
+ * middle; embedded units, number separators, and the count abbreviation localize. English keeps
+ * brand-first order. Count abbreviation split: es-ES "uds" vs es-MX "pzas".
+ */
+export const PRODUCT_NAME_LOCALIZATION = `[PRODUCT NAME LOCALIZATION — localize the Product Name in EVERY place it appears]
+The Product Name recurs in the hook <p>, the §2 killer-specs table heading, spec-table <h2>/<h3>,
+the §7 "Technical specifications of the [Product Name]" header, figure captions, and the §9
+commercial-closing H2 — render it in ONE consistent localized form across all of them.
+
+Split the Product Name into three parts and treat each differently:
+1. GENERIC DESCRIPTIVE CATEGORY — the common noun(s) naming WHAT the product is
+   ("Reflective Markers", "Filament", "Resin", "Build Plate", "Cleaning Kit"). TRANSLATE it into the
+   target language using natural, normative terminology (anti-anglicism rules apply).
+2. BRAND / SUB-BRAND / MODEL — proper names ("Shining3D", "EinScan", "EINSTAR VEGA", "Bambu Lab",
+   "Creality Ender"). KEEP in original Latin script — NEVER translate or transliterate.
+3. EMBEDDED SPECS — dimensions and quantities ("12 mm", "1500 pcs"). Localize units, number
+   separators and the count abbreviation (below); never change the digits.
+
+WORD ORDER:
+- English (en-GB / en-ES / en-US): brand-first → [Brand Model] [Descriptive] [specs].
+- uk-UA / ru-UA / pl-PL / de-DE / es-ES / es-MX: category-first → [Translated descriptive]
+  [Brand Model] [specs].
+
+COUNT / QUANTITY ABBREVIATION ("pcs" / "pieces" / "units" / "pack"):
+  Ukrainian (uk-UA) → "шт"  ·  Russian (ru-UA) → "шт"  ·  Polish (pl-PL) → "szt"  ·
+  German (de-DE) → "Stk"  ·  Castilian Spanish (es-ES) → "uds"  ·
+  Mexican Spanish (es-MX) → "pzas"  ·  English (en-GB / en-ES / en-US) → "pcs".
+UNITS → follow the unit rules above ([CYRILLIC UNITS] / [UNITS]): "12 mm" → uk/ru "12 мм"; keep
+Latin for en/pl/de/es. NUMBER SEPARATORS → follow the number-format rules above ([NUMBER FORMATTING]
+/ [NUMBERS]). The digits never change.
+
+WORKED EXAMPLE — source "Shining3D EinScan Reflective Markers 12 mm 1500 pcs":
+  en-GB / en-ES / en-US → Shining3D EinScan Reflective Markers 12 mm 1500 pcs
+  es-ES → Marcadores reflectantes Shining3D EinScan 12 mm 1500 uds
+  es-MX → Marcadores reflectantes Shining3D EinScan 12 mm 1500 pzas
+  uk-UA → Відбиваючі маркери Shining3D EinScan 12 мм 1500 шт
+  ru-UA → Маркеры отражающие Shining3D EinScan 12 мм 1500 шт
+  pl-PL → Markery odbijające Shining3D EinScan 12 mm 1500 szt
+  de-DE → Reflektive Marker Shining3D EinScan 12 mm 1500 Stk
+
+EDGE CASE — if the name is purely brand + model with NO generic descriptor (e.g. "Bambu Lab X1
+Carbon"), there is nothing to translate or reorder: keep brand/model Latin and only localize the
+embedded units / numbers / counts.
+Never add, drop, or invent tokens; aside from the descriptive↔brand reordering above, preserve token
+order and identical numeric values — only the translated descriptor, unit script, separators, and
+count abbreviation change.`;

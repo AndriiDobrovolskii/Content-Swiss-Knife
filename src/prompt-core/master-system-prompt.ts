@@ -1,4 +1,4 @@
-import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, BRAND_GUARANTEE_EN } from './constants';
+import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION } from './constants';
 
 /**
  * STATIC system prompt shared by Task A / B / C and all translations.
@@ -35,6 +35,8 @@ NEVER change the numeric value — only the unit abbreviation. Spacing rule stil
 ("200 mm" → "200 мм"). For English/Polish/German/Spanish output: keep ALL units in Latin.
 
 ${NUMBER_FORMAT_RULES}
+
+${PRODUCT_NAME_LOCALIZATION}
 
 [MICRODATA ARCHITECTURE — CRITICAL]
 The store CMS already emits a complete JSON-LD Product at page level. The description body MUST NOT
