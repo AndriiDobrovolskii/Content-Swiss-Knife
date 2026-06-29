@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION } from '../prompt-core/constants';
+import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 function pack(instruction: string, html: string): PromptPayload {
@@ -12,21 +12,40 @@ function pack(instruction: string, html: string): PromptPayload {
   };
 }
 
-export function buildPromptC(html: string, targetLang: string, storeName: string, websiteGroup?: string): PromptPayload {
+export function buildPromptC(
+  html: string,
+  targetLang: string,
+  storeName: string,
+  websiteGroup?: string,
+  templateId?: string,
+): PromptPayload {
+  // Select the localization-specific instruction first…
+  let instruction: string;
   if (targetLang === 'European English' || targetLang === 'European English (EXPERT3D)') {
-    return pack(EU_EN_INSTRUCTION, html);
-  }
-  if ((targetLang === 'Ukrainian' && websiteGroup === 'US') || targetLang === 'Ukrainian (Expert-3DPrinter)') {
-    return pack(US_UK_INSTRUCTION, html);
-  }
-  if (targetLang.includes('American English') || targetLang.includes('American Spanish')) {
-    return pack(usInstruction(targetLang), html);
-  }
-  if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && ['EXPERT3D', 'Impresora-3D'].includes(storeName))) {
-    return pack(EXPERT3D_ES_INSTRUCTION, html);
+    instruction = EU_EN_INSTRUCTION;
+  } else if ((targetLang === 'Ukrainian' && websiteGroup === 'US') || targetLang === 'Ukrainian (Expert-3DPrinter)') {
+    instruction = US_UK_INSTRUCTION;
+  } else if (targetLang.includes('American English') || targetLang.includes('American Spanish')) {
+    instruction = usInstruction(targetLang);
+  } else if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && ['EXPERT3D', 'Impresora-3D'].includes(storeName))) {
+    instruction = EXPERT3D_ES_INSTRUCTION;
+  } else {
+    instruction = genericInstruction(targetLang);
   }
 
-  return pack(`TASK C — TRANSLATE HTML TO ${targetLang} (pure HTML body only).
+  // …then, for consumables, append the overlay so the simplified §C1–§C6 structure and the
+  // 2500-char limit survive translation regardless of which variant was chosen above.
+  if (templateId === 'consumables-resin') {
+    instruction += `\n\n${CONSUMABLES_TRANSLATION_OVERLAY}`;
+  }
+
+  return pack(instruction, html);
+}
+
+// ── Generic (default) translation instruction ──────────────────────────────
+
+function genericInstruction(targetLang: string): string {
+  return `TASK C — TRANSLATE HTML TO ${targetLang} (pure HTML body only).
 Standalone, complete description. Numeric values IDENTICAL. Preserve structure, classes, inline
 styles, <hr> after </section>. Translate visible text + alt="" / title="". Never translate
 tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script, but TRANSLATE the generic descriptor and reorder it
@@ -49,7 +68,7 @@ ${PRODUCT_NAME_LOCALIZATION}
 COMMERCIAL CLOSING H2: it is a "why-buy from store" question. Translate it naturally to ${targetLang}
 as such (e.g. "Why buy [Product] from [Store]?"). Keep trust signals + the brand-guarantee sentence in
 the body. Do NOT rewrite it into a transactional "Buy [Product] — price…" headline.
-No geographic, brand/store, or added-claim changes. Return ONLY raw HTML.`, html);
+No geographic, brand/store, or added-claim changes. Return ONLY raw HTML.`;
 }
 
 // ── Specialized variant instructions (localization-specific only; role/format inherited from master) ──

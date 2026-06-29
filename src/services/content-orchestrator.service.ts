@@ -237,7 +237,7 @@ export class ContentOrchestratorService {
       });
       for (const lang of sortedTransLangs) {
         this.progressMessage.set(`Translating to ${lang}…`);
-        const basePayloadC = buildPromptC(htmlEn, lang, input.website.name, input.website.group);
+        const basePayloadC = buildPromptC(htmlEn, lang, input.website.name, input.website.group, input.templateId);
         const locale = taskLangToIso(lang, input.website.name);
         const { artifact: translatedHtml, repairsUsed: cRepairs } = await runRepairGate<string>({
           label: `HTML (${lang})`,
