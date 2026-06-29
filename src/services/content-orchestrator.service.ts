@@ -214,7 +214,17 @@ export class ContentOrchestratorService {
       // h1 + title core; HTML context still feeds meta_description's hard spec.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
       const promptB = buildPromptB(input.website.name, input.name, seoLangs, htmlEn, localizedNames);
-      const seoJson = await this.llm.generateJson(promptB, useThinking);
+      const { artifact: seoJson, repairsUsed: bRepairs } = await runRepairGate({
+        label: 'SEO metadata',
+        maxRepairs: this.maxRepairs(),
+        basePayload: promptB,
+        produce: (payload) => this.llm.generateJson(payload, useThinking),
+        validate: (json) => validateSeoMetadata(json, ''),
+        withFeedback: appendRepairFeedback,
+        onAttempt: (n, c) =>
+          this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+      });
+      if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
       // Step 4 — Translations (Ukrainian always first)
@@ -227,20 +237,27 @@ export class ContentOrchestratorService {
       });
       for (const lang of sortedTransLangs) {
         this.progressMessage.set(`Translating to ${lang}…`);
-        const promptC = buildPromptC(htmlEn, lang, input.website.name, input.website.group);
-        let translatedHtml = await this.llm.generateText(promptC, useThinking);
-        translatedHtml = translatedHtml.replace(/```html/g, '').replace(/```/g, '').trim();
-
-        // EXPERT3D Spanish URL replacement
-        if (input.website.name === 'EXPERT3D' && lang === 'ES') {
-          translatedHtml = this.applySpanishExpert3dReplacements(translatedHtml);
-        }
-
-        // Re-assert the image figure structure: Task C can drift styles/attrs
-        // while translating, so normalize each language output (idempotent).
-        translatedHtml = wrapImageFigures(translatedHtml);
-        translatedHtml = fixNumberFormatting(translatedHtml);
-
+        const basePayloadC = buildPromptC(htmlEn, lang, input.website.name, input.website.group, input.templateId);
+        const locale = taskLangToIso(lang, input.website.name);
+        const { artifact: translatedHtml, repairsUsed: cRepairs } = await runRepairGate<string>({
+          label: `HTML (${lang})`,
+          maxRepairs: this.maxRepairs(),
+          basePayload: basePayloadC,
+          produce: async (payload) => {
+            let html = await this.llm.generateText(payload, useThinking);
+            html = html.replace(/```html/g, '').replace(/```/g, '').trim();
+            if (input.website.name === 'EXPERT3D' && lang === 'ES') {
+              html = this.applySpanishExpert3dReplacements(html);
+            }
+            html = wrapImageFigures(html);
+            return fixNumberFormatting(html);
+          },
+          validate: (html) => validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId }),
+          withFeedback: appendRepairFeedback,
+          onAttempt: (n, c) =>
+            this.progressMessage.set(`Repairing translation ${lang} (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+        });
+        if (cRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${cRepairs} repair(s) applied`);
         this.content.update(c => ({
           ...c,
           translations: { ...c.translations, [lang]: translatedHtml }
@@ -256,15 +273,39 @@ export class ContentOrchestratorService {
           const humanLang = isoToHumanLang(isoCode);
 
           this.progressMessage.set(`Generating FAQ artifact (${isoCode})…`);
-          let faqHtml = await this.llm.generateText(
-            buildPromptFaq(input.name, input.description, input.specs, input.supplementalContent ?? '', humanLang, store.currencySymbol),
-            useThinking,
+          const basePayloadFaq = buildPromptFaq(
+            input.name, input.description, input.specs,
+            input.supplementalContent ?? '', humanLang, store.currencySymbol,
           );
-          faqHtml = faqHtml.replace(/```html/g, '').replace(/```/g, '').trim();
+          const validateFaqHtml = (html: string): ValidationIssue[] => {
+            const issues = validateGeneratedHtml(html, `FAQ (${isoCode})`, input.name, isoCode);
+            if (html && !html.trim().startsWith('<')) {
+              issues.push({
+                severity: 'error', rule: 'non-html-output',
+                detail: 'Output is not HTML (does not start with "<").',
+                context: `FAQ (${isoCode})`,
+              });
+            }
+            return issues;
+          };
+          const { artifact: faqHtml, repairsUsed: faqRepairs } = await runRepairGate<string>({
+            label: `FAQ (${isoCode})`,
+            maxRepairs: this.maxRepairs(),
+            basePayload: basePayloadFaq,
+            produce: async (payload) => {
+              const html = await this.llm.generateText(payload, useThinking);
+              return html.replace(/```html/g, '').replace(/```/g, '').trim();
+            },
+            validate: validateFaqHtml,
+            withFeedback: appendRepairFeedback,
+            onAttempt: (n, c) =>
+              this.progressMessage.set(`Repairing FAQ (${isoCode}) (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+          });
+          if (faqRepairs > 0) console.info(`[repair-gate] FAQ (${isoCode}): ${faqRepairs} repair(s) applied`);
           if (faqHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
           } else {
-            console.warn(`[FAQ] No usable artifact for ${isoCode}: model returned ${faqHtml ? 'non-HTML output' : 'an empty response'}. Skipped.`);
+            console.warn(`[FAQ] No usable artifact for ${isoCode}: model returned non-HTML after repair. Skipped.`);
           }
         }
       }
@@ -301,7 +342,17 @@ export class ContentOrchestratorService {
         ? Object.fromEntries(existingSlug.slugs.map(s => [s.language, s.name]))
         : undefined;
       const promptB = buildPromptB(input.website.name, input.name, seoLangs, input.description, localizedNames);
-      const seoJson = await this.llm.generateJson(promptB, useThinking);
+      const { artifact: seoJson, repairsUsed: bRepairs } = await runRepairGate({
+        label: 'SEO metadata',
+        maxRepairs: this.maxRepairs(),
+        basePayload: promptB,
+        produce: (payload) => this.llm.generateJson(payload, useThinking),
+        validate: (json) => validateSeoMetadata(json, ''),
+        withFeedback: appendRepairFeedback,
+        onAttempt: (n, c) =>
+          this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+      });
+      if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
       // Validate just the SEO metadata for this flow (no HTML produced here).
@@ -482,7 +533,7 @@ export class ContentOrchestratorService {
     const issues: ValidationIssue[] = [
       ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)', productName, undefined, { templateId }),
       ...Object.entries(c.translations).flatMap(([lang, html]) =>
-        validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName))
+        validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId })
       ),
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),

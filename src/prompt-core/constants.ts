@@ -240,3 +240,22 @@ SECTIONS — emit in this exact order, no extras:
 FORBIDDEN for consumables:
   §2 Killer-Specs 3-column table · §3 Functionality H2/H3 blocks · §5 Compatibility section
   §6 Package Contents · <section class="specs"> · itemprop / microdata · <h3> · <p class="cta">`;
+/**
+* Translation overlay for consumables. Appended to whichever task-c instruction is
+* selected when templateId === 'consumables-resin'. Stops the translator from re-inflating
+* the simplified §C1–§C6 structure into a printer/scanner-style description, and carries the
+* 2500-char limit into every target language (DE/RU expand vs EN). Single source of truth.
+*/
+export const CONSUMABLES_TRANSLATION_OVERLAY =
+  `[CONSUMABLES MODE — TRANSLATION OVERLAY — these rules WIN over any [LABELS]/closing-H2 instruction above]
+The source uses the CONSUMABLES SIMPLIFIED SCHEMA (§C1–§C6), NOT Schema v3.0.
+Translate it AS-IS. Do NOT restructure it into a printer/scanner-style description.
+
+- NO "What's in the box" / Package Contents section exists here. If a [LABELS] line mentions one, IGNORE it — emit none.
+- The closing CTA is a plain <p> after <hr> (§C6). DO NOT convert it into a "Why buy … from [Store]?" H2 block. Keep it a short closing paragraph.
+- DO NOT add Killer-Specs 3-column table, Functionality, or Compatibility sections — they are absent from the source.
+- Translate only the §C2/§C3/§C4/§C5 H2 headings actually present.
+
+HARD LIMIT: translated visible text (HTML tags stripped) MUST NOT exceed 2500 characters.
+If the target language expands vs. the source, COMPRESS §C2/§C3/§C5 prose to stay under the limit. Never pad, never add sentences.
+Preserve every spec-table row and numeric value verbatim (only localize unit/separator as instructed above).`;

@@ -111,20 +111,21 @@ export function validateGeneratedHtml(
   const issues: ValidationIssue[] = [];
   if (!html || !html.trim()) {
     issues.push({ severity: 'error', rule: 'empty-output', detail: 'Generated HTML is empty.', context });
-    // CONSUMABLES: hard char-count gate (visible text only, HTML stripped).
-    if (options?.templateId === 'consumables-resin') {
-      const stripped = stripHtmlTags(html);
-      const len = charLength(stripped);
-      if (len > CONSUMABLES_MAX_STRIPPED_CHARS) {
-        issues.push({
-          severity: 'warning',
-          rule: 'consumables-char-limit',
-          detail: `Consumables description is ${len} stripped chars (limit ${CONSUMABLES_MAX_STRIPPED_CHARS}). Trim §C2/§C3/§C4 prose.`,
-          context,
-        });
-      }
-    }
     return issues;
+  }
+
+  // CONSUMABLES: hard char-count gate (visible text only, HTML stripped).
+  if (options?.templateId === 'consumables-resin') {
+    const stripped = stripHtmlTags(html);
+    const len = charLength(stripped);
+    if (len > CONSUMABLES_MAX_STRIPPED_CHARS) {
+      issues.push({
+        severity: 'error',
+        rule: 'consumables-char-limit',
+        detail: `Consumables description is ${len} stripped chars (limit ${CONSUMABLES_MAX_STRIPPED_CHARS}). Trim §C2/§C3/§C4 prose.`,
+        context,
+      });
+    }
   }
 
   // CRITICAL: <h1> in description body creates a duplicate H1 (CMS auto-generates H1).
