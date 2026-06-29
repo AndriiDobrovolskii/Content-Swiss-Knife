@@ -252,7 +252,7 @@ export class ContentOrchestratorService {
             html = wrapImageFigures(html);
             return fixNumberFormatting(html);
           },
-          validate: (html) => validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale),
+          validate: (html) => validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId }),
           withFeedback: appendRepairFeedback,
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing translation ${lang} (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -533,7 +533,7 @@ export class ContentOrchestratorService {
     const issues: ValidationIssue[] = [
       ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)', productName, undefined, { templateId }),
       ...Object.entries(c.translations).flatMap(([lang, html]) =>
-        validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName))
+        validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId })
       ),
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
