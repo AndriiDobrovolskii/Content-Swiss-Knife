@@ -22,18 +22,20 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
   let issues = opts.validate(artifact);
   let repairsUsed = 0;
 
-  while (repairsUsed < opts.maxRepairs) {
-    const errors = issues.filter(i => i.severity === 'error');
-    if (errors.length === 0) break;
+  const errCount = (is: ValidationIssue[]) => is.filter(i => i.severity === 'error').length;
+  let best = { artifact, issues, errors: errCount(issues) };
 
-    opts.onAttempt?.(repairsUsed + 1, errors.length);
-    const repairPayload = opts.withFeedback(opts.basePayload, errors);
-    artifact = await opts.produce(repairPayload);
+  while (repairsUsed < opts.maxRepairs) {
+    if (best.errors === 0) break;
+    opts.onAttempt?.(repairsUsed + 1, errCount(issues));
+    artifact = await opts.produce(opts.withFeedback(opts.basePayload, issues.filter(i => i.severity === 'error')));
     issues = opts.validate(artifact);
     repairsUsed++;
+    const e = errCount(issues);
+    if (e < best.errors) best = { artifact, issues, errors: e }; // strictly-better wins; ties keep earliest
   }
 
-  return { artifact, finalIssues: issues, repairsUsed };
+  return { artifact: best.artifact, finalIssues: best.issues, repairsUsed };
 }
 
 export function appendRepairFeedback(

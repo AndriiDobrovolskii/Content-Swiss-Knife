@@ -18,6 +18,7 @@ import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { SlugResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback } from '../utils/repair-gate';
+import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload } from '../prompt-core/payload';
 
 // ── Inline prompts for tools that don't need external templates ─────────────
@@ -157,6 +158,9 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {} });
     this.validationIssues.set([]);
 
+    const isConsumables = input.templateId === 'consumables-resin';
+    const repairBudget = isConsumables ? 2 : this.maxRepairs();
+
     try {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);
 
@@ -173,7 +177,7 @@ export class ContentOrchestratorService {
       };
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
         label: 'HTML (base)',
-        maxRepairs: this.maxRepairs(),
+        maxRepairs: repairBudget,
         basePayload: basePayloadA,
         produce: produceHtmlA,
         validate: html => validateGeneratedHtml(html, 'HTML (base)', input.name, undefined, { templateId: input.templateId }),
@@ -182,8 +186,13 @@ export class ContentOrchestratorService {
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
-      this.content.update(c => ({ ...c, mainHtmlEn: htmlEn }));
-      this.validationIssues.set(htmlIssues);
+      const finalHtmlEn = isConsumables ? trimConsumablesToLimit(htmlEn) : htmlEn;
+      this.content.update(c => ({ ...c, mainHtmlEn: finalHtmlEn }));
+      this.validationIssues.set(
+        isConsumables
+          ? validateGeneratedHtml(finalHtmlEn, 'HTML (base)', input.name, undefined, { templateId: input.templateId })
+          : htmlIssues,
+      );
 
       // Step 2 — SEO slugs FIRST. The localized `name` per locale is the single source of
       // truth for the storefront product-name field (→ H1) AND the Task B title core.
@@ -237,11 +246,11 @@ export class ContentOrchestratorService {
       });
       for (const lang of sortedTransLangs) {
         this.progressMessage.set(`Translating to ${lang}…`);
-        const basePayloadC = buildPromptC(htmlEn, lang, input.website.name, input.website.group, input.templateId);
+        const basePayloadC = buildPromptC(finalHtmlEn, lang, input.website.name, input.website.group, input.templateId);
         const locale = taskLangToIso(lang, input.website.name);
         const { artifact: translatedHtml, repairsUsed: cRepairs } = await runRepairGate<string>({
           label: `HTML (${lang})`,
-          maxRepairs: this.maxRepairs(),
+          maxRepairs: repairBudget,
           basePayload: basePayloadC,
           produce: async (payload) => {
             let html = await this.llm.generateText(payload, useThinking);
@@ -258,9 +267,10 @@ export class ContentOrchestratorService {
             this.progressMessage.set(`Repairing translation ${lang} (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
         if (cRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${cRepairs} repair(s) applied`);
+        const finalTranslated = isConsumables ? trimConsumablesToLimit(translatedHtml) : translatedHtml;
         this.content.update(c => ({
           ...c,
-          translations: { ...c.translations, [lang]: translatedHtml }
+          translations: { ...c.translations, [lang]: finalTranslated }
         }));
       }
 

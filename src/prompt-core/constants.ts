@@ -202,8 +202,10 @@ IGNORE: §1 Hook, §2 Killer Specs, §3 Functionality, §4 Applications, §5 Com
         §6 Package Contents, §9 CTA-TRUST from the master [CONTENT STRUCTURE].
 KEEP ALL OTHER MASTER RULES: unit cyrillization, number separators, no H1, no microdata, anti-anglicism.
 
-HARD TEXT LIMIT: total visible text (HTML tags stripped) MUST NOT exceed 2500 characters.
-Write efficiently — do not pad to fill a minimum length.
+TARGET LENGTH: ~2100 visible characters (HTML tags stripped). HARD CEILING: 2500 — validation FAILS above this.
+You cannot count your own characters, so AIM LOW (~2100) to leave headroom; budget words, do not measure.
+Translations into German/Russian/Spanish expand 10–30% vs. English — that headroom is what keeps them under 2500.
+Write efficiently — never pad to a minimum length.
 
 SECTIONS — emit in this exact order, no extras:
 
@@ -256,6 +258,7 @@ Translate it AS-IS. Do NOT restructure it into a printer/scanner-style descripti
 - DO NOT add Killer-Specs 3-column table, Functionality, or Compatibility sections — they are absent from the source.
 - Translate only the §C2/§C3/§C4/§C5 H2 headings actually present.
 
-HARD LIMIT: translated visible text (HTML tags stripped) MUST NOT exceed 2500 characters.
+HARD LIMIT: translated visible text (HTML tags stripped) MUST stay at or below 2100 characters (ceiling 2500).
+Since you cannot count characters, COMPRESS structurally: keep §C2/§C3/§C5 bullets to one short sentence each, drop adjectives. Never pad, never add sentences.
 If the target language expands vs. the source, COMPRESS §C2/§C3/§C5 prose to stay under the limit. Never pad, never add sentences.
 Preserve every spec-table row and numeric value verbatim (only localize unit/separator as instructed above).`;

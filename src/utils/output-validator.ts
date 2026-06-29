@@ -90,6 +90,12 @@ function stripHtmlTags(html: string): string {
     .trim();
 }
 
+/** Public exports for the deterministic consumables trimmer (utils/consumables-trim.ts). */
+export const CONSUMABLES_CHAR_LIMIT = CONSUMABLES_MAX_STRIPPED_CHARS;
+export function strippedVisibleLength(html: string): number {
+  return charLength(stripHtmlTags(html));
+}
+
 /**
  * Validates a single generated HTML body artifact.
  * @param html        the HTML body
@@ -116,13 +122,17 @@ export function validateGeneratedHtml(
 
   // CONSUMABLES: hard char-count gate (visible text only, HTML stripped).
   if (options?.templateId === 'consumables-resin') {
-    const stripped = stripHtmlTags(html);
-    const len = charLength(stripped);
+    const len = charLength(stripHtmlTags(html));
     if (len > CONSUMABLES_MAX_STRIPPED_CHARS) {
+      const over = len - CONSUMABLES_MAX_STRIPPED_CHARS;
+      const liToCut = Math.ceil(over / 90) + 1; // ~90 visible chars per bullet, +1 buffer
       issues.push({
         severity: 'error',
         rule: 'consumables-char-limit',
-        detail: `Consumables description is ${len} stripped chars (limit ${CONSUMABLES_MAX_STRIPPED_CHARS}). Trim §C2/§C3/§C4 prose.`,
+        detail: `Visible text is ${len} chars; ceiling ${CONSUMABLES_MAX_STRIPPED_CHARS} (you are ${over} over). ` +
+          `You cannot count characters, so make STRUCTURAL cuts: remove ${liToCut} entire <li> items ` +
+          `(start with §C5 Storage, then §C3 Applications), shorten the §C1 hook to one sentence, drop adjectives in §C2. ` +
+          `Aim for ~2100 for safety. NEVER remove or alter any spec-table row or numeric value.`,
         context,
       });
     }
