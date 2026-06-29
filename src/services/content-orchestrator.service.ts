@@ -176,7 +176,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: basePayloadA,
         produce: produceHtmlA,
-        validate: html => validateGeneratedHtml(html, 'HTML (base)', input.name),
+        validate: html => validateGeneratedHtml(html, 'HTML (base)', input.name, undefined, { templateId: input.templateId }),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -270,7 +270,7 @@ export class ContentOrchestratorService {
       }
 
       // Post-generation acceptance-criteria check (non-blocking — reports only).
-      this.runOutputValidation(input.website.name, input.name);
+      this.runOutputValidation(input.website.name, input.name, input.templateId);
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Done!');
@@ -477,17 +477,16 @@ export class ContentOrchestratorService {
    * stores the results in the validationIssues signal. Errors are also logged so they
    * are visible during development. Never throws — validation is advisory.
    */
-  private runOutputValidation(storeName: string, productName?: string): void {
+  private runOutputValidation(storeName: string, productName?: string, templateId?: string): void {
     const c = this.content();
     const issues: ValidationIssue[] = [
-      ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)', productName),
+      ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)', productName, undefined, { templateId }),
       ...Object.entries(c.translations).flatMap(([lang, html]) =>
         validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName))
       ),
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
     ];
-
     this.validationIssues.set(issues);
     const errors = issues.filter(i => i.severity === 'error');
     if (errors.length > 0) {

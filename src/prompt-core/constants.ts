@@ -187,3 +187,56 @@ embedded units / numbers / counts.
 Never add, drop, or invent tokens; aside from the descriptive↔brand reordering above, preserve token
 order and identical numeric values — only the translated descriptor, unit script, separators, and
 count abbreviation change.`;
+
+/**
+ * Simplified HTML schema for consumable products (filament / resin / adhesive).
+ * Used by task-a.ts when templateId === 'consumables-resin'.
+ * Overrides Schema v3.0 §1–§9. All other master-prompt rules stay in effect:
+ * unit cyrillization, number separators, no H1, no microdata, anti-anglicism.
+ * Hard visible-text limit: 2 500 characters (HTML tags stripped).
+ */
+export const CONSUMABLES_SIMPLIFIED_SCHEMA =
+  `[CONSUMABLES SIMPLIFIED SCHEMA — overrides Schema v3.0 §1–§9]
+Product is a consumable material (filament / resin / adhesive). Use this schema exclusively.
+IGNORE: §1 Hook, §2 Killer Specs, §3 Functionality, §4 Applications, §5 Compatibility,
+        §6 Package Contents, §9 CTA-TRUST from the master [CONTENT STRUCTURE].
+KEEP ALL OTHER MASTER RULES: unit cyrillization, number separators, no H1, no microdata, anti-anglicism.
+
+HARD TEXT LIMIT: total visible text (HTML tags stripped) MUST NOT exceed 2500 characters.
+Write efficiently — do not pad to fill a minimum length.
+
+SECTIONS — emit in this exact order, no extras:
+
+§C1 HOOK  (plain <p>, 40–60 words)
+  What the material is + base polymer/chemistry. Core differentiating property.
+  Primary workflow it serves. No heading. No <section> wrapper.
+
+§C2 FEATURES & MATERIAL PROPERTIES  (<h2> + <ul>, 4–6 items)
+  en H2: "Features & Material Properties"
+  Each <li>: <b>[Feature label.]</b> [1–2 sentences — concrete outcome, no marketing fluff.]
+
+§C3 APPLICATIONS  (<h2> + <ul>, 3–4 items)
+  en H2: "Applications"
+  Each <li>: <b>[Scenario]:</b> [1 sentence on what this material enables here.]
+
+§C4 PRINT SETTINGS + SPEC TABLES  (one <h2> per parameter group)
+  en H2: "Print Settings" (required if printing parameters are provided)
+  Optional: one-sentence print tip (e.g. active-cooling recommendation).
+  Table: <div class="table-responsive"><table><tbody>
+    <tr><td>[Parameter]</td><td>[Value + unit]</td></tr>
+  </tbody></table></div>
+  If mechanical properties provided → add separate <h2> + table. en H2: "Mechanical Properties"
+  If physical properties provided   → add separate <h2> + table. en H2: "Physical Properties"
+  NO <thead>. NO <h3>. NEVER invent parameter values.
+
+§C5 STORAGE GUIDELINES  (<h2> + <ul>, 2–3 items)
+  en H2: "Storage Guidelines"
+  Each <li>: <b>[Label]:</b> [concrete storage/handling instruction.]
+
+§C6 CLOSING CTA  (<hr> + plain <p>, 1–2 sentences)
+  Product name + store name + availability/shipping.
+  One internal category link where contextually natural. No <p class="cta">. No H2.
+
+FORBIDDEN for consumables:
+  §2 Killer-Specs 3-column table · §3 Functionality H2/H3 blocks · §5 Compatibility section
+  §6 Package Contents · <section class="specs"> · itemprop / microdata · <h3> · <p class="cta">`;

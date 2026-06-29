@@ -68,6 +68,28 @@ function charLength(s: string): number {
   return Array.from(s).length;
 }
 
+// ── Consumables char-limit helpers ─────────────────────────────────────────
+
+/** Hard limit on visible text for consumable products (templateId = 'consumables-resin'). */
+const CONSUMABLES_MAX_STRIPPED_CHARS = 2500;
+
+/**
+ * Strip HTML tags and decode common entities to get the visible character count
+ * as a CMS or reader would see it.
+ */
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
  * Validates a single generated HTML body artifact.
  * @param html        the HTML body
@@ -84,10 +106,24 @@ export function validateGeneratedHtml(
   context: string,
   productName?: string,
   locale?: string,
+  options?: { templateId?: string },
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!html || !html.trim()) {
     issues.push({ severity: 'error', rule: 'empty-output', detail: 'Generated HTML is empty.', context });
+    // CONSUMABLES: hard char-count gate (visible text only, HTML stripped).
+    if (options?.templateId === 'consumables-resin') {
+      const stripped = stripHtmlTags(html);
+      const len = charLength(stripped);
+      if (len > CONSUMABLES_MAX_STRIPPED_CHARS) {
+        issues.push({
+          severity: 'warning',
+          rule: 'consumables-char-limit',
+          detail: `Consumables description is ${len} stripped chars (limit ${CONSUMABLES_MAX_STRIPPED_CHARS}). Trim §C2/§C3/§C4 prose.`,
+          context,
+        });
+      }
+    }
     return issues;
   }
 
