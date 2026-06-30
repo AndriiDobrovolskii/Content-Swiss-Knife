@@ -97,7 +97,7 @@ export const downloadTextPackage = (content: GeneratedContent, productName: stri
 
 export const downloadImagesPackage = async (images: ProcessedImage[]) => {
   const zip = new JSZip();
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const timestamp = buildTimestamp();
   
   // Map to track filenames and handle duplicates
   const nameMap = new Map<string, number>();

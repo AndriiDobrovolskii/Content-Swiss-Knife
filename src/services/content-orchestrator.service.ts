@@ -459,7 +459,7 @@ export class ContentOrchestratorService {
     this.progressMessage.set('Cleaning HTML structure locally…');
     this.optimizerOutput.set('');
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 0));
       this.optimizerOutput.set(cleanHtmlStructure(htmlInput));
       this.progressMessage.set('Structure Cleaned!');
     } catch (e) {
