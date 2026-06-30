@@ -69,7 +69,6 @@ export class ContentOrchestratorService {
   }
 
   async generate(input: ProductInput, useThinking = false): Promise<void> {
-    this.isGenerating.set(true);
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
     // localized name authoritative across H1/title/URL without ever reusing a stale name.
@@ -80,7 +79,7 @@ export class ContentOrchestratorService {
     const isConsumables = input.templateId === 'consumables-resin';
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
 
-    try {
+    await this.withProgress(async () => {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);
 
       // Step 1 — Generate base English HTML (with one repair attempt on hard errors)
@@ -238,18 +237,10 @@ export class ContentOrchestratorService {
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Done!');
-
-    } catch (error) {
-      this.progressMessage.set('Error during generation.');
-      console.error(error);
-      alert('Generation failed. Check console for details.');
-    } finally {
-      this.isGenerating.set(false);
-    }
+    }, 'Error during generation.', 'Generation failed. Check console for details.');
   }
 
   async generateSeoMetadata(input: ProductInput, useThinking = false): Promise<void> {
-    this.isGenerating.set(true);
     // Reuse slugData ONLY if it was approved for THIS exact product+store, so a Slug→SEO
     // standalone run feeds the approved localized name to B as h1 + title core. Otherwise
     // clear it (and B falls back to the English formula → independence preserved).
@@ -257,7 +248,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: existingSlug });
     this.validationIssues.set([]);
 
-    try {
+    await this.withProgress(async () => {
       const { seoLangs } = getLangsForStore(input.website.name);
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
 
@@ -278,29 +269,18 @@ export class ContentOrchestratorService {
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      // Validate just the SEO metadata for this flow (no HTML produced here).
-      this.validationIssues.set(
-        validateSeoMetadata(this.content().seoData, '')
-      );
+      this.validationIssues.set(validateSeoMetadata(this.content().seoData, ''));
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('SEO Generation Done!');
-
-    } catch (error) {
-      this.progressMessage.set('Error during SEO generation.');
-      console.error(error);
-      alert('SEO Generation failed.');
-    } finally {
-      this.isGenerating.set(false);
-    }
+    }, 'Error during SEO generation.', 'SEO Generation failed.');
   }
 
   async generateSlugs(input: ProductInput, useThinking = false): Promise<void> {
-    this.isGenerating.set(true);
     this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null });
     this.validationIssues.set([]);
 
-    try {
+    await this.withProgress(async () => {
       const { seoLangs } = getLangsForStore(input.website.name);
       this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
 
@@ -314,14 +294,7 @@ export class ContentOrchestratorService {
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Slug Generation Done!');
-
-    } catch (error) {
-      this.progressMessage.set('Error during slug generation.');
-      console.error(error);
-      alert('Slug Generation failed.');
-    } finally {
-      this.isGenerating.set(false);
-    }
+    }, 'Error during slug generation.', 'Slug Generation failed.');
   }
 
   private normalizeSlugResponse(raw: SlugResponse): SlugResponse {
@@ -348,102 +321,62 @@ export class ContentOrchestratorService {
   }
 
   async optimize(htmlInput: string, productName = '', useThinking = false): Promise<void> {
-    this.isGenerating.set(true);
-    this.progressMessage.set('Optimizing HTML…');
     this.optimizerOutput.set('');
-
-    try {
+    this.progressMessage.set('Optimizing HTML…');
+    await this.withProgress(async () => {
       let optimized = await this.llm.generateText(buildOptimizerPrompt(htmlInput, productName), useThinking);
       optimized = stripCodeFences(optimized);
       optimized = cleanHtmlStructure(optimized);
       this.optimizerOutput.set(optimized);
       this.progressMessage.set('Optimization Complete!');
-    } catch (error) {
-      this.progressMessage.set('Error during optimization.');
-      console.error(error);
-      alert('Optimization failed.');
-    } finally {
-      this.isGenerating.set(false);
-    }
+    }, 'Error during optimization.', 'Optimization failed.');
   }
 
   async cleanStructureOnly(htmlInput: string): Promise<void> {
-    this.isGenerating.set(true);
-    this.progressMessage.set('Cleaning HTML structure locally…');
     this.optimizerOutput.set('');
-    try {
+    this.progressMessage.set('Cleaning HTML structure locally…');
+    await this.withProgress(async () => {
       await new Promise(resolve => setTimeout(resolve, 0));
       this.optimizerOutput.set(cleanHtmlStructure(htmlInput));
       this.progressMessage.set('Structure Cleaned!');
-    } catch (e) {
-      console.error(e);
-      alert('Cleaning failed');
-    } finally {
-      this.isGenerating.set(false);
-    }
+    }, 'Error while cleaning.', 'Cleaning failed');
   }
 
   async translate(content: string, targetLang: string, useThinking = false): Promise<void> {
-    this.isGenerating.set(true);
-    this.progressMessage.set(`Translating to ${targetLang}…`);
     this.translatorOutput.set('');
-
-    try {
+    this.progressMessage.set(`Translating to ${targetLang}…`);
+    await this.withProgress(async () => {
       const prompt = buildPromptC(content, targetLang, '', undefined);
       let translated = await this.llm.generateText(prompt, useThinking);
       translated = stripCodeFences(translated);
-
       if (targetLang === 'Spanish (EXPERT3D)') {
         translated = this.applySpanishExpert3dReplacements(translated);
       }
-
       this.translatorOutput.set(translated);
       this.progressMessage.set('Translation Complete!');
-    } catch (error) {
-      this.progressMessage.set('Error during translation.');
-      console.error(error);
-      alert('Translation failed.');
-    } finally {
-      this.isGenerating.set(false);
-    }
+    }, 'Error during translation.', 'Translation failed.');
   }
 
   async rewrite(website: WebsiteOption, text: string, useThinking = false): Promise<void> {
-    this.isGenerating.set(true);
-    this.progressMessage.set('Rewriting content…');
     this.copywriterOutput.set('');
-
-    try {
+    this.progressMessage.set('Rewriting content…');
+    await this.withProgress(async () => {
       const prompt = buildCopywriterPrompt(website, text);
       let rewritten = await this.llm.generateText(prompt, useThinking);
       rewritten = stripCodeFences(rewritten);
       this.copywriterOutput.set(rewritten);
       this.progressMessage.set('Content Rewritten!');
-    } catch (error) {
-      this.progressMessage.set('Error during rewriting.');
-      console.error(error);
-      alert('Rewrite failed.');
-    } finally {
-      this.isGenerating.set(false);
-    }
+    }, 'Error during rewriting.', 'Rewrite failed.');
   }
 
   async analyzeReadability(text: string): Promise<void> {
-    this.isGenerating.set(true);
-    this.progressMessage.set('Analyzing readability…');
     this.readabilityScore.set(null);
-
-    try {
+    this.progressMessage.set('Analyzing readability…');
+    await this.withProgress(async () => {
       const result = await this.llm.generateJson(buildReadabilityPrompt(text));
       this.readabilityScore.set(result);
       this.progressMessage.set('Analysis Complete!');
-    } catch (error) {
-      this.progressMessage.set('Error during readability analysis.');
-      console.error(error);
-      alert('Analysis failed.');
-    } finally {
-      this.isGenerating.set(false);
-    }
+    }, 'Error during readability analysis.', 'Analysis failed.');
   }
 
   /**
@@ -497,6 +430,22 @@ export class ContentOrchestratorService {
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
+
+  private async withProgress(
+    task: () => Promise<void>,
+    errorMsg: string,
+    alertMsg = errorMsg,
+  ): Promise<void> {
+    this.isGenerating.set(true);
+    try { await task(); }
+    catch (error) {
+      this.progressMessage.set(errorMsg);
+      console.error(error);
+      alert(alertMsg);
+    } finally {
+      this.isGenerating.set(false);
+    }
+  }
 
   private applySpanishExpert3dReplacements(content: string): string {
     let result = content;
