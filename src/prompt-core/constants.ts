@@ -199,6 +199,16 @@ SECTIONS — emit in this exact order, no extras:
 §C1 HOOK  (plain <p>, 40–60 words)
   What the material is + base polymer/chemistry. Core differentiating property.
   Primary workflow it serves. No heading. No <section> wrapper.
+  ANTI-REPETITION: identify the descriptive root in the Product Name (e.g. "Reflective"/"Marker",
+  "Filament"/"PLA"). State that concept ONCE. If you need to reference it again in the same
+  paragraph, use a different word or a pronoun — NEVER a cognate of the same root (e.g. do not
+  follow "Reflective Markers" with "retroreflective… marker-based"). Before finalizing, re-read the
+  hook and rewrite if any root/cognate appears twice.
+  BODY-WIDE ANTI-REPETITION (§C1–§C6): the same rule applies across the WHOLE description, not just
+  the hook. Within any one bullet or paragraph, do not repeat a content root in successive sentences
+  (e.g. "виявлення… виявлення", "діапазону… діапазону", "range… range"). Vary with domain synonyms:
+  detection→capture/registration, range→reach/distance, target/marker→point/reference point. Spec
+  values are exempt — never alter a number or unit to avoid repetition.
 
 §C2 FEATURES & MATERIAL PROPERTIES  (<h2> + <ul>, 4–6 items)
   en H2: "Features & Material Properties"
@@ -214,6 +224,15 @@ SECTIONS — emit in this exact order, no extras:
   Table: <div class="table-responsive"><table><tbody>
     <tr><td>[Parameter]</td><td>[Value + unit]</td></tr>
   </tbody></table></div>
+  PARAMETER LABELS: each [Parameter] must read as a self-contained noun phrase ("Inner diameter",
+  "Markers per sheet", "Total markers") — never a clipped sentence fragment.
+  COUNT/QUANTITY ROWS (MANDATORY): a quantity row is any row whose Value is a count of discrete
+  items (markers/sheets/pieces/units per sheet/pack/box, or a grand total). EVERY such row MUST
+  carry the count abbreviation in its Value cell — no bare integers. Apply it uniformly: if the
+  total row has it, the per-sheet and per-pack rows MUST have it too. Localized form:
+    en "15 pcs" · uk/ru "15 шт." (WITH trailing period) · pl "15 szt." · de "15 Stk" ·
+    es-ES "15 uds" · es-MX "15 pzas".
+  Self-check before output: scan every quantity row; if any shows a bare number, add the abbreviation.
   If mechanical properties provided → add separate <h2> + table. en H2: "Mechanical Properties"
   If physical properties provided   → add separate <h2> + table. en H2: "Physical Properties"
   NO <thead>. NO <h3>. NEVER invent parameter values.
@@ -244,6 +263,43 @@ Translate it AS-IS. Do NOT restructure it into a printer/scanner-style descripti
 - The closing CTA is a plain <p> after <hr> (§C6). DO NOT convert it into a "Why buy … from [Store]?" H2 block. Keep it a short closing paragraph.
 - DO NOT add Killer-Specs 3-column table, Functionality, or Compatibility sections — they are absent from the source.
 - Translate only the §C2/§C3/§C4/§C5 H2 headings actually present.
+- COLON CAPITALIZATION in §C2/§C3/§C5 items ("<b>Label:</b> continuation"): for uk-UA, ru-UA,
+  pl-PL — lowercase the first letter after the colon (it introduces an explanation of the bold
+  label, not a new sentence; house style — uk "Великі об'єкти: автомобільні панелі…" NOT
+  "…: Автомобільні…"). For de-DE keep the German default (capitalize when a complete clause
+  follows — that is correct German orthography). For en-GB/en-ES/en-US keep the English default
+  (capitalized, as a sentence).
+- SPEC-TABLE PARAMETER RE-NOMINALIZATION: translating a §C4 quantity [Parameter] (EN "Markers per
+  sheet" / "Sheets per pack" / "Total markers") word-for-word often lands in the genitive/partitive
+  case and reads like a clipped sentence — WRONG, e.g. uk "Маркерів на аркуші", ru "Маркеров на
+  листе". Rephrase as a clean nominative noun phrase, adding a quantity head-noun if needed: uk
+  "Кількість маркерів на аркуші" / "Кількість аркушів у наборі" / "Загальна кількість маркерів";
+  ru "Количество маркеров на листе" / "Количество листов в наборе" / "Общее количество маркеров";
+  pl "Liczba znaczników na arkusz" / "Liczba arkuszy w opakowaniu" / "Łączna liczba znaczników".
+  Apply the same nominative-phrase check to every other §C4 label in the target language.
+- COUNT-ABBREVIATION CONSISTENCY: if the source table's quantity rows carry the count abbreviation
+  inconsistently, FIX it on translation — every quantity row gets the same localized abbreviation,
+  not just the total row. Forms: uk/ru "шт." (WITH trailing period), pl "szt.", de "Stk",
+  es-ES "uds", es-MX "pzas". Add it to any quantity row that shows a bare integer.
+- BODY-WIDE ANTI-REPETITION also applies to the translation: do not let a content root repeat in
+  successive sentences of any §C1–§C6 bullet/paragraph; vary with target-language synonyms. Never
+  alter spec values to do so.
+- ANTI-ANGLICISM (target language only — applies to uk-UA, ru-UA, pl-PL, de-DE, es-ES, es-MX):
+  before finalizing, scan the draft for unnecessary English loanwords/calques and replace with the
+  native term, using this classification:
+    BAD (jargon/anglicism/morphological calque) — e.g. uk "ретровідбиваючі" (mechanical "-ючі" calque,
+    not a real Ukrainian adjective form), "прінт", "софт".
+    GOOD (native/normative equivalent) — uk "світловідбивальний" or, in technical/ДСТУ context,
+    "світлоповертальний" (replaces "ретровідбиваючі"); "друк" (not "прінт"); "ПЗ" (not "софт").
+    ALLOWED (no direct native equivalent — established technical/industry term, keep as-is):
+    filament, nozzle, extruder, scanner/skaner/сканер, USB, Wi-Fi.
+  Prefer the literary/normative adjective form over inventing a hybrid calque of the English or
+  Russian root. When in doubt whether a term is BAD or ALLOWED, default to the native form.
+  EDITOR-LOCKED TERMS (uk-UA, confirmed against gold-edited reference, takes precedence over any
+  literal translation): "reference point(s)" → "реперна(-і) точка(-и)" (NOT "опорна точка" /
+  "референсна точка"); "digitisation/digitalization" → "оцифрування" (already standard — do not
+  drift to "діджитизація"/"цифровізація"). Apply the same precedence logic in ru/pl/de/es when an
+  equivalent editor-confirmed term exists in the glossary.
 
 HARD LIMIT: translated visible text (HTML tags stripped) MUST stay at or below 2100 characters (ceiling 2500).
 Since you cannot count characters, COMPRESS structurally: keep §C2/§C3/§C5 bullets to one short sentence each, drop adjectives. Never pad, never add sentences.
