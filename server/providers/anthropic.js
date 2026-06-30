@@ -1,5 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { withRetry } from '../utils/retry.js';
+import { normalizePayload } from '../utils/payload.js';
+import { parseJsonResponse } from '../utils/json-parse.js';
+import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
 
 export class AnthropicProvider {
   constructor(apiKey, opts = {}) {
@@ -19,9 +22,7 @@ export class AnthropicProvider {
   }
 
   async generate(payload, mode = 'text') {
-    // Back-compat: accept a plain string too.
-    const { systemBlocks = [], userContent = '' } =
-      typeof payload === 'string' ? { systemBlocks: [], userContent: payload } : payload;
+    const { systemBlocks = [], userContent = '' } = normalizePayload(payload);
 
     return withRetry(async () => {
       const isCreative = mode === 'creative' || mode === 'creative-json';
@@ -44,7 +45,7 @@ export class AnthropicProvider {
         { in: u.input_tokens, out: u.output_tokens, cw: u.cache_creation_input_tokens, cr: u.cache_read_input_tokens });
 
       const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
-      if (mode === 'json' || mode === 'creative-json') return JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
+      if (mode === 'json' || mode === 'creative-json') return parseJsonResponse(text);
       return text;
     });
   }
@@ -78,10 +79,7 @@ export class AnthropicProvider {
               type: 'document',
               source: { type: 'base64', media_type: 'application/pdf', data: base64Data }
             },
-            {
-              type: 'text',
-              text: 'Extract the full product description and technical specifications from this document. Return them as plain text.'
-            }
+            { type: 'text', text: PDF_EXTRACT_PROMPT }
           ]
         }]
       });
