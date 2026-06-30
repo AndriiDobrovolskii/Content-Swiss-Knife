@@ -123,7 +123,7 @@ ${PRODUCT_NAME_LOCALIZATION}
 - Anti-anglicism: "друк" not "прінт", "ПЗ" not "софт". Established tech terms may stay.
 
 [CONSTRAINTS]
-- Do NOT translate Brand/Model Names; TRANSLATE the generic descriptor, reorder it category-first, "pcs" → "шт" (see [PRODUCT NAME LOCALIZATION]).
+- Do NOT translate Brand/Model Names; TRANSLATE the generic descriptor, reorder it category-first, "pcs" → "шт." (see [PRODUCT NAME LOCALIZATION]).
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add new information.
 - Translate alt="…" and title="…".

@@ -152,9 +152,12 @@ WORD ORDER:
   [Brand Model] [specs].
 
 COUNT / QUANTITY ABBREVIATION ("pcs" / "pieces" / "units" / "pack"):
-  Ukrainian (uk-UA) → "шт"  ·  Russian (ru-UA) → "шт"  ·  Polish (pl-PL) → "szt"  ·
+  Ukrainian (uk-UA) → "шт."  ·  Russian (ru-UA) → "шт."  ·  Polish (pl-PL) → "szt."  ·
   German (de-DE) → "Stk"  ·  Castilian Spanish (es-ES) → "uds"  ·
   Mexican Spanish (es-MX) → "pzas"  ·  English (en-GB / en-ES / en-US) → "pcs".
+  uk/ru/pl carry a trailing period (correct abbreviation orthography); de/es/en do not.
+  This form is identical everywhere the count appears — Product Name, spec-table quantity rows,
+  running text — never drop the period in one place and keep it in another.
 UNITS → follow the unit rules above ([CYRILLIC UNITS] / [UNITS]): "12 mm" → uk/ru "12 мм"; keep
 Latin for en/pl/de/es. NUMBER SEPARATORS → follow the number-format rules above ([NUMBER FORMATTING]
 / [NUMBERS]). The digits never change.
@@ -163,9 +166,9 @@ WORKED EXAMPLE — source "Shining3D EinScan Reflective Markers 12 mm 1500 pcs":
   en-GB / en-ES / en-US → Shining3D EinScan Reflective Markers 12 mm 1500 pcs
   es-ES → Marcadores reflectantes Shining3D EinScan 12 mm 1500 uds
   es-MX → Marcadores reflectantes Shining3D EinScan 12 mm 1500 pzas
-  uk-UA → Відбиваючі маркери Shining3D EinScan 12 мм 1500 шт
-  ru-UA → Маркеры отражающие Shining3D EinScan 12 мм 1500 шт
-  pl-PL → Markery odbijające Shining3D EinScan 12 mm 1500 szt
+  uk-UA → Відбиваючі маркери Shining3D EinScan 12 мм 1500 шт.
+  ru-UA → Маркеры отражающие Shining3D EinScan 12 мм 1500 шт.
+  pl-PL → Markery odbijające Shining3D EinScan 12 mm 1500 szt.
   de-DE → Reflektive Marker Shining3D EinScan 12 mm 1500 Stk
 
 EDGE CASE — if the name is purely brand + model with NO generic descriptor (e.g. "Bambu Lab X1
