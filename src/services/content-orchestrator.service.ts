@@ -3,7 +3,7 @@ import { LlmService } from './llm.service';
 import { RetrievalService } from './retrieval.service';
 import { HistoryService } from '@/src/services/history.service';
 import { ProductInput, GeneratedContent, WebsiteOption } from '../app/types';
-import { cleanHtmlStructure } from '../utils/html-cleaner';
+import { cleanHtmlStructure, stripCodeFences } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
@@ -12,10 +12,11 @@ import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
-import { normalizeSlug, ensureUniqueSlugs } from '../prompt-core/slug-utils';
+import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, US_MEASUREMENT_RULES, isoToHumanLang, taskLangToIso } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
+import { sortUkrainianFirst } from '../utils/locale-sort';
 import { SlugResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback } from '../utils/repair-gate';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
@@ -169,7 +170,7 @@ export class ContentOrchestratorService {
       const basePayloadA = buildPromptA(input);
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
         let html = await this.llm.generateText(payload, useThinking);
-        html = html.replace(/```html/g, '').replace(/```/g, '').trim();
+        html = stripCodeFences(html);
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
@@ -200,7 +201,7 @@ export class ContentOrchestratorService {
       // Non-blocking either way: a slug failure must not abort SEO/translations/FAQ.
       let localizedNames: Record<string, string> | undefined;
       if (reusedSlug?.slugs?.length) {
-        localizedNames = Object.fromEntries(reusedSlug.slugs.map(s => [s.language, s.name]));
+        localizedNames = slugsToLocalizedNames(reusedSlug.slugs);
       } else {
         try {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
@@ -209,7 +210,7 @@ export class ContentOrchestratorService {
           const slugData = this.normalizeSlugResponse(rawSlug);
           this.content.update(c => ({ ...c, slugData }));
           this.approvedSlugKey.set(this.slugKey(input));
-          localizedNames = Object.fromEntries(slugData.slugs.map(s => [s.language, s.name]));
+          localizedNames = slugsToLocalizedNames(slugData.slugs);
         } catch (e) {
           console.warn('[Slugs] Generation failed; SEO H1 falls back to formula.', e);
           this.validationIssues.update(issues => [
@@ -237,13 +238,7 @@ export class ContentOrchestratorService {
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
       // Step 4 — Translations (Ukrainian always first)
-      const sortedTransLangs = [...transLangs].sort((a, b) => {
-        const aIsUk = a === 'UA' || a === 'Ukrainian';
-        const bIsUk = b === 'UA' || b === 'Ukrainian';
-        if (aIsUk && !bIsUk) return -1;
-        if (!aIsUk && bIsUk) return 1;
-        return 0;
-      });
+      const sortedTransLangs = [...transLangs].sort(sortUkrainianFirst);
       for (const lang of sortedTransLangs) {
         this.progressMessage.set(`Translating to ${lang}…`);
         const basePayloadC = buildPromptC(finalHtmlEn, lang, input.website.name, input.website.group, input.templateId);
@@ -254,7 +249,7 @@ export class ContentOrchestratorService {
           basePayload: basePayloadC,
           produce: async (payload) => {
             let html = await this.llm.generateText(payload, useThinking);
-            html = html.replace(/```html/g, '').replace(/```/g, '').trim();
+            html = stripCodeFences(html);
             if (input.website.name === 'EXPERT3D' && lang === 'ES') {
               html = this.applySpanishExpert3dReplacements(html);
             }
@@ -304,7 +299,7 @@ export class ContentOrchestratorService {
             basePayload: basePayloadFaq,
             produce: async (payload) => {
               const html = await this.llm.generateText(payload, useThinking);
-              return html.replace(/```html/g, '').replace(/```/g, '').trim();
+              return stripCodeFences(html);
             },
             validate: validateFaqHtml,
             withFeedback: appendRepairFeedback,
@@ -349,7 +344,7 @@ export class ContentOrchestratorService {
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
 
       const localizedNames = existingSlug?.slugs?.length
-        ? Object.fromEntries(existingSlug.slugs.map(s => [s.language, s.name]))
+        ? slugsToLocalizedNames(existingSlug.slugs)
         : undefined;
       const promptB = buildPromptB(input.website.name, input.name, seoLangs, input.description, localizedNames);
       const { artifact: seoJson, repairsUsed: bRepairs } = await runRepairGate({
@@ -441,7 +436,7 @@ export class ContentOrchestratorService {
 
     try {
       let optimized = await this.llm.generateText(buildOptimizerPrompt(htmlInput, productName), useThinking);
-      optimized = optimized.replace(/```html/g, '').replace(/```/g, '').trim();
+      optimized = stripCodeFences(optimized);
       optimized = cleanHtmlStructure(optimized);
       this.optimizerOutput.set(optimized);
       this.progressMessage.set('Optimization Complete!');
@@ -478,7 +473,7 @@ export class ContentOrchestratorService {
     try {
       const prompt = buildPromptC(content, targetLang, '', undefined);
       let translated = await this.llm.generateText(prompt, useThinking);
-      translated = translated.replace(/```html/g, '').replace(/```/g, '').trim();
+      translated = stripCodeFences(translated);
 
       if (targetLang === 'Spanish (EXPERT3D)') {
         translated = this.applySpanishExpert3dReplacements(translated);
@@ -503,7 +498,7 @@ export class ContentOrchestratorService {
     try {
       const prompt = this.buildCopywriterPrompt(website, text);
       let rewritten = await this.llm.generateText(prompt, useThinking);
-      rewritten = rewritten.replace(/```html/g, '').replace(/```/g, '').trim();
+      rewritten = stripCodeFences(rewritten);
       this.copywriterOutput.set(rewritten);
       this.progressMessage.set('Content Rewritten!');
     } catch (error) {

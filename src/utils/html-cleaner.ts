@@ -1,4 +1,8 @@
 
+export function stripCodeFences(text: string): string {
+  return text.replace(/```html/g, '').replace(/```/g, '').trim();
+}
+
 export const cleanHtmlStructure = (html: string): string => {
   if (!html) return '';
   
