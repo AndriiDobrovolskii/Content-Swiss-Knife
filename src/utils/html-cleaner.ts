@@ -1,4 +1,6 @@
 
+import { ensureRel0 } from './video-url';
+
 export function stripCodeFences(text: string): string {
   return text.replace(/```html/g, '').replace(/```/g, '').trim();
 }
@@ -121,35 +123,7 @@ export const cleanHtmlStructure = (html: string): string => {
     if (src.includes('youtube.com') || src.includes('youtu.be')) {
       
       // A. URL Modification (Ensure rel=0)
-      try {
-        let urlObj: URL | null = null;
-        let isProtocolRelative = src.startsWith('//');
-        
-        if (src.startsWith('http') || isProtocolRelative) {
-           const fullUrl = isProtocolRelative ? 'https:' + src : src;
-           urlObj = new URL(fullUrl);
-           
-           if (urlObj.searchParams.get('rel') !== '0') {
-              urlObj.searchParams.set('rel', '0');
-              const newSrc = isProtocolRelative 
-                ? urlObj.toString().replace(/^https:/, '') 
-                : urlObj.toString();
-              iframe.setAttribute('src', newSrc);
-           }
-        } else {
-           // Fallback for relative paths or others
-           if (!src.includes('rel=0')) {
-             const separator = src.includes('?') ? '&' : '?';
-             iframe.setAttribute('src', `${src}${separator}rel=0`);
-           }
-        }
-      } catch (e) {
-        // Safety fallback
-         if (!src.includes('rel=0')) {
-             const separator = src.includes('?') ? '&' : '?';
-             iframe.setAttribute('src', `${src}${separator}rel=0`);
-         }
-      }
+      iframe.setAttribute('src', ensureRel0(src));
 
       // B. Attribute Purge & Style
       const preserveAttrs = ['src', 'title', 'allow', 'allowfullscreen', 'loading', 'referrerpolicy'];
