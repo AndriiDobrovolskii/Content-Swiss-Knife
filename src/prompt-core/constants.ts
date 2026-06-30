@@ -75,14 +75,6 @@ export function isoToHumanLang(iso: string): string {
   return map[iso] ?? iso;
 }
 
-/** Per-group language config. */
-export const GROUP_CONFIG: Record<WebsiteGroup, { seoLangs: string[]; transLangs: string[] }> = {
-  UA: { seoLangs: ['EN', 'UA', 'RU'], transLangs: ['UA', 'RU'] },
-  EU: { seoLangs: ['EN', 'PL', 'DE', 'UA', 'RU'], transLangs: ['PL', 'DE', 'UA', 'RU'] },
-  ES: { seoLangs: ['EN', 'ES', 'en-ES', 'uk-UA'], transLangs: ['ES', 'European English', 'Ukrainian'] },
-  US: { seoLangs: ['en-US', 'es-US', 'uk-UA'], transLangs: ['American Spanish', 'Ukrainian'] },
-};
-
 /** Brand lists per store group. */
 export const BRANDS_ES = ['Raise3D', 'Formlabs', 'xTool', 'Shining3D', 'XGRIDS', 'PUDU', 'Metal3D'];
 export const BRANDS_DEFAULT = [
@@ -90,11 +82,6 @@ export const BRANDS_DEFAULT = [
   'Shining3D', 'Peel 3D', 'Creaform', 'Revopoint', 'Scantech', 'Surphaser', 'Thunk3D', 'E-PLUS 3D',
   'Fastform', 'xTool', 'Magigoo', 'Aesub', 'Bambu Lab', 'PUDU', 'Metal3D',
 ];
-
-export function officialBrand(productName: string, storeName: string): string {
-  const list = ['EXPERT3D', 'Impresora-3D'].includes(storeName) ? BRANDS_ES : BRANDS_DEFAULT;
-  return list.find(b => productName.toLowerCase().includes(b.toLowerCase())) ?? '';
-}
 
 /**
  * Brand-guarantee sentence used in the COMMERCIAL CLOSING / CTA-TRUST block (Schema v3 §9).

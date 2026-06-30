@@ -56,7 +56,6 @@ export function appendRepairFeedback(
 
   return {
     ...payload,
-    systemBlocks: payload.systemBlocks,
     userContent: `${payload.userContent}\n${block}`,
   };
 }

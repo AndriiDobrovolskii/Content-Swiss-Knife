@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import saveAs from 'file-saver';
 import { GeneratedContent, ProcessedImage } from '../app/types';
 import { getStore, taskLangToIso } from '../prompt-core/constants';
+import { sortUkrainianFirst, sortUkrainianFirstIso } from './locale-sort';
 
 function buildTimestamp(): string {
   const d = new Date();
@@ -23,13 +24,7 @@ export const downloadPackage = async (content: GeneratedContent, productName: st
   zip.file(`description_${enIso}.html`, content.mainHtmlEn);
 
   // 2. Translations — sort so Ukrainian comes first
-  const sortedKeys = Object.keys(content.translations).sort((a, b) => {
-    const aIsUk = a === 'UA' || a === 'Ukrainian';
-    const bIsUk = b === 'UA' || b === 'Ukrainian';
-    if (aIsUk && !bIsUk) return -1;
-    if (!aIsUk && bIsUk) return 1;
-    return 0;
-  });
+  const sortedKeys = Object.keys(content.translations).sort(sortUkrainianFirst);
   sortedKeys.forEach(key => {
     const iso = taskLangToIso(key, storeName);
     zip.file(`description_${iso}.html`, content.translations[key]);
@@ -37,11 +32,7 @@ export const downloadPackage = async (content: GeneratedContent, productName: st
 
   // 3. FAQ artifacts — schema-free, for Journal theme FAQ module
   if (content.faqArtifacts) {
-    const faqEntries = Object.entries(content.faqArtifacts).sort(([a], [b]) => {
-      if (a === 'uk-UA') return -1;
-      if (b === 'uk-UA') return 1;
-      return 0;
-    });
+    const faqEntries = Object.entries(content.faqArtifacts).sort(([a], [b]) => sortUkrainianFirstIso(a, b));
     faqEntries.forEach(([iso, html]) => { if (html) zip.file(`faq_${iso}.html`, html); });
   }
 
@@ -97,7 +88,7 @@ export const downloadTextPackage = (content: GeneratedContent, productName: stri
 
 export const downloadImagesPackage = async (images: ProcessedImage[]) => {
   const zip = new JSZip();
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const timestamp = buildTimestamp();
   
   // Map to track filenames and handle duplicates
   const nameMap = new Map<string, number>();

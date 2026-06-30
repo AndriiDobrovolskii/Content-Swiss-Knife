@@ -14,10 +14,9 @@
  * source iframe with a lead-in <p>; that lead-in is a separate sibling and is
  * left untouched.
  *
- * The rel=0 / URL handling mirrors html-cleaner.ts section 6 (ported, not
- * imported, to keep this PR contained — a shared normalizeVideoIframe() is
- * tracked follow-up debt).
  */
+
+import { ensureRel0 } from './video-url';
 
 /** Canonical attribute set every video iframe must end up with. */
 const IFRAME_STYLE = 'width: 100%; height: 100%; border: 0;';
@@ -30,33 +29,6 @@ const FIGCAPTION_STYLE = 'text-align: center; font-size: 14px; color: #666; marg
 
 function isVideoSrc(src: string): boolean {
   return src.includes('youtube.com') || src.includes('youtu.be') || src.includes('vimeo.com');
-}
-
-/** Ensure `rel=0` on the iframe src, preserving the URL otherwise (html-cleaner §6 logic). */
-function ensureRel0(src: string): string {
-  try {
-    const isProtocolRelative = src.startsWith('//');
-    if (src.startsWith('http') || isProtocolRelative) {
-      const urlObj = new URL(isProtocolRelative ? 'https:' + src : src);
-      if (urlObj.searchParams.get('rel') !== '0') {
-        urlObj.searchParams.set('rel', '0');
-        return isProtocolRelative ? urlObj.toString().replace(/^https:/, '') : urlObj.toString();
-      }
-      return src;
-    }
-    // Relative path / other — string fallback.
-    if (!src.includes('rel=0')) {
-      const separator = src.includes('?') ? '&' : '?';
-      return `${src}${separator}rel=0`;
-    }
-    return src;
-  } catch {
-    if (!src.includes('rel=0')) {
-      const separator = src.includes('?') ? '&' : '?';
-      return `${src}${separator}rel=0`;
-    }
-    return src;
-  }
 }
 
 /**

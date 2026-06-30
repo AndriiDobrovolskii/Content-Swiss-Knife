@@ -1,5 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
 import { withRetry } from '../utils/retry.js';
+import { normalizePayload } from '../utils/payload.js';
+import { parseJsonResponse } from '../utils/json-parse.js';
+import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
 
 export class GeminiProvider {
   constructor(apiKey) {
@@ -10,8 +13,7 @@ export class GeminiProvider {
 
   async generate(payload, mode = 'text') {
     return withRetry(async () => {
-      const { systemBlocks = [], userContent = '' } =
-        typeof payload === 'string' ? { systemBlocks: [], userContent: payload } : payload;
+      const { systemBlocks = [], userContent = '' } = normalizePayload(payload);
       const contents = [systemBlocks.map(b => b.text).join('\n\n'), userContent].filter(Boolean).join('\n\n');
 
       if (mode === 'creative') {
@@ -29,9 +31,7 @@ export class GeminiProvider {
           contents,
           config: { responseMimeType: 'application/json' }
         });
-        const text = response.text || '{}';
-        const clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(clean);
+        return parseJsonResponse(response.text || '{}');
       }
 
       const response = await this.ai.models.generateContent({
@@ -64,7 +64,7 @@ export class GeminiProvider {
         contents: {
           parts: [
             { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-            { text: 'Extract the full product description and technical specifications from document. Return them as plain text.' }
+            { text: PDF_EXTRACT_PROMPT }
           ]
         }
       });

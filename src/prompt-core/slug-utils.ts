@@ -51,3 +51,7 @@ export function ensureUniqueSlugs(items: { language: string; slug: string }[]): 
 }
 
 export const SLUG_PATTERN = /^[a-z0-9]+(\.[0-9]+)?(-[a-z0-9]+(\.[0-9]+)?)*$/;
+
+export function slugsToLocalizedNames(slugs: { language: string; name: string }[]): Record<string, string> {
+  return Object.fromEntries(slugs.map(s => [s.language, s.name]));
+}

@@ -1,6 +1,8 @@
 import OpenAI from 'openai';
 import { pdfToText } from '../utils/pdf.js';
 import { withRetry } from '../utils/retry.js';
+import { normalizePayload } from '../utils/payload.js';
+import { parseJsonResponse } from '../utils/json-parse.js';
 
 export class OpenAiProvider {
   constructor(apiKey, model = 'gpt-4o') {
@@ -16,8 +18,7 @@ export class OpenAiProvider {
 
   async generate(payload, mode = 'text') {
     return withRetry(async () => {
-      const { systemBlocks = [], userContent = '' } =
-        typeof payload === 'string' ? { systemBlocks: [], userContent: payload } : payload;
+      const { systemBlocks = [], userContent = '' } = normalizePayload(payload);
       const system = systemBlocks.map(b => b.text).join('\n\n');
       const openaiMessages = [];
       if (system) openaiMessages.push({ role: 'system', content: system });
@@ -41,10 +42,7 @@ export class OpenAiProvider {
       const response = await this.client.chat.completions.create(config);
       const text = response.choices[0].message.content || '';
 
-      if (mode === 'json') {
-        const clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(clean);
-      }
+      if (mode === 'json') return parseJsonResponse(text);
       return text;
     });
   }

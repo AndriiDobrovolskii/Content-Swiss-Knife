@@ -29,10 +29,6 @@ export class LlmService implements LlmProvider {
     return this.generate<string>(toPayload(input), useThinking ? 'creative' : 'text');
   }
 
-  async generateCreativeContent(input: PromptPayload | string): Promise<string> {
-    return this.generate<string>(toPayload(input), 'creative');
-  }
-
   async generateJson<T = any>(input: PromptPayload | string, useThinking = false): Promise<T> {
     return this.generate<T>(toPayload(input), useThinking ? 'creative-json' : 'json');
   }
