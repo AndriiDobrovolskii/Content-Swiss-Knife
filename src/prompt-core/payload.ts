@@ -7,4 +7,3 @@ export interface PromptPayload {
   userContent: string;         // dynamic, never cached
 }
 
-export type LlmMode = 'creative' | 'text' | 'json';

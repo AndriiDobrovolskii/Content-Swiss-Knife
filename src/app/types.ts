@@ -169,5 +169,3 @@ export const CONTENT_TEMPLATES: ContentTemplate[] = [
   }
 ];
 
-// Re-exported from prompt-core/constants for back-compat.
-export { GROUP_CONFIG } from '../prompt-core/constants';
