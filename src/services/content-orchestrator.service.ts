@@ -13,101 +13,19 @@ import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
-import { getStore, getLangsForStore, US_MEASUREMENT_RULES, isoToHumanLang, taskLangToIso } from '../prompt-core/constants';
+import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
+import { buildOptimizerPrompt } from '../prompts/optimizer';
+import { buildReadabilityPrompt } from '../prompts/readability';
+import { buildKeywordsPrompt } from '../prompts/keywords';
+import { buildImageAltPrompt } from '../prompts/image-alt';
+import { buildCopywriterPrompt } from '../prompts/copywriter';
 import { sortUkrainianFirst } from '../utils/locale-sort';
 import { SlugResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback } from '../utils/repair-gate';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload } from '../prompt-core/payload';
-
-// ── Inline prompts for tools that don't need external templates ─────────────
-
-function buildOptimizerPrompt(htmlInput: string, productName = ''): string {
-  const contextInstruction = productName ? ` + "${productName}"` : '';
-  return `🛠️ Role
-You are an Advanced HTML Parser & SEO Optimizer. Refactor dirty HTML into clean, semantic, high-performance HTML5.
-
-⚡️ Execution Pipeline (follow strictly)
-PHASE 1 — Structural Cleanup
-1. Remove <noscript> tags and content.
-2. Unwrap <div class="wpb-content-wrapper">…</div> — keep inner HTML.
-3. Smart Image Extraction:
-   - <a href…><img …></a> → keep only <img …>.
-   - <picture>…<img …>…</picture> → keep only <img …>.
-   - WordPress captions → extract <img> + <p>Caption text</p>.
-4. Heading Hygiene: remove <strong>, <b>, <span> inside <h2>/<h3>/<h4> but keep text.
-5. Tag Replacement:
-   - <pre>…</pre> → <small>…</small>
-   - <p><br /></p> → <br>
-   - <b>…</b> → <strong>…</strong>
-
-PHASE 2 — Image Optimization
-For every <img>:
-- If data-src present: move to src, remove data-src.
-- REMOVE: class, style, loading, decoding, srcset, sizes, border.
-- KEEP: width, height, alt, title. Never invent dimensions.
-- Alt text: if missing/empty, generate 4–8 words based on context${contextInstruction}.
-- Title attribute: REMOVE entirely.
-
-PHASE 3 — Semantic Highlighting
-- Bold High-Value Technical Specs only (44.2 MPa, 70 °C, 1.93 GPa).
-- Do NOT bold standard volumes/weights, ABS/PLA/PETG acronyms in paragraphs.
-- Max 1 highlight per paragraph.
-- In lists: <li><strong>Nozzle:</strong> 0.4 mm</li>.
-
-⛔ Output Restrictions
-- NEVER output Python code, scripts, or explanations.
-- Raw HTML Only — no markdown code blocks.
-- Do not close <div> tags not opened in the input.
-
-📥 Input HTML:
-${htmlInput}`;
-}
-
-function buildReadabilityPrompt(text: string): string {
-  return `Act as a Professional Editor and Accessibility Specialist.
-Analyze the following text for clarity, readability, and accessibility.
-
-Text to analyze:
-${text.substring(0, 5000)}
-
-Provide analysis in this JSON format:
-{
-  "score": number (0–100, 100 = extremely clear),
-  "level": "Easy | Moderate | Difficult | Technical",
-  "issues": ["specific clarity/accessibility issues"],
-  "suggestions": ["specific improvements"],
-  "optimizedText": "rewritten version implementing the suggestions while preserving technical facts and SEO keywords"
-}
-
-Return ONLY the raw JSON object.`;
-}
-
-function buildKeywordsPrompt(productName: string, description: string): string {
-  return `Act as an SEO Specialist.
-Analyze the following product information and generate a list of 10 high-impact, relevant SEO keywords
-and phrases (including long-tail). Focus on terms potential buyers would search for related to
-3D printing equipment.
-
-Product Name: ${productName}
-Description Context: ${description.substring(0, 2000)}
-
-Return ONLY a raw JSON array of strings. Example: ["keyword 1", "keyword 2"]`;
-}
-
-function buildImageAltPrompt(): string {
-  return `Generate professional, technical SEO alt text for this product image.
-
-Rules:
-1. Be Specific: mention technical specs visible in the image (wavelengths, spot sizes, material types).
-2. Comparative Analysis: if the image shows a comparison, describe the before/after or left/right differences.
-3. Function over Form: focus on the result of the technology shown.
-4. Tone: scientific, precise, professional. No marketing fluff ("amazing", "beautiful").
-5. Structure: main subject first, then technical details and the specific machine/process.
-6. Conciseness: maximum 20 words. No introductory phrases like "This image shows".`;
-}
 
 // ── Orchestrator ────────────────────────────────────────────────────────────
 
@@ -496,7 +414,7 @@ export class ContentOrchestratorService {
     this.copywriterOutput.set('');
 
     try {
-      const prompt = this.buildCopywriterPrompt(website, text);
+      const prompt = buildCopywriterPrompt(website, text);
       let rewritten = await this.llm.generateText(prompt, useThinking);
       rewritten = stripCodeFences(rewritten);
       this.copywriterOutput.set(rewritten);
@@ -578,12 +496,6 @@ export class ContentOrchestratorService {
     }
   }
 
-  // ── Image alt text (used by app.component.ts) ────────────────────────────
-
-  getImageAltPrompt(): string {
-    return buildImageAltPrompt();
-  }
-
   // ── Private helpers ───────────────────────────────────────────────────────
 
   private applySpanishExpert3dReplacements(content: string): string {
@@ -633,58 +545,4 @@ export class ContentOrchestratorService {
     return result;
   }
 
-  private buildCopywriterPrompt(website: WebsiteOption, text: string): string {
-    const siteName = website.name;
-    const store = getStore(siteName);
-    let localizationContext = '';
-
-    if (store.group === 'UA') {
-      localizationContext = `### Context for ${siteName} (UA Market)
-- Language Priority: Ukrainian (uk-UA), Russian (ru-UA).
-- Tone: Professional, clear, and trustworthy. Expert voice.`;
-    } else if (store.group === 'EU') {
-      localizationContext = `### Context for ${siteName} (EU Market)
-- Language Priority: Polish (pl-PL), English (en-GB), German (de-DE).
-- Tone: Professional, direct, and technically accurate.`;
-    } else if (store.group === 'ES') {
-      localizationContext = `### Context for ${siteName} (Spain Market)
-- Language Priority: Spanish (es-ES).
-- Tone: "Cercano y Profesional". Engaging and direct. Use "Tú".`;
-    } else if (store.group === 'US') {
-      localizationContext = `${US_MEASUREMENT_RULES}
-
-### Context for ${siteName} (US Market)
-- Language Priority: English (en-US), Spanish (es-MX).
-- Tone: Confident, benefit-driven, and energetic. Use active voice.`;
-    } else {
-      localizationContext = `### Context for ${siteName} (${website.group})`;
-    }
-
-    return `[ROLE]
-You are an expert copywriter and SEO specialist. Rewrite the given text to make it unique,
-engaging, and stylistically appropriate for the specific target market defined below.
-
-[TASK]
-Rewrite the following [SOURCE TEXT] to be approximately 80% unique. The core meaning and
-technical facts must be preserved, but the structure, vocabulary, and sentence construction
-must be significantly different.
-
-${localizationContext}
-
-[STYLE & HUMANIZATION GUIDELINES]
-1. No Fluff: start directly with value. Ban intro phrases like "In the modern world…".
-2. Expert Perspective (The "Why"): explain WHY specs matter.
-3. Rhythm & Burstiness: mix short punchy sentences with longer descriptive ones.
-   Prohibited clichés: "ideal solution", "cutting-edge", "perfect choice".
-4. Formatting: use <strong> for keywords and specs sparingly (max 2–3 per paragraph).
-
-[FORMAT REQUIREMENTS]
-1. HTML Structure: NO <h1>. Use <h2> for section titles, <h3> for sub-features.
-   Wrap ALL paragraphs in <p> tags. Lists: <ul><li>…</li></ul>.
-2. Formatting: use <strong> for bold. NO markdown (**text**).
-3. NO markdown code blocks. Return RAW HTML string only.
-
-[SOURCE TEXT]
-${text}`;
-  }
 }

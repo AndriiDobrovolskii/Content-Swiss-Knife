@@ -6,6 +6,7 @@ import { LlmService } from '../services/llm.service';
 import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry, TabDescriptor } from './types';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
+import { buildImageAltPrompt } from '../prompts/image-alt';
 import { parseVisionResult } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
 import { getStore, getLangsForStore } from '../prompt-core/constants';
@@ -1153,7 +1154,7 @@ export class AppComponent {
             if (this.imgUseAiAlt()) {
               try {
                 const base64ForApi = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
-                altText = await this.llmService.analyzeImage(base64ForApi, 'image/jpeg', this.orchestrator.getImageAltPrompt(), this.generatorUseThinking());
+                altText = await this.llmService.analyzeImage(base64ForApi, 'image/jpeg', buildImageAltPrompt(), this.generatorUseThinking());
               } catch (err) {
                 console.warn('AI Alt Text failed', err);
                 altText = 'Error generating alt text.';
