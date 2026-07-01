@@ -8,6 +8,7 @@ import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
+import { validateSpecsGrounding } from '../utils/specs-grounding';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -98,7 +99,10 @@ export class ContentOrchestratorService {
         maxRepairs: repairBudget,
         basePayload: basePayloadA,
         produce: produceHtmlA,
-        validate: html => validateGeneratedHtml(html, 'HTML (base)', input.name, undefined, { templateId: input.templateId }),
+        validate: html => [
+          ...validateGeneratedHtml(html, 'HTML (base)', input.name, undefined, { templateId: input.templateId }),
+          ...validateSpecsGrounding(html, input.specs, 'HTML (base)'),
+        ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -489,6 +493,16 @@ export class ContentOrchestratorService {
       rule.old.forEach(url => {
         result = result.split(url).join(rule.new);
       });
+    });
+
+    // EXPERT3D ToV — deterministic calque fixes (unambiguous multi-word phrases only;
+    // single-word/inflected calques stay prompt- + validator-driven to avoid false hits).
+    const calqueReplacements: Array<[string, string]> = [
+      ['de extremo a extremo', 'de principio a fin'],
+      ['producción puente', 'producción de transición'],
+    ];
+    calqueReplacements.forEach(([bad, good]) => {
+      result = result.split(bad).join(good);
     });
 
     return result;

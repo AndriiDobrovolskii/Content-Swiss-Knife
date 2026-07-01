@@ -1,6 +1,6 @@
 import { ProductInput, ImageManifestEntry, CONTENT_TEMPLATES } from '../app/types';
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { getStore, CONSUMABLES_SIMPLIFIED_SCHEMA } from '../prompt-core/constants';
+import { getStore, isExpert3dStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 // ── Standard full-schema instruction (Schema v3.0 §1–§9) ──────────────────
@@ -48,6 +48,7 @@ Build src as {base}{brandFolder}/{modelFolder}/{filename}. ${example ? 'Example:
 export function buildPromptA(input: ProductInput): PromptPayload {
   const store = getStore(input.website.name);
   const isUs = store.group === 'US';
+  const isExpert3d = isExpert3dStore(input.website.name);
   const baseLanguage = isUs ? 'American English (en-US)' : 'European English (en-GB)';
   const isConsumables = input.templateId === 'consumables-resin';
 
@@ -86,6 +87,9 @@ Generate the description in ${baseLanguage}. Primary keyword "${input.name}" use
       { text: MASTER_SYSTEM_PROMPT, cache: true },
       // Cache key differs per schema type — correct behaviour, two independent cache slots.
       { text: isConsumables ? TASK_A_CONSUMABLES_INSTRUCTION : TASK_A_INSTRUCTION, cache: true },
+      // EXPERT3D-only ToV voice block. Appended as a cached suffix so the shared
+      // master+task prefix stays byte-stable (cache hit) for all other stores.
+      ...(isExpert3d ? [{ text: EXPERT3D_TOV_BASE_OVERLAY, cache: true }] : []),
     ],
     userContent,
   };

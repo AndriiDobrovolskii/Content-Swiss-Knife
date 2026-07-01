@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY } from '../prompt-core/constants';
+import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 function pack(instruction: string, html: string): PromptPayload {
@@ -37,6 +37,13 @@ export function buildPromptC(
   // 2500-char limit survive translation regardless of which variant was chosen above.
   if (templateId === 'consumables-resin') {
     instruction += `\n\n${CONSUMABLES_TRANSLATION_OVERLAY}`;
+  }
+
+  // EXPERT3D Tone of Voice: formal register + forbidden calques + brand voice, for every
+  // EXPERT3D/Impresora-3D language version (es-ES, uk-UA). targetLang check also covers the
+  // manual translate() path where storeName is empty ('Spanish (EXPERT3D)' etc.).
+  if (isExpert3dStore(storeName) || targetLang.includes('(EXPERT3D)')) {
+    instruction += `\n\n${EXPERT3D_TOV_TRANSLATION_OVERLAY}`;
   }
 
   return pack(instruction, html);
@@ -158,12 +165,15 @@ in a repeated Product Name. Never change the digits or the unit — only the sep
 
 ${PRODUCT_NAME_LOCALIZATION}
 
-[STYLE — CASTILIAN SPANISH]
-- Use "Tú" (Tuteo). Creates trust in Spain.
-- Active voice. Instead of "It is recommended" → "Te recomendamos".
+[STYLE — CASTILIAN SPANISH — EXPERT3D ToV]
+- REGISTER: formal "usted" throughout (B2B industrial capital equipment) — NEVER "tú"/"te"/"tu".
+  Active voice: "It is recommended" → "le recomendamos" / "recomendamos".
+- Expert-consultant voice: factual, precise, no marketing fluff. Every claim carries a figure or
+  a mechanism (Fact → Mechanism → Consequence). Do NOT use: revolucionario, innovador, puntero,
+  el mejor, increíble, la elección perfecta, imprescindible.
 - Vocabulary: Ordenador, Móvil, Vídeo (accented), Fichero.
   Tech: "Resina" (not "Resin"), "Laminador" (slicer), "Plataforma" (bed).
-- Focus on "acabados profesionales" and "fiabilidad".
+- Focus on verifiable precision, reliability and professional finishes — stated with specifics.
 
 [CONSTRAINTS]
 - Keep brand/model names in original Latin script (Creality, Bambu Lab); TRANSLATE the generic descriptor, reorder it category-first, es-ES uses "uds" (see [PRODUCT NAME LOCALIZATION]).
