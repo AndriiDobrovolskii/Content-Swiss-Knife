@@ -14,7 +14,7 @@ import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
-import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso } from '../prompt-core/constants';
+import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { buildOptimizerPrompt } from '../prompts/optimizer';
@@ -171,7 +171,7 @@ export class ContentOrchestratorService {
           produce: async (payload) => {
             let html = await this.llm.generateText(payload, useThinking);
             html = stripCodeFences(html);
-            if (input.website.name === 'EXPERT3D' && lang === 'ES') {
+            if (isExpert3dStore(input.website.name) && lang === 'ES') {
               html = this.applySpanishExpert3dReplacements(html);
             }
             html = wrapImageFigures(html);
@@ -495,14 +495,20 @@ export class ContentOrchestratorService {
       });
     });
 
-    // EXPERT3D ToV — deterministic calque fixes (unambiguous multi-word phrases only;
-    // single-word/inflected calques stay prompt- + validator-driven to avoid false hits).
-    const calqueReplacements: Array<[string, string]> = [
-      ['de extremo a extremo', 'de principio a fin'],
-      ['producción puente', 'producción de transición'],
+    // EXPERT3D ToV — deterministic calque fixes. Case-insensitive to catch sentence-initial
+    // capitals; plural form of 'producción puente' maps to plural replacement.
+    const calqueReplacements: Array<[RegExp, (m: string) => string]> = [
+      [/de extremo a extremo/gi, (m) => {
+        const r = 'de principio a fin';
+        return /^[A-ZÁÉÍÓÚÑÜ]/.test(m) ? r[0].toUpperCase() + r.slice(1) : r;
+      }],
+      [/producci[oó]n puentes?/gi, (m) => {
+        const r = /puentes$/i.test(m) ? 'producciones de transición' : 'producción de transición';
+        return /^[A-ZÁÉÍÓÚÑÜ]/.test(m) ? r[0].toUpperCase() + r.slice(1) : r;
+      }],
     ];
-    calqueReplacements.forEach(([bad, good]) => {
-      result = result.split(bad).join(good);
+    calqueReplacements.forEach(([re, replacer]) => {
+      result = result.replace(re, replacer);
     });
 
     return result;
