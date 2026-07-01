@@ -63,6 +63,36 @@ function checkNumberFormatting(html: string, locale: string | undefined, issues:
   }
 }
 
+/**
+ * EXPERT3D ToV forbidden calques (es-ES). locale 'es-ES' is exclusive to EXPERT3D/Impresora-3D
+ * in STORE_REGISTRY, so keying on it is equivalent to gating on the store. Warning-only:
+ * "huella" can be legitimate (huella de carbono), so it flags rather than blocks. Single-word
+ * ambiguous items (útiles / flujo de trabajo) are left to the prompt overlay, not the validator.
+ */
+const ES_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
+  { re: /\bhuellas?\b/i, fix: 'superficie de ocupación / espacio de instalación' },
+  { re: /\bde extremo a extremo\b/i, fix: 'de principio a fin / integral' },
+  { re: /\bproducci[oó]n puentes?\b/i, fix: 'producción de transición' },
+  { re: /\bfixtures?\b/i, fix: 'fijaciones / utillajes de sujeción' },
+  { re: /\benvases prot[eé]sicos?\b/i, fix: 'encajes protésicos' },
+];
+
+function checkExpert3dSpanishCalques(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
+  if (locale !== 'es-ES') return;
+  const text = html.replace(/<[^>]*>/g, ' ');
+  for (const { re, fix } of ES_FORBIDDEN_CALQUES) {
+    const m = text.match(re);
+    if (m) {
+      issues.push({
+        severity: 'warning',
+        rule: 'es-forbidden-calque',
+        detail: `Anglicism/calque "${m[0]}" — use "${fix}" (EXPERT3D ToV §7.3).`,
+        context,
+      });
+    }
+  }
+}
+
 /** Counts visible characters by code point (so emoji/➔ count as 1, matching CMS limits). */
 function charLength(s: string): number {
   return Array.from(s).length;
@@ -230,6 +260,7 @@ export function validateGeneratedHtml(
   // Decimal/thousands separator per locale — runs on the raw html (not the productName-stripped
   // variant above): a wrong separator inside a repeated Product Name must still be flagged.
   checkNumberFormatting(html, locale, issues, context);
+  checkExpert3dSpanishCalques(html, locale, issues, context);
 
   // Image lazy-loading rule: first <img> must NOT be lazy; every subsequent one must be.
   try {

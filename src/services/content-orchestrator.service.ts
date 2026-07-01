@@ -495,6 +495,16 @@ export class ContentOrchestratorService {
       });
     });
 
+    // EXPERT3D ToV — deterministic calque fixes (unambiguous multi-word phrases only;
+    // single-word/inflected calques stay prompt- + validator-driven to avoid false hits).
+    const calqueReplacements: Array<[string, string]> = [
+      ['de extremo a extremo', 'de principio a fin'],
+      ['producción puente', 'producción de transición'],
+    ];
+    calqueReplacements.forEach(([bad, good]) => {
+      result = result.split(bad).join(good);
+    });
+
     return result;
   }
 

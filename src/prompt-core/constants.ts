@@ -29,6 +29,15 @@ export function getStore(name: string): StoreProfile {
   };
 }
 
+/**
+ * EXPERT3D / Impresora-3D — the two ES-group storefronts that share one Tone of Voice.
+ * The single predicate that gates every EXPERT3D-only ToV injection (Task A voice block,
+ * Task C translation overlay). Equivalent to group === 'ES' but named for intent.
+ */
+export function isExpert3dStore(name: string): boolean {
+  return name === 'EXPERT3D' || name === 'Impresora-3D';
+}
+
 function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
   if (lang === 'uk-UA') return group === 'US' ? 'Ukrainian' : 'UA';
   if (lang === 'ru-UA') return 'RU';
@@ -308,3 +317,82 @@ HARD LIMIT: translated visible text (HTML tags stripped) MUST stay at or below 2
 Since you cannot count characters, COMPRESS structurally: keep §C2/§C3/§C5 bullets to one short sentence each, drop adjectives. Never pad, never add sentences.
 If the target language expands vs. the source, COMPRESS §C2/§C3/§C5 prose to stay under the limit. Never pad, never add sentences.
 Preserve every spec-table row and numeric value verbatim (only localize unit/separator as instructed above).`;
+
+/**
+ * EXPERT3D Tone of Voice — BASE-GENERATION overlay (Task A only, EXPERT3D/Impresora-3D).
+ * Added as an extra CACHED system block AFTER master + task-a instruction, so the shared
+ * master+task prefix stays byte-stable (cache hit) for every other store and EXPERT3D just
+ * gets one additional cached suffix (its own cache slot). Encodes brand character, the
+ * forbidden-word list and the Fact -> Mechanism -> Consequence formula. Product-agnostic:
+ * no product-specific few-shots that would bias unrelated categories. Register and loanword
+ * rules are per-locale and live in EXPERT3D_TOV_TRANSLATION_OVERLAY instead.
+ */
+export const EXPERT3D_TOV_BASE_OVERLAY =
+  `[EXPERT3D BRAND VOICE — applies to this store's base generation and every language version]
+Write as EXPERT3D: a technical partner that sells solutions, not boxes. The narrator is an
+experienced engineering consultant who knows the product and respects the reader's time —
+not a salesperson, not an enthusiast.
+
+TONE:
+- Confident, never boastful. Technically precise, but readable without a glossary.
+- Emotionally neutral: no excitement, no exclamation marks.
+- Every claim is backed by a concrete figure or a mechanism — never vague.
+- Respect the reader: do not explain the obvious; do surface the non-obvious.
+
+VOICE FORMULA (apply throughout — especially "Why it matters" cells, key benefits, applications):
+  Fact -> Mechanism -> User consequence.
+  e.g. "A 0.2 mm nozzle forms a narrower extrusion path, sharpening the boundary between colour
+  overlap zones." — parameter + how it works + what the buyer gets, in one sentence.
+
+FORBIDDEN WORDS (all languages — extends the master fluff ban): revolutionary, innovative,
+cutting-edge, advanced, best, incredible, amazing, fantastic, perfect choice, must-have,
+top product, game-changer, "quality on point", "exceeds expectations", "buy now", "don't miss
+out". Replace each with a specific fact or number.
+  BAD  "High-quality filament / excellent print results / easy to use"
+  GOOD "±0.02 mm diameter tolerance across all four spools / even colour saturation on 0.2 mm
+       details / no manual profile calibration when HEX values match"
+
+Keep the schema's mandated section order and headings — the ToV changes the WORDING and the
+evidence discipline, not the structure. In Applications, every entry states a concrete scenario
+plus what makes THIS product the right tool for it (the differentiator vs alternatives), never
+just the industry name.`;
+
+/**
+ * EXPERT3D Tone of Voice — TRANSLATION overlay (Task C, EXPERT3D/Impresora-3D locales).
+ * Appended to whichever task-c instruction is selected — same mechanism as
+ * CONSUMABLES_TRANSLATION_OVERLAY. Carries the per-locale FORMAL register, the es-ES
+ * forbidden-calque list and the uk-UA forbidden-word stems into every EXPERT3D language
+ * version and preserves the brand voice through translation. These rules WIN over any
+ * conflicting [STYLE]/register line above (notably the legacy "use tú" line — B2B industrial
+ * capital equipment uses the formal register).
+ */
+export const EXPERT3D_TOV_TRANSLATION_OVERLAY =
+  `[EXPERT3D ToV — TRANSLATION OVERLAY — these rules WIN over any [STYLE]/register line above]
+Preserve the EXPERT3D brand voice: expert-consultant, factual, no marketing fluff. Do NOT
+introduce forbidden words in the target language (revolucionario/innovador/puntero/el mejor/
+increíble/la elección perfecta/imprescindible ; революційний/інноваційний/ідеальний/неймовірний/
+найкращий). Keep the Fact -> Mechanism -> Consequence shape of each claim.
+
+REGISTER (formal, mandatory — this is B2B industrial capital equipment):
+- es-ES / es-MX: formal "usted" throughout — verbs, possessives (le garantizamos, le asesora,
+  su línea, aproveche). NEVER "tú" / "te" / "tu".
+- uk-UA: formal "Ви" (з великої), technical and direct, no pathos.
+- pl-PL: formal Pan/Pani — never bezpośrednie "ty".
+- en-ES / en-GB: neutral, impersonal industrial tone (English has no tú/usted).
+
+FORBIDDEN CALQUES (es-ES / es-MX — replace the English calque with natural Spanish; match
+inflected forms too, e.g. huella/huellas, puente/puentes):
+- huella (= footprint) -> superficie de ocupación / espacio de instalación
+- de extremo a extremo (= end-to-end) -> de principio a fin / integral
+- producción puente (= bridge manufacturing) -> producción de transición
+- fixtures (untranslated) -> fijaciones / utillajes de sujeción
+- envases protésicos (= socket, wrong term) -> encajes protésicos
+- útiles (= tooling) -> utillajes
+- over-literal flujo de trabajo (= workflow, overused) -> flujo de producción / proceso
+
+FORBIDDEN STEMS (uk-UA — drop or replace with a concrete fact): революцій-, інновацій-,
+ідеальн-, неймовірн-, найкращ- (when unproven).
+
+COLON CAPITALIZATION in "<b>Label:</b> continuation" list items and figcaptions: for uk-UA /
+ru-UA / pl-PL lowercase the first letter after the colon (it introduces an explanation of the
+bold label, not a new sentence). For de-DE and all English keep the default capital.`;
