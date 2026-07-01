@@ -35,7 +35,7 @@ export function getStore(name: string): StoreProfile {
  * Task C translation overlay). Equivalent to group === 'ES' but named for intent.
  */
 export function isExpert3dStore(name: string): boolean {
-  return name === 'EXPERT3D' || name === 'Impresora-3D';
+  return getStore(name).group === 'ES';
 }
 
 function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {

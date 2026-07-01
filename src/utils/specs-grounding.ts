@@ -52,6 +52,7 @@ function normalizeText(s: string): string {
 function significantWords(label: string): string[] {
   return normalizeText(label)
     .split(' ')
+    .map(w => w.replace(/\.$/, ''))   // strip trailing abbreviation dot (Temp. → temp)
     .filter(w => w.length >= MIN_LABEL_WORD_LEN && !LABEL_STOPWORDS.has(w));
 }
 
@@ -98,7 +99,11 @@ export function validateSpecsGrounding(
       const words = significantWords(label);
       if (words.length === 0) continue; // label had only generic words — cannot ground, skip
 
-      const grounded = words.some(w => sourceNorm.includes(w));
+      const grounded = words.some(w => {
+        // Word-boundary check prevents 'film' from matching inside 'filament', etc.
+        const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`\\b${escaped}\\b`).test(sourceNorm);
+      });
       if (!grounded) {
         issues.push({
           severity: 'error',
