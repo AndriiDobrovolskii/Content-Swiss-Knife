@@ -50,6 +50,16 @@ and PropertyValue (itemprop="additionalProperty"). No itemprop attributes anywhe
 The Journal theme emits FAQPage/HowTo schema from its own native module fields — a duplicate in the
 body causes GSC "Duplicate field" critical errors.
 
+[PROHIBITED COMMERCIAL CLAIMS — every CTA / closing paragraph, all categories, all languages]
+- DELIVERY SPEED is NOT guaranteed — never promise it. Banned: "fast delivery", "швидка доставка",
+  "быстрая доставка", "szybka dostawa", "schnelle Lieferung", "envío rápido", "next-day",
+  "same-day", and any specific lead time not present in the input. "Ready to ship" is banned when
+  used as a speed promise.
+- ALLOWED (neutral, verifiable): state only THAT delivery is available and the region — e.g.
+  "з доставкою по ЄС", "with delivery across the EU", "доступний для придбання".
+- STOCK/AVAILABILITY claims ("in stock", "є в наявності") only if the input explicitly supplies
+  stock status; otherwise omit.
+
 [STYLE & GEO]
 - Featured-snippet opening: first sentence is a "What is / Best for" fact. Ban fluff openers
   ("In the modern world…", "cutting-edge", "perfect choice", "game-changer") unless strictly factual.
