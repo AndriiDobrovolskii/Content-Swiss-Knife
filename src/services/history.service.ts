@@ -3,6 +3,8 @@ import { GeneratedContent, ProductInput, HistoryItem } from '../app/types';
 
 @Injectable({ providedIn: 'root' })
 export class HistoryService {
+  private readonly MAX_HISTORY_ITEMS = 20;
+
   history = signal<HistoryItem[]>([]);
 
   constructor() {
@@ -11,17 +13,24 @@ export class HistoryService {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          this.history.set(parsed);
+          this.history.set(parsed.slice(0, this.MAX_HISTORY_ITEMS));
         }
       } catch (e) {
         console.error('Failed to load history', e);
-        // If parsing fails, reset storage to avoid persistent errors
         localStorage.removeItem('seo_gen_history');
       }
     }
 
     effect(() => {
-      localStorage.setItem('seo_gen_history', JSON.stringify(this.history()));
+      const items = this.history();
+      try {
+        localStorage.setItem('seo_gen_history', JSON.stringify(items));
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+          const trimmed = items.slice(0, Math.ceil(items.length / 2));
+          this.history.set(trimmed);
+        }
+      }
     });
   }
 
@@ -32,13 +41,11 @@ export class HistoryService {
       input,
       output
     };
-    this.history.update(h => [item, ...h]);
+    this.history.update(h => [item, ...h].slice(0, this.MAX_HISTORY_ITEMS));
   }
 
   clear() {
-    // Explicitly set the signal to an empty array
     this.history.set([]);
-    // Force clean the storage immediately to ensure sync state
     localStorage.removeItem('seo_gen_history');
   }
 
