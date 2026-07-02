@@ -37,7 +37,7 @@ function buildImageBlock(input: ProductInput, baseUrl: string): string {
   const lines = done.map((e, i) =>
     `${i + 1}. ${e.urlFilename} — figcaption: "${e.altText || e.visionDescription}"`).join('\n');
   const example = baseUrl ? `${baseUrl}${brand}${model}${done[0].urlFilename}` : '';
-  return `[IMAGE MANIFEST] — use ALL ${done.length}; each exactly once; sequential order:
+  return `[IMAGE MANIFEST] — use ALL ${done.length}; each exactly once; distribute across §3–§4 prose in listed order (see PLACEMENT rules in [IMAGE HANDLING]):
 ${lines}
 [URL] base=${baseUrl} brandFolder=${input.brandFolder || '(none)'} modelFolder=${input.modelFolder || '(none)'}
 Build src as {base}{brandFolder}/{modelFolder}/{filename}. ${example ? 'Example: ' + example : ''}`;
