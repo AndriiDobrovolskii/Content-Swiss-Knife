@@ -122,6 +122,41 @@ unit; only the separator punctuation localizes.
 - en-US:         decimal dot, thousands comma                 → 1,234,567.89
 - es-US / es-MX (US market, CLDR): decimal dot, thousands comma → 1,234,567.89`;
 
+/**
+ * Per-locale sentence-length budget. A LANGUAGE-LEVEL quality rule (like NUMBER_FORMAT_RULES),
+ * NOT a store/ToV overlay: it applies to EVERY task, EVERY store, EVERY generated and translated
+ * language version, and is injected once into the master prompt. Values are words-per-sentence,
+ * calibrated per language because the same meaning costs a different word count across languages
+ * (German compounds + verb-final frame → fewest words; Romance expansion → most; Slavic drops
+ * articles but words run longer). The English band is grounded in the comprehension curve
+ * (~14 words ≈ 90% comprehension, sharp drop after 25); other bands are derived from the
+ * language-adapted readability formulas + text-expansion factors. Averages over a section, with a
+ * hard per-sentence ceiling. Also the AEO/GEO sweet spot: answer engines extract the first 1–2
+ * sentences of a section, so the opening sentence must be short and self-contained.
+ */
+export const SENTENCE_LENGTH_RULES = `[SENTENCE LENGTH — by locale, applies everywhere, every language version]
+Write to a words-per-sentence budget calibrated for the TARGET language. Values are averages across
+the section; never exceed the hard ceiling for any single sentence. Vary length for rhythm (mix
+short and medium) — do NOT make every sentence the same length.
+Sections: HERO = opening/intro paragraph · BODY = feature→benefit + technical-explanation prose ·
+FAQ = the FIRST sentence of every answer (supporting sentences may sit at the BODY band).
+                    HERO     BODY      FAQ-1st   ceiling
+- en-GB / en-ES:    9–14     15–18     10–15     25
+- en-US:            8–12     14–17     9–14      22
+- de-DE:            8–12     12–15     8–13      18   (compounds + Satzklammer — keep shortest)
+- es-ES:            10–15    16–20     12–16     27   (Romance expansion — highest budget)
+- es-MX:            9–13     14–18     10–15     24
+- pl-PL:            8–13     13–17     10–15     22
+- uk-UA / ru-UA:    8–12     12–16     9–14      20   (no articles, long words — split long clauses)
+UNIVERSAL (all locales): one idea per sentence; open each section AND each FAQ answer with a
+complete, self-contained statement (answer-first); front-load subject + key attribute (product +
+spec) at the sentence start; anchor technical sentences on a concrete figure. Avoid nested/
+subordinate pile-ups (uk/ru дієприслівникові звороти; de Schachtelsätze).
+[ON TRANSLATION] "Preserve structure" governs HTML only (sections, classes, <hr>) — NOT sentence
+boundaries. If a source English sentence would exceed the TARGET band, SPLIT it; if the target
+language is terser, you may MERGE. Re-fit to the target band instead of mirroring English sentence
+structure 1:1 (critical for de-DE and uk-UA/ru-UA).`;
+
 /** US mixed measurement rule — the ONLY copy. */
 export const US_MEASUREMENT_RULES = `[MEASUREMENT SYSTEM — MIXED US STANDARD]
 CONVERT to Imperial: Printer Dimensions → inches, Build Volume → inches, Printer Weight → lbs, Filament Spool Weight → lbs (oz for small samples).

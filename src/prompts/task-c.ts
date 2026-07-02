@@ -220,7 +220,7 @@ ${labelsBlock}
 | "3D Plastic"         | Replace with "Filament" (EN) / "Filamento" (ES)  |
 
 [STYLE]
-- Break long sentences into shorter US-style punchy ones.
+- Follow the [SENTENCE LENGTH] budget for the target locale (US bands are the tightest).
 - Benefit-first: "Print warp-free ABS parts thanks to the enclosed chamber."
 - US tone: Direct, confident, professional. No "It is important to note that…".
 
