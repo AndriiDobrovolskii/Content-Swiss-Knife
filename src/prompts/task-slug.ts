@@ -1,4 +1,4 @@
-import { getStore } from '../prompt-core/constants';
+import { getStore, CYRILLIC_UNIT_RULES } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 /**
@@ -67,9 +67,9 @@ Work per-locale: the language code drives word order, number format and translit
 7. NUMBERS — decimal separator follows the locale:
         dot   → en-GB, en-ES, en-US, es-MX            (e.g. "1.75 mm")
         comma → pl-PL, de-DE, es-ES, uk-UA, ru-UA      (e.g. "1,75 mm")
-   Units inside Cyrillic names: cyrillize the abbreviation ONLY (mm→мм, cm→см, kg→кг, g→г,
-   mm/s→мм/с). NEVER change the numeric value. Keep in Latin everywhere: W, V, A, mAh, μm, dpi,
-   Hz, kHz, L, ml, fps, px.
+   Units inside Cyrillic names (uk-UA / ru-UA): see the same rule used everywhere else in the
+   pipeline —
+   ${CYRILLIC_UNIT_RULES}
 8. LENGTH: keep the name concise and Title-friendly — aim ≤ 60 characters. If over, drop in this
    order: colour code → secondary variant → least-critical spec. Never drop brand, model, or the
    product type.

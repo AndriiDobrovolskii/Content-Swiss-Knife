@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore } from '../prompt-core/constants';
+import { US_MEASUREMENT_RULES, CYRILLIC_UNIT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 function pack(instruction: string, html: string): PromptPayload {
@@ -60,10 +60,7 @@ styles, <hr> after </section>. Translate visible text + alt="" / title="". Never
 tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script, but TRANSLATE the generic descriptor and reorder it
 category-first, and localize embedded units/quantities — see [PRODUCT NAME LOCALIZATION].
 Never alter <img src="">.
-[UNITS] If ${targetLang} is Ukrainian or Russian: cyrillize unit abbreviations in ALL visible text
-including spec-table cells — ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с.
-Keep W/V/A/mAh/μm/dpi/Hz/L/ml in Latin and °C unchanged. For any other language keep all units
-in Latin. NEVER change the numeric value — only the unit abbreviation.
+${CYRILLIC_UNIT_RULES}
 [NUMBERS] Use the locale decimal/thousands separator everywhere — body prose, headings, captions,
 AND spec-table <td> cells alike (Ukrainian/Russian/Polish/Spanish/German → decimal comma). This
 includes numbers embedded in a repeated Product Name (e.g. in the spec-table heading or closing
