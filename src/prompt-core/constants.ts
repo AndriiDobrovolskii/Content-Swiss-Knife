@@ -162,6 +162,43 @@ export const US_MEASUREMENT_RULES = `[MEASUREMENT SYSTEM — MIXED US STANDARD]
 CONVERT to Imperial: Printer Dimensions → inches, Build Volume → inches, Printer Weight → lbs, Filament Spool Weight → lbs (oz for small samples).
 KEEP in Metric: Layer Thickness → μm, Filament Diameter → mm, Nozzle → mm, Temperature → °C, Print Speed → mm/s, Resin Volume → L/ml.`;
 
+/**
+ * Single source of truth for unit-abbreviation localization across the whole pipeline.
+ * Interpolated into MASTER_SYSTEM_PROMPT, task-c (generic + US_UK) and referenced by task-slug.
+ * Language-driven, not store-driven: applies to uk-UA / ru-UA output on EVERY storefront.
+ * Deterministic backstops: number-format-fixer (spacing) and output-validator
+ * (latin-unit-in-cyrillic-text warning).
+ */
+export const UNIT_LOCALIZATION_RULES = `[UNIT LOCALIZATION]
+LATIN-SCRIPT LANGUAGES (en-GB/en-US/en-ES, pl-PL, de-DE, es-ES, es-MX): keep ALL international
+unit abbreviations unchanged (mm, kg, W, kW, GHz, GB…). Never invent localized abbreviations.
+Lowercase "l" for litre in pl (litr); "L" acceptable in en/de.
+
+CYRILLIC LANGUAGES (uk-UA, ru-UA) — cyrillize EVERY unit abbreviation in ALL visible text,
+including spec-table cells, alt="", title="", figcaptions and repeated Product Names.
+Only the abbreviation script changes; the numeric value NEVER changes. Spacing rule still
+applies ("200 mm" → "200 мм", "10W" → "10 Вт").
+  Length:      mm→мм, cm→см, m→м, km→км, μm/µm→мкм, nm→нм
+  Mass:        kg→кг, g→г, mg→мг
+  Power:       W→Вт, kW→кВт, mW→мВт
+  Voltage:     V→В, kV→кВ, mV→мВ
+  Current:     A→А, mA→мА
+  Frequency:   Hz→Гц, kHz→кГц, MHz→МГц, GHz→ГГц
+  Volume:      L/l→л, ml→мл
+  Data:        GB→ГБ, MB→МБ, TB→ТБ
+  Bitrate:     Mbit/Mb→Мбіт (uk) / Мбит (ru), Gbit→Гбіт (uk) / Гбит (ru)
+  Speed:       mm/s→мм/с, m/s→м/с
+  Area/Volume: m²→м², m³→м³, cm²→см², cm³→см³
+  Capacity:    mAh→мА·год (uk) / мА·ч (ru)
+  Rotation:    rpm→об/хв (uk) / об/мин (ru)
+  Composite units cyrillize part-by-part (kg/h → кг/год (uk) / кг/ч (ru)).
+KEEP UNCHANGED in uk/ru (fixed exception list — technical convention): °C, °F, VAC / V AC
+(full form "вольт змінного струму / вольт переменного тока" is too long for tables/UI),
+dpi, px, fps, K (colour temperature, e.g. "6500 K"), ppm, and any inch marks in US-market
+content. Any unit NOT listed anywhere above: keep as in source, do not guess.
+[NUMBER SEPARATOR REMINDER] Decimal comma for uk/ru/pl/de/es-ES ("1.5 kW" → "1,5 кВт");
+decimal dot for en-GB/en-US/en-ES/es-MX. Separator rules live in [NUMBER FORMATTING].`;
+
 export const METRIC_MEASUREMENT_RULES = `[MEASUREMENT] Use standard Metric units (mm, kg, °C).
 SPACING IS MANDATORY: a single space between number and unit everywhere (body, table cells, alt text).
 ✅ "10 W", "1.75 mm", "200 °C", "-5 °C – 50 °C"   ❌ "10W", "1.75mm", "200°C"
