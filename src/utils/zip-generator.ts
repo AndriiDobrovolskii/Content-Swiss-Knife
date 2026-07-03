@@ -10,18 +10,30 @@ function buildTimestamp(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
 }
 
+const sanitize = (s: string) => s.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+/** [Site]_[Product-name]_[timestamp] — site segment omitted when unavailable. */
+function buildFilePrefix(content: GeneratedContent, productName: string): string {
+  const safeSite = content.website?.name ? sanitize(content.website.name) : '';
+  const safeName = sanitize(productName);
+  return [safeSite, safeName].filter(Boolean).join('_');
+}
+
 export const downloadPackage = async (content: GeneratedContent, productName: string) => {
   const zip = new JSZip();
-  const safeName = productName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  const prefix = buildFilePrefix(content, productName);
   const ts = buildTimestamp();
   const storeName = content.website?.name ?? '';
   const store = getStore(storeName);
 
   // Determine English ISO code for this store (e.g. 'en-GB', 'en-ES', 'en-US')
   const enIso = store.languages.find(l => l.startsWith('en-')) ?? 'en-GB';
+  // mainHtmlEn holds the actual base description — English by default, but a locale like
+  // 'uk-UA' for native ua-generator output (see GeneratedContent.mainHtmlLocale).
+  const mainIso = content.mainHtmlLocale ?? enIso;
 
-  // 1. Base English description
-  zip.file(`description_${enIso}.html`, content.mainHtmlEn);
+  // 1. Base description
+  zip.file(`description_${mainIso}.html`, content.mainHtmlEn);
 
   // 2. Translations — sort so Ukrainian comes first
   const sortedKeys = Object.keys(content.translations).sort(sortUkrainianFirst);
@@ -34,6 +46,11 @@ export const downloadPackage = async (content: GeneratedContent, productName: st
   if (content.faqArtifacts) {
     const faqEntries = Object.entries(content.faqArtifacts).sort(([a], [b]) => sortUkrainianFirstIso(a, b));
     faqEntries.forEach(([iso, html]) => { if (html) zip.file(`faq_${iso}.html`, html); });
+  }
+
+  // 4. Slugs JSON
+  if (content.slugData) {
+    zip.file('slugs.json', JSON.stringify(content.slugData, null, 2));
   }
 
   // 5. SEO JSON
@@ -53,22 +70,23 @@ export const downloadPackage = async (content: GeneratedContent, productName: st
   }
 
   const blob = await zip.generateAsync({ type: 'blob' });
-  saveAs(blob, `${safeName}_content_${ts}.zip`);
+  saveAs(blob, `${prefix}_${ts}.zip`);
 };
 
 export const downloadTextPackage = (content: GeneratedContent, productName: string) => {
-  const safeName = productName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  
+  const prefix = buildFilePrefix(content, productName);
+  const ts = buildTimestamp();
+
   const strip = (html: string) => {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     return doc.body.textContent || "";
   };
 
   let fullText = `Product: ${productName}\nGenerated: ${new Date().toLocaleString()}\n\n`;
-  
+
   if (content.mainHtmlEn) {
     fullText += `--------------------------------------------------\n`;
-    fullText += `LANGUAGE: English (US)\n`;
+    fullText += `LANGUAGE: ${content.mainHtmlLocale ?? 'English (US)'}\n`;
     fullText += `--------------------------------------------------\n\n`;
     fullText += strip(content.mainHtmlEn).trim();
     fullText += `\n\n\n`;
@@ -81,9 +99,9 @@ export const downloadTextPackage = (content: GeneratedContent, productName: stri
     fullText += strip(html).trim();
     fullText += `\n\n\n`;
   });
-  
+
   const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
-  saveAs(blob, `${safeName}_plain_text.txt`);
+  saveAs(blob, `${prefix}_${ts}.txt`);
 };
 
 export const downloadImagesPackage = async (images: ProcessedImage[]) => {
