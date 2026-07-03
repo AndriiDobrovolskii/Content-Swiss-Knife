@@ -92,6 +92,14 @@
             <i class="fa-solid fa-glasses mr-1"></i> {{ uiLabels().readability }}
           </button>
         </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
+          <button
+            (click)="setMode('ua-generator')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'ua-generator' ? 'bg-white dark:bg-slate-600 text-amber-600 dark:text-amber-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            <i class="fa-solid fa-language mr-1"></i> {{ uiLabels().uaGenerator }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -376,7 +384,7 @@
     </ng-template>
 
     <!-- GENERATOR FORM in sidebar (shown only after generation) -->
-    @if (appMode() === 'generator' && hasGeneratorOutput()) {
+    @if ((appMode() === 'generator' || appMode() === 'ua-generator') && hasGeneratorOutput()) {
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
         <ng-container *ngTemplateOutlet="generatorForm"></ng-container>
       </div>
@@ -765,6 +773,19 @@
             <span>{{ uiLabels().generateBtn }}</span>
           }
         </button>
+      } @else if (appMode() === 'ua-generator') {
+        <button
+          (click)="generateUa()"
+          [disabled]="isGenerating() || !isFormValid()"
+          class="w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+          @if (isGenerating()) {
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ uiLabels().processing }}</span>
+          } @else {
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>{{ uiLabels().generateBtn }}</span>
+          }
+        </button>
       } @else if (appMode() === 'seo-generator') {
          <button
           (click)="generateSeoOnly()"
@@ -919,7 +940,11 @@
           [class.border-cyan-100]="appMode() === 'slug-generator'"
           [class.dark:border-cyan-900]="appMode() === 'slug-generator'"
           [class.border-t-cyan-600]="appMode() === 'slug-generator'"
-          [class.dark:border-t-cyan-500]="appMode() === 'slug-generator'"></div>
+          [class.dark:border-t-cyan-500]="appMode() === 'slug-generator'"
+          [class.border-amber-100]="appMode() === 'ua-generator'"
+          [class.dark:border-amber-900]="appMode() === 'ua-generator'"
+          [class.border-t-amber-600]="appMode() === 'ua-generator'"
+          [class.dark:border-t-amber-500]="appMode() === 'ua-generator'"></div>
         <p class="text-lg font-medium text-slate-700 dark:text-slate-200">{{ progressMessage() }}</p>
       </div>
     }
@@ -1074,8 +1099,8 @@
     }
 
     <!-- GENERATOR VIEW / SEO VIEW / SLUG VIEW -->
-    @if (appMode() === 'generator' || appMode() === 'seo-generator' || appMode() === 'slug-generator') {
-      @if (appMode() === 'generator' && !hasGeneratorOutput()) {
+    @if (appMode() === 'generator' || appMode() === 'ua-generator' || appMode() === 'seo-generator' || appMode() === 'slug-generator') {
+      @if ((appMode() === 'generator' || appMode() === 'ua-generator') && !hasGeneratorOutput()) {
         <div class="flex-1 overflow-y-auto p-8">
           <div class="max-w-3xl mx-auto">
             <ng-container *ngTemplateOutlet="generatorForm"></ng-container>
@@ -1175,7 +1200,7 @@
 
             @if (tab.type === 'english' && content().mainHtmlEn) {
               <div role="tabpanel" [id]="'panel-' + tab.id" [attr.aria-labelledby]="'tab-' + tab.id" class="max-w-5xl mx-auto space-y-6">
-                <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ baseOutputLabel() }}</h2>
+                <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ tab.label }}</h2>
 
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
                   <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>

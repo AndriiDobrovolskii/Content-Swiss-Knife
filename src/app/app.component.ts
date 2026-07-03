@@ -24,6 +24,7 @@ const TRANSLATIONS = {
   en: {
     appTitle: 'SEO Content',
     generator: 'Generator',
+    uaGenerator: 'UA Description',
     optimizer: 'Optimizer',
     translator: 'Translator',
     imageTools: 'Image Tools',
@@ -171,6 +172,7 @@ const TRANSLATIONS = {
   uk: {
     appTitle: 'SEO Content',
     generator: 'Генератор',
+    uaGenerator: 'UA Опис',
     optimizer: 'Оптимізатор',
     translator: 'Перекладач',
     imageTools: 'Інструменти зображень',
@@ -465,6 +467,18 @@ export class AppComponent {
     const storeName = c.website?.name ?? this.selectedWebsite()?.name ?? '';
     if (!storeName) return [];
 
+    // ua-generator: single uk-UA description tab + optional uk-UA FAQ tab. The 'seo' tab is
+    // added separately by _autoSelectTab (same mechanism as every other mode).
+    if (this.appMode() === 'ua-generator') {
+      const tabs: TabDescriptor[] = [
+        { id: 'html', label: this.uiLabels().uaGenerator, type: 'english', color: 'purple', iso: 'uk-UA', isFaq: false },
+      ];
+      if (c.faqArtifacts?.['uk-UA']) {
+        tabs.push({ id: 'faq-html', label: 'FAQ', type: 'faq-english', color: 'green', iso: 'uk-UA', isFaq: true });
+      }
+      return tabs;
+    }
+
     const store = getStore(storeName);
     const { transLangs } = getLangsForStore(storeName);
     const labels = this.uiLabels();
@@ -716,14 +730,14 @@ export class AppComponent {
     }
   }
 
-  async generate() {
+  private buildGeneratorInput(): ProductInput | null {
     const currentSite = this.selectedWebsite();
     if (!currentSite || !this.isFormValid()) {
       alert(this.uiLabels().alertFillFields);
-      return;
+      return null;
     }
     const manifest = this.genImgManifest();
-    const input: ProductInput = {
+    return {
       website: currentSite,
       name: this.productName(),
       description: this.description(),
@@ -736,8 +750,20 @@ export class AppComponent {
       brandFolder: this.genBrandFolder().trim() || undefined,
       modelFolder: this.genModelFolder().trim() || undefined,
     };
+  }
+
+  async generate() {
+    const input = this.buildGeneratorInput();
+    if (!input) return;
     this.activeTab.set('html');
     await this.orchestrator.generate(input, this.generatorUseThinking());
+  }
+
+  async generateUa() {
+    const input = this.buildGeneratorInput();
+    if (!input) return;
+    this.activeTab.set('html');
+    await this.orchestrator.generateUaContent(input, this.generatorUseThinking());
   }
 
   async generateSeoOnly() {
