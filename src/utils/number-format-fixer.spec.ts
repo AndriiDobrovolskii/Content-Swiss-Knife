@@ -26,7 +26,7 @@ describe('fixNumberFormatting — thousands separators', () => {
 
   describe('space (UA / nbsp format)', () => {
     it('strips a regular-space group: 1 000 → 1000', () => {
-      expect(fixNumberFormatting('power 1 000 mW')).toBe('power 1000 mW');
+      expect(fixNumberFormatting('power 1 000 mW')).toBe('power 1000 mW');
     });
 
     it('strips 1 250 → 1250', () => {
@@ -38,11 +38,11 @@ describe('fixNumberFormatting — thousands separators', () => {
     });
 
     it('strips non-breaking space (U+00A0)', () => {
-      expect(fixNumberFormatting('power 1 000 mW')).toBe('power 1000 mW');
+      expect(fixNumberFormatting('power 1\u00A0000 mW')).toBe('power 1000 mW');
     });
 
     it('strips thin space (U+202F)', () => {
-      expect(fixNumberFormatting('price 1 000 UAH')).toBe('price 1000 UAH');
+      expect(fixNumberFormatting('price 1\u202F000 UAH')).toBe('price 1000 UAH');
     });
   });
 
@@ -134,6 +134,71 @@ describe('fixNumberFormatting — unit spaces', () => {
   });
 });
 
+describe('fixNumberFormatting — Cyrillic unit spaces (uk/ru output, [UNIT LOCALIZATION])', () => {
+  it('adds space for Вт and кВт (with decimal comma value)', () => {
+    expect(fixNumberFormatting('<p>Потужність 10Вт, 1,5кВт</p>')).toBe('<p>Потужність 10 Вт, 1,5 кВт</p>');
+  });
+
+  it('adds space for мм in a spec-table cell', () => {
+    expect(fixNumberFormatting('<td>200мм</td>')).toBe('<td>200 мм</td>');
+  });
+
+  it('adds space for мкм', () => {
+    expect(fixNumberFormatting('<td>50мкм</td>')).toBe('<td>50 мкм</td>');
+  });
+
+  it('adds space for ГГц', () => {
+    expect(fixNumberFormatting('<td>2,4ГГц</td>')).toBe('<td>2,4 ГГц</td>');
+  });
+
+  it('adds space for composite мм/с', () => {
+    expect(fixNumberFormatting('швидкість 300мм/с')).toBe('швидкість 300 мм/с');
+  });
+
+  it('adds space for кг, г, л, мл', () => {
+    expect(fixNumberFormatting('вага 2,5кг')).toBe('вага 2,5 кг');
+    expect(fixNumberFormatting('маса 500г')).toBe('маса 500 г');
+    expect(fixNumberFormatting("об'єм 1л")).toBe("об'єм 1 л");
+    expect(fixNumberFormatting('смола 500мл')).toBe('смола 500 мл');
+  });
+
+  it('adds space for В, кВ, А, мА·год', () => {
+    expect(fixNumberFormatting('напруга 220В')).toBe('напруга 220 В');
+    expect(fixNumberFormatting('ізоляція 5кВ')).toBe('ізоляція 5 кВ');
+    expect(fixNumberFormatting('струм 2А')).toBe('струм 2 А');
+    expect(fixNumberFormatting('акумулятор 5000мА·год')).toBe('акумулятор 5000 мА·год');
+  });
+
+  it('adds space for data units ГБ / Мбіт / Мбит', () => {
+    expect(fixNumberFormatting("пам'ять 32ГБ")).toBe("пам'ять 32 ГБ");
+    expect(fixNumberFormatting('швидкість 100Мбіт')).toBe('швидкість 100 Мбіт');
+    expect(fixNumberFormatting('скорость 100Мбит')).toBe('скорость 100 Мбит');
+  });
+
+  it('adds space for м² and об/хв', () => {
+    expect(fixNumberFormatting('площа 2м²')).toBe('площа 2 м²');
+    expect(fixNumberFormatting('оберти 3000об/хв')).toBe('оберти 3000 об/хв');
+  });
+
+  it('does NOT split when the letters continue a Cyrillic word (word-boundary guard)', () => {
+    // "шт." is not a measurement unit — count abbreviations are handled by the prompt, not the fixer
+    expect(fixNumberFormatting('<p>3шт.</p>')).toBe('<p>3шт.</p>');
+    // "мм" followed by a Cyrillic letter is part of a token, not a unit
+    expect(fixNumberFormatting('код 5ммХ')).toBe('код 5ммХ');
+  });
+
+  it('does NOT touch Cyrillic units inside src/href, still fixes alt', () => {
+    const html = '<img src="laser-500мВт.jpg" alt="модуль 500мВт">';
+    expect(fixNumberFormatting(html)).toBe('<img src="laser-500мВт.jpg" alt="модуль 500 мВт">');
+  });
+
+  it('does NOT modify already-spaced Cyrillic values (idempotent)', () => {
+    expect(fixNumberFormatting('потужність 10 Вт')).toBe('потужність 10 Вт');
+    const once = fixNumberFormatting('<td>10Вт, 200мм, 2,4ГГц</td>');
+    expect(fixNumberFormatting(once)).toBe(once);
+  });
+});
+
 describe('fixNumberFormatting — combined', () => {
   it('strips thousands separator AND adds unit space in one pass', () => {
     expect(fixNumberFormatting('power 1,000mW')).toBe('power 1000 mW');
@@ -148,6 +213,12 @@ describe('fixNumberFormatting — combined', () => {
   it('handles a realistic HTML snippet (UA)', () => {
     const input = '<li>Потужність: 1 000 мВт, розмір плями 50µm</li>';
     const expected = '<li>Потужність: 1000 мВт, розмір плями 50 µm</li>';
+    expect(fixNumberFormatting(input)).toBe(expected);
+  });
+
+  it('handles a realistic cyrillized UA snippet (thousands + Cyrillic unit spacing)', () => {
+    const input = '<li>Потужність: 1 000мВт, швидкість 1 250мм/с, темп. 80°C</li>';
+    const expected = '<li>Потужність: 1000 мВт, швидкість 1250 мм/с, темп. 80 °C</li>';
     expect(fixNumberFormatting(input)).toBe(expected);
   });
 
