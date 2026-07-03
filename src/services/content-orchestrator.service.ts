@@ -251,16 +251,32 @@ export class ContentOrchestratorService {
     const UA_ISO = 'uk-UA';
     const UA_BASE_LANGUAGE = 'Ukrainian (uk-UA)';
 
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {} });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
     this.validationIssues.set([]);
 
     const isConsumables = input.templateId === 'consumables-resin';
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
 
     await this.withProgress(async () => {
+      const { seoLangs } = getLangsForStore(input.website.name);
+
       // Step 1 — Task A generated NATIVELY in Ukrainian (no English base, no Task C).
+      // Image manifest figcaption/alt text is sourced in English (Vision pre-pass output), so a
+      // custom-instructions override is injected here to make Task A translate it into Ukrainian
+      // instead of copying it verbatim — the normal pipeline gets this for free from Task C, which
+      // this native path skips entirely.
       this.progressMessage.set(useThinking ? 'Generating Ukrainian Description (Deep Thinking)…' : 'Generating Ukrainian Description…');
-      const basePayloadA = buildPromptA(input, UA_BASE_LANGUAGE);
+      const uaInput: ProductInput = {
+        ...input,
+        customInstructions: [
+          input.customInstructions?.trim(),
+          '[UKRAINIAN NATIVE OUTPUT — IMAGE TEXT OVERRIDE] This description is generated natively in ' +
+          'Ukrainian with no separate translation pass. The image manifest figcaption/vision-description ' +
+          'text is sourced in English — do NOT copy it verbatim. Translate each figcaption and alt text ' +
+          'into natural, idiomatic Ukrainian preserving the same factual meaning before using it.',
+        ].filter(Boolean).join('\n\n'),
+      };
+      const basePayloadA = buildPromptA(uaInput, UA_BASE_LANGUAGE);
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
         let html = await this.llm.generateText(payload, useThinking);
         html = stripCodeFences(html);
@@ -291,12 +307,13 @@ export class ContentOrchestratorService {
           : htmlIssues,
       );
 
-      // Step 2 — Slug (uk-UA only). Localized name is the single source of truth for H1 +
-      // Task B title core. Non-blocking: a slug failure must not abort SEO/FAQ.
+      // Step 2 — Slug for ALL site languages, grounded in the uk-UA description. Localized name
+      // is the single source of truth for H1 + Task B title core. Non-blocking: a slug failure
+      // must not abort SEO/FAQ.
       let localizedNames: Record<string, string> | undefined;
       try {
-        this.progressMessage.set('Generating SEO slug (uk-UA)…');
-        const promptSlug = buildPromptSlug(input.website.name, input.name, [UA_ISO], finalHtmlUa);
+        this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
+        const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
         const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
         const slugData = this.normalizeSlugResponse(rawSlug);
         this.content.update(c => ({ ...c, slugData }));
@@ -310,9 +327,9 @@ export class ContentOrchestratorService {
         ]);
       }
 
-      // Step 3 — SEO metadata (uk-UA only), grounded in the uk description.
-      this.progressMessage.set('Generating SEO Metadata (uk-UA)…');
-      const promptB = buildPromptB(input.website.name, input.name, [UA_ISO], finalHtmlUa, localizedNames);
+      // Step 3 — SEO metadata for ALL site languages, grounded in the uk-UA description.
+      this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
+      const promptB = buildPromptB(input.website.name, input.name, seoLangs, finalHtmlUa, localizedNames);
       const { artifact: seoJson, repairsUsed: bRepairs } = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -379,7 +396,7 @@ export class ContentOrchestratorService {
     // standalone run feeds the approved localized name to B as h1 + title core. Otherwise
     // clear it (and B falls back to the English formula → independence preserved).
     const existingSlug = this.approvedSlugKey() === this.slugKey(input) ? this.content().slugData ?? null : null;
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: existingSlug });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: existingSlug, website: input.website });
     this.validationIssues.set([]);
 
     await this.withProgress(async () => {
@@ -411,7 +428,7 @@ export class ContentOrchestratorService {
   }
 
   async generateSlugs(input: ProductInput, useThinking = false): Promise<void> {
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website });
     this.validationIssues.set([]);
 
     await this.withProgress(async () => {
