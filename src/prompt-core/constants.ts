@@ -191,6 +191,7 @@ applies ("200 mm" → "200 мм", "10W" → "10 Вт").
   Area/Volume: m²→м², m³→м³, cm²→см², cm³→см³
   Capacity:    mAh→мА·год (uk) / мА·ч (ru)
   Rotation:    rpm→об/хв (uk) / об/мин (ru)
+  Time:        min→хв. (uk) / мин. (ru), h→год. (uk) / ч (ru), s→с
   Composite units cyrillize part-by-part (kg/h → кг/год (uk) / кг/ч (ru)).
 KEEP UNCHANGED in uk/ru (fixed exception list — technical convention): °C, °F, VAC / V AC
 (full form "вольт змінного струму / вольт переменного тока" is too long for tables/UI),
