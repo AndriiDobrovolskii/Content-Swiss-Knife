@@ -1,4 +1,4 @@
-import { getStore } from '../prompt-core/constants';
+import { getStore, CYRILLIC_UNIT_RULES } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 /**
@@ -67,6 +67,9 @@ Work per-locale: the language code drives word order, number format and translit
 7. NUMBERS — decimal separator follows the locale:
         dot   → en-GB, en-ES, en-US, es-MX            (e.g. "1.75 mm")
         comma → pl-PL, de-DE, es-ES, uk-UA, ru-UA      (e.g. "1,75 mm")
+   Units inside Cyrillic names (uk-UA / ru-UA): see the same rule used everywhere else in the
+   pipeline —
+   ${CYRILLIC_UNIT_RULES}
    Units inside Cyrillic NAMES: cyrillize EVERY unit abbreviation per the network-wide table
    (mm→мм, μm→мкм, kg→кг, W→Вт, kW→кВт, V→В, A→А, Hz→Гц, GHz→ГГц, L→л, GB→ГБ,
    Mbit→Мбіт/Мбит, mAh→мА·год/мА·ч, m²→м²; composite units part-by-part). NEVER change the

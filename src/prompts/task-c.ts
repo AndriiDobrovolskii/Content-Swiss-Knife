@@ -1,4 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
+import { US_MEASUREMENT_RULES, CYRILLIC_UNIT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore } from '../prompt-core/constants';
 import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore, UNIT_LOCALIZATION_RULES } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
@@ -21,14 +22,16 @@ export function buildPromptC(
 ): PromptPayload {
   // Select the localization-specific instruction first…
   let instruction: string;
+  let expert3dEsSelected = false;
   if (targetLang === 'European English' || targetLang === 'European English (EXPERT3D)') {
     instruction = EU_EN_INSTRUCTION;
   } else if ((targetLang === 'Ukrainian' && websiteGroup === 'US') || targetLang === 'Ukrainian (Expert-3DPrinter)') {
     instruction = US_UK_INSTRUCTION;
   } else if (targetLang.includes('American English') || targetLang.includes('American Spanish')) {
     instruction = usInstruction(targetLang);
-  } else if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && ['EXPERT3D', 'Impresora-3D'].includes(storeName))) {
+  } else if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && isExpert3dStore(storeName))) {
     instruction = EXPERT3D_ES_INSTRUCTION;
+    expert3dEsSelected = true;
   } else {
     instruction = genericInstruction(targetLang);
   }
@@ -39,10 +42,10 @@ export function buildPromptC(
     instruction += `\n\n${CONSUMABLES_TRANSLATION_OVERLAY}`;
   }
 
-  // EXPERT3D Tone of Voice: formal register + forbidden calques + brand voice, for every
-  // EXPERT3D/Impresora-3D language version (es-ES, uk-UA). targetLang check also covers the
-  // manual translate() path where storeName is empty ('Spanish (EXPERT3D)' etc.).
-  if (isExpert3dStore(storeName) || targetLang.includes('(EXPERT3D)')) {
+  // EXPERT3D Tone of Voice: formal register + forbidden calques + brand voice.
+  // Skipped for ES because EXPERT3D_ES_INSTRUCTION already embeds these rules —
+  // appending the overlay on top would duplicate them for the same language version.
+  if (!expert3dEsSelected && (isExpert3dStore(storeName) || targetLang.includes('(EXPERT3D)'))) {
     instruction += `\n\n${EXPERT3D_TOV_TRANSLATION_OVERLAY}`;
   }
 
@@ -58,6 +61,7 @@ styles, <hr> after </section>. Translate visible text + alt="" / title="". Never
 tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script, but TRANSLATE the generic descriptor and reorder it
 category-first, and localize embedded units/quantities — see [PRODUCT NAME LOCALIZATION].
 Never alter <img src="">.
+${CYRILLIC_UNIT_RULES}
 ${UNIT_LOCALIZATION_RULES}
 [NUMBERS] Use the locale decimal/thousands separator everywhere — body prose, headings, captions,
 AND spec-table <td> cells alike (Ukrainian/Russian/Polish/Spanish/German → decimal comma). This

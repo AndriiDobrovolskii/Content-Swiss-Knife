@@ -1,3 +1,4 @@
+import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, CYRILLIC_UNIT_RULES, NUMBER_FORMAT_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION } from './constants';
 import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES } from './constants';
 
 /**
@@ -24,6 +25,7 @@ no Markdown code fences.
 ${METRIC_MEASUREMENT_RULES}
 For the US store (Expert-3DPrinter) apply instead:
 ${US_MEASUREMENT_RULES}
+${CYRILLIC_UNIT_RULES}
 ${UNIT_LOCALIZATION_RULES}
 
 ${NUMBER_FORMAT_RULES}
@@ -207,7 +209,12 @@ PLACEMENT — STRICT RULES:
 - NO ORPHAN IMAGES: NEVER insert a <figure> without the lead-in <p> directly above it.
 - NO CONSECUTIVE IMAGES: NEVER place two <figure> blocks next to each other; separate every image
   with meaningful text.
-- Use ALL manifest entries exactly once, in listed order, distributed to match the logical text flow.
+- SECTION ANCHORS — where images go: distribute figures across §3 (Functionality) and §4 (Applications)
+  prose paragraphs — one figure per H2/H3 sub-section or per major paragraph break, in listed order.
+  First image: after the opening paragraph of §3. Subsequent images: after sub-section paragraphs in §3
+  or §4. If images remain after §4 is exhausted, place them in §5 (Compatibility) or §2 body text.
+- NEVER place any <figure> after §7 Technical Specifications or inside <section class="specs">.
+- NEVER cluster all images at the end of the document. Figures must appear woven into prose, not appended.
 
 ALT TEXT: write a literal screen-reader description of the image content. Prefer the manifest vision
 description; if absent, infer from filename (e.g. "high-prec-scan.jpg" → "High precision scanning

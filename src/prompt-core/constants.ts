@@ -35,7 +35,7 @@ export function getStore(name: string): StoreProfile {
  * Task C translation overlay). Equivalent to group === 'ES' but named for intent.
  */
 export function isExpert3dStore(name: string): boolean {
-  return name === 'EXPERT3D' || name === 'Impresora-3D';
+  return getStore(name).group === 'ES';
 }
 
 function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
@@ -203,6 +203,25 @@ export const METRIC_MEASUREMENT_RULES = `[MEASUREMENT] Use standard Metric units
 SPACING IS MANDATORY: a single space between number and unit everywhere (body, table cells, alt text).
 ✅ "10 W", "1.75 mm", "200 °C", "-5 °C – 50 °C"   ❌ "10W", "1.75mm", "200°C"
 Normalize spacing even if the source omits it ("10W" → "10 W").`;
+
+/**
+ * Cyrillic unit localization (uk-UA / ru-UA) — the single copy, imported by both
+ * master-system-prompt.ts (Task A/B native generation) and task-c.ts (translation), so the
+ * rule can't drift between the two paths the way the old duplicated inline blocks did.
+ */
+export const CYRILLIC_UNIT_RULES = `[CYRILLIC UNITS — Ukrainian & Russian output ONLY]
+When the target language is Ukrainian or Russian, cyrillize these unit abbreviations in ALL
+visible text — including spec-table cells. Only the unit abbreviation changes; numeric values
+are NEVER altered. Word-boundary aware: "m" localizes only as a standalone unit (e.g. "1.3 m²"),
+never inside "mm" (a separate two-letter unit).
+mm→мм, μm/µm→мкм, cm→см, kg→кг, g→г, m→м, mm/s→мм/с, W→Вт, kW→кВт, V→В, L/l→л, GHz→ГГц, Hz→Гц,
+GB→ГБ, Mbit→Мбіт (uk) / Мбит (ru), A→А, kV→кВ.
+TIME: min localizes as "хв." (uk) / "мин." (ru) when abbreviated (spec-table cells, e.g. "< 90
+min"), or spelled out "хвилин" (uk) / "минут" (ru) in running prose ("менш ніж за 90 хвилин").
+EXCEPTIONS — keep in Latin (established technical/display convention): VAC / V AC, mAh, dpi, fps,
+px. The °C degree symbol is unchanged in both scripts.
+Spacing rule still applies ("200 mm" → "200 мм"). For English/Polish/German/Spanish output: keep
+ALL units in Latin.`;
 
 /**
  * Product-name localization rule (Schema v3 §0/§7/§9 consistency) — THE single copy.
@@ -453,7 +472,9 @@ REGISTER (formal, mandatory — this is B2B industrial capital equipment):
 - en-ES / en-GB: neutral, impersonal industrial tone (English has no tú/usted).
 
 FORBIDDEN CALQUES (es-ES / es-MX — replace the English calque with natural Spanish; match
-inflected forms too, e.g. huella/huellas, puente/puentes):
+inflected forms too, e.g. huella/huellas, puente/puentes; applies in running prose AND in
+spec-table row labels, e.g. "Huella de operación recomendada" -> "Espacio de instalación
+recomendado"):
 - huella (= footprint) -> superficie de ocupación / espacio de instalación
 - de extremo a extremo (= end-to-end) -> de principio a fin / integral
 - producción puente (= bridge manufacturing) -> producción de transición
