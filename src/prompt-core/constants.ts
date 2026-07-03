@@ -224,7 +224,10 @@ Split the Product Name into three parts and treat each differently:
    ("Reflective Markers", "Filament", "Resin", "Build Plate", "Cleaning Kit"). TRANSLATE it into the
    target language using natural, normative terminology (anti-anglicism rules apply).
 2. BRAND / SUB-BRAND / MODEL — proper names ("Shining3D", "EinScan", "EINSTAR VEGA", "Bambu Lab",
-   "Creality Ender"). KEEP in original Latin script — NEVER translate or transliterate.
+   "Creality Ender") AND material/consumable TRADE NAMES ("Nylon 12 Powder", "Nylon 11 GF Powder",
+   "PA12", "PETG-CF"). KEEP in original Latin script — NEVER translate or transliterate, even when
+   the same word appears generically elsewhere in the text (see anti-anglicism rule for the
+   generic-noun case).
 3. EMBEDDED SPECS — dimensions and quantities ("12 mm", "1500 pcs"). Localize units, number
    separators and the count abbreviation (below); never change the digits.
 

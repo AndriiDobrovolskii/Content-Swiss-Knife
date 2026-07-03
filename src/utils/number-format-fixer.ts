@@ -26,8 +26,12 @@ function processTag(tag: string): string {
 }
 
 function stripThousandsSeparators(text: string): string {
-  // Comma groups: 1,000 / 1,234,567 -> 1000 / 1234567
-  text = text.replace(/\b\d{1,3}(?:,\d{3})+/g, m => m.replace(/,/g, ''));
+  // Comma groups: 1,000 / 1,234,567 -> 1000 / 1234567. Guard: does NOT start with "0," + a
+  // 3-digit group — nobody writes a thousands-separated integer as "0,330" (a leading zero
+  // group is meaningless there); in a comma-decimal locale (uk/ru/pl/de/es-ES) that shape is
+  // unambiguously a decimal fraction (e.g. "0,330 кг/год") and must be left untouched rather
+  // than corrupted into "0330". Mirrors the period-group guard below.
+  text = text.replace(/\b(?!0,\d{3})\d{1,3}(?:,\d{3})+/g, m => m.replace(/,/g, ''));
 
   // Space groups (regular, NBSP U+00A0, thin-space U+202F): 1 000 / 1 234 567
   text = text.replace(/\b\d{1,3}(?:[ \u00A0\u202F]\d{3})+/g, m => m.replace(/[ \u00A0\u202F]/g, ''));

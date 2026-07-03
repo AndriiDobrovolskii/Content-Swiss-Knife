@@ -124,7 +124,11 @@ ${PRODUCT_NAME_LOCALIZATION}
 
 [STYLE]
 - Tone: Direct, confident, professional but accessible.
-- Anti-anglicism: "друк" not "прінт", "ПЗ" not "софт". Established tech terms may stay.
+- Anti-anglicism: "друк" not "прінт", "ПЗ" not "софт". Established tech terms may stay. Material
+  TRADE NAMES ("Nylon 12 Powder", "Nylon 11 GF Powder", "PA12") are proper names — keep verbatim
+  in Latin, never "нейлон 12". Generic "nylon" (not the trade name) → paraphrase, don't
+  transliterate: "зі склонаповненого нейлону" (GF grades) / "з композитного нейлону" (composite
+  grades).
 
 [CONSTRAINTS]
 - Do NOT translate Brand/Model Names; TRANSLATE the generic descriptor, reorder it category-first, "pcs" → "шт." (see [PRODUCT NAME LOCALIZATION]).

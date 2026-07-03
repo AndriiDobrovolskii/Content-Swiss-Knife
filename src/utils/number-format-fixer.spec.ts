@@ -22,6 +22,14 @@ describe('fixNumberFormatting — thousands separators', () => {
     it('preserves decimal comma with 2 digits (1,75 stays 1,75)', () => {
       expect(fixNumberFormatting('nozzle 1,75 mm')).toBe('nozzle 1,75 mm');
     });
+
+    it('does NOT corrupt a leading-zero decimal comma-group: 0,330 stays', () => {
+      expect(fixNumberFormatting('throughput 0,330 kg/hr')).toBe('throughput 0,330 kg/hr');
+    });
+
+    it('does NOT corrupt a leading-zero decimal comma-group with more digits: 0,0129 stays', () => {
+      expect(fixNumberFormatting('spot size 0,0129 mm')).toBe('spot size 0,0129 mm');
+    });
   });
 
   describe('space (UA / nbsp format)', () => {
