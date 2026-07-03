@@ -95,15 +95,17 @@ function checkExpert3dSpanishCalques(html: string, locale: string | undefined, i
 
 /**
  * Latin SI units left uncyrillized in uk-UA / ru-UA output ([UNIT LOCALIZATION]).
- * Warning-only. The fixed Latin exception list from the rule (°C, °F, VAC, dpi, px, fps,
- * K, ppm) is deliberately absent from the pattern, so those never fire. Runs on text with
- * the product name and href/src values already stripped (same guard as unit-spacing) —
- * Latin units inside a brand/model suffix like "Ortur … 10W" are the name, not prose.
- * Composite units flag on their first Latin part (e.g. "kg" inside "kg/h") — the fix
- * message covers the whole unit.
+ * Warning-only. Most of the fixed Latin exception list from the rule (°C, °F, dpi, px, fps,
+ * K, ppm) is deliberately absent from the pattern, so those never fire. VAC / "V AC" is the
+ * one exception that DOES need an explicit carve-out: it shares the bare "V" token with the
+ * genuine voltage unit, so "V" only matches when NOT immediately followed by (optional space
+ * +) "AC". Runs on text with the product name and href/src values already stripped (same
+ * guard as unit-spacing) — Latin units inside a brand/model suffix like "Ortur … 10W" are the
+ * name, not prose. Composite units flag on their first Latin part (e.g. "kg" inside "kg/h") —
+ * the fix message covers the whole unit.
  */
 const LATIN_UNIT_IN_CYRILLIC =
-  /\d\s?(mm\/s|m\/s|kHz|MHz|GHz|Hz|mAh|mA|mV|kV|kW|mW|Mbit|Gbit|µm|μm|nm|mm²|mm³|cm²|cm³|m²|m³|mm|cm|km|kg|mg|ml|GB|MB|TB|rpm|[WVAglLm])(?![\w²³])/;
+  /\d\s?(mm\/s|m\/s|kHz|MHz|GHz|Hz|mAh|mA|mV|kV|kW|mW|Mbit|Gbit|µm|μm|nm|mm²|mm³|cm²|cm³|m²|m³|mm|cm|km|kg|mg|ml|GB|MB|TB|rpm|V(?!\s?AC)|[WAglLm])(?![\w²³])/;
 
 function checkCyrillicUnitLocalization(
   strippedHtml: string,
@@ -155,6 +157,18 @@ function stripHtmlTags(html: string): string {
 export const CONSUMABLES_CHAR_LIMIT = CONSUMABLES_MAX_STRIPPED_CHARS;
 export function strippedVisibleLength(html: string): number {
   return charLength(stripHtmlTags(html));
+}
+
+/**
+ * Matches `name` even where fixNumberFormatting has since inserted a space between a digit
+ * and an immediately-following unit letter (e.g. product name typed as "10W" but appearing
+ * as "10 W" in the generated output after unit-spacing normalization). Only that digit/letter
+ * boundary is made flexible; everything else in the name still matches literally.
+ */
+function buildProductNamePattern(name: string): RegExp {
+  const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const flexible = escaped.replace(/(\d)(?=[A-Za-zµμ])/g, '$1\\s?');
+  return new RegExp(flexible, 'g');
 }
 
 /**
@@ -262,7 +276,7 @@ export function validateGeneratedHtml(
   // Number glued to a unit, e.g. "1.75mm" or "200°C".
   // Strip href/src values first so URL slugs (e.g. /product/300mm-s) don't fire false positives.
   const htmlForUnitCheck = (productName?.trim()
-    ? html.replaceAll(productName.trim(), '\x00PRODUCT_NAME\x00')
+    ? html.replace(buildProductNamePattern(productName), '\x00PRODUCT_NAME\x00')
     : html
   ).replace(/\s(?:href|src)="[^"]*"/gi, '');
 

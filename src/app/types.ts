@@ -1,7 +1,7 @@
 
 export type WebsiteGroup = 'UA' | 'EU' | 'ES' | 'US';
 
-export type AppMode = 'generator' | 'optimizer' | 'translator' | 'image-tools' | 'seo-generator' | 'copywriter' | 'readability' | 'slug-generator';
+export type AppMode = 'generator' | 'ua-generator' | 'optimizer' | 'translator' | 'image-tools' | 'seo-generator' | 'copywriter' | 'readability' | 'slug-generator';
 
 export interface WebsiteOption {
   name: string;
@@ -86,6 +86,7 @@ export interface GeneratedContent {
   slugData?: SlugResponse | null;
   website?: WebsiteOption; // store this content was generated for (optional for backward compat)
   faqArtifacts?: Record<string, string>;   // ISO code → schema-free faq_[ISO].html
+  mainHtmlLocale?: string; // ISO code for mainHtmlEn's actual language, e.g. 'uk-UA' for native ua-generator output. Undefined = English (historical default).
 }
 
 export interface HistoryItem {

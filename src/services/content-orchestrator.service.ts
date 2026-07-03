@@ -244,12 +244,159 @@ export class ContentOrchestratorService {
     }, 'Error during generation.', 'Generation failed. Check console for details.');
   }
 
+  /** Native uk-UA generation: Task A is called directly in Ukrainian (no English base,
+   *  no Task C translation loop). SEO/slug/FAQ are scoped to uk-UA only. Mirrors generate()'s
+   *  repair gates and validators for the artifacts it shares. */
+  async generateUaContent(input: ProductInput, useThinking = false): Promise<void> {
+    const UA_ISO = 'uk-UA';
+    const UA_BASE_LANGUAGE = 'Ukrainian (uk-UA)';
+
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
+    this.validationIssues.set([]);
+
+    const isConsumables = input.templateId === 'consumables-resin';
+    const repairBudget = isConsumables ? 2 : this.maxRepairs();
+
+    await this.withProgress(async () => {
+      const { seoLangs } = getLangsForStore(input.website.name);
+
+      // Step 1 — Task A generated NATIVELY in Ukrainian (no English base, no Task C).
+      // Image manifest figcaption/alt text is sourced in English (Vision pre-pass output), so a
+      // custom-instructions override is injected here to make Task A translate it into Ukrainian
+      // instead of copying it verbatim — the normal pipeline gets this for free from Task C, which
+      // this native path skips entirely.
+      this.progressMessage.set(useThinking ? 'Generating Ukrainian Description (Deep Thinking)…' : 'Generating Ukrainian Description…');
+      const uaInput: ProductInput = {
+        ...input,
+        customInstructions: [
+          input.customInstructions?.trim(),
+          '[UKRAINIAN NATIVE OUTPUT — IMAGE TEXT OVERRIDE] This description is generated natively in ' +
+          'Ukrainian with no separate translation pass. The image manifest figcaption/vision-description ' +
+          'text is sourced in English — do NOT copy it verbatim. Translate each figcaption and alt text ' +
+          'into natural, idiomatic Ukrainian preserving the same factual meaning before using it.',
+        ].filter(Boolean).join('\n\n'),
+      };
+      const basePayloadA = buildPromptA(uaInput, UA_BASE_LANGUAGE);
+      const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
+        let html = await this.llm.generateText(payload, useThinking);
+        html = stripCodeFences(html);
+        html = wrapVideoFigures(html, input.name);
+        html = wrapImageFigures(html);
+        html = fixNumberFormatting(html);
+        return html;
+      };
+      const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
+        label: 'HTML (uk-UA)',
+        maxRepairs: repairBudget,
+        basePayload: basePayloadA,
+        produce: produceHtmlUa,
+        validate: html => [
+          ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId }),
+          ...validateSpecsGrounding(html, input.specs, 'HTML (uk-UA)'),
+        ],
+        withFeedback: appendRepairFeedback,
+        onAttempt: (n, c) =>
+          this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+      });
+      if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
+      const finalHtmlUa = isConsumables ? trimConsumablesToLimit(htmlUa) : htmlUa;
+      this.content.update(c => ({ ...c, mainHtmlEn: finalHtmlUa }));
+      this.validationIssues.set(
+        isConsumables
+          ? validateGeneratedHtml(finalHtmlUa, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId })
+          : htmlIssues,
+      );
+
+      // Step 2 — Slug for ALL site languages, grounded in the uk-UA description. Localized name
+      // is the single source of truth for H1 + Task B title core. Non-blocking: a slug failure
+      // must not abort SEO/FAQ.
+      let localizedNames: Record<string, string> | undefined;
+      try {
+        this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
+        const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
+        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
+        const slugData = this.normalizeSlugResponse(rawSlug);
+        this.content.update(c => ({ ...c, slugData }));
+        this.approvedSlugKey.set(this.slugKey(input));
+        localizedNames = slugsToLocalizedNames(slugData.slugs);
+      } catch (e) {
+        console.warn('[Slugs] uk-UA slug generation failed; H1 falls back to formula.', e);
+        this.validationIssues.update(issues => [
+          ...issues,
+          { severity: 'warning', rule: 'slug-generation-failed', detail: 'Slug generation failed — H1 and meta_title fall back to the formula.', context: 'Slugs' },
+        ]);
+      }
+
+      // Step 3 — SEO metadata for ALL site languages, grounded in the uk-UA description.
+      this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
+      const promptB = buildPromptB(input.website.name, input.name, seoLangs, finalHtmlUa, localizedNames);
+      const { artifact: seoJson, repairsUsed: bRepairs } = await runRepairGate({
+        label: 'SEO metadata',
+        maxRepairs: this.maxRepairs(),
+        basePayload: promptB,
+        produce: (payload) => this.llm.generateJson(payload, useThinking),
+        validate: (json) => validateSeoMetadata(json, ''),
+        withFeedback: appendRepairFeedback,
+        onAttempt: (n, c) =>
+          this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+      });
+      if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
+      this.content.update(c => ({ ...c, seoData: seoJson }));
+
+      // Step 4 — FAQ artifact (uk-UA only). Runs ONLY when Supplemental Content is supplied.
+      if (input.supplementalContent?.trim()) {
+        const store = getStore(input.website.name);
+        this.progressMessage.set('Generating FAQ artifact (uk-UA)…');
+        const basePayloadFaq = buildPromptFaq(
+          input.name, input.description, input.specs,
+          input.supplementalContent ?? '', isoToHumanLang(UA_ISO), store.currencySymbol,
+        );
+        const validateFaqHtml = (html: string): ValidationIssue[] => {
+          const issues = validateGeneratedHtml(html, 'FAQ (uk-UA)', input.name, UA_ISO);
+          if (html && !html.trim().startsWith('<')) {
+            issues.push({
+              severity: 'error', rule: 'non-html-output',
+              detail: 'Output is not HTML (does not start with "<").',
+              context: 'FAQ (uk-UA)',
+            });
+          }
+          return issues;
+        };
+        const { artifact: faqHtml, repairsUsed: faqRepairs } = await runRepairGate<string>({
+          label: 'FAQ (uk-UA)',
+          maxRepairs: this.maxRepairs(),
+          basePayload: basePayloadFaq,
+          produce: async (payload) => {
+            const html = await this.llm.generateText(payload, useThinking);
+            return stripCodeFences(html);
+          },
+          validate: validateFaqHtml,
+          withFeedback: appendRepairFeedback,
+          onAttempt: (n, c) =>
+            this.progressMessage.set(`Repairing FAQ (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+        });
+        if (faqRepairs > 0) console.info(`[repair-gate] FAQ (uk-UA): ${faqRepairs} repair(s) applied`);
+        if (faqHtml.startsWith('<')) {
+          this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [UA_ISO]: faqHtml } }));
+        } else {
+          console.warn('[FAQ] No usable uk-UA artifact: model returned non-HTML after repair. Skipped.');
+        }
+      }
+
+      // Post-generation acceptance-criteria check (non-blocking — reports only).
+      this.runOutputValidation(input.website.name, input.name, input.templateId, UA_ISO);
+
+      this.historyService.add(input, this.content());
+      this.progressMessage.set('Done!');
+    }, 'Error during Ukrainian generation.', 'Ukrainian generation failed. Check console for details.');
+  }
+
   async generateSeoMetadata(input: ProductInput, useThinking = false): Promise<void> {
     // Reuse slugData ONLY if it was approved for THIS exact product+store, so a Slug→SEO
     // standalone run feeds the approved localized name to B as h1 + title core. Otherwise
     // clear it (and B falls back to the English formula → independence preserved).
     const existingSlug = this.approvedSlugKey() === this.slugKey(input) ? this.content().slugData ?? null : null;
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: existingSlug });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: existingSlug, website: input.website });
     this.validationIssues.set([]);
 
     await this.withProgress(async () => {
@@ -281,7 +428,7 @@ export class ContentOrchestratorService {
   }
 
   async generateSlugs(input: ProductInput, useThinking = false): Promise<void> {
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website });
     this.validationIssues.set([]);
 
     await this.withProgress(async () => {
@@ -388,10 +535,10 @@ export class ContentOrchestratorService {
    * stores the results in the validationIssues signal. Errors are also logged so they
    * are visible during development. Never throws — validation is advisory.
    */
-  private runOutputValidation(storeName: string, productName?: string, templateId?: string): void {
+  private runOutputValidation(storeName: string, productName?: string, templateId?: string, mainLocale?: string): void {
     const c = this.content();
     const issues: ValidationIssue[] = [
-      ...validateGeneratedHtml(c.mainHtmlEn, 'HTML (base)', productName, undefined, { templateId }),
+      ...validateGeneratedHtml(c.mainHtmlEn, mainLocale ? `HTML (${mainLocale})` : 'HTML (base)', productName, mainLocale, { templateId }),
       ...Object.entries(c.translations).flatMap(([lang, html]) =>
         validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId })
       ),

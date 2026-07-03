@@ -45,11 +45,11 @@ Build src as {base}{brandFolder}/{modelFolder}/{filename}. ${example ? 'Example:
 
 // ── Main prompt builder ────────────────────────────────────────────────────
 
-export function buildPromptA(input: ProductInput): PromptPayload {
+export function buildPromptA(input: ProductInput, baseLanguageOverride?: string): PromptPayload {
   const store = getStore(input.website.name);
   const isUs = store.group === 'US';
   const isExpert3d = isExpert3dStore(input.website.name);
-  const baseLanguage = isUs ? 'American English (en-US)' : 'European English (en-GB)';
+  const baseLanguage = baseLanguageOverride ?? (isUs ? 'American English (en-US)' : 'European English (en-GB)');
   const isConsumables = input.templateId === 'consumables-resin';
 
   // Template hint is skipped for consumables — the simplified schema is self-contained

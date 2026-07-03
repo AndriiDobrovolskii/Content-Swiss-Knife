@@ -1,5 +1,4 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { US_MEASUREMENT_RULES, CYRILLIC_UNIT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore } from '../prompt-core/constants';
 import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore, UNIT_LOCALIZATION_RULES } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
@@ -61,7 +60,6 @@ styles, <hr> after </section>. Translate visible text + alt="" / title="". Never
 tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script, but TRANSLATE the generic descriptor and reorder it
 category-first, and localize embedded units/quantities — see [PRODUCT NAME LOCALIZATION].
 Never alter <img src="">.
-${CYRILLIC_UNIT_RULES}
 ${UNIT_LOCALIZATION_RULES}
 [NUMBERS] Use the locale decimal/thousands separator everywhere — body prose, headings, captions,
 AND spec-table <td> cells alike (Ukrainian/Russian/Polish/Spanish/German → decimal comma). This
@@ -128,7 +126,11 @@ ${PRODUCT_NAME_LOCALIZATION}
 
 [STYLE]
 - Tone: Direct, confident, professional but accessible.
-- Anti-anglicism: "друк" not "прінт", "ПЗ" not "софт". Established tech terms may stay.
+- Anti-anglicism: "друк" not "прінт", "ПЗ" not "софт". Established tech terms may stay. Material
+  TRADE NAMES ("Nylon 12 Powder", "Nylon 11 GF Powder", "PA12") are proper names — keep verbatim
+  in Latin, never "нейлон 12". Generic "nylon" (not the trade name) → paraphrase, don't
+  transliterate: "зі склонаповненого нейлону" (GF grades) / "з композитного нейлону" (composite
+  grades).
 
 [CONSTRAINTS]
 - Do NOT translate Brand/Model Names; TRANSLATE the generic descriptor, reorder it category-first, "pcs" → "шт." (see [PRODUCT NAME LOCALIZATION]).

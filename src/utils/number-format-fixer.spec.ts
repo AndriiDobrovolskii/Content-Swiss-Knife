@@ -22,6 +22,14 @@ describe('fixNumberFormatting — thousands separators', () => {
     it('preserves decimal comma with 2 digits (1,75 stays 1,75)', () => {
       expect(fixNumberFormatting('nozzle 1,75 mm')).toBe('nozzle 1,75 mm');
     });
+
+    it('does NOT corrupt a leading-zero decimal comma-group: 0,330 stays', () => {
+      expect(fixNumberFormatting('throughput 0,330 kg/hr')).toBe('throughput 0,330 kg/hr');
+    });
+
+    it('does NOT corrupt a leading-zero decimal comma-group with more digits: 0,0129 stays', () => {
+      expect(fixNumberFormatting('spot size 0,0129 mm')).toBe('spot size 0,0129 mm');
+    });
   });
 
   describe('space (UA / nbsp format)', () => {
@@ -57,6 +65,14 @@ describe('fixNumberFormatting — thousands separators', () => {
 
     it('strips chained period groups: 1.234.567 → 1234567', () => {
       expect(fixNumberFormatting('valor 1.234.567')).toBe('valor 1234567');
+    });
+
+    it('does NOT corrupt a leading-zero decimal that looks like a period group: 0.004 stays', () => {
+      expect(fixNumberFormatting('tolerance 0.004 in')).toBe('tolerance 0.004 in');
+    });
+
+    it('does NOT corrupt a leading-zero decimal with more than 3 fractional digits: 0.0129 stays', () => {
+      expect(fixNumberFormatting('spot size 0.0129 in')).toBe('spot size 0.0129 in');
     });
 
     it('preserves decimal dot with 1 digit (1.5 stays)', () => {

@@ -191,6 +191,7 @@ applies ("200 mm" → "200 мм", "10W" → "10 Вт").
   Area/Volume: m²→м², m³→м³, cm²→см², cm³→см³
   Capacity:    mAh→мА·год (uk) / мА·ч (ru)
   Rotation:    rpm→об/хв (uk) / об/мин (ru)
+  Time:        min→хв. (uk) / мин. (ru), h→год. (uk) / ч (ru), s→с
   Composite units cyrillize part-by-part (kg/h → кг/год (uk) / кг/ч (ru)).
 KEEP UNCHANGED in uk/ru (fixed exception list — technical convention): °C, °F, VAC / V AC
 (full form "вольт змінного струму / вольт переменного тока" is too long for tables/UI),
@@ -203,25 +204,6 @@ export const METRIC_MEASUREMENT_RULES = `[MEASUREMENT] Use standard Metric units
 SPACING IS MANDATORY: a single space between number and unit everywhere (body, table cells, alt text).
 ✅ "10 W", "1.75 mm", "200 °C", "-5 °C – 50 °C"   ❌ "10W", "1.75mm", "200°C"
 Normalize spacing even if the source omits it ("10W" → "10 W").`;
-
-/**
- * Cyrillic unit localization (uk-UA / ru-UA) — the single copy, imported by both
- * master-system-prompt.ts (Task A/B native generation) and task-c.ts (translation), so the
- * rule can't drift between the two paths the way the old duplicated inline blocks did.
- */
-export const CYRILLIC_UNIT_RULES = `[CYRILLIC UNITS — Ukrainian & Russian output ONLY]
-When the target language is Ukrainian or Russian, cyrillize these unit abbreviations in ALL
-visible text — including spec-table cells. Only the unit abbreviation changes; numeric values
-are NEVER altered. Word-boundary aware: "m" localizes only as a standalone unit (e.g. "1.3 m²"),
-never inside "mm" (a separate two-letter unit).
-mm→мм, μm/µm→мкм, cm→см, kg→кг, g→г, m→м, mm/s→мм/с, W→Вт, kW→кВт, V→В, L/l→л, GHz→ГГц, Hz→Гц,
-GB→ГБ, Mbit→Мбіт (uk) / Мбит (ru), A→А, kV→кВ.
-TIME: min localizes as "хв." (uk) / "мин." (ru) when abbreviated (spec-table cells, e.g. "< 90
-min"), or spelled out "хвилин" (uk) / "минут" (ru) in running prose ("менш ніж за 90 хвилин").
-EXCEPTIONS — keep in Latin (established technical/display convention): VAC / V AC, mAh, dpi, fps,
-px. The °C degree symbol is unchanged in both scripts.
-Spacing rule still applies ("200 mm" → "200 мм"). For English/Polish/German/Spanish output: keep
-ALL units in Latin.`;
 
 /**
  * Product-name localization rule (Schema v3 §0/§7/§9 consistency) — THE single copy.
@@ -242,7 +224,10 @@ Split the Product Name into three parts and treat each differently:
    ("Reflective Markers", "Filament", "Resin", "Build Plate", "Cleaning Kit"). TRANSLATE it into the
    target language using natural, normative terminology (anti-anglicism rules apply).
 2. BRAND / SUB-BRAND / MODEL — proper names ("Shining3D", "EinScan", "EINSTAR VEGA", "Bambu Lab",
-   "Creality Ender"). KEEP in original Latin script — NEVER translate or transliterate.
+   "Creality Ender") AND material/consumable TRADE NAMES ("Nylon 12 Powder", "Nylon 11 GF Powder",
+   "PA12", "PETG-CF"). KEEP in original Latin script — NEVER translate or transliterate, even when
+   the same word appears generically elsewhere in the text (see anti-anglicism rule for the
+   generic-noun case).
 3. EMBEDDED SPECS — dimensions and quantities ("12 mm", "1500 pcs"). Localize units, number
    separators and the count abbreviation (below); never change the digits.
 
