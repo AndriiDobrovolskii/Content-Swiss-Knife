@@ -158,6 +158,18 @@ export function strippedVisibleLength(html: string): number {
 }
 
 /**
+ * Matches `name` even where fixNumberFormatting has since inserted a space between a digit
+ * and an immediately-following unit letter (e.g. product name typed as "10W" but appearing
+ * as "10 W" in the generated output after unit-spacing normalization). Only that digit/letter
+ * boundary is made flexible; everything else in the name still matches literally.
+ */
+function buildProductNamePattern(name: string): RegExp {
+  const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const flexible = escaped.replace(/(\d)(?=[A-Za-zµμ])/g, '$1\\s?');
+  return new RegExp(flexible, 'g');
+}
+
+/**
  * Validates a single generated HTML body artifact.
  * @param html        the HTML body
  * @param context     label for reporting, e.g. "HTML (base/en)" or "HTML (UA)"
@@ -262,7 +274,7 @@ export function validateGeneratedHtml(
   // Number glued to a unit, e.g. "1.75mm" or "200°C".
   // Strip href/src values first so URL slugs (e.g. /product/300mm-s) don't fire false positives.
   const htmlForUnitCheck = (productName?.trim()
-    ? html.replaceAll(productName.trim(), '\x00PRODUCT_NAME\x00')
+    ? html.replace(buildProductNamePattern(productName), '\x00PRODUCT_NAME\x00')
     : html
   ).replace(/\s(?:href|src)="[^"]*"/gi, '');
 
