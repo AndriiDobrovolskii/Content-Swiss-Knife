@@ -21,14 +21,16 @@ export function buildPromptC(
 ): PromptPayload {
   // Select the localization-specific instruction first…
   let instruction: string;
+  let expert3dEsSelected = false;
   if (targetLang === 'European English' || targetLang === 'European English (EXPERT3D)') {
     instruction = EU_EN_INSTRUCTION;
   } else if ((targetLang === 'Ukrainian' && websiteGroup === 'US') || targetLang === 'Ukrainian (Expert-3DPrinter)') {
     instruction = US_UK_INSTRUCTION;
   } else if (targetLang.includes('American English') || targetLang.includes('American Spanish')) {
     instruction = usInstruction(targetLang);
-  } else if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && ['EXPERT3D', 'Impresora-3D'].includes(storeName))) {
+  } else if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && isExpert3dStore(storeName))) {
     instruction = EXPERT3D_ES_INSTRUCTION;
+    expert3dEsSelected = true;
   } else {
     instruction = genericInstruction(targetLang);
   }
@@ -39,10 +41,10 @@ export function buildPromptC(
     instruction += `\n\n${CONSUMABLES_TRANSLATION_OVERLAY}`;
   }
 
-  // EXPERT3D Tone of Voice: formal register + forbidden calques + brand voice, for every
-  // EXPERT3D/Impresora-3D language version (es-ES, uk-UA). targetLang check also covers the
-  // manual translate() path where storeName is empty ('Spanish (EXPERT3D)' etc.).
-  if (isExpert3dStore(storeName) || targetLang.includes('(EXPERT3D)')) {
+  // EXPERT3D Tone of Voice: formal register + forbidden calques + brand voice.
+  // Skipped for ES because EXPERT3D_ES_INSTRUCTION already embeds these rules —
+  // appending the overlay on top would duplicate them for the same language version.
+  if (!expert3dEsSelected && (isExpert3dStore(storeName) || targetLang.includes('(EXPERT3D)'))) {
     instruction += `\n\n${EXPERT3D_TOV_TRANSLATION_OVERLAY}`;
   }
 

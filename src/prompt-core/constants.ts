@@ -35,7 +35,7 @@ export function getStore(name: string): StoreProfile {
  * Task C translation overlay). Equivalent to group === 'ES' but named for intent.
  */
 export function isExpert3dStore(name: string): boolean {
-  return name === 'EXPERT3D' || name === 'Impresora-3D';
+  return getStore(name).group === 'ES';
 }
 
 function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
@@ -457,7 +457,9 @@ REGISTER (formal, mandatory — this is B2B industrial capital equipment):
 - en-ES / en-GB: neutral, impersonal industrial tone (English has no tú/usted).
 
 FORBIDDEN CALQUES (es-ES / es-MX — replace the English calque with natural Spanish; match
-inflected forms too, e.g. huella/huellas, puente/puentes):
+inflected forms too, e.g. huella/huellas, puente/puentes; applies in running prose AND in
+spec-table row labels, e.g. "Huella de operación recomendada" -> "Espacio de instalación
+recomendado"):
 - huella (= footprint) -> superficie de ocupación / espacio de instalación
 - de extremo a extremo (= end-to-end) -> de principio a fin / integral
 - producción puente (= bridge manufacturing) -> producción de transición
