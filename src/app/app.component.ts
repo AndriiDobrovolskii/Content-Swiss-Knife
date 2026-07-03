@@ -449,6 +449,15 @@ export class AppComponent {
   // Aggregate for ZIP/TXT download enablement etc. Generator layout MUST use hasGeneratorOutput().
   hasOutput = computed(() => this.hasGeneratorOutput() || this.hasSeoOutput() || this.hasSlugOutput());
 
+  // The product-name signal that owns the currently active mode's input form.
+  activeProductName = computed(() => {
+    switch (this.appMode()) {
+      case 'seo-generator': return this.seoProductName();
+      case 'slug-generator': return this.slugProductName();
+      default: return this.productName();
+    }
+  });
+
   // "US English Output" only for the US store; plain "English" for all other groups.
   // Uses website recorded on the generated content so a post-generation dropdown change
   // does not relabel an already-shown result.
@@ -945,8 +954,8 @@ export class AppComponent {
     }
   }
 
-  async downloadZip() { await downloadPackage(this.content(), this.productName()); }
-  async downloadText() { downloadTextPackage(this.content(), this.productName()); }
+  async downloadZip() { await downloadPackage(this.content(), this.activeProductName()); }
+  async downloadText() { downloadTextPackage(this.content(), this.activeProductName()); }
 
   copyToClipboard(text: string, event?: Event) {
     navigator.clipboard.writeText(text);
