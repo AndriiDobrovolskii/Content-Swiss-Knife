@@ -95,15 +95,17 @@ function checkExpert3dSpanishCalques(html: string, locale: string | undefined, i
 
 /**
  * Latin SI units left uncyrillized in uk-UA / ru-UA output ([UNIT LOCALIZATION]).
- * Warning-only. The fixed Latin exception list from the rule (°C, °F, VAC, dpi, px, fps,
- * K, ppm) is deliberately absent from the pattern, so those never fire. Runs on text with
- * the product name and href/src values already stripped (same guard as unit-spacing) —
- * Latin units inside a brand/model suffix like "Ortur … 10W" are the name, not prose.
- * Composite units flag on their first Latin part (e.g. "kg" inside "kg/h") — the fix
- * message covers the whole unit.
+ * Warning-only. Most of the fixed Latin exception list from the rule (°C, °F, dpi, px, fps,
+ * K, ppm) is deliberately absent from the pattern, so those never fire. VAC / "V AC" is the
+ * one exception that DOES need an explicit carve-out: it shares the bare "V" token with the
+ * genuine voltage unit, so "V" only matches when NOT immediately followed by (optional space
+ * +) "AC". Runs on text with the product name and href/src values already stripped (same
+ * guard as unit-spacing) — Latin units inside a brand/model suffix like "Ortur … 10W" are the
+ * name, not prose. Composite units flag on their first Latin part (e.g. "kg" inside "kg/h") —
+ * the fix message covers the whole unit.
  */
 const LATIN_UNIT_IN_CYRILLIC =
-  /\d\s?(mm\/s|m\/s|kHz|MHz|GHz|Hz|mAh|mA|mV|kV|kW|mW|Mbit|Gbit|µm|μm|nm|mm²|mm³|cm²|cm³|m²|m³|mm|cm|km|kg|mg|ml|GB|MB|TB|rpm|[WVAglLm])(?![\w²³])/;
+  /\d\s?(mm\/s|m\/s|kHz|MHz|GHz|Hz|mAh|mA|mV|kV|kW|mW|Mbit|Gbit|µm|μm|nm|mm²|mm³|cm²|cm³|m²|m³|mm|cm|km|kg|mg|ml|GB|MB|TB|rpm|V(?!\s?AC)|[WAglLm])(?![\w²³])/;
 
 function checkCyrillicUnitLocalization(
   strippedHtml: string,

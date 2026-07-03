@@ -424,6 +424,16 @@ describe('validateGeneratedHtml — Rule: latin-unit-in-cyrillic-text', () => {
     expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
   });
 
+  it('does NOT flag the "V AC" exception (space-separated form)', () => {
+    const html = '<p>Вхідна напруга адаптера 100–240 V AC 50/60 Гц.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
+  });
+
+  it('still flags a genuine uncyrillized "V" that is not part of VAC / V AC', () => {
+    const html = '<p>Вихідна напруга 5 V на порту USB.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text')).toBeDefined();
+  });
+
   it('does NOT flag Latin units inside the product name (model suffix "10W")', () => {
     const productName = 'Ortur R2 Smart Laser Engraver 10W';
     const html = `<p>${productName} — потужний гравер для майстерні.</p>`;
