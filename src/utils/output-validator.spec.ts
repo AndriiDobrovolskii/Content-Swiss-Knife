@@ -9,10 +9,11 @@
  * or changes severity from 'error' to 'warning', these tests catch it immediately
  * — before any real LLM call is made.
  *
- * COVERAGE TARGETS (11 rules total)
+ * COVERAGE TARGETS (13 rules total)
  *   HTML checks:   empty-output, duplicate-product-schema, no-faqpage-in-body, no-howto-in-body,
  *                  markdown-fence, br-spacing, unit-spacing, decimal-separator,
- *                  thousands-separator, lcp-image-lazy, image-not-lazy
+ *                  thousands-separator, latin-unit-in-cyrillic-text, es-forbidden-calque,
+ *                  lcp-image-lazy, image-not-lazy
  *   SEO checks:    seo-empty, meta-title-length, meta-description-length,
  *                  meta-description-cta, meta-description-currency
  *
@@ -362,7 +363,7 @@ describe('validateGeneratedHtml — Rule: thousands-separator', () => {
   });
 
   it('does NOT flag a single comma group — it is a valid decimal in uk-UA ("1,234 kg" = 1.234 kg)', () => {
-    const html = '<p>Вага: 1,234 kg.</p>';
+    const html = '<p>Вага: 1,234 кг.</p>';
     expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'thousands-separator');
   });
 
@@ -379,6 +380,95 @@ describe('validateGeneratedHtml — Rule: thousands-separator', () => {
   it('does NOT check dot-decimal locales (es-US)', () => {
     const html = '<p>Volume: 1,234,567 mm³.</p>';
     expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-US'), 'thousands-separator');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: latin-unit-in-cyrillic-text', () => {
+  it('flags a Latin unit in uk-UA prose', () => {
+    const html = '<p>Потужність лазера становить 10 W при безперервній роботі.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text')?.severity).toBe('warning');
+  });
+
+  it('flags a Latin unit in a ru-UA spec-table cell', () => {
+    const html = '<table><tr><td>Диаметр сопла</td><td>0,4 mm</td></tr></table>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'ru-UA'), 'latin-unit-in-cyrillic-text')).toBeDefined();
+  });
+
+  it('flags a glued Latin unit too (1.75mm)', () => {
+    const html = '<p>Філамент діаметром 1,75mm.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text')).toBeDefined();
+  });
+
+  it('flags multi-char units: GHz, GB, kW, µm, mAh', () => {
+    for (const unit of ['2,4 GHz', '32 GB', '1,5 kW', '50 µm', '5000 mAh']) {
+      const html = `<p>Параметр: ${unit}.</p>`;
+      expect(
+        findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text'),
+        `expected "${unit}" to flag`,
+      ).toBeDefined();
+    }
+  });
+
+  it('flags the Latin part of a composite unit (kg/h)', () => {
+    const html = '<p>Продуктивність: 330 kg/h.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text')).toBeDefined();
+  });
+
+  it('does NOT flag properly cyrillized units', () => {
+    const html = '<p>Потужність 10 Вт, вага 2,5 кг, роздільність 50 мкм, швидкість 300 мм/с, 32 ГБ.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
+  });
+
+  it('does NOT flag fixed Latin exceptions: °C, VAC, dpi, px, fps, K, ppm', () => {
+    const html = '<p>Температура 60 °C, живлення 220 VAC, роздільність 300 dpi, екран 1920 px, 30 fps, 6500 K, точність 5 ppm.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
+  });
+
+  it('does NOT flag Latin units inside the product name (model suffix "10W")', () => {
+    const productName = 'Ortur R2 Smart Laser Engraver 10W';
+    const html = `<p>${productName} — потужний гравер для майстерні.</p>`;
+    expectNoRule(validateGeneratedHtml(html, 'test', productName, 'uk-UA'), 'latin-unit-in-cyrillic-text');
+  });
+
+  it('does NOT flag Latin units inside href/src URL slugs', () => {
+    const html = '<a href="/product/laser-10w-300mm-s">посилання</a><img src="/img/2mm-nozzle.png" alt="сопло 2 мм">';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
+  });
+
+  it('does NOT check Latin-script locales (pl-PL, es-ES, de-DE)', () => {
+    const html = '<p>Moc lasera: 10 W, waga 2,5 kg.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'pl-PL'), 'latin-unit-in-cyrillic-text');
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'latin-unit-in-cyrillic-text');
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'de-DE'), 'latin-unit-in-cyrillic-text');
+  });
+
+  it('does NOT check when no locale is passed (backward compatible)', () => {
+    const html = '<p>Потужність 10 W.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'latin-unit-in-cyrillic-text');
+  });
+
+  it('does NOT false-positive on 4K/8K display shorthand or model tokens (unit followed by word chars)', () => {
+    const html = '<p>Екран 4K, модель S1-40Wx не є юнітом.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
+  });
+
+  it('propagates context and names the offending unit in detail', () => {
+    const html = '<td>10 W</td>';
+    const issue = findRule(validateGeneratedHtml(html, 'HTML (UA)', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
+    expect(issue?.context).toBe('HTML (UA)');
+    expect(issue?.detail).toContain('"W"');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: es-forbidden-calque', () => {
+  it('flags "huella" in es-ES output (incl. spec-table labels)', () => {
+    const html = '<table><tr><td>Huella de la impresora</td><td>450 × 450 mm</td></tr></table>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'es-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('does NOT flag es-MX or other locales', () => {
+    const html = '<p>La huella del equipo es compacta.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-MX'), 'es-forbidden-calque');
   });
 });
 

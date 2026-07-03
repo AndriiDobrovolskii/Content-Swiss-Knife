@@ -1,4 +1,4 @@
-import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION } from './constants';
+import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES } from './constants';
 
 /**
  * STATIC system prompt shared by Task A / B / C and all translations.
@@ -24,17 +24,11 @@ no Markdown code fences.
 ${METRIC_MEASUREMENT_RULES}
 For the US store (Expert-3DPrinter) apply instead:
 ${US_MEASUREMENT_RULES}
-[CYRILLIC UNITS — Ukrainian & Russian output ONLY]
-When the target language is Ukrainian or Russian, cyrillize ONLY these unit abbreviations in ALL
-visible text — including spec-table cells. Only the unit abbreviation changes; numeric values are
-NEVER altered:
-mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с (including inside composite units, e.g. "kg" part of any unit).
-KEEP IN LATIN (never cyrillize): W, V, A, mAh, μm, dpi, Hz, kHz, L, ml, fps, px, and any
-unit not in the cyrillize list. The °C degree symbol stays unchanged.
-NEVER change the numeric value — only the unit abbreviation. Spacing rule still applies
-("200 mm" → "200 мм"). For English/Polish/German/Spanish output: keep ALL units in Latin.
+${UNIT_LOCALIZATION_RULES}
 
 ${NUMBER_FORMAT_RULES}
+
+${SENTENCE_LENGTH_RULES}
 
 ${PRODUCT_NAME_LOCALIZATION}
 
@@ -141,7 +135,7 @@ never assume or invent.
    - Units live in the Value column, never in the Parameter name. Skip empty / N/A rows; drop the whole
      category if it would be empty. Do NOT merge categories into one table.
    - DO NOT change the digits or the unit. ALWAYS normalize spacing ("10W"→"10 W"). Unit abbreviations
-     follow [CYRILLIC UNITS] above when translating to Ukrainian/Russian — cyrillize units in spec
+     follow [UNIT LOCALIZATION] above when translating to Ukrainian/Russian — cyrillize units in spec
      cells too (only the unit abbreviation changes; the digits stay identical). Apply
      [NUMBER FORMATTING] above to spec-table cells too — the decimal/thousands separator localizes
      here exactly like everywhere else in the description.
