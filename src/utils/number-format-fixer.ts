@@ -32,9 +32,12 @@ function stripThousandsSeparators(text: string): string {
   // Space groups (regular, NBSP U+00A0, thin-space U+202F): 1 000 / 1 234 567
   text = text.replace(/\b\d{1,3}(?:[ \u00A0\u202F]\d{3})+/g, m => m.replace(/[ \u00A0\u202F]/g, ''));
 
-  // Period groups: 1.000 / 1.234.567 -> 1000 / 1234567
-  // Guard: NOT followed by more digit(s) that would indicate a decimal tail
-  text = text.replace(/\b\d{1,3}(?:\.\d{3})+(?!\.\d)/g, m => m.replace(/\./g, ''));
+  // Period groups: 1.000 / 1.234.567 -> 1000 / 1234567. Guard 1: not followed by more
+  // digit(s) that would indicate a decimal tail. Guard 2: does NOT start with "0." + a
+  // 3-digit group — nobody writes a thousands-separated integer as "0.004" (a leading zero
+  // group is meaningless there), so that shape is unambiguously a decimal fraction (e.g. an
+  // inch tolerance) and must be left untouched rather than corrupted into "0004".
+  text = text.replace(/\b(?!0\.\d{3})\d{1,3}(?:\.\d{3})+(?!\.\d)/g, m => m.replace(/\./g, ''));
 
   return text;
 }

@@ -59,6 +59,14 @@ describe('fixNumberFormatting — thousands separators', () => {
       expect(fixNumberFormatting('valor 1.234.567')).toBe('valor 1234567');
     });
 
+    it('does NOT corrupt a leading-zero decimal that looks like a period group: 0.004 stays', () => {
+      expect(fixNumberFormatting('tolerance 0.004 in')).toBe('tolerance 0.004 in');
+    });
+
+    it('does NOT corrupt a leading-zero decimal with more than 3 fractional digits: 0.0129 stays', () => {
+      expect(fixNumberFormatting('spot size 0.0129 in')).toBe('spot size 0.0129 in');
+    });
+
     it('preserves decimal dot with 1 digit (1.5 stays)', () => {
       expect(fixNumberFormatting('nozzle 1.5 mm')).toBe('nozzle 1.5 mm');
     });
