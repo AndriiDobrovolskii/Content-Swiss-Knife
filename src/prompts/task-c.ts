@@ -1,5 +1,6 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
 import { US_MEASUREMENT_RULES, CYRILLIC_UNIT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore } from '../prompt-core/constants';
+import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore, UNIT_LOCALIZATION_RULES } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 function pack(instruction: string, html: string): PromptPayload {
@@ -61,6 +62,7 @@ tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script, but TRANSLA
 category-first, and localize embedded units/quantities — see [PRODUCT NAME LOCALIZATION].
 Never alter <img src="">.
 ${CYRILLIC_UNIT_RULES}
+${UNIT_LOCALIZATION_RULES}
 [NUMBERS] Use the locale decimal/thousands separator everywhere — body prose, headings, captions,
 AND spec-table <td> cells alike (Ukrainian/Russian/Polish/Spanish/German → decimal comma). This
 includes numbers embedded in a repeated Product Name (e.g. in the spec-table heading or closing
@@ -109,9 +111,9 @@ Translate the input into high-converting Ukrainian for a product sold in the US 
 [MEASUREMENT CONSTRAINT — CRITICAL]
 If the source contains Imperial units (inches, lbs), the Ukrainian translation MUST preserve
 those Imperial units (дюйми, фунти). Do NOT convert them to Metric.
-[UNITS — CYRILLIZE] Cyrillize in ALL visible text including spec-table cells:
-ONLY mm→мм, cm→см, kg→кг, g→г, mm/s→мм/с (plus дюйми/фунти for Imperial as above).
-Keep W/V/A/μm/Hz/ml/L in Latin and °C unchanged. NEVER change the numeric value.
+${UNIT_LOCALIZATION_RULES}
+[US EXCEPTION] Imperial units from the source stay Imperial (дюйми, фунти) — the
+[MEASUREMENT CONSTRAINT] above overrides; never convert to Metric.
 [NUMBERS] Use a decimal comma everywhere in Ukrainian output — running text, headings, captions,
 AND spec-table <td> cells alike ("1.75 mm" → "1,75 мм"). This includes numbers embedded in a
 repeated Product Name. Never change the digits or the unit — only the separator localizes.
@@ -219,7 +221,7 @@ ${labelsBlock}
 | "3D Plastic"         | Replace with "Filament" (EN) / "Filamento" (ES)  |
 
 [STYLE]
-- Break long sentences into shorter US-style punchy ones.
+- Follow the [SENTENCE LENGTH] budget for the target locale (US bands are the tightest).
 - Benefit-first: "Print warp-free ABS parts thanks to the enclosed chamber."
 - US tone: Direct, confident, professional. No "It is important to note that…".
 

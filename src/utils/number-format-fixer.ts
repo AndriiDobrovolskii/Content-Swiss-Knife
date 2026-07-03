@@ -30,7 +30,7 @@ function stripThousandsSeparators(text: string): string {
   text = text.replace(/\b\d{1,3}(?:,\d{3})+/g, m => m.replace(/,/g, ''));
 
   // Space groups (regular, NBSP U+00A0, thin-space U+202F): 1 000 / 1 234 567
-  text = text.replace(/\b\d{1,3}(?:[   ]\d{3})+/g, m => m.replace(/[   ]/g, ''));
+  text = text.replace(/\b\d{1,3}(?:[ \u00A0\u202F]\d{3})+/g, m => m.replace(/[ \u00A0\u202F]/g, ''));
 
   // Period groups: 1.000 / 1.234.567 -> 1000 / 1234567
   // Guard: NOT followed by more digit(s) that would indicate a decimal tail
@@ -39,8 +39,29 @@ function stripThousandsSeparators(text: string): string {
   return text;
 }
 
+/**
+ * Cyrillic units continue Cyrillic words ("3шт." must stay glued to nothing — "шт." is not
+ * in the unit list; "5ммX" inside a token must not split). \b is unreliable across the
+ * Latin/Cyrillic script boundary in JS regex, so an explicit negative lookahead over
+ * Cyrillic letters + word chars is used instead.
+ */
+const CYR_BOUNDARY = '(?![\u0430-\u044F\u0456\u0457\u0454\u0491\u0410-\u042F\u0406\u0407\u0404\u0490\\w])';
+
+// Multi-character Cyrillic units, longest match wins (uk + ru variants).
+const CYR_MULTI_UNITS_RE = new RegExp(
+  '(\\d)(кГц|МГц|ГГц|мВт|кВт|мА·год|мА·ч|мА|мВ|кВ|мм/с|м/с|мкм|мм|см|км|нм|мг|кг|мл|Мбіт|Мбит|Гбіт|Гбит|ГБ|МБ|ТБ|об/хв|об/мин|Гц|Вт|м²|м³|см²|см³)' + CYR_BOUNDARY,
+  'g',
+);
+
+// Single-letter Cyrillic SI units: г, л, м, т (mass tonne), В, А.
+const CYR_SINGLE_UNITS_RE = new RegExp('(\\d)([глмт\u0412\u0410])' + CYR_BOUNDARY, 'g');
+
 function ensureUnitSpaces(text: string): string {
-  // Multi-character units first (longest match wins).
+  // Cyrillic units (uk/ru output) — multi-character first, longest match wins.
+  text = text.replace(CYR_MULTI_UNITS_RE, '$1 $2');
+  // Cyrillic single-letter SI units.
+  text = text.replace(CYR_SINGLE_UNITS_RE, '$1 $2');
+  // Multi-character Latin units first (longest match wins).
   text = text.replace(/(\d)(kHz|MHz|GHz|mW|kW|mA|mV|mm|cm|km|µm|μm|nm|mg|ml|MPa|GPa|kPa|Pa)\b/g, '$1 $2');
   // Single- or double-char units.
   text = text.replace(/(\d)(Hz|kg|px|pt|dpi|bar|psi)\b/g, '$1 $2');

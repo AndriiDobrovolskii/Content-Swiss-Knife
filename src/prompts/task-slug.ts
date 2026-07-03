@@ -70,6 +70,11 @@ Work per-locale: the language code drives word order, number format and translit
    Units inside Cyrillic names (uk-UA / ru-UA): see the same rule used everywhere else in the
    pipeline —
    ${CYRILLIC_UNIT_RULES}
+   Units inside Cyrillic NAMES: cyrillize EVERY unit abbreviation per the network-wide table
+   (mm→мм, μm→мкм, kg→кг, W→Вт, kW→кВт, V→В, A→А, Hz→Гц, GHz→ГГц, L→л, GB→ГБ,
+   Mbit→Мбіт/Мбит, mAh→мА·год/мА·ч, m²→м²; composite units part-by-part). NEVER change the
+   numeric value. Fixed Latin exceptions: °C, VAC, dpi, px, fps, K, ppm.
+   SLUGS are always Latin ASCII — transliterate back (мм→mm) per the slug rules below.  
 8. LENGTH: keep the name concise and Title-friendly — aim ≤ 60 characters. If over, drop in this
    order: colour code → secondary variant → least-critical spec. Never drop brand, model, or the
    product type.
