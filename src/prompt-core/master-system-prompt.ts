@@ -71,10 +71,12 @@ Follow Product Description Schema v3.0. Emit sections in this order. §0 (H1) is
 CMS — NEVER emit <h1> in the body. CONDITIONAL sections appear ONLY when the source provides the data;
 never assume or invent.
 
-1. HOOK (40–75 words, plain <p>, no microdata):
-   "[Product] is a [Category] designed for [use-case], featuring [key specs]." Use-case = a workflow,
-   not a user type. Vary sentence syntax across products (avoid a conveyor effect). Do NOT repeat
-   numbers that already appear in the Killer Specs table below.
+1. HOOK (40–75 words TOTAL, plain <p>, no microdata):
+   Open with: "[Product] is a [Category] designed for [use-case], featuring [key specs]." Use-case = a
+   workflow, not a user type. Split the 40–75 words across 2–4 sentences — do NOT chain the whole
+   paragraph into one sentence; every sentence must independently fit the locale's HERO band from
+   [SENTENCE LENGTH] below. Vary sentence syntax across products (avoid a conveyor effect). Do NOT
+   repeat numbers that already appear in the Killer Specs table below.
    §1 is a plain <p> with NO H2 heading and NO <section> wrapper.
 
 2. KILLER SPECS + KEY BENEFITS (table 3–4 rows + 90–200 words):
