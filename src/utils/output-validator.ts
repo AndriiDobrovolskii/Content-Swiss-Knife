@@ -93,6 +93,37 @@ function checkExpert3dSpanishCalques(html: string, locale: string | undefined, i
   }
 }
 
+/**
+ * Latin SI units left uncyrillized in uk-UA / ru-UA output ([UNIT LOCALIZATION]).
+ * Warning-only. The fixed Latin exception list from the rule (°C, °F, VAC, dpi, px, fps,
+ * K, ppm) is deliberately absent from the pattern, so those never fire. Runs on text with
+ * the product name and href/src values already stripped (same guard as unit-spacing) —
+ * Latin units inside a brand/model suffix like "Ortur … 10W" are the name, not prose.
+ * Composite units flag on their first Latin part (e.g. "kg" inside "kg/h") — the fix
+ * message covers the whole unit.
+ */
+const LATIN_UNIT_IN_CYRILLIC =
+  /\d\s?(mm\/s|m\/s|kHz|MHz|GHz|Hz|mAh|mA|mV|kV|kW|mW|Mbit|Gbit|µm|μm|nm|mm²|mm³|cm²|cm³|m²|m³|mm|cm|km|kg|mg|ml|GB|MB|TB|rpm|[WVAglLm])(?![\w²³])/;
+
+function checkCyrillicUnitLocalization(
+  strippedHtml: string,
+  locale: string | undefined,
+  issues: ValidationIssue[],
+  context: string,
+): void {
+  if (locale !== 'uk-UA' && locale !== 'ru-UA') return;
+  const text = strippedHtml.replace(/<[^>]*>/g, ' ');
+  const m = text.match(LATIN_UNIT_IN_CYRILLIC);
+  if (m) {
+    issues.push({
+      severity: 'warning',
+      rule: 'latin-unit-in-cyrillic-text',
+      detail: `Latin unit "${m[1]}" in ${locale} output — cyrillize per [UNIT LOCALIZATION] (e.g. W→Вт, mm→мм, GHz→ГГц). Fixed Latin exceptions: °C, VAC, dpi, px, fps, K, ppm.`,
+      context,
+    });
+  }
+}
+
 /** Counts visible characters by code point (so emoji/➔ count as 1, matching CMS limits). */
 function charLength(s: string): number {
   return Array.from(s).length;
@@ -261,6 +292,9 @@ export function validateGeneratedHtml(
   // variant above): a wrong separator inside a repeated Product Name must still be flagged.
   checkNumberFormatting(html, locale, issues, context);
   checkExpert3dSpanishCalques(html, locale, issues, context);
+  // Uncyrillized Latin units (uk/ru) — runs on the name/URL-stripped variant: units inside a
+  // brand/model suffix stay Latin by design ([PRODUCT NAME LOCALIZATION] keeps model codes as-is).
+  checkCyrillicUnitLocalization(htmlForUnitCheck, locale, issues, context);
 
   // Image lazy-loading rule: first <img> must NOT be lazy; every subsequent one must be.
   try {

@@ -122,15 +122,106 @@ unit; only the separator punctuation localizes.
 - en-US:         decimal dot, thousands comma                 → 1,234,567.89
 - es-US / es-MX (US market, CLDR): decimal dot, thousands comma → 1,234,567.89`;
 
+/**
+ * Per-locale sentence-length budget. A LANGUAGE-LEVEL quality rule (like NUMBER_FORMAT_RULES),
+ * NOT a store/ToV overlay: it applies to EVERY task, EVERY store, EVERY generated and translated
+ * language version, and is injected once into the master prompt. Values are words-per-sentence,
+ * calibrated per language because the same meaning costs a different word count across languages
+ * (German compounds + verb-final frame → fewest words; Romance expansion → most; Slavic drops
+ * articles but words run longer). The English band is grounded in the comprehension curve
+ * (~14 words ≈ 90% comprehension, sharp drop after 25); other bands are derived from the
+ * language-adapted readability formulas + text-expansion factors. Averages over a section, with a
+ * hard per-sentence ceiling. Also the AEO/GEO sweet spot: answer engines extract the first 1–2
+ * sentences of a section, so the opening sentence must be short and self-contained.
+ */
+export const SENTENCE_LENGTH_RULES = `[SENTENCE LENGTH — by locale, applies everywhere, every language version]
+Write to a words-per-sentence budget calibrated for the TARGET language. Values are averages across
+the section; never exceed the hard ceiling for any single sentence. Vary length for rhythm (mix
+short and medium) — do NOT make every sentence the same length.
+Sections: HERO = opening/intro paragraph · BODY = feature→benefit + technical-explanation prose ·
+FAQ = the FIRST sentence of every answer (supporting sentences may sit at the BODY band).
+                    HERO     BODY      FAQ-1st   ceiling
+- en-GB / en-ES:    9–14     15–18     10–15     25
+- en-US:            8–12     14–17     9–14      22
+- de-DE:            8–12     12–15     8–13      18   (compounds + Satzklammer — keep shortest)
+- es-ES:            10–15    16–20     12–16     27   (Romance expansion — highest budget)
+- es-MX:            9–13     14–18     10–15     24
+- pl-PL:            8–13     13–17     10–15     22
+- uk-UA / ru-UA:    8–12     12–16     9–14      20   (no articles, long words — split long clauses)
+UNIVERSAL (all locales): one idea per sentence; open each section AND each FAQ answer with a
+complete, self-contained statement (answer-first); front-load subject + key attribute (product +
+spec) at the sentence start; anchor technical sentences on a concrete figure. Avoid nested/
+subordinate pile-ups (uk/ru дієприслівникові звороти; de Schachtelsätze).
+[ON TRANSLATION] "Preserve structure" governs HTML only (sections, classes, <hr>) — NOT sentence
+boundaries. If a source English sentence would exceed the TARGET band, SPLIT it; if the target
+language is terser, you may MERGE. Re-fit to the target band instead of mirroring English sentence
+structure 1:1 (critical for de-DE and uk-UA/ru-UA).`;
+
 /** US mixed measurement rule — the ONLY copy. */
 export const US_MEASUREMENT_RULES = `[MEASUREMENT SYSTEM — MIXED US STANDARD]
 CONVERT to Imperial: Printer Dimensions → inches, Build Volume → inches, Printer Weight → lbs, Filament Spool Weight → lbs (oz for small samples).
 KEEP in Metric: Layer Thickness → μm, Filament Diameter → mm, Nozzle → mm, Temperature → °C, Print Speed → mm/s, Resin Volume → L/ml.`;
 
+/**
+ * Single source of truth for unit-abbreviation localization across the whole pipeline.
+ * Interpolated into MASTER_SYSTEM_PROMPT, task-c (generic + US_UK) and referenced by task-slug.
+ * Language-driven, not store-driven: applies to uk-UA / ru-UA output on EVERY storefront.
+ * Deterministic backstops: number-format-fixer (spacing) and output-validator
+ * (latin-unit-in-cyrillic-text warning).
+ */
+export const UNIT_LOCALIZATION_RULES = `[UNIT LOCALIZATION]
+LATIN-SCRIPT LANGUAGES (en-GB/en-US/en-ES, pl-PL, de-DE, es-ES, es-MX): keep ALL international
+unit abbreviations unchanged (mm, kg, W, kW, GHz, GB…). Never invent localized abbreviations.
+Lowercase "l" for litre in pl (litr); "L" acceptable in en/de.
+
+CYRILLIC LANGUAGES (uk-UA, ru-UA) — cyrillize EVERY unit abbreviation in ALL visible text,
+including spec-table cells, alt="", title="", figcaptions and repeated Product Names.
+Only the abbreviation script changes; the numeric value NEVER changes. Spacing rule still
+applies ("200 mm" → "200 мм", "10W" → "10 Вт").
+  Length:      mm→мм, cm→см, m→м, km→км, μm/µm→мкм, nm→нм
+  Mass:        kg→кг, g→г, mg→мг
+  Power:       W→Вт, kW→кВт, mW→мВт
+  Voltage:     V→В, kV→кВ, mV→мВ
+  Current:     A→А, mA→мА
+  Frequency:   Hz→Гц, kHz→кГц, MHz→МГц, GHz→ГГц
+  Volume:      L/l→л, ml→мл
+  Data:        GB→ГБ, MB→МБ, TB→ТБ
+  Bitrate:     Mbit/Mb→Мбіт (uk) / Мбит (ru), Gbit→Гбіт (uk) / Гбит (ru)
+  Speed:       mm/s→мм/с, m/s→м/с
+  Area/Volume: m²→м², m³→м³, cm²→см², cm³→см³
+  Capacity:    mAh→мА·год (uk) / мА·ч (ru)
+  Rotation:    rpm→об/хв (uk) / об/мин (ru)
+  Composite units cyrillize part-by-part (kg/h → кг/год (uk) / кг/ч (ru)).
+KEEP UNCHANGED in uk/ru (fixed exception list — technical convention): °C, °F, VAC / V AC
+(full form "вольт змінного струму / вольт переменного тока" is too long for tables/UI),
+dpi, px, fps, K (colour temperature, e.g. "6500 K"), ppm, and any inch marks in US-market
+content. Any unit NOT listed anywhere above: keep as in source, do not guess.
+[NUMBER SEPARATOR REMINDER] Decimal comma for uk/ru/pl/de/es-ES ("1.5 kW" → "1,5 кВт");
+decimal dot for en-GB/en-US/en-ES/es-MX. Separator rules live in [NUMBER FORMATTING].`;
+
 export const METRIC_MEASUREMENT_RULES = `[MEASUREMENT] Use standard Metric units (mm, kg, °C).
 SPACING IS MANDATORY: a single space between number and unit everywhere (body, table cells, alt text).
 ✅ "10 W", "1.75 mm", "200 °C", "-5 °C – 50 °C"   ❌ "10W", "1.75mm", "200°C"
 Normalize spacing even if the source omits it ("10W" → "10 W").`;
+
+/**
+ * Cyrillic unit localization (uk-UA / ru-UA) — the single copy, imported by both
+ * master-system-prompt.ts (Task A/B native generation) and task-c.ts (translation), so the
+ * rule can't drift between the two paths the way the old duplicated inline blocks did.
+ */
+export const CYRILLIC_UNIT_RULES = `[CYRILLIC UNITS — Ukrainian & Russian output ONLY]
+When the target language is Ukrainian or Russian, cyrillize these unit abbreviations in ALL
+visible text — including spec-table cells. Only the unit abbreviation changes; numeric values
+are NEVER altered. Word-boundary aware: "m" localizes only as a standalone unit (e.g. "1.3 m²"),
+never inside "mm" (a separate two-letter unit).
+mm→мм, μm/µm→мкм, cm→см, kg→кг, g→г, m→м, mm/s→мм/с, W→Вт, kW→кВт, V→В, L/l→л, GHz→ГГц, Hz→Гц,
+GB→ГБ, Mbit→Мбіт (uk) / Мбит (ru), A→А, kV→кВ.
+TIME: min localizes as "хв." (uk) / "мин." (ru) when abbreviated (spec-table cells, e.g. "< 90
+min"), or spelled out "хвилин" (uk) / "минут" (ru) in running prose ("менш ніж за 90 хвилин").
+EXCEPTIONS — keep in Latin (established technical/display convention): VAC / V AC, mAh, dpi, fps,
+px. The °C degree symbol is unchanged in both scripts.
+Spacing rule still applies ("200 mm" → "200 мм"). For English/Polish/German/Spanish output: keep
+ALL units in Latin.`;
 
 /**
  * Product-name localization rule (Schema v3 §0/§7/§9 consistency) — THE single copy.
@@ -381,7 +472,9 @@ REGISTER (formal, mandatory — this is B2B industrial capital equipment):
 - en-ES / en-GB: neutral, impersonal industrial tone (English has no tú/usted).
 
 FORBIDDEN CALQUES (es-ES / es-MX — replace the English calque with natural Spanish; match
-inflected forms too, e.g. huella/huellas, puente/puentes):
+inflected forms too, e.g. huella/huellas, puente/puentes; applies in running prose AND in
+spec-table row labels, e.g. "Huella de operación recomendada" -> "Espacio de instalación
+recomendado"):
 - huella (= footprint) -> superficie de ocupación / espacio de instalación
 - de extremo a extremo (= end-to-end) -> de principio a fin / integral
 - producción puente (= bridge manufacturing) -> producción de transición
