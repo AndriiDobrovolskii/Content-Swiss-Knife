@@ -38,7 +38,7 @@ export function isExpert3dStore(name: string): boolean {
   return getStore(name).group === 'ES';
 }
 
-function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
+export function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
   if (lang === 'uk-UA') return group === 'US' ? 'Ukrainian' : 'UA';
   if (lang === 'ru-UA') return 'RU';
   if (lang === 'pl-PL') return 'PL';
@@ -479,7 +479,13 @@ FORBIDDEN CALQUES / ANGLICISMS:
 - 3D-printing/industrial terminology: "pó reclamado" → "pó recuperado" · "pó selecionado"
   (sifted powder) → "pó peneirado" · "embalamento" (packing-density sense, NOT literal parcel
   packaging) → "empacotamento" · "taxa de atualização" (powder refresh rate, NOT UI refresh rate)
-  → "taxa de renovação" · "breakout limpo" → "extração limpa".
+  → "taxa de renovação" · "breakout limpo" → "extração limpa" · "nitrogénio" (chemical element) →
+  "azoto" (PT-PT never uses "nitrogénio" for this) · "gantries" → "pórticos" · "powder bed fusion"
+  (left in English) → "fusão em leito de pó" · "sistemas legados" (calque of "legacy systems") →
+  "sistemas convencionais" / "de geração anterior" · "filtros de carbono" (gas/air filtration
+  media) → "filtros de carvão ativado" ("carbono" alone stays correct elsewhere, e.g. "fibra de
+  carbono") · "caixa de luvas selada" (glove-box / breakout-station description) → "câmara selada
+  com luvas".
 
 SPANISH-LEAKAGE WATCHLIST: this store also serves es-ES — Spanish vocabulary bleeding into pt-PT
 output is a systemic risk, not a one-off. Known leaks to avoid: "utillajes" → "ferramental" ·
@@ -487,6 +493,10 @@ output is a systemic risk, not a one-off. Known leaks to avoid: "utillajes" → 
 words where a distinct Portuguese term exists.
 
 GRAMMAR: "dezenas de milhar" → "dezenas de milhares" (number agreement).
+
+DOCUMENT SCOPE: every rule above applies to the ENTIRE generated artifact — main body, FAQ,
+HowTo, and any other block generated under this locale — not only the first/main section. Do not
+relax terminology discipline in a shorter or separately-framed block.
 
 NUMBERS: decimal comma, space thousands ("1,75 mm"; "12 500 h"). Never change digits or unit.
 COUNT: unit-count abbreviation is "un." (see [PRODUCT NAME LOCALIZATION]).`;

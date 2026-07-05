@@ -16,6 +16,9 @@ No preamble, no explanations — output the FAQ artifact only.`;
  *
  * @param currencySymbol  Store's currency symbol (e.g. "€", "₴", "zł", "$").
  *                        Used to enforce correct currency formatting for any prices in the FAQ.
+ * @param localeOverlay   Optional per-locale ToV overlay (e.g. buildNativeLangOverlay() output) —
+ *                        same mechanism Task A uses for native generation, so locale-specific
+ *                        vocabulary/orthography/calque rules also reach this separate FAQ call.
  */
 export function buildPromptFaq(
   productName: string,
@@ -24,11 +27,13 @@ export function buildPromptFaq(
   supplementalContent: string,
   humanLang: string,
   currencySymbol: string,
+  localeOverlay?: string,
 ): PromptPayload {
+  const overlay = localeOverlay?.trim() ? `\n\n[LOCALE OVERLAY]\n${localeOverlay.trim()}` : '';
   return {
     systemBlocks: [{ text: TASK_FAQ_SYSTEM, cache: true }],
     userContent: `[TASK]
-Create an expert FAQ block for "${productName}" in ${humanLang}, based ONLY on the provided sources.
+Create an expert FAQ block for "${productName}" in ${humanLang}, based ONLY on the provided sources.${overlay}
 
 [CONTENT RULES]
 - Answer-first: the first sentence of each answer is a direct, clear answer to the question. Details and

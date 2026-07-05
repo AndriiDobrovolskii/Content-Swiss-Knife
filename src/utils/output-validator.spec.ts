@@ -507,6 +507,21 @@ describe('validateGeneratedHtml — Rule: pt-forbidden-calque', () => {
     const html = '<p>O pó reclamado é reintroduzido após um breakout limpo, para dezenas de milhar de peças.</p>';
     expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
   });
+
+  it('flags nitrogénio (should be azoto in PT-PT)', () => {
+    const html = '<p>Requer fornecimento externo de nitrogénio com pureza superior a 99,5%.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('flags gantries and powder bed fusion as untranslated English terms', () => {
+    const html = '<p>Braços robóticos e gantries de câmara superam sistemas de powder bed fusion legados.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('flags sistemas legados as a calque of "legacy systems"', () => {
+    const html = '<p>Supera os sistemas legados de sinterização em custo por peça.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
 });
 
 describe('validateGeneratedHtml — Rules: lcp-image-lazy / image-not-lazy', () => {
