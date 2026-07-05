@@ -474,6 +474,20 @@ NUMBERS: decimal comma, space thousands ("1,75 mm"; "12 500 h"). Never change di
 COUNT: unit-count abbreviation is "un." (see [PRODUCT NAME LOCALIZATION]).`;
 
 /**
+ * EXPERT3D Tone of Voice — Castilian Spanish (es-ES) vocabulary overlay for NATIVE generation.
+ * Extracted from EXPERT3D_ES_INSTRUCTION (task-c.ts, translation-only) so native Task A
+ * generation (main pipeline) has the same vocabulary/showroom constraints without duplicating
+ * them into the orchestrator as inline strings.
+ */
+export const EXPERT3D_ES_NATIVE_VOCAB_OVERLAY =
+  `[EXPERT3D ToV — CASTILIAN SPANISH (es-ES) VOCABULARY]
+MARKET: Spain (es-ES), European terminology only.
+MANDATORY VOCABULARY: Ordenador (NOT computadora) · Fichero (NOT archivo) ·
+Laminador / software de laminado (NOT rebanador/slicer) · Plataforma de impresión / cama de
+impresión (bed) · Extrusor.
+SHOWROOM: EXPERT3D has no physical showroom — do not invent a showroom/visit/demo-unit claim.`;
+
+/**
  * EXPERT3D Tone of Voice — TRANSLATION overlay (Task C, EXPERT3D/Impresora-3D locales).
  * Appended to whichever task-c instruction is selected — same mechanism as
  * CONSUMABLES_TRANSLATION_OVERLAY. Carries the per-locale FORMAL register, the es-ES
@@ -514,3 +528,25 @@ FORBIDDEN STEMS (uk-UA — drop or replace with a concrete fact): революц
 COLON CAPITALIZATION in "<b>Label:</b> continuation" list items and figcaptions: for uk-UA /
 ru-UA / pl-PL lowercase the first letter after the colon (it introduces an explanation of the
 bold label, not a new sentence). For de-DE and all English keep the default capital.`;
+
+/**
+ * Builds the customInstructions suffix for native per-language generation (main pipeline Step 4,
+ * ContentOrchestratorService.generate()). Generic image-caption-translation note for every
+ * language; EXPERT3D stores additionally get the register/calque ToV overlay, plus PT's or ES's
+ * locale-specific overlay.
+ */
+export function buildNativeLangOverlay(lang: string, humanLang: string, storeName: string): string {
+  const parts = [
+    `[NATIVE ${humanLang.toUpperCase()} OUTPUT — IMAGE TEXT OVERRIDE] This description is generated ` +
+    `natively in ${humanLang} with no separate translation pass. The image manifest figcaption/` +
+    `vision-description text is sourced in English — do NOT copy it verbatim. Translate each ` +
+    `figcaption and alt text into natural, idiomatic ${humanLang} preserving the same factual ` +
+    `meaning before using it.`,
+  ];
+  if (isExpert3dStore(storeName)) {
+    parts.push(EXPERT3D_TOV_TRANSLATION_OVERLAY);
+    if (lang === 'PT') parts.push(EXPERT3D_PT_LOCALE_TOV);
+    if (lang === 'ES') parts.push(EXPERT3D_ES_NATIVE_VOCAB_OVERLAY);
+  }
+  return parts.join('\n\n');
+}
