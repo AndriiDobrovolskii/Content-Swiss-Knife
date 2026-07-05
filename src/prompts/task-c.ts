@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, isExpert3dStore, UNIT_LOCALIZATION_RULES } from '../prompt-core/constants';
+import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, UNIT_LOCALIZATION_RULES } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 function pack(instruction: string, html: string): PromptPayload {
@@ -22,6 +22,7 @@ export function buildPromptC(
   // Select the localization-specific instruction first…
   let instruction: string;
   let expert3dEsSelected = false;
+  let expert3dPtSelected = false;
   if (targetLang === 'European English' || targetLang === 'European English (EXPERT3D)') {
     instruction = EU_EN_INSTRUCTION;
   } else if ((targetLang === 'Ukrainian' && websiteGroup === 'US') || targetLang === 'Ukrainian (Expert-3DPrinter)') {
@@ -31,6 +32,9 @@ export function buildPromptC(
   } else if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && isExpert3dStore(storeName))) {
     instruction = EXPERT3D_ES_INSTRUCTION;
     expert3dEsSelected = true;
+  } else if (targetLang === 'Portuguese (EXPERT3D)' || (targetLang === 'PT' && isExpert3dStore(storeName))) {
+    instruction = EXPERT3D_PT_INSTRUCTION;
+    expert3dPtSelected = true;
   } else {
     instruction = genericInstruction(targetLang);
   }
@@ -44,7 +48,7 @@ export function buildPromptC(
   // EXPERT3D Tone of Voice: formal register + forbidden calques + brand voice.
   // Skipped for ES because EXPERT3D_ES_INSTRUCTION already embeds these rules —
   // appending the overlay on top would duplicate them for the same language version.
-  if (!expert3dEsSelected && (isExpert3dStore(storeName) || targetLang.includes('(EXPERT3D)'))) {
+  if (!expert3dEsSelected && !expert3dPtSelected && (isExpert3dStore(storeName) || targetLang.includes('(EXPERT3D)'))) {
     instruction += `\n\n${EXPERT3D_TOV_TRANSLATION_OVERLAY}`;
   }
 
@@ -180,6 +184,47 @@ ${PRODUCT_NAME_LOCALIZATION}
 
 [CONSTRAINTS]
 - Keep brand/model names in original Latin script (Creality, Bambu Lab); TRANSLATE the generic descriptor, reorder it category-first, es-ES uses "uds" (see [PRODUCT NAME LOCALIZATION]).
+- Do NOT alter <img src="…"> URLs or change hrefs to "#".
+- Do NOT add information not in the source.
+- Translate alt="…" and title="…".
+- Return ONLY the HTML content.`;
+
+const EXPERT3D_PT_INSTRUCTION = `TASK C — EUROPEAN PORTUGUESE LOCALIZATION FOR EXPERT3D (pure HTML body only).
+Translate/adapt into natural, persuasive European Portuguese (pt-PT) for EXPERT3D, sold to the
+Portugal market and shipped from Valencia, Spain.
+
+[EDGE CASE — SAME LANGUAGE]
+If the input is already Portuguese, convert any Brazilian forms to European Portuguese and apply
+SEO optimization. Never leave pt-BR vocabulary (arquivo/tela/usuário) in the output.
+
+[LABELS TO TRANSLATE (European Portuguese)]
+- "Technical specifications of the [Product Name]" → "Especificações técnicas de [Product Name]"
+- "What's in the box" → "Conteúdo da embalagem"
+- Commercial closing H2 → "why-buy" European Portuguese: "Porquê comprar [Product] na EXPERT3D?".
+  Keep the store-trust signals and brand guarantee in the body.
+- SHOWROOM EXCLUSION: EXPERT3D has no physical showroom — remove any showroom/visit/demo benefit.
+- Brand-guarantee sentence → translate fully.
+
+[LOCALIZATION TABLE]
+| Source Concept       | Action / Replacement                                            |
+|----------------------|------------------------------------------------------------------|
+| "3DDevice"           | Replace with "EXPERT3D"                                          |
+| Ukraine / Kyiv       | Replace with "Espanha" / "Valência" (company location)           |
+| Specific UA carriers | Replace with "envio urgente 24/48h"                              |
+| UA Phone Numbers     | Replace with "o nosso apoio técnico"                             |
+| Prices in UAH/USD    | REMOVE specific prices; use "excelente relação qualidade-preço"  |
+| "3D Plastic"         | Replace with "Filamento"                                         |
+
+[NUMBERS] Decimal comma everywhere (running text, headings, captions, spec-table <td> cells,
+and numbers embedded in a repeated Product Name): "1.75 mm" → "1,75 mm". Never change digits or unit.
+
+${PRODUCT_NAME_LOCALIZATION}
+
+${EXPERT3D_PT_LOCALE_TOV}
+
+[CONSTRAINTS]
+- Keep brand/model names in original Latin script (Creality, Bambu Lab); TRANSLATE the generic
+  descriptor, reorder it category-first, pt-PT count abbreviation is "un." (see [PRODUCT NAME LOCALIZATION]).
 - Do NOT alter <img src="…"> URLs or change hrefs to "#".
 - Do NOT add information not in the source.
 - Translate alt="…" and title="…".

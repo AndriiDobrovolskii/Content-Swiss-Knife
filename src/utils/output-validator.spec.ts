@@ -9,11 +9,11 @@
  * or changes severity from 'error' to 'warning', these tests catch it immediately
  * — before any real LLM call is made.
  *
- * COVERAGE TARGETS (13 rules total)
+ * COVERAGE TARGETS (14 rules total)
  *   HTML checks:   empty-output, duplicate-product-schema, no-faqpage-in-body, no-howto-in-body,
  *                  markdown-fence, br-spacing, unit-spacing, decimal-separator,
  *                  thousands-separator, latin-unit-in-cyrillic-text, es-forbidden-calque,
- *                  lcp-image-lazy, image-not-lazy
+ *                  pt-forbidden-calque, lcp-image-lazy, image-not-lazy
  *   SEO checks:    seo-empty, meta-title-length, meta-description-length,
  *                  meta-description-cta, meta-description-currency
  *
@@ -479,6 +479,18 @@ describe('validateGeneratedHtml — Rule: es-forbidden-calque', () => {
   it('does NOT flag es-MX or other locales', () => {
     const html = '<p>La huella del equipo es compacta.</p>';
     expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-MX'), 'es-forbidden-calque');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: pt-forbidden-calque', () => {
+  it('flags Brazilian Portuguese calques in pt-PT output', () => {
+    const html = '<p>Verifique o arquivo antes de imprimir.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('does NOT flag es-ES or other locales', () => {
+    const html = '<p>Verifique o arquivo antes de imprimir.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'pt-forbidden-calque');
   });
 });
 

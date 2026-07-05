@@ -17,8 +17,8 @@ export const STORE_REGISTRY: Record<string, StoreProfile> = {
   '3DScanner': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dscanner.com.ua/image/catalog/Products/', siteSuffix: '3DScanner' },
   'Center 3D Print': { group: 'EU', region: 'Poland & EU 🇵🇱', currency: 'PLN (zł) / EUR (€)', currencySymbol: 'zł', languages: ['pl-PL', 'en-GB', 'de-DE', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://center3dprint.com/image/catalog/Products/', siteSuffix: 'C3D' },
   'Drukarka 3D': { group: 'EU', region: 'Poland 🇵🇱', currency: 'PLN (zł)', currencySymbol: 'zł', languages: ['pl-PL', 'uk-UA'], imageBaseUrl: 'https://drukarka-3d.com.pl/image/catalog/products/', siteSuffix: 'Drukarka 3D' },
-  'EXPERT3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', siteSuffix: 'EXPERT3D' },
-  'Impresora-3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', siteSuffix: 'EXPERT3D' },
+  'EXPERT3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'pt-PT', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', siteSuffix: 'EXPERT3D' },
+  'Impresora-3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'pt-PT', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', siteSuffix: 'EXPERT3D' },
   'Expert-3DPrinter': { group: 'US', region: 'Houston, TX 🇺🇸', currency: 'USD ($)', currencySymbol: '$', languages: ['en-US', 'es-MX', 'uk-UA'], imageBaseUrl: '', siteSuffix: 'Expert-3DPrinter' },
 };
 
@@ -45,6 +45,7 @@ function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
   if (lang === 'de-DE') return 'DE';
   if (lang === 'es-ES') return 'ES';
   if (lang === 'es-MX') return 'American Spanish';
+  if (lang === 'pt-PT') return 'PT';
   return lang;
 }
 
@@ -80,6 +81,7 @@ export function isoToHumanLang(iso: string): string {
     'de-DE': 'German',
     'es-ES': 'Castilian Spanish',
     'es-MX': 'Mexican Spanish',
+    'pt-PT': 'European Portuguese',
   };
   return map[iso] ?? iso;
 }
@@ -233,14 +235,15 @@ Split the Product Name into three parts and treat each differently:
 
 WORD ORDER:
 - English (en-GB / en-ES / en-US): brand-first → [Brand Model] [Descriptive] [specs].
-- uk-UA / ru-UA / pl-PL / de-DE / es-ES / es-MX: category-first → [Translated descriptive]
+- uk-UA / ru-UA / pl-PL / de-DE / es-ES / es-MX / pt-PT: category-first → [Translated descriptive]
   [Brand Model] [specs].
 
 COUNT / QUANTITY ABBREVIATION ("pcs" / "pieces" / "units" / "pack"):
   Ukrainian (uk-UA) → "шт."  ·  Russian (ru-UA) → "шт."  ·  Polish (pl-PL) → "szt."  ·
   German (de-DE) → "Stk"  ·  Castilian Spanish (es-ES) → "uds"  ·
-  Mexican Spanish (es-MX) → "pzas"  ·  English (en-GB / en-ES / en-US) → "pcs".
-  uk/ru/pl carry a trailing period (correct abbreviation orthography); de/es/en do not.
+  Mexican Spanish (es-MX) → "pzas"  ·  European Portuguese (pt-PT) → "un."  ·
+  English (en-GB / en-ES / en-US) → "pcs".
+  uk/ru/pl carry a trailing period (correct abbreviation orthography); de/es/en/pt do not.
   This form is identical everywhere the count appears — Product Name, spec-table quantity rows,
   running text — never drop the period in one place and keep it in another.
 UNITS → follow the unit rules above ([CYRILLIC UNITS] / [UNITS]): "12 mm" → uk/ru "12 мм"; keep
@@ -255,6 +258,7 @@ WORKED EXAMPLE — source "Shining3D EinScan Reflective Markers 12 mm 1500 pcs":
   ru-UA → Маркеры отражающие Shining3D EinScan 12 мм 1500 шт.
   pl-PL → Markery odbijające Shining3D EinScan 12 mm 1500 szt.
   de-DE → Reflektive Marker Shining3D EinScan 12 mm 1500 Stk
+  pt-PT → Marcadores refletores Shining3D EinScan 12 mm 1500 un.
 
 EDGE CASE — if the name is purely brand + model with NO generic descriptor (e.g. "Bambu Lab X1
 Carbon"), there is nothing to translate or reorder: keep brand/model Latin and only localize the
@@ -319,7 +323,7 @@ SECTIONS — emit in this exact order, no extras:
   carry the count abbreviation in its Value cell — no bare integers. Apply it uniformly: if the
   total row has it, the per-sheet and per-pack rows MUST have it too. Localized form:
     en "15 pcs" · uk/ru "15 шт." (WITH trailing period) · pl "15 szt." · de "15 Stk" ·
-    es-ES "15 uds" · es-MX "15 pzas".
+    es-ES "15 uds" · es-MX "15 pzas" · pt-PT "15 un.".
   Self-check before output: scan every quantity row; if any shows a bare number, add the abbreviation.
   If mechanical properties provided → add separate <h2> + table. en H2: "Mechanical Properties"
   If physical properties provided   → add separate <h2> + table. en H2: "Physical Properties"
@@ -368,7 +372,7 @@ Translate it AS-IS. Do NOT restructure it into a printer/scanner-style descripti
 - COUNT-ABBREVIATION CONSISTENCY: if the source table's quantity rows carry the count abbreviation
   inconsistently, FIX it on translation — every quantity row gets the same localized abbreviation,
   not just the total row. Forms: uk/ru "шт." (WITH trailing period), pl "szt.", de "Stk",
-  es-ES "uds", es-MX "pzas". Add it to any quantity row that shows a bare integer.
+  es-ES "uds", es-MX "pzas", pt-PT "un.". Add it to any quantity row that shows a bare integer.
 - BODY-WIDE ANTI-REPETITION also applies to the translation: do not let a content root repeat in
   successive sentences of any §C1–§C6 bullet/paragraph; vary with target-language synonyms. Never
   alter spec values to do so.
@@ -432,6 +436,42 @@ Keep the schema's mandated section order and headings — the ToV changes the WO
 evidence discipline, not the structure. In Applications, every entry states a concrete scenario
 plus what makes THIS product the right tool for it (the differentiator vs alternatives), never
 just the industry name.`;
+
+/**
+ * EXPERT3D per-locale ToV — European Portuguese (pt-PT). Delivery-neutral: embedded by the
+ * Task C EXPERT3D_PT_INSTRUCTION (Translator) and injected into Task A via customInstructions
+ * for native pt-PT generation (main pipeline, PR #3). Register/vocabulary rules only — brand
+ * character + Fact→Mechanism→Consequence come from EXPERT3D_TOV_BASE_OVERLAY.
+ * NEEDS-PROOFREADER: vocabulary confirmed against pt-PT vs pt-BR norms, not yet against real output.
+ */
+export const EXPERT3D_PT_LOCALE_TOV =
+  `[EXPERT3D ToV — EUROPEAN PORTUGUESE (pt-PT) — these rules WIN over any conflicting register line]
+MARKET: European Portuguese for Portugal. This is NOT Brazilian Portuguese (pt-BR).
+
+REGISTER (formal, mandatory — B2B industrial capital equipment):
+- Formal third-person European register. Address the reader impersonally or as "o cliente".
+  NEVER "tu" / "te" / "teu" / "vosso". Avoid "você" as the default subject pronoun (distances in PT-PT).
+- European construction: "estar a + infinitivo" ("está a imprimir"), NEVER the Brazilian gerund
+  ("está imprimindo"). "de forma a", "por forma a" over Brazilian "de modo a" where natural.
+
+VOCABULARY (European, mandatory — replace Brazilian analogues):
+- ecrã (NOT tela) · ficheiro (NOT arquivo) · utilizador (NOT usuário) · rato (NOT mouse) ·
+  gestão · pormenor · equipa (NOT time) · autocolante (NOT adesivo where "sticker").
+- Tech: "resina" · "plataforma de impressão" / "base" (bed) · "extrusor" · "bico" (nozzle) ·
+  "software de fatiamento (slicer)" · "impressão 3D" · "impressora 3D".
+
+FORBIDDEN MARKETING WORDS (extends the master fluff ban): revolucionário, inovador, de ponta,
+o melhor, incrível, fantástico, a escolha perfeita, imprescindível, imperdível. Replace each with
+a concrete figure or mechanism.
+
+FORBIDDEN CALQUES / ANGLICISMS:
+- "performance" → "desempenho" · "workflow" → "fluxo de trabalho" · "footprint"/"pegada"
+  (installation sense) → "área de instalação / ocupação" · "end-to-end"/"de ponta a ponta" →
+  "integral / de princípio a fim" · "fixtures" → "fixações / utensílios de fixação".
+- Brazilianisms count as calques here: arquivo, tela, usuário, mouse, time — use the European forms above.
+
+NUMBERS: decimal comma, space thousands ("1,75 mm"; "12 500 h"). Never change digits or unit.
+COUNT: unit-count abbreviation is "un." (see [PRODUCT NAME LOCALIZATION]).`;
 
 /**
  * EXPERT3D Tone of Voice — TRANSLATION overlay (Task C, EXPERT3D/Impresora-3D locales).

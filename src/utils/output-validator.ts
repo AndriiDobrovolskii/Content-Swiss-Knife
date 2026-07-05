@@ -22,8 +22,8 @@ export interface ValidationIssue {
 const MAX_META_TITLE = 55;
 const MAX_META_DESCRIPTION = 155;
 
-const COMMA_DECIMAL_LOCALES = new Set(['uk-UA', 'ru-UA', 'pl-PL', 'de-DE', 'es-ES']);
-const NBSP_THOUSANDS_LOCALES = new Set(['uk-UA', 'ru-UA', 'pl-PL']); // de-DE/es-ES allow dot OR space
+const COMMA_DECIMAL_LOCALES = new Set(['uk-UA', 'ru-UA', 'pl-PL', 'de-DE', 'es-ES', 'pt-PT']);
+const NBSP_THOUSANDS_LOCALES = new Set(['uk-UA', 'ru-UA', 'pl-PL', 'pt-PT']); // de-DE/es-ES allow dot OR space
 
 /**
  * Heuristic check for the locale decimal/thousands separator (Schema v3 Appendix), run on the
@@ -87,6 +87,36 @@ function checkExpert3dSpanishCalques(html: string, locale: string | undefined, i
         severity: 'warning',
         rule: 'es-forbidden-calque',
         detail: `Anglicism/calque "${m[0]}" — use "${fix}" (EXPERT3D ToV §7.3).`,
+        context,
+      });
+    }
+  }
+}
+
+/**
+ * EXPERT3D ToV forbidden calques (pt-PT). locale 'pt-PT' is exclusive to EXPERT3D/Impresora-3D
+ * in STORE_REGISTRY. Warning-only. Flags Brazilianisms and anglicism calques; ambiguous single
+ * words are left to the prompt asset, not the validator ("pegada de carbono" is legitimate).
+ */
+const PT_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
+  { re: /\barquivos?\b/i, fix: 'ficheiro(s) (pt-BR calque)' },
+  { re: /\btelas?\b/i, fix: 'ecrã(s) (pt-BR calque)' },
+  { re: /\busu[aá]rios?\b/i, fix: 'utilizador(es) (pt-BR calque)' },
+  { re: /\bperformance\b/i, fix: 'desempenho' },
+  { re: /\bde ponta a ponta\b/i, fix: 'integral / de princípio a fim' },
+  { re: /\bpegada de instala[cç][aã]o\b/i, fix: 'área de instalação / ocupação' },
+];
+
+function checkExpert3dPortugueseCalques(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
+  if (locale !== 'pt-PT') return;
+  const text = html.replace(/<[^>]*>/g, ' ');
+  for (const { re, fix } of PT_FORBIDDEN_CALQUES) {
+    const m = text.match(re);
+    if (m) {
+      issues.push({
+        severity: 'warning',
+        rule: 'pt-forbidden-calque',
+        detail: `Anglicism/Brazilianism "${m[0]}" — use "${fix}" (EXPERT3D ToV pt-PT).`,
         context,
       });
     }
@@ -306,6 +336,7 @@ export function validateGeneratedHtml(
   // variant above): a wrong separator inside a repeated Product Name must still be flagged.
   checkNumberFormatting(html, locale, issues, context);
   checkExpert3dSpanishCalques(html, locale, issues, context);
+  checkExpert3dPortugueseCalques(html, locale, issues, context);
   // Uncyrillized Latin units (uk/ru) — runs on the name/URL-stripped variant: units inside a
   // brand/model suffix stay Latin by design ([PRODUCT NAME LOCALIZATION] keeps model codes as-is).
   checkCyrillicUnitLocalization(htmlForUnitCheck, locale, issues, context);
