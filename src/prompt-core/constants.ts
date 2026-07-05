@@ -442,7 +442,8 @@ just the industry name.`;
  * Task C EXPERT3D_PT_INSTRUCTION (Translator) and injected into Task A via customInstructions
  * for native pt-PT generation (main pipeline, PR #3). Register/vocabulary rules only — brand
  * character + Fact→Mechanism→Consequence come from EXPERT3D_TOV_BASE_OVERLAY.
- * NEEDS-PROOFREADER: vocabulary confirmed against pt-PT vs pt-BR norms, not yet against real output.
+ * Checked against real native-generated output (Formlabs Fuse X1 proofreading pass): orthography,
+ * calque and Spanish-leakage sections below were added in response to concrete defects found.
  */
 export const EXPERT3D_PT_LOCALE_TOV =
   `[EXPERT3D ToV — EUROPEAN PORTUGUESE (pt-PT) — these rules WIN over any conflicting register line]
@@ -460,6 +461,12 @@ VOCABULARY (European, mandatory — replace Brazilian analogues):
 - Tech: "resina" · "plataforma de impressão" / "base" (bed) · "extrusor" · "bico" (nozzle) ·
   "software de fatiamento (slicer)" · "impressão 3D" · "impressora 3D".
 
+ORTHOGRAPHY (post-1990 Acordo Ortográfico, mandatory): drop the silent consonant in "ct"/"cç"/"pt"
+clusters that pre-reform spelling kept. Concrete examples — always follow these exactly, do not
+just paraphrase the rule name: "actua(r/l/va/ndo)" → "atua(r/l/va/ndo)" · "arquitectura" →
+"arquitetura" · "táctil" → "tátil" · "electrónico" → "eletrónico" · "activado" → "ativado" ·
+"injecção" → "injeção" · "projecção" → "projeção" · "directamente" → "diretamente".
+
 FORBIDDEN MARKETING WORDS (extends the master fluff ban): revolucionário, inovador, de ponta,
 o melhor, incrível, fantástico, a escolha perfeita, imprescindível, imperdível. Replace each with
 a concrete figure or mechanism.
@@ -469,6 +476,17 @@ FORBIDDEN CALQUES / ANGLICISMS:
   (installation sense) → "área de instalação / ocupação" · "end-to-end"/"de ponta a ponta" →
   "integral / de princípio a fim" · "fixtures" → "fixações / utensílios de fixação".
 - Brazilianisms count as calques here: arquivo, tela, usuário, mouse, time — use the European forms above.
+- 3D-printing/industrial terminology: "pó reclamado" → "pó recuperado" · "pó selecionado"
+  (sifted powder) → "pó peneirado" · "embalamento" (packing-density sense, NOT literal parcel
+  packaging) → "empacotamento" · "taxa de atualização" (powder refresh rate, NOT UI refresh rate)
+  → "taxa de renovação" · "breakout limpo" → "extração limpa".
+
+SPANISH-LEAKAGE WATCHLIST: this store also serves es-ES — Spanish vocabulary bleeding into pt-PT
+output is a systemic risk, not a one-off. Known leaks to avoid: "utillajes" → "ferramental" ·
+"pantalla" → "ecrã" · "ajustes" → "definições/configurações". Watch generally for Spanish-looking
+words where a distinct Portuguese term exists.
+
+GRAMMAR: "dezenas de milhar" → "dezenas de milhares" (number agreement).
 
 NUMBERS: decimal comma, space thousands ("1,75 mm"; "12 500 h"). Never change digits or unit.
 COUNT: unit-count abbreviation is "un." (see [PRODUCT NAME LOCALIZATION]).`;

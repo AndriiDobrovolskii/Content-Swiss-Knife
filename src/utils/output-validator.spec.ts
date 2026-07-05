@@ -492,6 +492,21 @@ describe('validateGeneratedHtml — Rule: pt-forbidden-calque', () => {
     const html = '<p>Verifique o arquivo antes de imprimir.</p>';
     expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'pt-forbidden-calque');
   });
+
+  it('flags pre-1990 orthography (silent consonants)', () => {
+    const html = '<p>O sistema de arquitectura modular permite um controlo táctil directamente no ecrã electrónico.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('flags Spanish leakage (utillajes, pantalla, ajustes)', () => {
+    const html = '<p>Os utillajes de produção são configurados através dos ajustes na pantalla principal.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('flags 3D-printing terminology miscalques (pó reclamado, breakout limpo, dezenas de milhar)', () => {
+    const html = '<p>O pó reclamado é reintroduzido após um breakout limpo, para dezenas de milhar de peças.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
 });
 
 describe('validateGeneratedHtml — Rules: lcp-image-lazy / image-not-lazy', () => {
