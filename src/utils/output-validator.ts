@@ -105,6 +105,19 @@ const PT_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
   { re: /\bperformance\b/i, fix: 'desempenho' },
   { re: /\bde ponta a ponta\b/i, fix: 'integral / de princípio a fim' },
   { re: /\bpegada de instala[cç][aã]o\b/i, fix: 'área de instalação / ocupação' },
+  { re: /\barquitectura\b/i, fix: 'arquitetura (post-AO90 spelling)' },
+  { re: /\bt[áa]ctil\b/i, fix: 'tátil (post-AO90 spelling)' },
+  { re: /\belectr[óo]nic\w*/i, fix: 'eletrónic... (post-AO90 spelling)' },
+  { re: /\bactivad\w*/i, fix: 'ativad... (post-AO90 spelling)' },
+  { re: /\binjec[cç][aã]o\b/i, fix: 'injeção (post-AO90 spelling)' },
+  { re: /\bprojec[cç][aã]o\b/i, fix: 'projeção (post-AO90 spelling)' },
+  { re: /\bdirectamente\b/i, fix: 'diretamente (post-AO90 spelling)' },
+  { re: /\butillajes?\b/i, fix: 'ferramental (es-ES leakage)' },
+  { re: /\bp[óo] reclamado\b/i, fix: 'pó recuperado' },
+  { re: /\bbreakout limpo\b/i, fix: 'extração limpa' },
+  { re: /\bdezenas de milhar\b/i, fix: 'dezenas de milhares' },
+  { re: /\bpantalla?s?\b/i, fix: 'ecrã(s) (es-ES leakage)' },
+  { re: /\bajustes\b/i, fix: 'definições/configurações (es-ES leakage)' },
 ];
 
 function checkExpert3dPortugueseCalques(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
