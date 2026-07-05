@@ -14,7 +14,7 @@ import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
-import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore } from '../prompt-core/constants';
+import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { buildOptimizerPrompt } from '../prompts/optimizer';
@@ -158,35 +158,56 @@ export class ContentOrchestratorService {
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      // Step 4 — Translations (Ukrainian always first)
+      // Step 4 — Native per-language generation (Ukrainian always first). Each target language is
+      // generated directly via Task A (buildPromptA with a baseLanguageOverride), NOT translated
+      // from finalHtmlEn — mirrors generateUaContent()'s native path, generalized to every target
+      // language. Kept sequential (not Promise.all): matches every other loop in this pipeline,
+      // and avoids tripping provider rate limits since native generation is a heavier call than
+      // translation was.
       const sortedTransLangs = [...transLangs].sort(sortUkrainianFirst);
       for (const lang of sortedTransLangs) {
-        this.progressMessage.set(`Translating to ${lang}…`);
-        const basePayloadC = buildPromptC(finalHtmlEn, lang, input.website.name, input.website.group, input.templateId);
         const locale = taskLangToIso(lang, input.website.name);
-        const { artifact: translatedHtml, repairsUsed: cRepairs } = await runRepairGate<string>({
+        const humanLang = isoToHumanLang(locale);
+        const baseLanguageOverride = `${humanLang} (${locale})`;
+        const isExpert3d = isExpert3dStore(input.website.name);
+
+        this.progressMessage.set(`Generating ${lang} description…`);
+
+        const langInput: ProductInput = {
+          ...input,
+          customInstructions: [
+            input.customInstructions?.trim(),
+            buildNativeLangOverlay(lang, humanLang, input.website.name),
+          ].filter(Boolean).join('\n\n'),
+        };
+        const basePayloadLang = buildPromptA(langInput, baseLanguageOverride);
+        const { artifact: htmlLang, repairsUsed: langRepairs } = await runRepairGate<string>({
           label: `HTML (${lang})`,
           maxRepairs: repairBudget,
-          basePayload: basePayloadC,
+          basePayload: basePayloadLang,
           produce: async (payload) => {
             let html = await this.llm.generateText(payload, useThinking);
             html = stripCodeFences(html);
-            if (isExpert3dStore(input.website.name) && (lang === 'ES' || lang === 'PT')) {
+            html = wrapVideoFigures(html, input.name);
+            if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
               html = this.applySpanishExpert3dReplacements(html);
             }
             html = wrapImageFigures(html);
             return fixNumberFormatting(html);
           },
-          validate: (html) => validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId }),
+          validate: (html) => [
+            ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId }),
+            ...validateSpecsGrounding(html, input.specs, `HTML (${lang})`),
+          ],
           withFeedback: appendRepairFeedback,
           onAttempt: (n, c) =>
-            this.progressMessage.set(`Repairing translation ${lang} (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+            this.progressMessage.set(`Repairing ${lang} description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
-        if (cRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${cRepairs} repair(s) applied`);
-        const finalTranslated = isConsumables ? trimConsumablesToLimit(translatedHtml) : translatedHtml;
+        if (langRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${langRepairs} repair(s) applied`);
+        const finalLangHtml = isConsumables ? trimConsumablesToLimit(htmlLang) : htmlLang;
         this.content.update(c => ({
           ...c,
-          translations: { ...c.translations, [lang]: finalTranslated }
+          translations: { ...c.translations, [lang]: finalLangHtml }
         }));
       }
 
