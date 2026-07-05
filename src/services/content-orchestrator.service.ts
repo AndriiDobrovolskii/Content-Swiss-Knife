@@ -14,7 +14,7 @@ import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
-import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay } from '../prompt-core/constants';
+import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, bcp47ToTaskCLang } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { buildOptimizerPrompt } from '../prompts/optimizer';
@@ -218,11 +218,15 @@ export class ContentOrchestratorService {
         const store = getStore(input.website.name);
         for (const isoCode of store.languages) {
           const humanLang = isoToHumanLang(isoCode);
+          const faqLocaleOverlay = buildNativeLangOverlay(
+            bcp47ToTaskCLang(isoCode, store.group), humanLang, input.website.name,
+          );
 
           this.progressMessage.set(`Generating FAQ artifact (${isoCode})…`);
           const basePayloadFaq = buildPromptFaq(
             input.name, input.description, input.specs,
             input.supplementalContent ?? '', humanLang, store.currencySymbol,
+            faqLocaleOverlay,
           );
           const validateFaqHtml = (html: string): ValidationIssue[] => {
             const issues = validateGeneratedHtml(html, `FAQ (${isoCode})`, input.name, isoCode);

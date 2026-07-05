@@ -118,6 +118,10 @@ const PT_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
   { re: /\bdezenas de milhar\b/i, fix: 'dezenas de milhares' },
   { re: /\bpantalla?s?\b/i, fix: 'ecrã(s) (es-ES leakage)' },
   { re: /\bajustes\b/i, fix: 'definições/configurações (es-ES leakage)' },
+  { re: /\bnitrog[eé]nio\b/i, fix: 'azoto (PT-PT chemical name)' },
+  { re: /\bgantr(y|ies)\b/i, fix: 'pórtico(s)' },
+  { re: /\bpowder bed fusion\b/i, fix: 'fusão em leito de pó' },
+  { re: /\bsistemas? legados?\b/i, fix: 'sistema(s) convencional(is) / de geração anterior' },
 ];
 
 function checkExpert3dPortugueseCalques(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
