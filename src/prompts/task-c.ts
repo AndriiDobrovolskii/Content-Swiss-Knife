@@ -19,7 +19,10 @@ const HAS_FIGURE_MARKUP = /<(?:figure|img|iframe)\b/i;
 const STANDALONE_SNIPPET_NOTE = `[STANDALONE SNIPPET]
 This is a short, self-contained text/HTML fragment submitted directly for translation — not an
 excerpt of a longer product description. Translate the [BASE HTML] content below exactly as given;
-do not ask for additional context, a Store Name, or a fuller description.`;
+do not ask for additional context, a Store Name, or a fuller description. Do NOT wrap the output in
+any tag, link, or structure (e.g. <a>, <button>, <div>, <p>) that is not already present in the
+input — if the input is plain text with no tags, the output must be plain translated text only,
+with no added markup, even if the phrase reads like a button or link label.`;
 
 function deriveStoreLabel(storeName: string, targetLang: string): string {
   if (storeName.trim()) return storeName.trim();

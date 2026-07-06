@@ -100,3 +100,24 @@ describe('buildPromptC — always supplies [Store Name] and a standalone-snippet
     expect(payload.userContent).toContain('[Store Name]: SomeOtherStore');
   });
 });
+
+describe('buildPromptC — forbids inventing wrapping tags/links for figure-less input', () => {
+  it('instructs the model not to wrap plain-text output in tags/links absent from the input (CTA-like snippet)', () => {
+    const payload = buildPromptC('Перейти до каталогу', 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).toContain('Do NOT wrap the output');
+  });
+
+  it('still supplies [Store Name] and [STANDALONE SNIPPET], and omits [IMAGE MANIFEST], for the CTA-like snippet', () => {
+    const payload = buildPromptC('Перейти до каталогу', 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).toContain('[Store Name]: EXPERT3D');
+    expect(payload.userContent).toContain('[STANDALONE SNIPPET]');
+    expect(payload.userContent).not.toContain('[IMAGE MANIFEST]');
+  });
+
+  it('does not add the no-wrapping instruction to figure-bearing input (still resolves to IMAGE_PRESERVATION_MANIFEST)', () => {
+    const html = '<p>Lead-in.</p><figure><img src="a.jpg" alt="A"><figcaption>Caption</figcaption></figure>';
+    const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).not.toContain('Do NOT wrap the output');
+    expect(payload.userContent).toContain('[IMAGE MANIFEST]');
+  });
+});
