@@ -38,7 +38,7 @@ export function isExpert3dStore(name: string): boolean {
   return getStore(name).group === 'ES';
 }
 
-function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
+export function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
   if (lang === 'uk-UA') return group === 'US' ? 'Ukrainian' : 'UA';
   if (lang === 'ru-UA') return 'RU';
   if (lang === 'pl-PL') return 'PL';
@@ -442,7 +442,8 @@ just the industry name.`;
  * Task C EXPERT3D_PT_INSTRUCTION (Translator) and injected into Task A via customInstructions
  * for native pt-PT generation (main pipeline, PR #3). Register/vocabulary rules only — brand
  * character + Fact→Mechanism→Consequence come from EXPERT3D_TOV_BASE_OVERLAY.
- * NEEDS-PROOFREADER: vocabulary confirmed against pt-PT vs pt-BR norms, not yet against real output.
+ * Checked against real native-generated output (Formlabs Fuse X1 proofreading pass): orthography,
+ * calque and Spanish-leakage sections below were added in response to concrete defects found.
  */
 export const EXPERT3D_PT_LOCALE_TOV =
   `[EXPERT3D ToV — EUROPEAN PORTUGUESE (pt-PT) — these rules WIN over any conflicting register line]
@@ -460,6 +461,12 @@ VOCABULARY (European, mandatory — replace Brazilian analogues):
 - Tech: "resina" · "plataforma de impressão" / "base" (bed) · "extrusor" · "bico" (nozzle) ·
   "software de fatiamento (slicer)" · "impressão 3D" · "impressora 3D".
 
+ORTHOGRAPHY (post-1990 Acordo Ortográfico, mandatory): drop the silent consonant in "ct"/"cç"/"pt"
+clusters that pre-reform spelling kept. Concrete examples — always follow these exactly, do not
+just paraphrase the rule name: "actua(r/l/va/ndo)" → "atua(r/l/va/ndo)" · "arquitectura" →
+"arquitetura" · "táctil" → "tátil" · "electrónico" → "eletrónico" · "activado" → "ativado" ·
+"injecção" → "injeção" · "projecção" → "projeção" · "directamente" → "diretamente".
+
 FORBIDDEN MARKETING WORDS (extends the master fluff ban): revolucionário, inovador, de ponta,
 o melhor, incrível, fantástico, a escolha perfeita, imprescindível, imperdível. Replace each with
 a concrete figure or mechanism.
@@ -469,9 +476,44 @@ FORBIDDEN CALQUES / ANGLICISMS:
   (installation sense) → "área de instalação / ocupação" · "end-to-end"/"de ponta a ponta" →
   "integral / de princípio a fim" · "fixtures" → "fixações / utensílios de fixação".
 - Brazilianisms count as calques here: arquivo, tela, usuário, mouse, time — use the European forms above.
+- 3D-printing/industrial terminology: "pó reclamado" → "pó recuperado" · "pó selecionado"
+  (sifted powder) → "pó peneirado" · "embalamento" (packing-density sense, NOT literal parcel
+  packaging) → "empacotamento" · "taxa de atualização" (powder refresh rate, NOT UI refresh rate)
+  → "taxa de renovação" · "breakout limpo" → "extração limpa" · "nitrogénio" (chemical element) →
+  "azoto" (PT-PT never uses "nitrogénio" for this) · "gantries" → "pórticos" · "powder bed fusion"
+  (left in English) → "fusão em leito de pó" · "sistemas legados" (calque of "legacy systems") →
+  "sistemas convencionais" / "de geração anterior" · "filtros de carbono" (gas/air filtration
+  media) → "filtros de carvão ativado" ("carbono" alone stays correct elsewhere, e.g. "fibra de
+  carbono") · "caixa de luvas selada" (glove-box / breakout-station description) → "câmara selada
+  com luvas".
+
+SPANISH-LEAKAGE WATCHLIST: this store also serves es-ES — Spanish vocabulary bleeding into pt-PT
+output is a systemic risk, not a one-off. Known leaks to avoid: "utillajes" → "ferramental" ·
+"pantalla" → "ecrã" · "ajustes" → "definições/configurações". Watch generally for Spanish-looking
+words where a distinct Portuguese term exists.
+
+GRAMMAR: "dezenas de milhar" → "dezenas de milhares" (number agreement).
+
+DOCUMENT SCOPE: every rule above applies to the ENTIRE generated artifact — main body, FAQ,
+HowTo, and any other block generated under this locale — not only the first/main section. Do not
+relax terminology discipline in a shorter or separately-framed block.
 
 NUMBERS: decimal comma, space thousands ("1,75 mm"; "12 500 h"). Never change digits or unit.
 COUNT: unit-count abbreviation is "un." (see [PRODUCT NAME LOCALIZATION]).`;
+
+/**
+ * EXPERT3D Tone of Voice — Castilian Spanish (es-ES) vocabulary overlay for NATIVE generation.
+ * Extracted from EXPERT3D_ES_INSTRUCTION (task-c.ts, translation-only) so native Task A
+ * generation (main pipeline) has the same vocabulary/showroom constraints without duplicating
+ * them into the orchestrator as inline strings.
+ */
+export const EXPERT3D_ES_NATIVE_VOCAB_OVERLAY =
+  `[EXPERT3D ToV — CASTILIAN SPANISH (es-ES) VOCABULARY]
+MARKET: Spain (es-ES), European terminology only.
+MANDATORY VOCABULARY: Ordenador (NOT computadora) · Fichero (NOT archivo) ·
+Laminador / software de laminado (NOT rebanador/slicer) · Plataforma de impresión / cama de
+impresión (bed) · Extrusor.
+SHOWROOM: EXPERT3D has no physical showroom — do not invent a showroom/visit/demo-unit claim.`;
 
 /**
  * EXPERT3D Tone of Voice — TRANSLATION overlay (Task C, EXPERT3D/Impresora-3D locales).
@@ -514,3 +556,25 @@ FORBIDDEN STEMS (uk-UA — drop or replace with a concrete fact): революц
 COLON CAPITALIZATION in "<b>Label:</b> continuation" list items and figcaptions: for uk-UA /
 ru-UA / pl-PL lowercase the first letter after the colon (it introduces an explanation of the
 bold label, not a new sentence). For de-DE and all English keep the default capital.`;
+
+/**
+ * Builds the customInstructions suffix for native per-language generation (main pipeline Step 4,
+ * ContentOrchestratorService.generate()). Generic image-caption-translation note for every
+ * language; EXPERT3D stores additionally get the register/calque ToV overlay, plus PT's or ES's
+ * locale-specific overlay.
+ */
+export function buildNativeLangOverlay(lang: string, humanLang: string, storeName: string): string {
+  const parts = [
+    `[NATIVE ${humanLang.toUpperCase()} OUTPUT — IMAGE TEXT OVERRIDE] This description is generated ` +
+    `natively in ${humanLang} with no separate translation pass. The image manifest figcaption/` +
+    `vision-description text is sourced in English — do NOT copy it verbatim. Translate each ` +
+    `figcaption and alt text into natural, idiomatic ${humanLang} preserving the same factual ` +
+    `meaning before using it.`,
+  ];
+  if (isExpert3dStore(storeName)) {
+    parts.push(EXPERT3D_TOV_TRANSLATION_OVERLAY);
+    if (lang === 'PT') parts.push(EXPERT3D_PT_LOCALE_TOV);
+    if (lang === 'ES') parts.push(EXPERT3D_ES_NATIVE_VOCAB_OVERLAY);
+  }
+  return parts.join('\n\n');
+}

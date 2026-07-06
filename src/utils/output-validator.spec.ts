@@ -492,6 +492,36 @@ describe('validateGeneratedHtml — Rule: pt-forbidden-calque', () => {
     const html = '<p>Verifique o arquivo antes de imprimir.</p>';
     expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'es-ES'), 'pt-forbidden-calque');
   });
+
+  it('flags pre-1990 orthography (silent consonants)', () => {
+    const html = '<p>O sistema de arquitectura modular permite um controlo táctil directamente no ecrã electrónico.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('flags Spanish leakage (utillajes, pantalla, ajustes)', () => {
+    const html = '<p>Os utillajes de produção são configurados através dos ajustes na pantalla principal.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('flags 3D-printing terminology miscalques (pó reclamado, breakout limpo, dezenas de milhar)', () => {
+    const html = '<p>O pó reclamado é reintroduzido após um breakout limpo, para dezenas de milhar de peças.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('flags nitrogénio (should be azoto in PT-PT)', () => {
+    const html = '<p>Requer fornecimento externo de nitrogénio com pureza superior a 99,5%.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('flags gantries and powder bed fusion as untranslated English terms', () => {
+    const html = '<p>Braços robóticos e gantries de câmara superam sistemas de powder bed fusion legados.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+
+  it('flags sistemas legados as a calque of "legacy systems"', () => {
+    const html = '<p>Supera os sistemas legados de sinterização em custo por peça.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
 });
 
 describe('validateGeneratedHtml — Rules: lcp-image-lazy / image-not-lazy', () => {
