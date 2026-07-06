@@ -2,13 +2,25 @@ import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
 import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, UNIT_LOCALIZATION_RULES } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
+const IMAGE_PRESERVATION_MANIFEST = `[IMAGE MANIFEST]
+TRANSLATION PASS — NOT base generation: [BASE HTML] below already contains the FINAL, approved
+<figure> blocks (image figures AND video-embed figures wrapping an <iframe>) from the
+source-language description. PRESERVE every existing <figure>...</figure> block exactly as
+structured: do NOT strip, remove, regenerate, reorder, merge, split, add, or duplicate any
+<figure>, <img>, or <iframe> element. Every attribute stays byte-identical — src, href, loading,
+decoding, inline style, width/height — with TWO exceptions: translate the visible text inside
+<figcaption> (including its <b> lead-in label) into the target language, and translate the <img>
+alt="" attribute value into the target language. Do not otherwise alter the meaning, wording
+length, or structure of the figcaption/alt beyond translating them. If [BASE HTML] contains zero
+<figure> blocks, do not invent any.`;
+
 function pack(instruction: string, html: string): PromptPayload {
   return {
     systemBlocks: [
       { text: MASTER_SYSTEM_PROMPT, cache: true },
       { text: instruction, cache: true },
     ],
-    userContent: `[BASE HTML]:\n${html}`,
+    userContent: `${IMAGE_PRESERVATION_MANIFEST}\n\n[BASE HTML]:\n${html}`,
   };
 }
 
