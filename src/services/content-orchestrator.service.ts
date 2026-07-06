@@ -525,6 +525,7 @@ export class ContentOrchestratorService {
       const prompt = buildPromptC(content, targetLang, '', undefined);
       let translated = await this.llm.generateText(prompt, useThinking);
       translated = stripCodeFences(translated);
+      translated = wrapImageFigures(translated);
       if (targetLang === 'Spanish (EXPERT3D)' || targetLang === 'Portuguese (EXPERT3D)') {
         translated = this.applySpanishExpert3dReplacements(translated);
       }
