@@ -14,13 +14,27 @@ alt="" attribute value into the target language. Do not otherwise alter the mean
 length, or structure of the figcaption/alt beyond translating them. If [BASE HTML] contains zero
 <figure> blocks, do not invent any.`;
 
-function pack(instruction: string, html: string): PromptPayload {
+const HAS_FIGURE_MARKUP = /<(?:figure|img|iframe)\b/i;
+
+const STANDALONE_SNIPPET_NOTE = `[STANDALONE SNIPPET]
+This is a short, self-contained text/HTML fragment submitted directly for translation — not an
+excerpt of a longer product description. Translate the [BASE HTML] content below exactly as given;
+do not ask for additional context, a Store Name, or a fuller description.`;
+
+function deriveStoreLabel(storeName: string, targetLang: string): string {
+  if (storeName.trim()) return storeName.trim();
+  const match = targetLang.match(/\(([^)]+)\)\s*$/);
+  return match ? match[1] : 'N/A — standalone snippet, not tied to a specific store';
+}
+
+function pack(instruction: string, html: string, storeLabel: string): PromptPayload {
+  const context = HAS_FIGURE_MARKUP.test(html) ? IMAGE_PRESERVATION_MANIFEST : STANDALONE_SNIPPET_NOTE;
   return {
     systemBlocks: [
       { text: MASTER_SYSTEM_PROMPT, cache: true },
       { text: instruction, cache: true },
     ],
-    userContent: `${IMAGE_PRESERVATION_MANIFEST}\n\n[BASE HTML]:\n${html}`,
+    userContent: `[Store Name]: ${storeLabel}\n\n${context}\n\n[BASE HTML]:\n${html}`,
   };
 }
 
@@ -64,7 +78,7 @@ export function buildPromptC(
     instruction += `\n\n${EXPERT3D_TOV_TRANSLATION_OVERLAY}`;
   }
 
-  return pack(instruction, html);
+  return pack(instruction, html, deriveStoreLabel(storeName, targetLang));
 }
 
 // ── Generic (default) translation instruction ──────────────────────────────

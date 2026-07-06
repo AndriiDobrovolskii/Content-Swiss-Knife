@@ -44,3 +44,59 @@ describe('buildPromptC — pt-PT (EXPERT3D)', () => {
     expect(taskBlock).not.toContain('EUROPEAN PORTUGUESE LOCALIZATION FOR EXPERT3D');
   });
 });
+
+describe('buildPromptC — image preservation manifest is conditional on figure markup', () => {
+  it('omits the [IMAGE MANIFEST] block when the input has no figure/img/iframe markup', () => {
+    const payload = buildPromptC('Estamos presentes en los siguientes mercados', 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).not.toContain('[IMAGE MANIFEST]');
+    expect(payload.userContent).not.toContain('already contains the FINAL, approved');
+  });
+
+  it('includes the [IMAGE MANIFEST] block when the input contains a <figure> block', () => {
+    const html = '<p>Lead-in.</p><figure><img src="a.jpg" alt="A"><figcaption>Caption</figcaption></figure>';
+    const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).toContain('[IMAGE MANIFEST]');
+  });
+
+  it('includes the [IMAGE MANIFEST] block when the input contains a bare <img> tag', () => {
+    const html = '<p>Lead-in.</p><img src="a.jpg" alt="A">';
+    const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).toContain('[IMAGE MANIFEST]');
+  });
+
+  it('includes the [IMAGE MANIFEST] block when the input contains a bare <iframe> tag', () => {
+    const html = '<p>Lead-in.</p><iframe src="https://youtube.com/embed/x"></iframe>';
+    const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).toContain('[IMAGE MANIFEST]');
+  });
+});
+
+describe('buildPromptC — always supplies [Store Name] and a standalone-snippet note for figure-less input', () => {
+  it('derives [Store Name] from the "(EXPERT3D)" suffix in the target-language label when storeName is empty', () => {
+    const payload = buildPromptC('Estamos presentes en los siguientes mercados', 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).toContain('[Store Name]: EXPERT3D');
+  });
+
+  it('adds a [STANDALONE SNIPPET] instruction telling the model not to ask for more context, for figure-less input', () => {
+    const payload = buildPromptC('Estamos presentes en los siguientes mercados', 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).toContain('[STANDALONE SNIPPET]');
+    expect(payload.userContent).not.toContain('[IMAGE MANIFEST]');
+  });
+
+  it('falls back to an explicit N/A [Store Name] when neither storeName nor a "(...)" language suffix is available', () => {
+    const payload = buildPromptC('Estamos presentes en los siguientes mercados', 'PT', '');
+    expect(payload.userContent).toContain('[Store Name]: N/A');
+  });
+
+  it('still includes [Store Name] and [IMAGE MANIFEST] together for figure-bearing input', () => {
+    const html = '<p>Lead-in.</p><figure><img src="a.jpg" alt="A"><figcaption>Caption</figcaption></figure>';
+    const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).toContain('[Store Name]: EXPERT3D');
+    expect(payload.userContent).toContain('[IMAGE MANIFEST]');
+  });
+
+  it('prefers an explicit storeName argument over deriving one from the target-language label', () => {
+    const payload = buildPromptC('Estamos presentes en los siguientes mercados', 'Portuguese (EXPERT3D)', 'SomeOtherStore');
+    expect(payload.userContent).toContain('[Store Name]: SomeOtherStore');
+  });
+});
