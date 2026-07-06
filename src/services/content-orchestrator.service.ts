@@ -171,7 +171,7 @@ export class ContentOrchestratorService {
           produce: async (payload) => {
             let html = await this.llm.generateText(payload, useThinking);
             html = stripCodeFences(html);
-            if (isExpert3dStore(input.website.name) && lang === 'ES') {
+            if (isExpert3dStore(input.website.name) && (lang === 'ES' || lang === 'PT')) {
               html = this.applySpanishExpert3dReplacements(html);
             }
             html = wrapImageFigures(html);
@@ -500,7 +500,7 @@ export class ContentOrchestratorService {
       const prompt = buildPromptC(content, targetLang, '', undefined);
       let translated = await this.llm.generateText(prompt, useThinking);
       translated = stripCodeFences(translated);
-      if (targetLang === 'Spanish (EXPERT3D)') {
+      if (targetLang === 'Spanish (EXPERT3D)' || targetLang === 'Portuguese (EXPERT3D)') {
         translated = this.applySpanishExpert3dReplacements(translated);
       }
       this.translatorOutput.set(translated);
