@@ -185,15 +185,13 @@ If the input is already in Spanish, apply Castilian style improvements and SEO o
 - SHOWROOM EXCLUSION: EXPERT3D has no physical showroom — remove any showroom/visit/demo benefit if present in the source CTA.
 - Brand-guarantee sentence → translate fully
 
-[LOCALIZATION TABLE]
-| Source Concept       | Action / Replacement                                   |
-|----------------------|--------------------------------------------------------|
-| "3DDevice"           | Replace with "EXPERT3D"                                |
-| Ukraine / Kyiv       | Replace with "España" / "Valencia"                     |
-| Specific UA carriers | Replace with "envío urgente 24/48h"                    |
-| UA Phone Numbers     | Replace with "nuestro soporte técnico"                 |
-| Prices in UAH/USD    | REMOVE specific prices; use "excelente calidad-precio" |
-| "3D Plastic"         | Replace with "Filamento"                               |
+[CONTENT FIDELITY — TRANSLATE ONLY, DO NOT REWRITE]
+This is a translation task, not a content rewrite. Translate the language only — do not invent,
+substitute, remove, or "localize" any fact from the source. Brand names, addresses, emails, phone
+numbers, carrier names, prices, and country/city references all carry over from the source
+exactly; only render them in Castilian Spanish where they are natural-language text (e.g. a
+country name like "Ukraine" → "Ucrania" — translate the word, don't change which country it
+names). Never replace one entity's real data (address, email, phone, brand) with another's.
 
 [NUMBERS] Use a decimal comma everywhere in Castilian Spanish output — running text, headings,
 captions, AND spec-table <td> cells alike ("1.75 mm" → "1,75 mm"). This includes numbers embedded
@@ -234,15 +232,13 @@ SEO optimization. Never leave pt-BR vocabulary (arquivo/tela/usuário) in the ou
 - SHOWROOM EXCLUSION: EXPERT3D has no physical showroom — remove any showroom/visit/demo benefit.
 - Brand-guarantee sentence → translate fully.
 
-[LOCALIZATION TABLE]
-| Source Concept       | Action / Replacement                                            |
-|----------------------|------------------------------------------------------------------|
-| "3DDevice"           | Replace with "EXPERT3D"                                          |
-| Ukraine / Kyiv       | Replace with "Espanha" / "Valência" (company location)           |
-| Specific UA carriers | Replace with "envio urgente 24/48h"                              |
-| UA Phone Numbers     | Replace with "o nosso apoio técnico"                             |
-| Prices in UAH/USD    | REMOVE specific prices; use "excelente relação qualidade-preço"  |
-| "3D Plastic"         | Replace with "Filamento"                                         |
+[CONTENT FIDELITY — TRANSLATE ONLY, DO NOT REWRITE]
+This is a translation task, not a content rewrite. Translate the language only — do not invent,
+substitute, remove, or "localize" any fact from the source. Brand names, addresses, emails, phone
+numbers, carrier names, prices, and country/city references all carry over from the source
+exactly; only render them in European Portuguese where they are natural-language text (e.g. a
+country name like "Ukraine" → "Ucrânia" — translate the word, don't change which country it
+names). Never replace one entity's real data (address, email, phone, brand) with another's.
 
 [NUMBERS] Decimal comma everywhere (running text, headings, captions, spec-table <td> cells,
 and numbers embedded in a repeated Product Name): "1.75 mm" → "1,75 mm". Never change digits or unit.
