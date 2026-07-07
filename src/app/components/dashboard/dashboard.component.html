@@ -1,0 +1,200 @@
+<div class="h-full overflow-y-auto p-6 space-y-6 bg-slate-50 dark:bg-slate-900">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+        <i class="fa-solid fa-chart-line text-violet-600 dark:text-violet-400"></i>
+        {{ t().title }}
+      </h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ t().subtitle }}</p>
+    </div>
+    <button
+      (click)="refresh()"
+      [disabled]="loading()"
+      class="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white transition-colors flex items-center gap-2">
+      <i class="fa-solid fa-arrows-rotate" [class.animate-spin]="loading()"></i>
+      {{ loading() ? t().loading : t().refresh }}
+    </button>
+  </div>
+
+  @if (error()) {
+    <div class="p-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+      {{ error() }}
+    </div>
+  }
+
+  <!-- Filters -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div>
+      <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{{ t().from }}</label>
+      <input type="date" [value]="fromDate()" (change)="fromDate.set($any($event.target).value); refresh()"
+        class="w-full p-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none text-slate-800 dark:text-slate-200">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{{ t().to }}</label>
+      <input type="date" [value]="toDate()" (change)="toDate.set($any($event.target).value); refresh()"
+        class="w-full p-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none text-slate-800 dark:text-slate-200">
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{{ t().store }}</label>
+      <select [value]="storeFilter()" (change)="storeFilter.set($any($event.target).value)"
+        class="w-full p-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none cursor-pointer text-slate-800 dark:text-slate-200">
+        <option value="">{{ t().allStores }}</option>
+        @for (s of stores(); track s) { <option [value]="s">{{ s }}</option> }
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{{ t().task }}</label>
+      <select [value]="taskFilter()" (change)="taskFilter.set($any($event.target).value)"
+        class="w-full p-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none cursor-pointer text-slate-800 dark:text-slate-200">
+        <option value="">{{ t().allTasks }}</option>
+        @for (task of taskLabels(); track task) { <option [value]="task">{{ task }}</option> }
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{{ t().product }}</label>
+      <input type="text" [value]="productFilter()" (input)="productFilter.set($any($event.target).value)"
+        [placeholder]="t().productPlaceholder"
+        class="w-full p-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500">
+    </div>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{{ t().totalCost }}</div>
+      <div class="text-2xl font-bold text-violet-600 dark:text-violet-400 mt-1">{{ fmtCost(totals().cost) }}</div>
+      <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ filteredRecords().length }} {{ t().requests }}</div>
+    </div>
+    <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{{ t().inputTokens }}</div>
+      <div class="text-2xl font-bold text-blue-500 dark:text-blue-400 mt-1">{{ fmtTokens(totals().inTok) }}</div>
+      <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ fmtCost(breakdown()[0].cost) }}</div>
+    </div>
+    <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{{ t().outputTokens }}</div>
+      <div class="text-2xl font-bold text-emerald-500 dark:text-emerald-400 mt-1">{{ fmtTokens(totals().outTok) }}</div>
+      <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ fmtCost(breakdown()[1].cost) }}</div>
+    </div>
+    <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{{ t().cacheWrite }}</div>
+      <div class="text-2xl font-bold text-amber-500 dark:text-amber-400 mt-1">{{ fmtTokens(totals().cwTok) }}</div>
+      <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ fmtCost(breakdown()[2].cost) }}</div>
+    </div>
+    <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{{ t().cacheRead }}</div>
+      <div class="text-2xl font-bold text-pink-500 dark:text-pink-400 mt-1">{{ fmtTokens(totals().crTok) }}</div>
+      <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ fmtCost(breakdown()[3].cost) }}</div>
+    </div>
+  </div>
+
+  <!-- Breakdown panels -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-3">{{ t().costBreakdown }}</div>
+      @for (b of breakdown(); track b.label) {
+        <div class="flex items-center gap-3 mb-2.5">
+          <div class="text-xs text-slate-500 dark:text-slate-400 w-24 flex-shrink-0">{{ b.label }}</div>
+          <div class="flex-1 h-2 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden">
+            <div class="h-full rounded" [class]="b.barClass" [style.width.%]="(b.cost / maxBreakdownCost()) * 100"></div>
+          </div>
+          <div class="text-xs font-semibold w-20 text-right flex-shrink-0" [class]="b.colorClass">{{ fmtCost(b.cost) }}</div>
+        </div>
+      }
+    </div>
+
+    <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-3">{{ t().byModel }}</div>
+      @if (byModel().length === 0) {
+        <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-6">{{ t().empty }}</div>
+      }
+      @for (g of byModel(); track g.key) {
+        <div class="flex items-center gap-2 mb-2.5">
+          <span class="px-2 py-0.5 rounded text-[0.65rem] font-semibold" [class]="modelBadgeClass(g.key)">{{ g.key }}</span>
+          <div class="flex-1 h-1.5 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden">
+            <div class="h-full rounded bg-gradient-to-r from-violet-500 to-blue-400" [style.width.%]="(g.cost / maxModelCost()) * 100"></div>
+          </div>
+          <div class="text-[0.65rem] text-slate-400 dark:text-slate-500 w-8 text-right flex-shrink-0">{{ g.count }}×</div>
+          <div class="text-xs font-bold text-violet-600 dark:text-violet-400 w-16 text-right flex-shrink-0">{{ fmtCost(g.cost) }}</div>
+        </div>
+      }
+    </div>
+
+    <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-3">{{ t().byTask }}</div>
+      @if (byTask().length === 0) {
+        <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-6">{{ t().empty }}</div>
+      }
+      @for (g of byTask(); track g.key) {
+        <div class="flex items-center gap-2 mb-2.5">
+          <span class="px-2 py-0.5 rounded text-[0.65rem] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{ g.key }}</span>
+          <div class="flex-1 h-1.5 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden">
+            <div class="h-full rounded bg-gradient-to-r from-teal-500 to-emerald-400" [style.width.%]="(g.cost / maxTaskCost()) * 100"></div>
+          </div>
+          <div class="text-[0.65rem] text-slate-400 dark:text-slate-500 w-8 text-right flex-shrink-0">{{ g.count }}×</div>
+          <div class="text-xs font-bold text-teal-600 dark:text-teal-400 w-16 text-right flex-shrink-0">{{ fmtCost(g.cost) }}</div>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Entries table -->
+  <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+      <span class="text-[0.7rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{{ t().entries }}</span>
+      <span class="text-xs text-slate-400 dark:text-slate-500">{{ filteredRecords().length }}</span>
+    </div>
+    @if (filteredRecords().length === 0) {
+      <div class="text-sm text-slate-400 dark:text-slate-500 text-center py-10">{{ t().empty }}</div>
+    } @else {
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-500 uppercase text-[0.63rem] tracking-wide">
+              <th class="text-left px-3 py-2">{{ t().colWhen }}</th>
+              <th class="text-left px-3 py-2">{{ t().colModel }}</th>
+              <th class="text-left px-3 py-2">{{ t().colTask }}</th>
+              <th class="text-left px-3 py-2">{{ t().colProduct }}</th>
+              <th class="text-left px-3 py-2">{{ t().colStore }}</th>
+              <th class="text-left px-3 py-2">{{ t().colLang }}</th>
+              <th class="text-right px-3 py-2">{{ t().colIn }}</th>
+              <th class="text-right px-3 py-2">{{ t().colOut }}</th>
+              <th class="text-right px-3 py-2">{{ t().colCw }}</th>
+              <th class="text-right px-3 py-2">{{ t().colCr }}</th>
+              <th class="text-right px-3 py-2">{{ t().colCost }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of filteredRecords(); track r.id) {
+              <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                <td class="px-3 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{{ fmtWhen(r.ts) }}</td>
+                <td class="px-3 py-2"><span class="px-1.5 py-0.5 rounded text-[0.65rem] font-semibold" [class]="modelBadgeClass(r.model)">{{ r.model }}</span></td>
+                <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ r.taskLabel || '—' }}</td>
+                <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ r.productName || '—' }}</td>
+                <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ r.store || '—' }}</td>
+                <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ r.lang || '—' }}</td>
+                <td class="px-3 py-2 text-right font-mono text-blue-500 dark:text-blue-400">{{ fmtTokens(r.inputTokens) }}</td>
+                <td class="px-3 py-2 text-right font-mono text-emerald-500 dark:text-emerald-400">{{ fmtTokens(r.outputTokens) }}</td>
+                <td class="px-3 py-2 text-right font-mono text-amber-500 dark:text-amber-400">{{ fmtTokens(r.cacheWriteTokens) }}</td>
+                <td class="px-3 py-2 text-right font-mono text-pink-500 dark:text-pink-400">{{ fmtTokens(r.cacheReadTokens) }}</td>
+                <td class="px-3 py-2 text-right font-mono font-bold text-violet-600 dark:text-violet-400">{{ fmtCost(r.costUsd) }}</td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr class="bg-violet-50 dark:bg-violet-900/20 font-bold">
+              <td colspan="6" class="px-3 py-2.5 text-[0.65rem] uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ t().totalRow }}</td>
+              <td class="px-3 py-2.5 text-right font-mono text-blue-500 dark:text-blue-400">{{ fmtTokens(totals().inTok) }}</td>
+              <td class="px-3 py-2.5 text-right font-mono text-emerald-500 dark:text-emerald-400">{{ fmtTokens(totals().outTok) }}</td>
+              <td class="px-3 py-2.5 text-right font-mono text-amber-500 dark:text-amber-400">{{ fmtTokens(totals().cwTok) }}</td>
+              <td class="px-3 py-2.5 text-right font-mono text-pink-500 dark:text-pink-400">{{ fmtTokens(totals().crTok) }}</td>
+              <td class="px-3 py-2.5 text-right font-mono text-violet-600 dark:text-violet-400">{{ fmtCost(totals().cost) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    }
+  </div>
+
+</div>

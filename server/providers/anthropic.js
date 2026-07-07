@@ -44,9 +44,18 @@ export class AnthropicProvider {
       console.log('[anthropic]', config.model, mode,
         { in: u.input_tokens, out: u.output_tokens, cw: u.cache_creation_input_tokens, cr: u.cache_read_input_tokens });
 
+      const usage = {
+        model: config.model,
+        mode,
+        inputTokens: u.input_tokens,
+        outputTokens: u.output_tokens,
+        cacheWriteTokens: u.cache_creation_input_tokens,
+        cacheReadTokens: u.cache_read_input_tokens,
+      };
+
       const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
-      if (mode === 'json' || mode === 'creative-json') return parseJsonResponse(text);
-      return text;
+      const result = (mode === 'json' || mode === 'creative-json') ? parseJsonResponse(text) : text;
+      return { result, usage };
     });
   }
 

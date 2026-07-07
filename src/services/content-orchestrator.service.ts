@@ -87,7 +87,7 @@ export class ContentOrchestratorService {
       this.progressMessage.set(useThinking ? 'Generating HTML Description (Deep Thinking)…' : 'Generating HTML Description…');
       const basePayloadA = buildPromptA(input);
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking);
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name });
         html = stripCodeFences(html);
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
@@ -127,7 +127,7 @@ export class ContentOrchestratorService {
         try {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
           const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, htmlEn);
-          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
+          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
           const slugData = this.normalizeSlugResponse(rawSlug);
           this.content.update(c => ({ ...c, slugData }));
           this.approvedSlugKey.set(this.slugKey(input));
@@ -149,7 +149,7 @@ export class ContentOrchestratorService {
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
-        produce: (payload) => this.llm.generateJson(payload, useThinking),
+        produce: (payload) => this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -186,7 +186,7 @@ export class ContentOrchestratorService {
           maxRepairs: repairBudget,
           basePayload: basePayloadLang,
           produce: async (payload) => {
-            let html = await this.llm.generateText(payload, useThinking);
+            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale });
             html = stripCodeFences(html);
             html = wrapVideoFigures(html, input.name);
             if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
@@ -244,7 +244,7 @@ export class ContentOrchestratorService {
             maxRepairs: this.maxRepairs(),
             basePayload: basePayloadFaq,
             produce: async (payload) => {
-              const html = await this.llm.generateText(payload, useThinking);
+              const html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode });
               return stripCodeFences(html);
             },
             validate: validateFaqHtml,
@@ -303,7 +303,7 @@ export class ContentOrchestratorService {
       };
       const basePayloadA = buildPromptA(uaInput, UA_BASE_LANGUAGE);
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking);
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
         html = stripCodeFences(html);
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
@@ -339,7 +339,7 @@ export class ContentOrchestratorService {
       try {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
         const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
-        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
+        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO });
         const slugData = this.normalizeSlugResponse(rawSlug);
         this.content.update(c => ({ ...c, slugData }));
         this.approvedSlugKey.set(this.slugKey(input));
@@ -359,7 +359,7 @@ export class ContentOrchestratorService {
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
-        produce: (payload) => this.llm.generateJson(payload, useThinking),
+        produce: (payload) => this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -392,7 +392,7 @@ export class ContentOrchestratorService {
           maxRepairs: this.maxRepairs(),
           basePayload: basePayloadFaq,
           produce: async (payload) => {
-            const html = await this.llm.generateText(payload, useThinking);
+            const html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
             return stripCodeFences(html);
           },
           validate: validateFaqHtml,
@@ -436,7 +436,7 @@ export class ContentOrchestratorService {
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
-        produce: (payload) => this.llm.generateJson(payload, useThinking),
+        produce: (payload) => this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -461,7 +461,7 @@ export class ContentOrchestratorService {
       this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
 
       const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, input.description);
-      const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking);
+      const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
       const slugData = this.normalizeSlugResponse(rawSlug);
       this.content.update(c => ({ ...c, slugData }));
       this.approvedSlugKey.set(this.slugKey(input));
@@ -486,7 +486,7 @@ export class ContentOrchestratorService {
     this.isSuggestingKeywords.set(true);
     this.suggestedKeywords.set([]);
     try {
-      const keywords = await this.llm.generateJson<string[]>(buildKeywordsPrompt(name, description));
+      const keywords = await this.llm.generateJson<string[]>(buildKeywordsPrompt(name, description), false, { taskLabel: 'Keywords', productName: name });
       this.suggestedKeywords.set(Array.isArray(keywords) ? keywords : []);
     } catch (e) {
       console.error(e);
@@ -500,7 +500,7 @@ export class ContentOrchestratorService {
     this.optimizerOutput.set('');
     this.progressMessage.set('Optimizing HTML…');
     await this.withProgress(async () => {
-      let optimized = await this.llm.generateText(buildOptimizerPrompt(htmlInput, productName), useThinking);
+      let optimized = await this.llm.generateText(buildOptimizerPrompt(htmlInput, productName), useThinking, { taskLabel: 'Optimizer', productName });
       optimized = stripCodeFences(optimized);
       optimized = cleanHtmlStructure(optimized);
       this.optimizerOutput.set(optimized);
@@ -523,7 +523,7 @@ export class ContentOrchestratorService {
     this.progressMessage.set(`Translating to ${targetLang}…`);
     await this.withProgress(async () => {
       const prompt = buildPromptC(content, targetLang, '', undefined);
-      let translated = await this.llm.generateText(prompt, useThinking);
+      let translated = await this.llm.generateText(prompt, useThinking, { taskLabel: 'Translator', lang: targetLang });
       translated = stripCodeFences(translated);
       translated = wrapImageFigures(translated);
       if (targetLang === 'Spanish (EXPERT3D)' || targetLang === 'Portuguese (EXPERT3D)') {
@@ -539,7 +539,7 @@ export class ContentOrchestratorService {
     this.progressMessage.set('Rewriting content…');
     await this.withProgress(async () => {
       const prompt = buildCopywriterPrompt(website, text);
-      let rewritten = await this.llm.generateText(prompt, useThinking);
+      let rewritten = await this.llm.generateText(prompt, useThinking, { taskLabel: 'Copywriter', store: website.name });
       rewritten = stripCodeFences(rewritten);
       this.copywriterOutput.set(rewritten);
       this.progressMessage.set('Content Rewritten!');
@@ -550,7 +550,7 @@ export class ContentOrchestratorService {
     this.readabilityScore.set(null);
     this.progressMessage.set('Analyzing readability…');
     await this.withProgress(async () => {
-      const result = await this.llm.generateJson(buildReadabilityPrompt(text));
+      const result = await this.llm.generateJson(buildReadabilityPrompt(text), false, { taskLabel: 'Readability' });
       this.readabilityScore.set(result);
       this.progressMessage.set('Analysis Complete!');
     }, 'Error during readability analysis.', 'Analysis failed.');

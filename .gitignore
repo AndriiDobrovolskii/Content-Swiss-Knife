@@ -20,6 +20,10 @@ dist-ssr
 # Local knowledge/plan files — not part of the codebase
 Knowlege/
 
+# Local usage/cost tracking database — machine-specific, not part of the codebase
+server/usage/*.db
+server/usage/*.db-*
+
 # Angular build cache
 .angular/
 

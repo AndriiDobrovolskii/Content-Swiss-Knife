@@ -12,6 +12,7 @@ import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../
 import { getStore, getLangsForStore } from '../prompt-core/constants';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
+import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
 import saveAs from 'file-saver';
 
@@ -25,6 +26,7 @@ const TRANSLATIONS = {
     appTitle: 'SEO Content',
     generator: 'Generator',
     uaGenerator: 'UA Description',
+    dashboardTooltip: 'Cost Dashboard',
     optimizer: 'Optimizer',
     translator: 'Translator',
     imageTools: 'Image Tools',
@@ -173,6 +175,7 @@ const TRANSLATIONS = {
     appTitle: 'SEO Content',
     generator: 'Генератор',
     uaGenerator: 'UA Опис',
+    dashboardTooltip: 'Дашборд витрат',
     optimizer: 'Оптимізатор',
     translator: 'Перекладач',
     imageTools: 'Інструменти зображень',
@@ -322,7 +325,7 @@ const TRANSLATIONS = {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective],
+  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent {
