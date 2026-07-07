@@ -14,7 +14,7 @@ alt="" attribute value into the target language. Do not otherwise alter the mean
 length, or structure of the figcaption/alt beyond translating them. If [BASE HTML] contains zero
 <figure> blocks, do not invent any.`;
 
-const HAS_FIGURE_MARKUP = /<(?:figure|img|iframe)\b/i;
+const HAS_FIGURE_MARKUP = /<figure\b/i;
 
 const STANDALONE_SNIPPET_NOTE = `[STANDALONE SNIPPET]
 This is a short, self-contained text/HTML fragment submitted directly for translation — not an
