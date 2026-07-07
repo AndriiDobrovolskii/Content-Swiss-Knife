@@ -42,8 +42,8 @@ export class OpenAiProvider {
       const response = await this.client.chat.completions.create(config);
       const text = response.choices[0].message.content || '';
 
-      if (mode === 'json') return parseJsonResponse(text);
-      return text;
+      const result = mode === 'json' ? parseJsonResponse(text) : text;
+      return { result, usage: null };
     });
   }
 

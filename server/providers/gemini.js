@@ -22,7 +22,7 @@ export class GeminiProvider {
           contents,
           config: { thinkingConfig: { thinkingBudget: 8000 } }
         });
-        return response.text || '';
+        return { result: response.text || '', usage: null };
       }
 
       if (mode === 'json') {
@@ -31,14 +31,14 @@ export class GeminiProvider {
           contents,
           config: { responseMimeType: 'application/json' }
         });
-        return parseJsonResponse(response.text || '{}');
+        return { result: parseJsonResponse(response.text || '{}'), usage: null };
       }
 
       const response = await this.ai.models.generateContent({
         model: this.flashModel,
         contents
       });
-      return response.text || '';
+      return { result: response.text || '', usage: null };
     });
   }
 

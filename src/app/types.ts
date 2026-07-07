@@ -1,7 +1,7 @@
 
 export type WebsiteGroup = 'UA' | 'EU' | 'ES' | 'US';
 
-export type AppMode = 'generator' | 'ua-generator' | 'optimizer' | 'translator' | 'image-tools' | 'seo-generator' | 'copywriter' | 'readability' | 'slug-generator';
+export type AppMode = 'generator' | 'ua-generator' | 'optimizer' | 'translator' | 'image-tools' | 'seo-generator' | 'copywriter' | 'readability' | 'slug-generator' | 'dashboard';
 
 export interface WebsiteOption {
   name: string;

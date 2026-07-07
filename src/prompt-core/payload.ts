@@ -7,3 +7,12 @@ export interface PromptPayload {
   userContent: string;         // dynamic, never cached
 }
 
+/** Attribution tags sent alongside a call so the server can record what it was for.
+ *  Purely for cost/usage tracking — never affects prompt content or the LLM call itself. */
+export interface UsageMeta {
+  taskLabel: string;
+  productName?: string;
+  store?: string;
+  lang?: string;
+}
+

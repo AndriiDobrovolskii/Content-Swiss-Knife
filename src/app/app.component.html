@@ -31,6 +31,12 @@
               <i class="fa-solid fa-clock-rotate-left text-lg"></i>
             </button>
           }
+          <button (click)="setMode('dashboard')"
+            class="transition-transform active:scale-90"
+            [class]="appMode() === 'dashboard' ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-400'"
+            [title]="uiLabels().dashboardTooltip">
+            <i class="fa-solid fa-chart-line text-lg"></i>
+          </button>
         </div>
       </div>
 
@@ -913,7 +919,11 @@
 
   <!-- Main Content Area -->
   <main class="flex-1 flex flex-col h-full bg-slate-50/50 dark:bg-slate-900/50 relative overflow-hidden transition-colors duration-200">
-    
+
+    @if (appMode() === 'dashboard') {
+      <app-dashboard [lang]="uiLanguage()"></app-dashboard>
+    }
+
     @if (isGenerating()) {
       <div class="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center animate-in fade-in duration-300">
         <div class="w-16 h-16 border-4 rounded-full animate-spin mb-4" 

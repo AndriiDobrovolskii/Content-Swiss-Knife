@@ -58,16 +58,32 @@ describe('buildPromptC — image preservation manifest is conditional on figure 
     expect(payload.userContent).toContain('[IMAGE MANIFEST]');
   });
 
-  it('includes the [IMAGE MANIFEST] block when the input contains a bare <img> tag', () => {
+  it('omits the [IMAGE MANIFEST] block when the input contains a bare <img> tag with no <figure> wrapper', () => {
     const html = '<p>Lead-in.</p><img src="a.jpg" alt="A">';
     const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
-    expect(payload.userContent).toContain('[IMAGE MANIFEST]');
+    expect(payload.userContent).not.toContain('[IMAGE MANIFEST]');
+    expect(payload.userContent).toContain('[STANDALONE SNIPPET]');
   });
 
-  it('includes the [IMAGE MANIFEST] block when the input contains a bare <iframe> tag', () => {
+  it('omits the [IMAGE MANIFEST] block when the input contains a bare <iframe> tag with no <figure> wrapper', () => {
     const html = '<p>Lead-in.</p><iframe src="https://youtube.com/embed/x"></iframe>';
     const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
-    expect(payload.userContent).toContain('[IMAGE MANIFEST]');
+    expect(payload.userContent).not.toContain('[IMAGE MANIFEST]');
+    expect(payload.userContent).toContain('[STANDALONE SNIPPET]');
+  });
+
+  it('omits the [IMAGE MANIFEST] block for a non-product widget with a bare <img> icon (contact/country-selector snippet)', () => {
+    const html = `<div class="country-item">
+    <div class="country-item__picture">
+        <img src="https://impresora-3d.es/image/catalog/usa.png" alt="USA">
+        <div class="country-item__heading">
+            <p class="country-item__picture-name">USA</p>
+        </div>
+    </div>
+</div>`;
+    const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
+    expect(payload.userContent).not.toContain('[IMAGE MANIFEST]');
+    expect(payload.userContent).toContain('[STANDALONE SNIPPET]');
   });
 });
 
