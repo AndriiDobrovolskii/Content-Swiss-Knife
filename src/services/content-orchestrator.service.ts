@@ -525,7 +525,8 @@ export class ContentOrchestratorService {
       const prompt = buildPromptC(content, targetLang, '', undefined);
       let translated = await this.llm.generateText(prompt, useThinking, { taskLabel: 'Translator', lang: targetLang });
       translated = stripCodeFences(translated);
-      translated = wrapImageFigures(translated);
+      // wrapImageFigures(translated) removed — Translator must preserve input structure
+      // verbatim; Task C's own prompt already forbids inventing/altering figure markup.
       if (targetLang === 'Spanish (EXPERT3D)' || targetLang === 'Portuguese (EXPERT3D)') {
         translated = this.applySpanishExpert3dReplacements(translated);
       }
