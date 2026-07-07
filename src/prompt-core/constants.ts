@@ -438,12 +438,13 @@ plus what makes THIS product the right tool for it (the differentiator vs altern
 just the industry name.`;
 
 /**
- * EXPERT3D per-locale ToV — European Portuguese (pt-PT). Delivery-neutral: embedded by the
- * Task C EXPERT3D_PT_INSTRUCTION (Translator) and injected into Task A via customInstructions
+ * EXPERT3D per-locale ToV — European Portuguese (pt-PT). Embedded by the Task C
+ * EXPERT3D_PT_INSTRUCTION (Translator) and injected into Task A via customInstructions
  * for native pt-PT generation (main pipeline, PR #3). Register/vocabulary rules only — brand
  * character + Fact→Mechanism→Consequence come from EXPERT3D_TOV_BASE_OVERLAY.
  * Checked against real native-generated output (Formlabs Fuse X1 proofreading pass): orthography,
- * calque and Spanish-leakage sections below were added in response to concrete defects found.
+ * calque, Spanish-leakage and delivery-market sections below were added in response to concrete
+ * defects found.
  */
 export const EXPERT3D_PT_LOCALE_TOV =
   `[EXPERT3D ToV — EUROPEAN PORTUGUESE (pt-PT) — these rules WIN over any conflicting register line]
@@ -465,7 +466,9 @@ ORTHOGRAPHY (post-1990 Acordo Ortográfico, mandatory): drop the silent consonan
 clusters that pre-reform spelling kept. Concrete examples — always follow these exactly, do not
 just paraphrase the rule name: "actua(r/l/va/ndo)" → "atua(r/l/va/ndo)" · "arquitectura" →
 "arquitetura" · "táctil" → "tátil" · "electrónico" → "eletrónico" · "activado" → "ativado" ·
-"injecção" → "injeção" · "projecção" → "projeção" · "directamente" → "diretamente".
+"injecção" → "injeção" · "projecção" → "projeção" · "directamente" → "diretamente" ·
+"Conetividade" → "Conectividade" (the 'c' is pronounced here — post-AO90 keeps it, unlike the
+silent-consonant clusters above).
 
 FORBIDDEN MARKETING WORDS (extends the master fluff ban): revolucionário, inovador, de ponta,
 o melhor, incrível, fantástico, a escolha perfeita, imprescindível, imperdível. Replace each with
@@ -485,7 +488,12 @@ FORBIDDEN CALQUES / ANGLICISMS:
   "sistemas convencionais" / "de geração anterior" · "filtros de carbono" (gas/air filtration
   media) → "filtros de carvão ativado" ("carbono" alone stays correct elsewhere, e.g. "fibra de
   carbono") · "caixa de luvas selada" (glove-box / breakout-station description) → "câmara selada
-  com luvas".
+  com luvas" · "Ítrio" (chemical element error: fiber lasers in this domain are Ytterbium, never
+  Yttrium) → "Itérbio" · "visão artificial" → "visão computacional" (industry-standard term for
+  computer vision) · "conectores cegos" → "conectores de acoplamento cego" (blind-mate connectors)
+  · "desempacotamento" (breakout/cleaning-station process specifically, not general unpacking) →
+  "extração das peças" · "transportador pneumático" → "transportador a vácuo" (vacuum conveyor) ·
+  "carcaças" (hardware/electronics enclosures — reads as informal here) → "invólucros" / "caixas".
 
 SPANISH-LEAKAGE WATCHLIST: this store also serves es-ES — Spanish vocabulary bleeding into pt-PT
 output is a systemic risk, not a one-off. Known leaks to avoid: "utillajes" → "ferramental" ·
@@ -499,7 +507,18 @@ HowTo, and any other block generated under this locale — not only the first/ma
 relax terminology discipline in a shorter or separately-framed block.
 
 NUMBERS: decimal comma, space thousands ("1,75 mm"; "12 500 h"). Never change digits or unit.
-COUNT: unit-count abbreviation is "un." (see [PRODUCT NAME LOCALIZATION]).`;
+COUNT: unit-count abbreviation is "un." (see [PRODUCT NAME LOCALIZATION]).
+
+SPEC TABLES: translate English technical terminology inside specification tables into Portuguese
+— never leave it in English (e.g. "Selective Laser Sintering" → "Sinterização Seletiva a Laser",
+"Ytterbium Fiber" → "Fibra de Itérbio").
+
+DELIVERY / MARKET (commercial-closing CTA section): the delivery destination is Portugal and the
+rest of the EU — never state Spain as the delivery destination. Valencia, Spain may still be named
+elsewhere as the company's operating/shipping base, but must never appear as the market the
+equipment is delivered "to". Use this exact template for the delivery-availability sentence in the
+CTA paragraph: "O equipamento está disponível para aquisição com soluções de transporte
+especializado para as suas instalações em Portugal e restantes países da UE."`;
 
 /**
  * EXPERT3D Tone of Voice — Castilian Spanish (es-ES) vocabulary overlay for NATIVE generation.
