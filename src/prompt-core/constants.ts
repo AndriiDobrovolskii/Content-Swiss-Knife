@@ -38,6 +38,27 @@ export function isExpert3dStore(name: string): boolean {
   return getStore(name).group === 'ES';
 }
 
+/**
+ * Standalone Translator tool — its target-language list. Store-independent by design:
+ * the Translator only translates text into a target language with correct orthography,
+ * with NO store/market coupling (unlike the generation pipeline's Task C).
+ * SINGLE SOURCE OF TRUTH — the UI dropdown (app.component.ts) and the prompt builder
+ * (prompts/task-translate.ts) both derive from this array. Do not hardcode the list elsewhere.
+ */
+export const TRANSLATOR_LANGUAGES = [
+  'English (en-GB)',
+  'American English (en-US)',
+  'American Spanish (es-US)',
+  'European English (en-ES)',
+  'Spanish (es-ES)',
+  'Portuguese (pt-PT)',
+  'Polish',
+  'German',
+  'Ukrainian',
+  'russian',
+] as const;
+export type TranslatorLanguage = typeof TRANSLATOR_LANGUAGES[number];
+
 export function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
   if (lang === 'uk-UA') return group === 'US' ? 'Ukrainian' : 'UA';
   if (lang === 'ru-UA') return 'RU';

@@ -9,7 +9,7 @@ import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { parseVisionResult } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
-import { getStore, getLangsForStore } from '../prompt-core/constants';
+import { getStore, getLangsForStore, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
@@ -347,20 +347,8 @@ export class AppComponent {
 
   // Real Options
   websiteOptions = WEBSITE_OPTIONS;
-  translatorLanguages = [
-    'English', 
-    'American English (Expert-3DPrinter)', 
-    'American Spanish (Expert-3DPrinter)', 
-    'European English (EXPERT3D)',
-    'Spanish (EXPERT3D)',
-    'Portuguese (EXPERT3D)',
-    'Polish',
-    'German', 
-    'Ukrainian', 
-    'Ukrainian (Expert-3DPrinter)',
-    'Russian', 
-    'Spanish'
-  ];
+  // Store-agnostic target-language list — single source of truth in prompt-core/constants.
+  translatorLanguages = TRANSLATOR_LANGUAGES;
 
   // --- GENERATOR STATE ---
   selectedWebsite = signal<WebsiteOption | null>(null);
@@ -383,7 +371,7 @@ export class AppComponent {
 
   // --- TRANSLATOR STATE ---
   translatorInput = signal<string>('');
-  translatorTargetLang = signal<string>('English');
+  translatorTargetLang = signal<string>('English (en-GB)');
   translatorUseThinking = signal<boolean>(false);
 
   // --- COPYWRITER STATE ---

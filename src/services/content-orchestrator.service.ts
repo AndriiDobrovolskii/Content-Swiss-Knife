@@ -16,6 +16,7 @@ import { buildPromptSlug } from '../prompts/task-slug';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, bcp47ToTaskCLang } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
+import { buildTranslatePrompt } from '../prompts/task-translate';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { buildOptimizerPrompt } from '../prompts/optimizer';
 import { buildReadabilityPrompt } from '../prompts/readability';
@@ -519,17 +520,17 @@ export class ContentOrchestratorService {
   }
 
   async translate(content: string, targetLang: string, useThinking = false): Promise<void> {
+    // Clear any stale result and bail on blank/whitespace input — avoids a wasted paid LLM call.
+    if (!content || !content.trim()) { this.translatorOutput.set(''); return; }
     this.translatorOutput.set('');
     this.progressMessage.set(`Translating to ${targetLang}…`);
     await this.withProgress(async () => {
-      const prompt = buildPromptC(content, targetLang, '', undefined);
+      // Store-agnostic pure translation — NOT the generation pipeline's store-coupled Task C.
+      const prompt = buildTranslatePrompt(content, targetLang);
       let translated = await this.llm.generateText(prompt, useThinking, { taskLabel: 'Translator', lang: targetLang });
       translated = stripCodeFences(translated);
-      // wrapImageFigures(translated) removed — Translator must preserve input structure
-      // verbatim; Task C's own prompt already forbids inventing/altering figure markup.
-      if (targetLang === 'Spanish (EXPERT3D)' || targetLang === 'Portuguese (EXPERT3D)') {
-        translated = this.applySpanishExpert3dReplacements(translated);
-      }
+      // No figure rewrapping and no store-specific URL/contact replacement here — the Translator
+      // preserves input structure verbatim and carries no store coupling.
       this.translatorOutput.set(translated);
       this.progressMessage.set('Translation Complete!');
     }, 'Error during translation.', 'Translation failed.');
