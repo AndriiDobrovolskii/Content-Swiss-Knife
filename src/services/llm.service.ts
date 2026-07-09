@@ -1,8 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, catchError, throwError } from 'rxjs';
 import { LlmProvider } from './providers/llm-provider.interface';
 import { PromptPayload, UsageMeta } from '../prompt-core/payload';
+import { classifyLlmError } from './providers/llm-errors';
 
 function toPayload(input: PromptPayload | string): PromptPayload {
   if (typeof input === 'string') return { systemBlocks: [], userContent: input };
@@ -14,7 +15,11 @@ export class LlmService implements LlmProvider {
   private http = inject(HttpClient);
 
   private post<T>(path: string, body: unknown): Promise<T> {
-    return firstValueFrom(this.http.post<T>(`/api${path}`, body));
+    return firstValueFrom(
+      this.http.post<T>(`/api${path}`, body).pipe(
+        catchError(err => throwError(() => classifyLlmError(err))),
+      ),
+    );
   }
 
   private generate<T>(payload: PromptPayload, mode: string, meta?: UsageMeta): Promise<T> {

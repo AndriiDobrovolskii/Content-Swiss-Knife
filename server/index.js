@@ -6,6 +6,7 @@ import { SerperRetrieval } from './retrieval/serper.js';
 import { fetchUrl } from './retrieval/fetcher.js';
 import { computeCost } from './usage/pricing.js';
 import { insertUsage, queryUsage } from './usage/store.js';
+import { mapProviderError } from './utils/http-errors.js';
 
 config();
 
@@ -49,7 +50,9 @@ app.post('/api/llm/generate', async (req, res) => {
     res.json({ result });
   } catch (error) {
     console.error('[LLM] generate error:', error.message);
-    res.status(500).json({ error: error.message });
+    const { status, body } = mapProviderError(error);
+    if (body.locale === undefined) body.locale = req.body.lang;
+    res.status(status).json(body);
   }
 });
 
@@ -60,7 +63,8 @@ app.post('/api/llm/vision', async (req, res) => {
     res.json({ result });
   } catch (error) {
     console.error('[LLM] vision error:', error.message);
-    res.status(500).json({ error: error.message });
+    const { status, body } = mapProviderError(error);
+    res.status(status).json(body);
   }
 });
 
@@ -71,7 +75,8 @@ app.post('/api/llm/pdf', async (req, res) => {
     res.json({ result });
   } catch (error) {
     console.error('[LLM] pdf error:', error.message);
-    res.status(500).json({ error: error.message });
+    const { status, body } = mapProviderError(error);
+    res.status(status).json(body);
   }
 });
 
