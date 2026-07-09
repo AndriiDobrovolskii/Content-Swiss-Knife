@@ -77,6 +77,12 @@ Follow Product Description Schema v3.0. Emit sections in this order. §0 (H1) is
 CMS — NEVER emit <h1> in the body. CONDITIONAL sections appear ONLY when the source provides the data;
 never assume or invent.
 
+MAXIMUM LENGTH LIMIT: Your absolute hard limit for the final output is 32,000 characters (including all
+spaces, text, and HTML tags). You must strictly plan your output length. If you have a massive amount of
+input data, be concise in the narrative sections (Hook, Functionality, Applications) to ensure you have
+enough character space to include the full Technical Specifications tables without exceeding the
+32,000-character limit.
+
 1. HOOK (40–75 words TOTAL, plain <p>, no microdata):
    Open with: "[Product] is a [Category] designed for [use-case], featuring [key specs]." Use-case = a
    workflow, not a user type. Split the 40–75 words across 2–4 sentences — do NOT chain the whole

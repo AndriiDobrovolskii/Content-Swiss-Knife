@@ -564,10 +564,13 @@
           </select>
         </div>
         <div class="space-y-2 h-full flex flex-col">
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-            {{ uiLabels().textToRewrite }} <span class="text-red-500">*</span>
-          </label>
-          <textarea 
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              {{ uiLabels().textToRewrite }} <span class="text-red-500">*</span>
+            </label>
+            <span class="text-sm" [class.text-green-500]="copywriterInput().length <= 32000" [class.text-red-400]="copywriterInput().length > 32000">{{ copywriterInput().length.toLocaleString() }} characters</span>
+          </div>
+          <textarea
             class="flex-1 w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             [value]="copywriterInput()"
             (input)="updateCopywriterInput($event)"
@@ -596,10 +599,13 @@
     @else if (appMode() === 'optimizer') {
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
         <div class="space-y-2 h-full flex flex-col">
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-            {{ uiLabels().rawHtmlInput }}
-          </label>
-          <textarea 
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              {{ uiLabels().rawHtmlInput }}
+            </label>
+            <span class="text-sm" [class.text-green-500]="optimizerInputHtml().length <= 32000" [class.text-red-400]="optimizerInputHtml().length > 32000">{{ optimizerInputHtml().length.toLocaleString() }} characters</span>
+          </div>
+          <textarea
             class="flex-1 w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none font-mono text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             [value]="optimizerInputHtml()"
             (input)="updateOptimizerInput($event)"
@@ -663,10 +669,13 @@
          </div>
 
         <div class="space-y-2 flex-1 flex flex-col">
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-            {{ uiLabels().contentToTrans }}
-          </label>
-          <textarea 
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              {{ uiLabels().contentToTrans }}
+            </label>
+            <span class="text-sm" [class.text-green-500]="translatorInput().length <= 32000" [class.text-red-400]="translatorInput().length > 32000">{{ translatorInput().length.toLocaleString() }} characters</span>
+          </div>
+          <textarea
             class="w-full flex-1 min-h-[300px] p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-mono text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             [value]="translatorInput()"
             (input)="updateTranslatorInput($event)"
@@ -689,10 +698,13 @@
         </h2>
         
         <div class="space-y-2 h-full flex flex-col">
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-            Text to Analyze
-          </label>
-          <textarea 
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              Text to Analyze
+            </label>
+            <span class="text-sm" [class.text-green-500]="readabilityInput().length <= 32000" [class.text-red-400]="readabilityInput().length > 32000">{{ readabilityInput().length.toLocaleString() }} characters</span>
+          </div>
+          <textarea
             class="flex-1 w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-pink-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             [value]="readabilityInput()"
             (input)="updateReadabilityInput($event)"
@@ -1082,8 +1094,9 @@
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-bold text-pink-600 dark:text-pink-400 uppercase tracking-widest flex items-center gap-2">
               <i class="fa-solid fa-wand-magic-sparkles"></i> {{ uiLabels().readabilityOptimized }}
+              <span class="normal-case font-normal text-sm" [class.text-green-500]="(readabilityResult()?.optimizedText ?? '').length <= 32000" [class.text-red-400]="(readabilityResult()?.optimizedText ?? '').length > 32000">{{ (readabilityResult()?.optimizedText ?? '').length.toLocaleString() }} characters</span>
             </h3>
-            <button 
+            <button
               (click)="copyToClipboard(readabilityResult()?.optimizedText || '')"
               class="p-2 text-slate-400 hover:text-pink-600 transition-colors"
               title="Copy optimized text">
@@ -1213,13 +1226,18 @@
                 <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ tab.label }}</h2>
 
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
-                  <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+                  <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
+                    {{ uiLabels().livePreview }}
+                    <span class="normal-case font-normal text-sm" [class.text-green-500]="content().mainHtmlEn.length <= 32000" [class.text-red-400]="content().mainHtmlEn.length > 32000">{{ content().mainHtmlEn.length.toLocaleString() }} characters</span>
+                  </h3>
                   <div [innerHTML]="content().mainHtmlEn | safeHtml"></div>
                 </div>
 
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-                  <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
-                    <span>{{ uiLabels().htmlSource }}</span>
+                  <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center gap-3">
+                    <span class="flex items-center gap-2">
+                      {{ uiLabels().htmlSource }}
+                    </span>
                     <button (click)="copyToClipboard(content().mainHtmlEn, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
                       <i class="fa-regular fa-copy"></i>
                     </button>
@@ -1236,15 +1254,18 @@
 
                 @if (transContent) {
                   <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
-                    <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">
-                      {{ uiLabels().livePreview }} ({{ tab.taskKey }})
+                    <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
+                      <span>{{ uiLabels().livePreview }} ({{ tab.taskKey }})</span>
+                      <span class="normal-case font-normal text-sm" [class.text-green-500]="transContent.length <= 32000" [class.text-red-400]="transContent.length > 32000">{{ transContent.length.toLocaleString() }} characters</span>
                     </h3>
                     <div [innerHTML]="transContent | safeHtml"></div>
                   </div>
 
                   <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-                    <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
-                      <span>{{ uiLabels().htmlSource }} ({{ tab.taskKey }})</span>
+                    <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center gap-3">
+                      <span class="flex items-center gap-2">
+                        {{ uiLabels().htmlSource }} ({{ tab.taskKey }})
+                      </span>
                       <button (click)="copyToClipboard(transContent, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
                         <i class="fa-regular fa-copy"></i>
                       </button>
@@ -1261,7 +1282,10 @@
                 <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ tab.label }}</h2>
 
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
-                  <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">FAQ – {{ uiLabels().livePreview }}</h3>
+                  <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
+                    <span>FAQ – {{ uiLabels().livePreview }}</span>
+                    <span class="normal-case font-normal text-sm" [class.text-green-500]="faqHtml.length <= 32000" [class.text-red-400]="faqHtml.length > 32000">{{ faqHtml.length.toLocaleString() }} characters</span>
+                  </h3>
                   <div class="space-y-4">
                     @for (item of parseFaqItems(faqHtml); track $index) {
                       <div class="border border-slate-100 dark:border-slate-700 rounded-lg p-4 space-y-2">
@@ -1283,8 +1307,10 @@
                 </div>
 
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-fit">
-                  <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center">
-                    <span>FAQ – {{ uiLabels().htmlSource }} ({{ tab.iso }})</span>
+                  <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center gap-3">
+                    <span class="flex items-center gap-2">
+                      FAQ – {{ uiLabels().htmlSource }} ({{ tab.iso }})
+                    </span>
                     <button (click)="copyToClipboard(faqHtml, $event)" class="hover:text-white transition-colors active:scale-75" [title]="uiLabels().copyCode">
                       <i class="fa-regular fa-copy"></i>
                     </button>
@@ -1311,15 +1337,18 @@
                 </div>
 
                 <div class="space-y-1">
-                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
-                    {{ uiLabels().h1Tag }}
-                    <div class="relative group/tooltip inline-block">
-                      <i class="fa-regular fa-circle-question text-slate-400 hover:text-blue-500 cursor-help"></i>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-10 pointer-events-none normal-case font-normal text-center leading-tight">
-                        Main page heading. Must include Product Name & Model. Only one per page.
-                        <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase flex justify-between items-center">
+                    <div class="flex items-center gap-1">
+                      {{ uiLabels().h1Tag }}
+                      <div class="relative group/tooltip inline-block">
+                        <i class="fa-regular fa-circle-question text-slate-400 hover:text-blue-500 cursor-help"></i>
+                        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-10 pointer-events-none normal-case font-normal text-center leading-tight">
+                          Main page heading. Must include Product Name & Model. Only one per page.
+                          <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                        </div>
                       </div>
                     </div>
+                    <span class="font-normal text-slate-400 dark:text-slate-500">{{ item.h1.length }} chars</span>
                   </label>
                   <div class="relative group">
                     <div class="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200 pr-8 min-h-[38px]">{{ item.h1 }}</div>
@@ -1402,7 +1431,10 @@
                 </div>
 
                 <div class="space-y-1">
-                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">{{ uiLabels().nameLabel }}</label>
+                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase flex justify-between items-center">
+                    <span>{{ uiLabels().nameLabel }}</span>
+                    <span class="font-normal text-slate-400 dark:text-slate-500">{{ item.name.length }} chars</span>
+                  </label>
                   <div class="relative group">
                     <div class="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200 pr-8 min-h-[38px]">{{ item.name }}</div>
                     <button (click)="copyToClipboard(item.name, $event)" class="absolute top-2 right-2 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-transform active:scale-75" title="Copy Name">
@@ -1412,7 +1444,10 @@
                 </div>
 
                 <div class="space-y-1">
-                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">{{ uiLabels().slugLabel }}</label>
+                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase flex justify-between items-center">
+                    <span>{{ uiLabels().slugLabel }}</span>
+                    <span class="font-normal text-slate-400 dark:text-slate-500">{{ item.slug.length }} chars</span>
+                  </label>
                   <div class="relative group">
                     <div class="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-sm font-mono text-slate-800 dark:text-slate-200 pr-8 min-h-[38px]">{{ item.slug }}</div>
                     <button (click)="copyToClipboard(item.slug, $event)" class="absolute top-2 right-2 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-transform active:scale-75" title="Copy Slug">
@@ -1450,12 +1485,15 @@
             </div>
 
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
-              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+              <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
+                <span>{{ uiLabels().livePreview }}</span>
+                <span class="normal-case font-normal text-sm" [class.text-green-500]="optimizerOutput().length <= 32000" [class.text-red-400]="optimizerOutput().length > 32000">{{ optimizerOutput().length.toLocaleString() }} characters</span>
+              </h3>
               <div [innerHTML]="optimizerOutput() | safeHtml"></div>
             </div>
 
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center gap-3">
                 <span>{{ uiLabels().optResult }}</span>
               </div>
               <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap"><code [appHighlightCode]="optimizerOutput()" class="hljs language-xml"></code></pre>
@@ -1487,14 +1525,20 @@
 
             @if (translatorOutput().includes('<')) {
               <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
-                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700">{{ uiLabels().livePreview }}</h3>
+                <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
+                  <span>{{ uiLabels().livePreview }}</span>
+                  <span class="normal-case font-normal text-sm" [class.text-green-500]="translatorOutput().length <= 32000" [class.text-red-400]="translatorOutput().length > 32000">{{ translatorOutput().length.toLocaleString() }} characters</span>
+                </h3>
                 <div [innerHTML]="translatorOutput() | safeHtml"></div>
               </div>
             }
 
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between">
+              <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center gap-3">
                 <span>{{ uiLabels().transResult }}</span>
+                @if (!translatorOutput().includes('<')) {
+                  <span class="font-normal text-sm" [class.text-green-500]="translatorOutput().length <= 32000" [class.text-red-400]="translatorOutput().length > 32000">{{ translatorOutput().length.toLocaleString() }} characters</span>
+                }
               </div>
               <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap"><code [appHighlightCode]="translatorOutput()" class="hljs language-xml"></code></pre>
             </div>
@@ -1517,6 +1561,7 @@
             <div class="flex justify-between items-center mb-4">
               <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <i class="fa-solid fa-check-circle text-indigo-600 dark:text-indigo-400"></i> {{ uiLabels().rewriteResult }}
+                <span class="text-sm font-normal" [class.text-green-500]="copywriterOutput().length <= 32000" [class.text-red-400]="copywriterOutput().length > 32000">{{ copywriterOutput().length.toLocaleString() }} characters</span>
               </h2>
               <button (click)="copyToClipboard(copywriterOutput(), $event)" class="text-indigo-600 dark:text-indigo-400 hover:underline text-sm font-medium transition-transform active:scale-90">
                 <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyRewrite }}
@@ -1608,6 +1653,7 @@
                           @if (res.altText) {
                             <div class="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 relative group">
                                <p class="text-xs text-slate-600 dark:text-slate-300 italic">"{{ res.altText }}"</p>
+                               <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{{ res.altText.length }} characters</p>
                                <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button (click)="copyToClipboard(res.altText, $event)" class="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400">
                                     <i class="fa-regular fa-copy"></i>

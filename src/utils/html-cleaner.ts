@@ -1,5 +1,8 @@
 
 import { ensureRel0 } from './video-url';
+import { wrapImageFigures } from './image-figure';
+
+const SCHEMA_TYPE_SELECTOR = (name: string) => `[itemtype$="/${name}"]`;
 
 export function stripCodeFences(text: string): string {
   return text.replace(/```html/g, '').replace(/```/g, '').trim();
@@ -27,8 +30,40 @@ export const cleanHtmlStructure = (html: string): string => {
     }
   });
 
+  // 2b. Schema.org Structural Unwrapping
+  // Flatten HowTo / FAQPage markup to plain heading/paragraph structure — the
+  // wrapper elements exist only to carry microdata, which this cleaner removes.
+
+  const unwrap = (el: Element) => {
+    const parent = el.parentNode;
+    if (!parent) return;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    el.remove();
+  };
+
+  // HowTo: the wrapping <section> already has an itemprop="name" heading as its
+  // first child, so unwrapping preserves it verbatim — no heading is invented.
+  doc.querySelectorAll(SCHEMA_TYPE_SELECTOR('HowTo')).forEach(unwrap);
+  doc.querySelectorAll(SCHEMA_TYPE_SELECTOR('HowToStep')).forEach(unwrap);
+
+  // FAQPage: unlike HowTo, the section itself carries no heading. Insert a fixed
+  // "Frequently Asked Questions" heading only when one isn't already present.
+  doc.querySelectorAll(SCHEMA_TYPE_SELECTOR('FAQPage')).forEach(section => {
+    const prev = section.previousElementSibling;
+    if (!prev || !/^H[1-6]$/.test(prev.tagName)) {
+      const heading = doc.createElement('h2');
+      heading.textContent = 'Frequently Asked Questions';
+      section.parentNode?.insertBefore(heading, section);
+    }
+    unwrap(section);
+  });
+  doc.querySelectorAll(SCHEMA_TYPE_SELECTOR('Question')).forEach(unwrap);
+  doc.querySelectorAll(SCHEMA_TYPE_SELECTOR('Answer')).forEach(unwrap);
+
   // 3. Smart Image Extraction
-  
+
   // A. Picture Tags
   // Extract the inner <img> and remove the <picture> wrapper.
   doc.querySelectorAll('picture').forEach(pic => {
@@ -115,6 +150,21 @@ export const cleanHtmlStructure = (html: string): string => {
     b.replaceWith(strong);
   });
 
+  // 5b. Table Simplification
+  // Strip Bootstrap classes / scope attrs and demote row-label <th> cells to
+  // plain <td> — the outer .table-responsive wrapper div is left untouched.
+  doc.querySelectorAll('table').forEach(table => table.removeAttribute('class'));
+  doc.querySelectorAll('th').forEach(th => th.removeAttribute('scope'));
+  doc.querySelectorAll('tbody > tr').forEach(row => {
+    const first = row.firstElementChild;
+    if (first && first.tagName === 'TH') {
+      const td = doc.createElement('td');
+      td.innerHTML = first.innerHTML;
+      Array.from(first.attributes).forEach(attr => td.setAttribute(attr.name, attr.value));
+      first.replaceWith(td);
+    }
+  });
+
   // 6. YouTube Iframe Standardization
   doc.querySelectorAll('iframe').forEach(iframe => {
     const src = iframe.getAttribute('src') || '';
@@ -197,5 +247,18 @@ export const cleanHtmlStructure = (html: string): string => {
     img.setAttribute('style', 'max-width: 100%; height: auto;');
   });
 
-  return doc.body.innerHTML;
+  // 7b. Generic Microdata Strip
+  // Mop up any remaining Schema.org attributes (e.g. on spec-table tr/th/td)
+  // left after the targeted unwrapping/simplification passes above.
+  doc.querySelectorAll('[itemscope], [itemtype], [itemprop]').forEach(el => {
+    el.removeAttribute('itemscope');
+    el.removeAttribute('itemtype');
+    el.removeAttribute('itemprop');
+  });
+
+  // 8. Figure Wrapping
+  // Delegate to the same canonical <figure>/<figcaption> convention the
+  // Generator pipeline uses. Never invents a <figcaption> — it only reuses one
+  // already present as a trailing sibling of the <img>.
+  return wrapImageFigures(doc.body.innerHTML);
 };
