@@ -87,6 +87,11 @@ export interface GeneratedContent {
   website?: WebsiteOption; // store this content was generated for (optional for backward compat)
   faqArtifacts?: Record<string, string>;   // ISO code → schema-free faq_[ISO].html
   mainHtmlLocale?: string; // ISO code for mainHtmlEn's actual language, e.g. 'uk-UA' for native ua-generator output. Undefined = English (historical default).
+  /** ISO codes of locales that failed generation (thrown error) or shipped with unresolved
+   *  validation errors / a length far below the run's median — e.g. a max_tokens truncation
+   *  or model refusal. Present so the UI can block export and the caller can tell a
+   *  genuinely complete run from one with a silently-bad artifact. */
+  failedLocales?: string[];
 }
 
 export interface HistoryItem {

@@ -7,9 +7,11 @@ import { cleanHtmlStructure, stripCodeFences } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
-import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
+import { validateGeneratedHtml, validateSeoMetadata, strippedVisibleLength, ValidationIssue } from '../utils/output-validator';
 import { validateSpecsGrounding } from '../utils/specs-grounding';
 import { validateSlugs } from '../utils/slug-validator';
+import { detectLengthOutliers, LengthEntry } from '../utils/length-outlier';
+import { IncompleteGenerationClientError, RefusalClientError } from './providers/llm-errors';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
@@ -95,7 +97,7 @@ export class ContentOrchestratorService {
         html = fixNumberFormatting(html);
         return html;
       };
-      const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
+      const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs, shippable: aShippable } = await runRepairGate<string>({
         label: 'HTML (base)',
         maxRepairs: repairBudget,
         basePayload: basePayloadA,
@@ -111,11 +113,20 @@ export class ContentOrchestratorService {
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
       const finalHtmlEn = isConsumables ? trimConsumablesToLimit(htmlEn) : htmlEn;
       this.content.update(c => ({ ...c, mainHtmlEn: finalHtmlEn }));
-      this.validationIssues.set(
-        isConsumables
-          ? validateGeneratedHtml(finalHtmlEn, 'HTML (base)', input.name, undefined, { templateId: input.templateId })
-          : htmlIssues,
-      );
+      const finalHtmlEnIssues = isConsumables
+        ? validateGeneratedHtml(finalHtmlEn, 'HTML (base)', input.name, undefined, { templateId: input.templateId })
+        : htmlIssues;
+      this.validationIssues.set(finalHtmlEnIssues);
+      // Consumables trimming can change the error count, so re-derive shippable from the
+      // freshly-validated (post-trim) issues rather than trusting the pre-trim repair-gate flag.
+      const enShippable = isConsumables ? !finalHtmlEnIssues.some(i => i.severity === 'error') : aShippable;
+      if (!enShippable) {
+        // The base HTML is the foundation every downstream step (slugs, SEO, translations)
+        // grounds on — a hard failure here isn't isolated to one locale, so it's just flagged
+        // (not thrown): downstream steps still run, but this run won't be a clean export.
+        const enIso = getStore(input.website.name).languages.find(l => l.startsWith('en-')) ?? 'en-GB';
+        this.markLocaleFailed(enIso);
+      }
 
       // Step 2 — SEO slugs FIRST. The localized `name` per locale is the single source of
       // truth for the storefront product-name field (→ H1) AND the Task B title core.
@@ -182,34 +193,55 @@ export class ContentOrchestratorService {
           ].filter(Boolean).join('\n\n'),
         };
         const basePayloadLang = buildPromptA(langInput, baseLanguageOverride);
-        const { artifact: htmlLang, repairsUsed: langRepairs } = await runRepairGate<string>({
-          label: `HTML (${lang})`,
-          maxRepairs: repairBudget,
-          basePayload: basePayloadLang,
-          produce: async (payload) => {
-            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale });
-            html = stripCodeFences(html);
-            html = wrapVideoFigures(html, input.name);
-            if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
-              html = this.applySpanishExpert3dReplacements(html);
-            }
-            html = wrapImageFigures(html);
-            return fixNumberFormatting(html);
-          },
-          validate: (html) => [
-            ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId }),
-            ...validateSpecsGrounding(html, input.specs, `HTML (${lang})`),
-          ],
-          withFeedback: appendRepairFeedback,
-          onAttempt: (n, c) =>
-            this.progressMessage.set(`Repairing ${lang} description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
-        });
-        if (langRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${langRepairs} repair(s) applied`);
-        const finalLangHtml = isConsumables ? trimConsumablesToLimit(htmlLang) : htmlLang;
-        this.content.update(c => ({
-          ...c,
-          translations: { ...c.translations, [lang]: finalLangHtml }
-        }));
+
+        // Per-locale isolation: a hard failure on ONE locale (exhausted-retry incomplete
+        // generation, a refusal) must not abort the whole run — mark it failed and move on
+        // to the next locale, instead of letting the exception propagate out of the loop.
+        try {
+          const { artifact: htmlLang, finalIssues: langIssues, repairsUsed: langRepairs, shippable: langShippable } = await runRepairGate<string>({
+            label: `HTML (${lang})`,
+            maxRepairs: repairBudget,
+            basePayload: basePayloadLang,
+            produce: async (payload) => {
+              let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale });
+              html = stripCodeFences(html);
+              html = wrapVideoFigures(html, input.name);
+              if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
+                html = this.applySpanishExpert3dReplacements(html);
+              }
+              html = wrapImageFigures(html);
+              return fixNumberFormatting(html);
+            },
+            validate: (html) => [
+              ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId }),
+              ...validateSpecsGrounding(html, input.specs, `HTML (${lang})`),
+            ],
+            withFeedback: appendRepairFeedback,
+            onAttempt: (n, c) =>
+              this.progressMessage.set(`Repairing ${lang} description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+          });
+          if (langRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${langRepairs} repair(s) applied`);
+          const finalLangHtml = isConsumables ? trimConsumablesToLimit(htmlLang) : htmlLang;
+          this.content.update(c => ({
+            ...c,
+            translations: { ...c.translations, [lang]: finalLangHtml }
+          }));
+          if (!langShippable) {
+            console.warn(`[generate] Locale ${lang} (${locale}) shipped with unresolved errors after repair; marked failed.`);
+            this.markLocaleFailed(locale);
+            this.validationIssues.update(issues => [...issues, ...langIssues.filter(i => i.severity === 'error')]);
+          }
+        } catch (e) {
+          const reason = this.describeGenerationFailure(e);
+          console.warn(`[generate] Locale ${lang} (${locale}) failed and was skipped: ${reason}`, e);
+          this.markLocaleFailed(locale);
+          this.validationIssues.update(issues => [...issues, {
+            severity: 'error', rule: 'locale-generation-failed',
+            detail: `Generation failed for ${lang} (${locale}): ${reason}`,
+            context: `HTML (${lang})`,
+          }]);
+          // Deliberately not added to translations — no artifact exists for a hard throw.
+        }
       }
 
       // Step 5 — FAQ artifacts (schema-free, for Journal theme native module fields).
@@ -311,7 +343,7 @@ export class ContentOrchestratorService {
         html = fixNumberFormatting(html);
         return html;
       };
-      const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
+      const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs, shippable: aShippable } = await runRepairGate<string>({
         label: 'HTML (uk-UA)',
         maxRepairs: repairBudget,
         basePayload: basePayloadA,
@@ -327,11 +359,16 @@ export class ContentOrchestratorService {
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
       const finalHtmlUa = isConsumables ? trimConsumablesToLimit(htmlUa) : htmlUa;
       this.content.update(c => ({ ...c, mainHtmlEn: finalHtmlUa }));
-      this.validationIssues.set(
-        isConsumables
-          ? validateGeneratedHtml(finalHtmlUa, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId })
-          : htmlIssues,
-      );
+      const finalHtmlUaIssues = isConsumables
+        ? validateGeneratedHtml(finalHtmlUa, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId })
+        : htmlIssues;
+      this.validationIssues.set(finalHtmlUaIssues);
+      const uaShippable = isConsumables ? !finalHtmlUaIssues.some(i => i.severity === 'error') : aShippable;
+      if (!uaShippable) {
+        // Single-locale path (no separate translations to isolate from) — flag it, same as
+        // generate()'s base-EN step; downstream steps still run so the run remains inspectable.
+        this.markLocaleFailed(UA_ISO);
+      }
 
       // Step 2 — Slug for ALL site languages, grounded in the uk-UA description. Localized name
       // is the single source of truth for H1 + Task B title core. Non-blocking: a slug failure
@@ -562,22 +599,71 @@ export class ContentOrchestratorService {
    * Runs deterministic acceptance-criteria checks across all generated artifacts and
    * stores the results in the validationIssues signal. Errors are also logged so they
    * are visible during development. Never throws — validation is advisory.
+   *
+   * Also runs the length-outlier check (src/utils/length-outlier.ts): a relative,
+   * cross-locale complement to output-validator's absolute per-templateId floor — a
+   * locale far shorter than the run's median gets marked failed even if it's not short
+   * enough in absolute terms to trip the floor on its own.
    */
   private runOutputValidation(storeName: string, productName?: string, templateId?: string, mainLocale?: string): void {
     const c = this.content();
+    const enIso = getStore(storeName).languages.find(l => l.startsWith('en-')) ?? 'en-GB';
+    const mainEntryLocale = mainLocale ?? enIso;
+
+    const entries: LengthEntry[] = [
+      { locale: mainEntryLocale, context: mainLocale ? `HTML (${mainLocale})` : 'HTML (base)', html: c.mainHtmlEn },
+      ...Object.entries(c.translations).map(([lang, html]) => ({
+        locale: taskLangToIso(lang, storeName),
+        context: `HTML (${lang})`,
+        html,
+      })),
+    ];
+
     const issues: ValidationIssue[] = [
-      ...validateGeneratedHtml(c.mainHtmlEn, mainLocale ? `HTML (${mainLocale})` : 'HTML (base)', productName, mainLocale, { templateId }),
-      ...Object.entries(c.translations).flatMap(([lang, html]) =>
-        validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId })
-      ),
+      ...entries.flatMap(e => validateGeneratedHtml(e.html, e.context, productName, e.locale, { templateId })),
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
     ];
+
+    const outliers = detectLengthOutliers(entries);
+    const failed = new Set(c.failedLocales ?? []);
+    outliers.forEach(o => {
+      failed.add(o.locale);
+      issues.push({
+        severity: 'error',
+        rule: 'length-outlier',
+        detail: `Rendered length (${strippedVisibleLength(o.html)} chars) is far below the run's median across locales — likely truncated or refused.`,
+        context: o.context,
+      });
+    });
+
     this.validationIssues.set(issues);
     const errors = issues.filter(i => i.severity === 'error');
     if (errors.length > 0) {
       console.warn(`[output-validator] ${errors.length} acceptance-criteria error(s):`, errors);
     }
+    if (failed.size > 0) {
+      this.content.update(cc => ({ ...cc, failedLocales: Array.from(failed) }));
+    }
+  }
+
+  /** Marks a locale as failed (dedup via Set) so the UI can block export / warn the user. */
+  private markLocaleFailed(locale: string): void {
+    this.content.update(c => ({
+      ...c,
+      failedLocales: Array.from(new Set([...(c.failedLocales ?? []), locale])),
+    }));
+  }
+
+  /** Human-readable reason for a caught generation failure, for logs and the validation issue detail. */
+  private describeGenerationFailure(e: unknown): string {
+    if (e instanceof IncompleteGenerationClientError) {
+      return `incomplete generation (stop_reason=${e.stopReason ?? 'unknown'})`;
+    }
+    if (e instanceof RefusalClientError) {
+      return `refused by model${e.category ? ` (${e.category})` : ''}`;
+    }
+    return e instanceof Error ? e.message : 'unknown error';
   }
 
   resetState() {
