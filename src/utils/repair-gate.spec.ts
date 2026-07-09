@@ -81,6 +81,7 @@ describe('runRepairGate', () => {
     expect(result.repairsUsed).toBe(0);
     expect(result.finalIssues).toEqual([]);
     expect(produce).toHaveBeenCalledTimes(1);
+    expect(result.shippable).toBe(true);
   });
 
   it('does NOT retry when validate returns only warnings', async () => {
@@ -100,15 +101,18 @@ describe('runRepairGate', () => {
     expect(produce).toHaveBeenCalledTimes(1);
     expect(result.repairsUsed).toBe(0);
     expect(result.finalIssues).toHaveLength(1);
+    // A warning-only result has zero errors, so it's shippable — shippable tracks
+    // errors specifically, not the presence of any issue at all.
+    expect(result.shippable).toBe(true);
   });
 
-  it('retries up to maxRepairs when errors persist, returns last artifact and finalIssues', async () => {
+  it('retries up to maxRepairs when errors persist, keeps the earliest attempt on a tie', async () => {
     const artifacts = [{ v: 1 }, { v: 2 }, { v: 3 }];
     const produce = vi.fn()
       .mockResolvedValueOnce(artifacts[0])
       .mockResolvedValueOnce(artifacts[1])
       .mockResolvedValueOnce(artifacts[2]);
-    const validate = vi.fn().mockReturnValue([makeIssue('seo-empty')]);
+    const validate = vi.fn().mockReturnValue([makeIssue('seo-empty')]); // 1 error every attempt — a tie
 
     const result = await runRepairGate({
       label: 'test',
@@ -121,8 +125,11 @@ describe('runRepairGate', () => {
 
     expect(produce).toHaveBeenCalledTimes(3); // initial + 2 repairs
     expect(result.repairsUsed).toBe(2);
-    expect(result.artifact).toBe(artifacts[2]);
+    // "strictly-better wins; ties keep earliest" (repair-gate.ts) — every attempt has the
+    // same 1-error count, so best never advances past the first one.
+    expect(result.artifact).toBe(artifacts[0]);
     expect(result.finalIssues).toHaveLength(1);
+    expect(result.shippable).toBe(false);
   });
 
   it('stops retrying as soon as all errors are resolved', async () => {
@@ -146,6 +153,7 @@ describe('runRepairGate', () => {
     expect(produce).toHaveBeenCalledTimes(2);
     expect(result.repairsUsed).toBe(1);
     expect(result.artifact).toBe(goodArtifact);
+    expect(result.shippable).toBe(true);
   });
 
   it('calls onAttempt with the attempt number and error count (not total issue count)', async () => {
@@ -236,6 +244,28 @@ describe('runRepairGate', () => {
 
     expect(produce).toHaveBeenCalledTimes(1);
     expect(result.repairsUsed).toBe(0);
+    expect(result.shippable).toBe(false);
+  });
+
+  it('shippable is false when repair strictly improves the error count but does not reach zero', async () => {
+    const produce = vi.fn()
+      .mockResolvedValueOnce({ v: 'two-errors' })
+      .mockResolvedValueOnce({ v: 'one-error' });
+    const validate = vi.fn()
+      .mockReturnValueOnce([makeIssue('rule-a'), makeIssue('rule-b')])
+      .mockReturnValueOnce([makeIssue('rule-a')]);
+
+    const result = await runRepairGate({
+      label: 'test',
+      maxRepairs: 1,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.finalIssues).toHaveLength(1);
+    expect(result.shippable).toBe(false);
   });
 
   it('propagates exceptions thrown by produce without catching them', async () => {
