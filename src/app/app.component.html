@@ -912,15 +912,19 @@
           {{ uiLabels().clearAll }}
         </button>
         @if ((appMode() === 'generator' || appMode() === 'ua-generator' || appMode() === 'seo-generator' || appMode() === 'slug-generator') && hasOutput()) {
-          <button 
+          <button
             (click)="downloadZip()"
-            class="flex-1 py-2 px-4 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-lg shadow-sm transition-transform active:scale-95 flex items-center justify-center gap-2 text-xs">
+            [disabled]="hasFailedLocales()"
+            [title]="hasFailedLocales() ? uiLabels().exportBlockedTooltip : ''"
+            class="flex-1 py-2 px-4 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-lg shadow-sm transition-transform active:scale-95 flex items-center justify-center gap-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-700">
             <i class="fa-solid fa-file-zipper"></i>
             ZIP
           </button>
-           <button 
+           <button
             (click)="downloadText()"
-            class="flex-1 py-2 px-4 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-lg shadow-sm transition-transform active:scale-95 flex items-center justify-center gap-2 text-xs">
+            [disabled]="hasFailedLocales()"
+            [title]="hasFailedLocales() ? uiLabels().exportBlockedTooltip : ''"
+            class="flex-1 py-2 px-4 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-lg shadow-sm transition-transform active:scale-95 flex items-center justify-center gap-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-700">
             <i class="fa-solid fa-file-lines"></i>
             TXT
           </button>
@@ -1186,6 +1190,17 @@
       </header>
 
       <div class="flex-1 overflow-y-auto p-8 relative">
+        @if (hasFailedLocales() && !isGenerating()) {
+          <div class="max-w-5xl mx-auto mb-6 rounded-xl border-2 p-4 text-sm bg-red-100 border-red-400 text-red-900 dark:bg-red-950/40 dark:border-red-700 dark:text-red-200">
+            <div class="flex items-center gap-2 font-bold mb-2">
+              <i class="fa-solid fa-ban"></i>
+              <span>{{ uiLabels().failedLocalesTitle }}</span>
+              <span class="font-normal opacity-80">— {{ failedLocales().join(', ') }}</span>
+            </div>
+            <p>{{ uiLabels().failedLocalesMessage }}</p>
+          </div>
+        }
+
         @if (validationIssues().length > 0 && !isGenerating()) {
           <div class="max-w-5xl mx-auto mb-6 rounded-xl border p-4 text-sm"
                [class]="validationErrorCount() > 0

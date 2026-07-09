@@ -170,6 +170,9 @@ const TRANSLATIONS = {
     validationTitle: 'Acceptance criteria check',
     validationErrorsLabel: 'error(s)',
     validationWarningsLabel: 'warning(s)',
+    failedLocalesTitle: 'Truncated or failed output',
+    failedLocalesMessage: 'One or more locales came back truncated, refused, or failed to generate. Export is blocked until you regenerate.',
+    exportBlockedTooltip: 'Export is blocked: this run has truncated, refused, or failed locales. Regenerate before exporting.',
   },
   uk: {
     appTitle: 'SEO Content',
@@ -319,6 +322,9 @@ const TRANSLATIONS = {
     validationTitle: 'Перевірка критеріїв якості',
     validationErrorsLabel: 'помилок',
     validationWarningsLabel: 'попереджень',
+    failedLocalesTitle: 'Обрізаний або невдалий вивід',
+    failedLocalesMessage: 'Одна або кілька локалей повернулися обрізаними, відхиленими моделлю або взагалі не згенерувалися. Експорт заблоковано до повторної генерації.',
+    exportBlockedTooltip: 'Експорт заблоковано: у цьому прогоні є обрізані, відхилені або невдалі локалі. Перегенеруйте перед експортом.',
   }
 };
 
@@ -434,12 +440,20 @@ export class AppComponent {
   validationErrorCount = computed(() => this.validationIssues().filter(i => i.severity === 'error').length);
   validationWarningCount = computed(() => this.validationIssues().filter(i => i.severity === 'warning').length);
 
+  // Locales that came back truncated/refused/failed (content-orchestrator.service.ts) —
+  // distinct from validationIssues: this is specifically about artifacts unfit to ship,
+  // not the full acceptance-criteria issue list. Blocks ZIP/TXT export while non-empty.
+  failedLocales = computed(() => this.content().failedLocales ?? []);
+  hasFailedLocales = computed(() => this.failedLocales().length > 0);
+
   // Per-tool output presence — each tool's layout reads ONLY its own slice.
   hasGeneratorOutput = computed(() => !!this.content().mainHtmlEn);
   hasSeoOutput       = computed(() => !!this.content().seoData);
   hasSlugOutput      = computed(() => !!this.content().slugData);
   // Aggregate for ZIP/TXT download enablement etc. Generator layout MUST use hasGeneratorOutput().
   hasOutput = computed(() => this.hasGeneratorOutput() || this.hasSeoOutput() || this.hasSlugOutput());
+  // Export is allowed only when there's something to export AND no locale is known-bad.
+  canExport = computed(() => this.hasOutput() && !this.hasFailedLocales());
 
   // The product-name signal that owns the currently active mode's input form.
   activeProductName = computed(() => {
@@ -946,8 +960,14 @@ export class AppComponent {
     }
   }
 
-  async downloadZip() { await downloadPackage(this.content(), this.activeProductName()); }
-  async downloadText() { downloadTextPackage(this.content(), this.activeProductName()); }
+  async downloadZip() {
+    if (!this.canExport()) return; // defense in depth — the button is already disabled for this state
+    await downloadPackage(this.content(), this.activeProductName());
+  }
+  async downloadText() {
+    if (!this.canExport()) return;
+    downloadTextPackage(this.content(), this.activeProductName());
+  }
 
   copyToClipboard(text: string, event?: Event) {
     navigator.clipboard.writeText(text);
