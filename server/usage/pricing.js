@@ -1,6 +1,7 @@
 // $ per 1M tokens, per Claude model. Update here when Anthropic changes prices —
 // past usage_log rows keep the cost computed at insert time, so this only affects new rows.
 const DEFAULT_PRICES = {
+  'claude-sonnet-5':   { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },
   'claude-sonnet-4-6': { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },
   'claude-sonnet-4-5': { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },
   'claude-sonnet-4':   { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },

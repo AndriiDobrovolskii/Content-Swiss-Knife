@@ -15,7 +15,7 @@ import {
 export class AnthropicProvider {
   constructor(apiKey, opts = {}) {
     this.client = new Anthropic({ apiKey });
-    this.thinkingModel = opts.thinkingModel || process.env.ANTHROPIC_MODEL_THINKING || 'claude-sonnet-4-6';
+    this.thinkingModel = opts.thinkingModel || process.env.ANTHROPIC_MODEL_THINKING || 'claude-sonnet-5';
     this.fastModel     = opts.fastModel     || process.env.ANTHROPIC_MODEL_FAST     || 'claude-haiku-4-5';
   }
 
