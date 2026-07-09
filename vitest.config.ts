@@ -16,8 +16,13 @@ export default defineConfig({
     // happy-dom is lighter than jsdom and sufficient for DOMParser used in output-validator.
     environment: 'happy-dom',
 
-    // Glob pattern: only *.spec.ts files under src/
-    include: ['src/**/*.spec.ts'],
+    // Glob pattern: *.spec.ts under src/ (Angular-adjacent, happy-dom), plus *.spec.js
+    // under server/ (Node, no DOM — see environmentMatchGlobs below).
+    include: ['src/**/*.spec.ts', 'server/**/*.spec.js'],
+
+    // server/ is plain Node (Express, no DOM); everything else keeps the default
+    // environment set above (happy-dom).
+    environmentMatchGlobs: [['server/**', 'node']],
 
     // Detailed output — show each test name, not just pass/fail summary.
     reporter: ['verbose'],
