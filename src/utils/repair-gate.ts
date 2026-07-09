@@ -15,6 +15,9 @@ export interface RepairGateResult<T> {
   artifact: T;
   finalIssues: ValidationIssue[];
   repairsUsed: number;
+  /** False when the best attempt still has an unresolved 'error'-severity issue after
+   *  exhausting maxRepairs — the artifact should not be shipped/exported as-is. */
+  shippable: boolean;
 }
 
 export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<RepairGateResult<T>> {
@@ -35,7 +38,7 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     if (e < best.errors) best = { artifact, issues, errors: e }; // strictly-better wins; ties keep earliest
   }
 
-  return { artifact: best.artifact, finalIssues: best.issues, repairsUsed };
+  return { artifact: best.artifact, finalIssues: best.issues, repairsUsed, shippable: best.errors === 0 };
 }
 
 export function appendRepairFeedback(
