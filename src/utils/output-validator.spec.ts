@@ -9,9 +9,9 @@
  * or changes severity from 'error' to 'warning', these tests catch it immediately
  * — before any real LLM call is made.
  *
- * COVERAGE TARGETS (14 rules total)
- *   HTML checks:   empty-output, duplicate-product-schema, no-faqpage-in-body, no-howto-in-body,
- *                  markdown-fence, br-spacing, unit-spacing, decimal-separator,
+ * COVERAGE TARGETS (15 rules total)
+ *   HTML checks:   empty-output, truncated-output, duplicate-product-schema, no-faqpage-in-body,
+ *                  no-howto-in-body, markdown-fence, br-spacing, unit-spacing, decimal-separator,
  *                  thousands-separator, latin-unit-in-cyrillic-text, es-forbidden-calque,
  *                  pt-forbidden-calque, lcp-image-lazy, image-not-lazy
  *   SEO checks:    seo-empty, meta-title-length, meta-description-length,
@@ -24,6 +24,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateGeneratedHtml,
   validateSeoMetadata,
+  strippedVisibleLength,
   type ValidationIssue,
 } from './output-validator';
 import type { SeoResponse } from '../app/types';
@@ -581,6 +582,93 @@ describe('validateGeneratedHtml — Rules: img-not-in-figure / figure-missing-fi
   it('flags a <figure> with an <img> but no <figcaption>', () => {
     const html = `<p>A</p><figure><img src="a.jpg" alt="A" decoding="async"></figure>`;
     expect(findRule(validateGeneratedHtml(html, 'test'), 'figure-missing-figcaption')?.severity).toBe('warning');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: truncated-output', () => {
+  // Representative filler prose, ~104 chars per sentence, used only to pad fixtures out
+  // to realistic rendered lengths without hand-typing thousands of characters.
+  const FULL_SENTENCE = 'This sentence is representative filler prose used to pad a fixture out to a realistic rendered length.';
+
+  function buildCompleteHtml(paragraphCount: number): string {
+    const paras = Array.from({ length: paragraphCount }, () => `<p>${FULL_SENTENCE}</p>`).join('');
+    return `<section>${paras}</section><hr>`;
+  }
+
+  it('does NOT flag a complete, properly closed artifact well above the length floor (mirrors the real full ~14067-char sample)', () => {
+    const html = buildCompleteHtml(140);
+    expect(strippedVisibleLength(html)).toBeGreaterThan(10000);
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'truncated-output');
+  });
+
+  it('flags a short mid-word Cyrillic cutoff (mirrors the real ~169-char uk-UA sample)', () => {
+    // Cut off after the first paragraph, mid-word, with no closing tags at all —
+    // exactly the reported bug's fingerprint.
+    const html = '<section><p>Цей проєктор ідеально підходить для виготовлення персоналіз';
+    expect(strippedVisibleLength(html)).toBeLessThan(250);
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'truncated-output')?.severity).toBe('error');
+  });
+
+  it('flags a mid-length cutoff well above the length floor via structural signals, not length alone (mirrors the real ~3572-char sample)', () => {
+    const body = Array.from({ length: 34 }, () => `<p>${FULL_SENTENCE}</p>`).join('');
+    const html = `<section>${body}<p>Cut off mid-sentence without a closing ta`;
+    expect(strippedVisibleLength(html)).toBeGreaterThan(2000); // proves it's not the length floor doing the work
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'truncated-output')?.severity).toBe('error');
+  });
+
+  it('flags a longer mid-word cutoff well above the length floor (mirrors the real ~4814-char pt-PT sample)', () => {
+    const body = Array.from({ length: 46 }, () => `<p>${FULL_SENTENCE}</p>`).join('');
+    const html = `<section>${body}<p>Interrompido a meio da palav`;
+    expect(strippedVisibleLength(html)).toBeGreaterThan(2000);
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'truncated-output')?.severity).toBe('error');
+  });
+
+  it('isolates the mid-cutoff signal: tags balanced and length above the floor, but a stray tail ends on a bare letter', () => {
+    const body = Array.from({ length: 30 }, () => `<p>${FULL_SENTENCE}</p>`).join('');
+    const html = `<section>${body}</section> trailing te`;
+    expect(strippedVisibleLength(html)).toBeGreaterThan(2000);
+    const issue = findRule(validateGeneratedHtml(html, 'test'), 'truncated-output');
+    expect(issue?.detail).toContain('ends mid-word/mid-tag');
+    expect(issue?.detail).not.toContain('tag count is unbalanced');
+    expect(issue?.detail).not.toContain('below the');
+  });
+
+  it('isolates the tag-imbalance signal: ends cleanly and length above the floor, but a <p> never closes', () => {
+    const body = Array.from({ length: 30 }, () => `<p>${FULL_SENTENCE}</p>`).join('');
+    const html = `<section>${body}<p>Extra paragraph that never gets its closing tag, but this sentence itself ends properly.</section>`;
+    expect(strippedVisibleLength(html)).toBeGreaterThan(2000);
+    const issue = findRule(validateGeneratedHtml(html, 'test'), 'truncated-output');
+    expect(issue?.detail).toContain('<p> tag count is unbalanced');
+    expect(issue?.detail).not.toContain('ends mid-word/mid-tag');
+    expect(issue?.detail).not.toContain('below the');
+  });
+
+  it('isolates the length-floor signal: properly closed and balanced, but far too short', () => {
+    const html = '<section><p>Short but complete.</p></section>';
+    const issue = findRule(validateGeneratedHtml(html, 'test'), 'truncated-output');
+    expect(issue?.detail).toContain('below the');
+    expect(issue?.detail).not.toContain('ends mid-word/mid-tag');
+    expect(issue?.detail).not.toContain('tag count is unbalanced');
+  });
+
+  it('does NOT flag a legitimately short, complete consumables-resin artifact under the default floor but above its own', () => {
+    const body = Array.from({ length: 8 }, () => `<p>${FULL_SENTENCE}</p>`).join('');
+    const html = `<section>${body}</section>`;
+    expect(strippedVisibleLength(html)).toBeGreaterThan(600);
+    expect(strippedVisibleLength(html)).toBeLessThan(2000);
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, undefined, { templateId: 'consumables-resin' }), 'truncated-output');
+  });
+
+  it('flags the same short artifact when templateId is NOT consumables-resin (default 2000-char floor applies)', () => {
+    const body = Array.from({ length: 8 }, () => `<p>${FULL_SENTENCE}</p>`).join('');
+    const html = `<section>${body}</section>`;
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'truncated-output')?.severity).toBe('error');
+  });
+
+  it('flags a consumables-resin artifact below even its own lower floor', () => {
+    const html = '<section><p>Too short for consumables too.</p></section>';
+    const issue = findRule(validateGeneratedHtml(html, 'test', undefined, undefined, { templateId: 'consumables-resin' }), 'truncated-output');
+    expect(issue?.severity).toBe('error');
   });
 });
 
