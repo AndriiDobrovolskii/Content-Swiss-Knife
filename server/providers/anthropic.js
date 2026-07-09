@@ -32,7 +32,7 @@ export class AnthropicProvider {
         system: this.#toSystem(systemBlocks),
         messages: [{ role: 'user', content: userContent }],
       };
-      if (isCreative) config.thinking = { type: 'enabled', budget_tokens: 6000 };
+      if (isCreative) config.thinking = { type: 'adaptive' };
 
       const hasCacheBlocks = systemBlocks.some(b => b?.cache);
       const stream = hasCacheBlocks
