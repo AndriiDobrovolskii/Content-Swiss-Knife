@@ -22,6 +22,15 @@ export interface ValidationIssue {
 const MAX_META_TITLE = 55;
 const MAX_META_DESCRIPTION = 155;
 
+// Rendered-length floor below which output is presumed truncated (max_tokens/stop cutoff),
+// not merely a legitimately short description. Full Schema v3.0 templates run into the
+// thousands of visible characters; the much shorter consumables-resin schema gets its own,
+// lower floor so a genuinely brief consumables listing isn't misflagged.
+const TRUNCATED_OUTPUT_MIN_CHARS = 2000;
+const TRUNCATED_OUTPUT_MIN_CHARS_CONSUMABLES = 600;
+
+const TRUNCATION_BLOCK_TAGS = ['p', 'section', 'table', 'ul', 'li'];
+
 const COMMA_DECIMAL_LOCALES = new Set(['uk-UA', 'ru-UA', 'pl-PL', 'de-DE', 'es-ES', 'pt-PT']);
 const NBSP_THOUSANDS_LOCALES = new Set(['uk-UA', 'ru-UA', 'pl-PL', 'pt-PT']); // de-DE/es-ES allow dot OR space
 
@@ -183,6 +192,68 @@ function charLength(s: string): number {
   return Array.from(s).length;
 }
 
+/**
+ * A max_tokens/stop cutoff always lands mid-stream — the response ends inside an
+ * unterminated opening tag, or on a bare Latin/Cyrillic letter with no closing
+ * punctuation or tag after it. A complete Schema v3.0/consumables artifact always ends
+ * with a closing tag (`</section>`, `<hr/>`, etc.), so either signal is a strong tell.
+ */
+function isMidCutoff(trimmedHtml: string): boolean {
+  if (/<[a-zA-Z][^<>]*$/.test(trimmedHtml)) return true; // unterminated "<tag ..." at the very end
+  const lastChar = trimmedHtml.slice(-1);
+  return /[A-Za-zА-Яа-яЁёІіЇїЄєҐґ]/.test(lastChar);
+}
+
+/** Open vs. close tag counts for a single tag name. */
+function countTag(html: string, tag: string): { openCount: number; closeCount: number } {
+  const openCount = (html.match(new RegExp(`<${tag}(\\s[^>]*)?>`, 'gi')) ?? []).length;
+  const closeCount = (html.match(new RegExp(`</${tag}\\s*>`, 'gi')) ?? []).length;
+  return { openCount, closeCount };
+}
+
+/**
+ * Detects output truncated by a max_tokens/stop cutoff — the failure mode where the
+ * model's response is cut off mid-stream but returned (and previously shipped) as if it
+ * were a complete artifact. Any one of three independent signals is sufficient: a
+ * mid-word/mid-tag cutoff, an unbalanced block-tag count (either direction — a cutoff can
+ * leave a dangling open tag, or a repair/normalization pass can leave a phantom extra
+ * close tag), or a rendered length below the floor for this artifact's templateId.
+ */
+function checkTruncatedOutput(html: string, options: { templateId?: string } | undefined, issues: ValidationIssue[], context: string): void {
+  const trimmed = html.trim();
+  if (!trimmed) return; // handled separately by the empty-output rule
+
+  const reasons: string[] = [];
+
+  if (isMidCutoff(trimmed)) {
+    reasons.push('output ends mid-word/mid-tag with no closing punctuation or tag');
+  }
+
+  for (const tag of TRUNCATION_BLOCK_TAGS) {
+    const { openCount, closeCount } = countTag(trimmed, tag);
+    if (openCount !== closeCount) {
+      reasons.push(`<${tag}> tag count is unbalanced (${openCount} open vs ${closeCount} close)`);
+    }
+  }
+
+  const floor = options?.templateId === 'consumables-resin'
+    ? TRUNCATED_OUTPUT_MIN_CHARS_CONSUMABLES
+    : TRUNCATED_OUTPUT_MIN_CHARS;
+  const renderedLength = strippedVisibleLength(trimmed);
+  if (renderedLength < floor) {
+    reasons.push(`rendered length is ${renderedLength} chars, below the ${floor}-char floor for this template`);
+  }
+
+  if (reasons.length > 0) {
+    issues.push({
+      severity: 'error',
+      rule: 'truncated-output',
+      detail: `Output appears truncated (likely a max_tokens/stop cutoff): ${reasons.join('; ')}.`,
+      context,
+    });
+  }
+}
+
 // ── Consumables char-limit helpers ─────────────────────────────────────────
 
 /** Hard limit on visible text for consumable products (templateId = 'consumables-resin'). */
@@ -246,6 +317,9 @@ export function validateGeneratedHtml(
     issues.push({ severity: 'error', rule: 'empty-output', detail: 'Generated HTML is empty.', context });
     return issues;
   }
+
+  // CRITICAL: a max_tokens/stop cutoff must never ship as if it were complete.
+  checkTruncatedOutput(html, options, issues, context);
 
   // CONSUMABLES: hard char-count gate (visible text only, HTML stripped).
   if (options?.templateId === 'consumables-resin') {
