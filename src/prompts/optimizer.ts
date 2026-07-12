@@ -6,50 +6,60 @@ import { PromptPayload } from '../prompt-core/payload';
 // target shape for the rewrite, instead of hardcoding a separate list of
 // section names here — the Generator and Optimizer must never drift apart on
 // what a "correct" description looks like. Only the clauses that don't fit a
-// rewrite-of-existing-HTML task (image sourcing, FAQ/HowTo placement) are
-// explicitly overridden below.
+// rewrite-of-existing-HTML task (image sourcing, FAQ/HowTo routing) are
+// explicitly overridden below. Section references match the rebuilt master
+// (2026-07-11): [OUTPUT CONTRACT], [MICRODATA ARCHITECTURE], [ROUTING].
 
 const TASK_OPTIMIZE_INSTRUCTION =
   `TASK OPTIMIZE — REWRITE AN EXISTING HTML DESCRIPTION
-OUTPUT: pure HTML body only (no JSON, no Markdown, no code fences, no explanations).
-This is a REWRITE task, not fresh generation: restructure [INPUT HTML] below into the Schema v3.0
-§1–§9 order already defined in [CONTENT STRUCTURE] above (Hook → Killer Specs + Key Benefits →
-Functionality → Applications → Compatibility [conditional] → Package Contents [conditional] →
-Technical Specifications → Supplemental → Commercial Closing/CTA). Do not invent new section names —
-follow that schema exactly, including the §2a Killer Specs highlight table (3–4 rows, Specification /
-Value / Why it matters, localized headers) and the §7 full Technical Specifications section.
 
-HARD ANTI-FABRICATION CONSTRAINT: use only facts, specs, and images already present in [INPUT HTML].
-Never invent new specs, numbers, or claims. §7's COMPLETENESS rule applies here too — count every spec
-row in the input first and reproduce every one of them in the final Technical Specifications section;
-the §2a highlight table is additive (a curated preview), never a replacement for the full table.
+OUTPUT CONTRACT: emit exactly one artifact — the rewritten HTML body. The first character of your
+output is the opening "<" of the §1 hook paragraph; the last character is the final closing tag of
+§9. Global hard cap: 32,000 characters including all spaces, text, and HTML tags. Where a preamble,
+explanation, JSON wrapper, or Markdown fence would appear, write the HTML itself.
 
-OVERRIDE — [IMAGE HANDLING] "ignore source images / manifest-only": does not apply to this task.
-[INPUT HTML] already contains real <img> URLs (there is no separate image manifest here) — keep every
-<img src> found in the input verbatim, never invent or drop one. Rewrap each per FIGURE FORMAT and
-PLACEMENT above, and — unlike a purely structural cleanup — actively author a new, context-aware
-<figcaption> for every image (with a <b> lead-in distinct from the alt text); never leave a <figure>
-without a <figcaption> in this task's output.
+SCOPE: this is a REWRITE task: restructure [INPUT HTML] below into the Schema v3.0 §1–§9 order
+already defined in [CONTENT STRUCTURE] above (Hook → Killer Specs + Key Benefits → Functionality →
+Applications → Compatibility [conditional] → Package Contents [conditional] → Technical
+Specifications → Commercial Closing/CTA), reusing that schema's exact section names, heading
+templates, and table formats — including the §2a Killer Specs highlight table (3–4 rows,
+Specification / Value / Why it matters, localized headers) and the full §7 Technical
+Specifications section.
 
-OVERRIDE — §8 "Supplemental FAQ/HowTo MUST NOT appear in the body": does not apply to this task, which
-has no separate FAQ/HowTo artifact pipeline. If [INPUT HTML] already contains HowTo or FAQ content
-(Schema.org-wrapped or plain), keep it in the body, flattened to plain heading/paragraph structure with
-no itemscope/itemtype/itemprop wrappers — do not delete it.
+FACT SOURCE (HARD CONSTRAINT): build every fact, spec, number, claim, and image exclusively from
+[INPUT HTML]. Where a gap invites a plausible-sounding addition, keep the gap and write only
+source-confirmed content. §7 COMPLETENESS applies here too — count every spec row in the input
+first and reproduce exactly that many rows in the final Technical Specifications section; keep the
+§2a highlight table additive (a curated 3–4-row preview drawn from those same rows) so the full §7
+table always ships complete alongside it.
+
+OVERRIDE — [IMAGE HANDLING] source of truth: for this task, [INPUT HTML] itself is the image
+manifest. Keep every <img src> found in the input verbatim — the output contains exactly as many
+<img> elements as the input, with byte-identical URLs. Rewrap each per FIGURE FORMAT and PLACEMENT
+above, and author a new, context-aware <figcaption> for every image (with a <b> lead-in distinct
+from the alt text) so that 100% of <figure> blocks in the output carry a <figcaption>.
+
+OVERRIDE — [ROUTING FAQ/HowTo]: this task has no separate FAQ/HowTo artifact pipeline. Keep FAQ or
+HowTo content found in [INPUT HTML] (Schema.org-wrapped or plain) in the body, flattened to plain
+heading/paragraph structure per [MICRODATA ARCHITECTURE]: strip itemscope/itemtype/itemprop
+attributes, keep every question, answer, and step text.
 
 PHASE 1 — STRUCTURAL CLEANUP (apply before restructuring):
-- Remove <noscript> tags and content; unwrap <div class="wpb-content-wrapper">.
-- Smart image extraction: <a href…><img …></a> → keep only <img …>; <picture>…<img …>…</picture> →
-  keep only <img …>; WordPress captions → extract <img> + <p>Caption text</p>.
-- Heading hygiene: remove <strong>, <b>, <span> inside <h2>/<h3>/<h4> but keep the text.
-- No Schema.org microdata (itemscope, itemtype, itemprop) and no Bootstrap table classes anywhere in
-  the output — plain tables only, matching §7's table format.
+- Delete <noscript> blocks with their content; unwrap <div class="wpb-content-wrapper"> keeping
+  its children.
+- Extract images from wrappers: <a href…><img …></a> → keep only <img …>;
+  <picture>…<img …>…</picture> → keep only <img …>; WordPress caption blocks → <img> +
+  <p>Caption text</p>.
+- Heading hygiene: inside <h2>/<h3>/<h4>, unwrap <strong>/<b>/<span> keeping the text.
+- Emit every table and element schema-free and framework-free per [MICRODATA ARCHITECTURE],
+  matching §7's plain-table format: where a Bootstrap table class or itemscope/itemtype/itemprop
+  attribute appears in the input, strip the attribute and keep the element.
 
-LENGTH COMPRESSION & LIMIT: Your absolute hard limit for the final output is 32,000 characters
-(including all spaces and HTML tags). If the input HTML is extremely long and approaches or exceeds
-this limit, you MUST organically condense and shorten the description. How to condense: summarize
-wordy narrative paragraphs, merge repetitive marketing claims, and keep bullet points punchy. What NOT
-to condense: NEVER remove, merge, or alter the actual technical specifications, numbers, or rows in the
-spec tables to save space. Preserve the facts, but compress the prose.`;
+LENGTH COMPRESSION: plan against the 32,000-character cap before writing. When the input HTML
+approaches or exceeds the cap, condense organically: summarize wordy narrative paragraphs, merge
+repetitive marketing claims into one factual sentence each, and keep bullet points punchy.
+Compression happens in narrative prose only — every technical specification, number, unit, and
+spec-table row carries into §7 byte-identical, at full count.`;
 
 export function buildOptimizerPrompt(htmlInput: string, productName = ''): PromptPayload {
   const contextInstruction = productName ? `\n[Product Name]: ${productName}` : '';

@@ -13,34 +13,38 @@ import { UNIT_LOCALIZATION_RULES, TRANSLATOR_LANGUAGES } from '../prompt-core/co
  */
 
 /** Shared role/format contract for every target language. Sits in system block [0] (cached). */
-const TRANSLATOR_SYSTEM_BLOCK = `You are a professional translator. Your ONLY job is to translate the
-human-readable text of the input into the requested target language, faithfully and idiomatically,
-using that language's correct spelling and orthography.
+const TRANSLATOR_SYSTEM_BLOCK = `You are a professional translator. Translate the human-readable text
+of the input into the requested target language, faithfully and idiomatically, using that
+language's correct spelling and orthography.
+
+[OUTPUT CONTRACT]
+Emit exactly one artifact: the translated text/HTML. The first character of your output is the
+first character of the translation itself (for HTML input — the same opening tag the input starts
+with); the last character mirrors the input's final character. Where an introduction, explanation,
+commentary, or Markdown fence (\`\`\`html, \`\`\`xml) would appear, write the translation itself.
 
 [TRANSLATE ONLY — PRESERVE ALL CODE/MARKUP]
-- If the input contains HTML/markup or any code, translate ONLY the human-readable text: visible text
-  nodes, and the values of alt="", title="", and <figcaption>. Preserve EVERYTHING else byte-identical
-  — every tag, attribute, class, id, URL/href, inline style, and code construct. Do not wrap, reorder,
-  add, remove, merge, or split any element.
-- If the input is plain text with no markup, output plain translated text with NO added markup — even
-  if a phrase reads like a button or link label, never wrap it in a tag.
+- For input containing HTML/markup or any code: translate exactly three kinds of strings — visible
+  text nodes, the values of alt="" and title="", and <figcaption> content. Carry everything else
+  over byte-identical: every tag, attribute, class, id, URL/href, inline style, and code
+  construct, in the input's element order and count (elements in = elements out — each element
+  keeps its position, wrapper, and boundaries).
+- For plain-text input with no markup: output plain translated text with the same paragraph
+  structure — a phrase that reads like a button or link label stays plain text.
 
-[FIDELITY — TRANSLATE, DO NOT LOCALIZE OR REWRITE]
-- Do NOT invent, substitute, or remove any fact. Brand names, model names, addresses, emails, phone
-  numbers, prices, and country/city references all carry over exactly. A country name is TRANSLATED as
-  a word (e.g. "Spain" → "España" / "Espanha") but is NEVER changed to a different country.
-- Do NOT alter any numbers, facts, or data values, EXCEPT for adapting unit abbreviations and the
-  decimal/thousands separator per the [UNIT LOCALIZATION] rules. The digit sequence itself never
-  changes (e.g. "2.5 mm" → "2,5 мм", never "2,6 мм").
+[FIDELITY — TRANSLATE 1:1]
+- Carry every fact over exactly: brand names, model names, addresses, emails, phone numbers,
+  prices, and country/city references. Translate a country name as a word ("Spain" → "España" /
+  "Espanha") — the referent country stays the same one.
+- Keep every digit sequence byte-identical; adapt ONLY unit abbreviations and the
+  decimal/thousands separator per the [UNIT LOCALIZATION] rules ("2.5 mm" → "2,5 мм" — the same
+  digits 2 and 5 in the same order, localized notation).
 
 [SEPARATOR / UNIT SCOPE — CRITICAL]
-Apply decimal-comma and unit localization ONLY to physical measurements, quantities, and currency
-(e.g. "2.5 mm" → "2,5 мм"). Leave dots UNTOUCHED in software/firmware versions (v1.1, macOS 10.15),
-technical standards (802.11), IP addresses, model numbers, and file names.
-
-[OUTPUT FORMAT]
-Output ONLY the translated text/HTML. Do NOT wrap the response in markdown code fences (\`\`\`html,
-\`\`\`xml, \`\`\`). Do NOT add any introductory text, explanation, or commentary.`;
+Apply decimal-comma and unit localization to exactly three value classes: physical measurements,
+quantities, and currency (e.g. "2.5 mm" → "2,5 мм"). Keep the source dot in software/firmware
+versions (v1.1, macOS 10.15), technical standards (802.11), IP addresses, model numbers, and
+file names.`;
 
 /** Per-language orthography/spelling guidance ONLY — no tone-of-voice, no market localization. */
 interface LangConfig {
@@ -57,27 +61,27 @@ interface LangConfig {
 const LANG_CONFIG: Record<string, LangConfig> = {
   'english (en-gb)': {
     name: 'English (British / European, en-GB)',
-    notes: '- STRICTLY British/European English spelling: "colour", "customise", "optimise", "fibre", "centre". Never American spelling.\n- Metric units (mm, °C, kg). Decimal dot.',
+    notes: '- British/European English spelling throughout: "colour", "customise", "optimise", "fibre", "centre" (replaces American "color", "customize", "optimize", "fiber", "center").\n- Metric units (mm, °C, kg). Decimal dot.',
   },
   'american english (en-us)': {
     name: 'American English (en-US)',
-    notes: '- STRICTLY American English spelling: "color", "customize", "optimize", "fiber", "center". Never British spelling.\n- Decimal dot.',
+    notes: '- American English spelling throughout: "color", "customize", "optimize", "fiber", "center" (replaces British "colour", "customise", "optimise", "fibre", "centre").\n- Decimal dot.',
   },
   'american spanish (es-us)': {
     name: 'US / Latin American Spanish (es-US)',
-    notes: '- Latin American Spanish spelling and vocabulary ("computadora", "video", "archivo"). Not Castilian.\n- Decimal dot is common in US Spanish; keep the source separator unless it is a measurement — then follow [UNIT LOCALIZATION].',
+    notes: '- Latin American Spanish spelling and vocabulary throughout: "computadora", "video", "archivo" (replaces Castilian "ordenador", "vídeo", "fichero").\n- Decimal dot is common in US Spanish; keep the source separator unless it is a measurement — then follow [UNIT LOCALIZATION].',
   },
   'european english (en-es)': {
     name: 'European English (en-ES)',
-    notes: '- British/European English spelling: "colour", "optimise", "fibre". Never American spelling.\n- Metric units (mm, °C, kg). Decimal dot.',
+    notes: '- British/European English spelling throughout: "colour", "optimise", "fibre" (replaces American "color", "optimize", "fiber").\n- Metric units (mm, °C, kg). Decimal dot.',
   },
   'spanish (es-es)': {
     name: 'Castilian Spanish (es-ES)',
-    notes: '- Castilian Spanish spelling and vocabulary: "ordenador" (not "computadora"), "vídeo" (accented), "fichero"/"archivo", "móvil".\n- Decimal comma (see [UNIT LOCALIZATION]).',
+    notes: '- Castilian Spanish spelling and vocabulary throughout: "ordenador" (replaces "computadora"), "vídeo" (accented), "fichero"/"archivo", "móvil".\n- Decimal comma (see [UNIT LOCALIZATION]).',
   },
   'portuguese (pt-pt)': {
     name: 'European Portuguese (pt-PT)',
-    notes: '- European Portuguese ONLY, never Brazilian: "ficheiro" (not "arquivo"), "ecrã" (not "tela"), "utilizador" (not "usuário"), "rato" (not "mouse").\n- Decimal comma (see [UNIT LOCALIZATION]).',
+    notes: '- European Portuguese throughout: "ficheiro" (replaces Brazilian "arquivo"), "ecrã" (replaces "tela"), "utilizador" (replaces "usuário"), "rato" (replaces "mouse").\n- Decimal comma (see [UNIT LOCALIZATION]).',
   },
   'polish': {
     name: 'Polish (pl-PL)',
@@ -89,11 +93,11 @@ const LANG_CONFIG: Record<string, LangConfig> = {
   },
   'ukrainian': {
     name: 'Ukrainian (uk-UA)',
-    notes: '- Standard normative Ukrainian spelling.\n- Anti-anglicism: "друк" not "прінт", "ПЗ" not "софт". Established tech terms may stay; material trade names (e.g. "PA12", "Nylon 12") stay verbatim in Latin.\n- Cyrillize units and use decimal comma (see [UNIT LOCALIZATION]).',
+    notes: '- Standard normative Ukrainian spelling.\n- Native technical vocabulary: "друк" (replaces "прінт"), "ПЗ" (replaces "софт"). Established tech terms may stay; material trade names (e.g. "PA12", "Nylon 12") stay verbatim in Latin.\n- Cyrillize units and use decimal comma (see [UNIT LOCALIZATION]).',
   },
   'russian': {
     name: 'russian (російська, ru)',
-    notes: '- Standard normative russian spelling.\n- Anti-anglicism: prefer native terms over transliterated English where a normative term exists.\n- Cyrillize units and use decimal comma (see [UNIT LOCALIZATION]).',
+    notes: '- Standard normative russian spelling.\n- Native terms over transliterated English wherever a normative term exists (the native term replaces the anglicism).\n- Cyrillize units and use decimal comma (see [UNIT LOCALIZATION]).',
   },
 };
 
