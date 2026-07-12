@@ -147,8 +147,12 @@ LLM_PROVIDER=anthropic
 
 # --- Anthropic (primary) ---
 ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL_THINKING=claude-sonnet-4-5   # Task A (creative/thinking)
+ANTHROPIC_MODEL_THINKING=claude-sonnet-5     # Task A (creative/thinking)
 ANTHROPIC_MODEL_FAST=claude-haiku-4-5        # Tasks B / C (structured + translations)
+
+# Thinking effort for the creative pass (Sonnet 5 only): low | medium | high | xhigh | max
+# Default 'medium' ≈ Sonnet 4.6 at high. Raise to 'high' for hard products; costs more thinking tokens.
+ANTHROPIC_THINKING_EFFORT=medium
 
 # --- OpenAI (used for cost-effective testing) ---
 OPENAI_API_KEY=sk-...

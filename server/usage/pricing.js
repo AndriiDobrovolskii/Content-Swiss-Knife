@@ -1,6 +1,11 @@
 // $ per 1M tokens, per Claude model. Update here when Anthropic changes prices —
 // past usage_log rows keep the cost computed at insert time, so this only affects new rows.
 const DEFAULT_PRICES = {
+  // Claude Sonnet 5 — INTRODUCTORY pricing, in effect through 2026-08-31.
+  // TODO(2026-09-01): switch to standard rates → { in: 3.00, out: 15.00, cw: 6.00, cr: 0.30 }
+  // cw is 2x base input because this codebase writes 1h ephemeral caches (ttl: '1h'),
+  // not 5m caches (which would be 1.25x). cr is 0.1x base input.
+  'claude-sonnet-5':   { in: 2.00, out: 10.00, cw: 4.00, cr: 0.20 },
   'claude-sonnet-4-6': { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },
   'claude-sonnet-4-5': { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },
   'claude-sonnet-4':   { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },

@@ -7,8 +7,11 @@ import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
 export class AnthropicProvider {
   constructor(apiKey, opts = {}) {
     this.client = new Anthropic({ apiKey });
-    this.thinkingModel = opts.thinkingModel || process.env.ANTHROPIC_MODEL_THINKING || 'claude-sonnet-4-6';
+    this.thinkingModel = opts.thinkingModel || process.env.ANTHROPIC_MODEL_THINKING || 'claude-sonnet-5';
     this.fastModel     = opts.fastModel     || process.env.ANTHROPIC_MODEL_FAST     || 'claude-haiku-4-5';
+    // Sonnet 5 defaults to effort 'high' (~= Sonnet 4.6 at 'max'). We pin 'medium',
+    // which is the closest behavioral match to the previous Sonnet 4.6 @ high pass.
+    this.thinkingEffort = opts.thinkingEffort || process.env.ANTHROPIC_THINKING_EFFORT || 'medium';
   }
 
   // Deep Thinking ON → mode 'creative'/'creative-json' → Sonnet. OFF → Haiku.
@@ -27,18 +30,36 @@ export class AnthropicProvider {
     return withRetry(async () => {
       const isCreative = mode === 'creative' || mode === 'creative-json';
       const config = {
+        // Sonnet 5's tokenizer emits ~30% more tokens for the same text, and max_tokens
+        // caps thinking + response text combined. 64000 leaves headroom for both.
+        // Non-creative modes route to Haiku (old tokenizer, no thinking) — unchanged.
         model: this.#modelFor(mode),
-        max_tokens: isCreative ? 32000 : 16000,
+        max_tokens: isCreative ? 64000 : 16000,
         system: this.#toSystem(systemBlocks),
         messages: [{ role: 'user', content: userContent }],
       };
-      if (isCreative) config.thinking = { type: 'adaptive' };
+      if (isCreative) {
+        config.thinking = { type: 'adaptive' };
+        config.output_config = { effort: this.thinkingEffort };
+      }
 
       const hasCacheBlocks = systemBlocks.some(b => b?.cache);
       const stream = hasCacheBlocks
         ? this.client.beta.messages.stream({ betas: ['extended-cache-ttl-2025-04-11'], ...config })
         : this.client.messages.stream(config);
       const response = await stream.finalMessage();
+
+      // Fail loudly. A truncated or refused response must never reach the validator
+      // or the repair gate as if it were a valid artifact.
+      if (response.stop_reason === 'max_tokens') {
+        throw new Error(
+          `[anthropic] output truncated: hit max_tokens (${config.max_tokens}) on ${config.model} / ${mode}. ` +
+          `Raise max_tokens or lower output_config.effort.`
+        );
+      }
+      if (response.stop_reason === 'refusal') {
+        throw new Error(`[anthropic] request refused by safety classifier on ${config.model} / ${mode}.`);
+      }
 
       const u = response.usage || {};
       console.log('[anthropic]', config.model, mode,
@@ -64,6 +85,10 @@ export class AnthropicProvider {
       const response = await this.client.messages.create({
         model: useThinking ? this.thinkingModel : this.fastModel,
         max_tokens: 300,
+        // Sonnet 5 runs adaptive thinking when `thinking` is omitted, and max_tokens caps
+        // thinking + text together. At 300 tokens that starves the answer. Alt-text needs
+        // no reasoning — pin it off. No-op on the Haiku path.
+        thinking: { type: 'disabled' },
         messages: [{
           role: 'user',
           content: [

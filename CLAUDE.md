@@ -34,7 +34,7 @@ The detailed migration plan is in `REFACTOR_PLAN.md`. This file holds operationa
 ## Stack
 
 - Frontend: Angular (standalone components, signals), TypeScript.
-- LLM providers: OpenAI (`gpt-4o`, primary during development) → Anthropic (`claude-sonnet-4-6`, target). Gemini — optional fallback.
+- LLM providers: OpenAI (`gpt-4o`, primary during development) → Anthropic (`claude-sonnet-5`, target). Gemini — optional fallback.
 - Retrieval/grounding: Serper.dev (`/search`) + page fetch. **Not** Google Grounding.
 - Build: Vite. Secrets go through a local backend proxy, never into the browser bundle.
 
