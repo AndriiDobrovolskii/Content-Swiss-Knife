@@ -100,7 +100,7 @@ function checkExpert3dSpanishCalques(html: string, locale: string | undefined, i
  */
 const PT_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
   { re: /\barquivos?\b/i, fix: 'ficheiro(s) (pt-BR calque)' },
-  { re: /\btelas?\b/i, fix: 'ecrã(s) (pt-BR calque)' },
+  { re: /\btelas?\b/i, fix: 'ecrã(s) — screen sense; "lona" — canvas/print-material sense (pt-BR calque)' },
   { re: /\busu[aá]rios?\b/i, fix: 'utilizador(es) (pt-BR calque)' },
   { re: /\bperformance\b/i, fix: 'desempenho' },
   { re: /\bde ponta a ponta\b/i, fix: 'integral / de princípio a fim' },
@@ -234,12 +234,64 @@ function buildProductNamePattern(name: string): RegExp {
  *                    separator check. Must be the real locale, not the internal task label —
  *                    "es-ES" (comma) and "es-US"/"es-MX" (dot) need different expectations.
  */
+/**
+ * IMAGE MANIFEST COVERAGE: every uploaded (manifest) image must appear in the generated HTML
+ * exactly once, and every <img> src must resolve to a manifest filename. Severity 'error' —
+ * a dropped image silently loses uploaded content (9/14-images regression, M1 Ultra
+ * SafetyPro, 2026-07-15), and an invented filename 404s on the storefront. Errors feed the
+ * repair gate, whose feedback tells the model exactly which figures to add or fix. Regex-based
+ * (no DOMParser) so it runs in both browser and node test environments.
+ */
+function checkImageManifestCoverage(
+  html: string,
+  manifest: ReadonlyArray<{ urlFilename: string }> | undefined,
+  issues: ValidationIssue[],
+  context: string,
+): void {
+  if (!manifest || manifest.length === 0) return;
+  const srcFilenames = Array.from(html.matchAll(/<img\b[^>]*?\bsrc\s*=\s*"([^"]+)"/gi))
+    .map(m => (m[1].split('/').pop() ?? m[1]).trim());
+
+  for (const { urlFilename } of manifest) {
+    const count = srcFilenames.filter(f => f === urlFilename).length;
+    if (count === 0) {
+      issues.push({
+        severity: 'error',
+        rule: 'image-manifest-missing',
+        detail: `Manifest image "${urlFilename}" is absent from the HTML. Insert its <figure> per [IMAGE HANDLING]: ` +
+          `a substantive lead-in <p> directly above it, never adjacent to another <figure>, filename verbatim.`,
+        context,
+      });
+    } else if (count > 1) {
+      issues.push({
+        severity: 'error',
+        rule: 'image-manifest-duplicate',
+        detail: `Manifest image "${urlFilename}" appears ${count} times — each manifest image must appear exactly once.`,
+        context,
+      });
+    }
+  }
+
+  const known = new Set(manifest.map(m => m.urlFilename));
+  srcFilenames.forEach((f, i) => {
+    if (!known.has(f)) {
+      issues.push({
+        severity: 'error',
+        rule: 'image-unknown-src',
+        detail: `<img> #${i + 1} uses filename "${f}" that is NOT in the [IMAGE MANIFEST] — filenames must be copied ` +
+          `verbatim from the manifest; replace it with the intended manifest filename (never invent or rename files).`,
+        context,
+      });
+    }
+  });
+}
+
 export function validateGeneratedHtml(
   html: string,
   context: string,
   productName?: string,
   locale?: string,
-  options?: { templateId?: string },
+  options?: { templateId?: string; imageManifest?: ReadonlyArray<{ urlFilename: string }> },
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!html || !html.trim()) {
@@ -362,6 +414,9 @@ export function validateGeneratedHtml(
   // Uncyrillized Latin units (uk/ru) — runs on the name/URL-stripped variant: units inside a
   // brand/model suffix stay Latin by design ([PRODUCT NAME LOCALIZATION] keeps model codes as-is).
   checkCyrillicUnitLocalization(htmlForUnitCheck, locale, issues, context);
+
+  // Every manifest image present exactly once; no invented filenames.
+  checkImageManifestCoverage(html, options?.imageManifest, issues, context);
 
   // Image lazy-loading rule: first <img> must NOT be lazy; every subsequent one must be.
   try {

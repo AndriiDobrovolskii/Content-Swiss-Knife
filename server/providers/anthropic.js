@@ -8,7 +8,7 @@ export class AnthropicProvider {
   constructor(apiKey, opts = {}) {
     this.client = new Anthropic({ apiKey });
     this.thinkingModel = opts.thinkingModel || process.env.ANTHROPIC_MODEL_THINKING || 'claude-sonnet-5';
-    this.fastModel     = opts.fastModel     || process.env.ANTHROPIC_MODEL_FAST     || 'claude-haiku-4-5';
+    this.fastModel = opts.fastModel || process.env.ANTHROPIC_MODEL_FAST || 'claude-haiku-4-5';
     // Sonnet 5 defaults to effort 'high' (~= Sonnet 4.6 at 'max'). We pin 'medium',
     // which is the closest behavioral match to the previous Sonnet 4.6 @ high pass.
     this.thinkingEffort = opts.thinkingEffort || process.env.ANTHROPIC_THINKING_EFFORT || 'medium';
@@ -82,13 +82,16 @@ export class AnthropicProvider {
 
   async analyzeImage(base64Data, mimeType, prompt, useThinking = false) {
     return withRetry(async () => {
-      const response = await this.client.messages.create({
-        model: useThinking ? this.thinkingModel : this.fastModel,
-        max_tokens: 300,
-        // Sonnet 5 runs adaptive thinking when `thinking` is omitted, and max_tokens caps
-        // thinking + text together. At 300 tokens that starves the answer. Alt-text needs
-        // no reasoning — pin it off. No-op on the Haiku path.
-        thinking: { type: 'disabled' },
+      const model = useThinking ? this.thinkingModel : this.fastModel;
+      const config = {
+        model,
+        // Sonnet 5: max_tokens caps thinking + response text COMBINED. Deep Thinking ON runs
+        // adaptive thinking, so the ceiling must leave room for reasoning AND the caption;
+        // 300 (the old value) starved either the thinking or the answer. The caption itself is
+        // tiny (<= 20 words), so 8000 is pure headroom against truncation, not a cost — only
+        // tokens actually generated bill. OFF path (Haiku, thinking disabled) needs the caption
+        // budget only.
+        max_tokens: useThinking ? 8000 : 1000,
         messages: [{
           role: 'user',
           content: [
@@ -96,8 +99,39 @@ export class AnthropicProvider {
             { type: 'text', text: prompt }
           ]
         }]
-      });
-      return response.content.find(b => b.type === 'text')?.text || '';
+      };
+      if (useThinking) {
+        // Deep Thinking ON → Sonnet 5. Adaptive thinking lets the model reason about the image
+        // (identify the subject, read on-image text, pick the single most useful sentence)
+        // before writing a concise best-practice alt caption. Manual thinking with
+        // budget_tokens is a 400 error on Sonnet 5 — adaptive + effort is the only supported
+        // mode. Reuses the pipeline's pinned effort ('medium') for behavioral consistency with
+        // generate().
+        config.thinking = { type: 'adaptive' };
+        config.output_config = { effort: this.thinkingEffort };
+      } else {
+        // Deep Thinking OFF → Haiku. Sonnet 5 would run adaptive thinking if `thinking` were
+        // omitted, so pin it disabled; no-op on the Haiku path. Nothing competes with the caption.
+        config.thinking = { type: 'disabled' };
+      }
+
+      const response = await this.client.messages.create(config);
+
+      // Same fail-loud contract as generate(): a truncated or refused caption must never reach
+      // the manifest as if valid. On a throw the client falls back to filename-derived alt text.
+      if (response.stop_reason === 'max_tokens') {
+        throw new Error(
+          `[anthropic] vision output truncated: hit max_tokens (${config.max_tokens}) on ${model}. ` +
+          `Raise max_tokens or lower output_config.effort.`
+        );
+      }
+      if (response.stop_reason === 'refusal') {
+        throw new Error(`[anthropic] vision request refused by safety classifier on ${model}.`);
+      }
+
+      // Return only visible text blocks; adaptive thinking emits separate thinking blocks
+      // (display defaults to 'omitted' on Sonnet 5) that must never be spliced into the caption.
+      return response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
     });
   }
 

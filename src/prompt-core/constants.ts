@@ -491,6 +491,11 @@ REGISTER (formal, mandatory — B2B industrial capital equipment):
 VOCABULARY (European, mandatory — replace Brazilian analogues):
 - ecrã (NOT tela) · ficheiro (NOT arquivo) · utilizador (NOT usuário) · rato (NOT mouse) ·
   gestão · pormenor · equipa (NOT time) · autocolante (NOT adesivo where "sticker").
+- "tela" is BANNED in EVERY sense, not only "screen": screen/display → "ecrã" · canvas
+  (EN "canvas" — print/craft MATERIAL: canvas prints, fabric substrates, material lists) →
+  "lona" (never "tela", and never "ecrã" — a material is not a display). Material enumerations
+  such as "wood, paper, canvas, acrylic" → "madeira, papel, lona, acrílico"; "prints directly
+  on fabric and canvas" → "imprime diretamente em tecido e lona".
 - Tech: "resina" · "plataforma de impressão" / "base" (bed) · "extrusor" · "bico" (nozzle) ·
   "software de fatiamento (slicer)" · "impressão 3D" · "impressora 3D".
 
@@ -510,7 +515,8 @@ FORBIDDEN CALQUES / ANGLICISMS:
 - "performance" → "desempenho" · "workflow" → "fluxo de trabalho" · "footprint"/"pegada"
   (installation sense) → "área de instalação / ocupação" · "end-to-end"/"de ponta a ponta" →
   "integral / de princípio a fim" · "fixtures" → "fixações / utensílios de fixação".
-- Brazilianisms count as calques here: arquivo, tela, usuário, mouse, time — use the European forms above.
+- Brazilianisms count as calques here: arquivo, tela, usuário, mouse, time — use the European forms above
+  ("tela" in the canvas-material sense → "lona", see VOCABULARY).
 - 3D-printing/industrial terminology: "pó reclamado" → "pó recuperado" · "pó selecionado"
   (sifted powder) → "pó peneirado" · "embalamento" (packing-density sense, NOT literal parcel
   packaging) → "empacotamento" · "taxa de atualização" (powder refresh rate, NOT UI refresh rate)

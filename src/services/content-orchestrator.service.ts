@@ -78,6 +78,11 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {}, mainHtmlLocale: 'uk-UA' });
     this.validationIssues.set([]);
 
+    // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
+    // image-unknown-src): every uploaded image must ship in every language version.
+    // Expert-3DPrinter is image-free by policy — no manifest, no coverage check.
+    const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
+
     const isConsumables = input.templateId === 'consumables-resin';
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
 
@@ -109,7 +114,7 @@ export class ContentOrchestratorService {
         basePayload: basePayloadA,
         produce: produceHtmlA,
         validate: html => [
-          ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId }),
+          ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, input.specs, 'HTML (base)'),
         ],
         withFeedback: appendRepairFeedback,
@@ -122,7 +127,7 @@ export class ContentOrchestratorService {
       this.content.update(c => ({ ...c, mainHtmlEn: finalMasterHtml }));
       this.validationIssues.set(
         isConsumables
-          ? validateGeneratedHtml(finalMasterHtml, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId })
+          ? validateGeneratedHtml(finalMasterHtml, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest })
           : htmlIssues,
       );
 
@@ -207,7 +212,7 @@ export class ContentOrchestratorService {
             return fixNumberFormatting(html);
           },
           validate: (html) => [
-            ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId }),
+            ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId, imageManifest: imgManifest }),
             ...validateSpecsGrounding(html, input.specs, `HTML (${lang})`),
             ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
           ],
@@ -291,6 +296,11 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
     this.validationIssues.set([]);
 
+    // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
+    // image-unknown-src): every uploaded image must ship in every language version.
+    // Expert-3DPrinter is image-free by policy — no manifest, no coverage check.
+    const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
+
     const isConsumables = input.templateId === 'consumables-resin';
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
 
@@ -325,7 +335,7 @@ export class ContentOrchestratorService {
         basePayload: basePayloadA,
         produce: produceHtmlUa,
         validate: html => [
-          ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId }),
+          ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, input.specs, 'HTML (uk-UA)'),
         ],
         withFeedback: appendRepairFeedback,
@@ -337,7 +347,7 @@ export class ContentOrchestratorService {
       this.content.update(c => ({ ...c, mainHtmlEn: finalHtmlUa }));
       this.validationIssues.set(
         isConsumables
-          ? validateGeneratedHtml(finalHtmlUa, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId })
+          ? validateGeneratedHtml(finalHtmlUa, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest })
           : htmlIssues,
       );
 
