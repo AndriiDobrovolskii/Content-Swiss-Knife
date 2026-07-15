@@ -70,9 +70,9 @@ Before considering a task done: `npm run lint && npm run build` must pass with n
 
 `ContentOrchestratorService.generate()` runs four sequential steps:
 
-1. **Task A** (`buildPromptA`) — generates the base English HTML description.
+1. **Task A** (`buildPromptA`) — generates the base **uk-UA master** HTML description (Sonnet, optionally with extended thinking). Every other locale is a translation of this artifact.
 2. **Task B** (`buildPromptB`) — generates SEO metadata JSON (multilingual, one object per language). Uses the Task A HTML as grounding context.
-3. **Task C** (`buildPromptC`) — translates the base HTML into each non-English language defined for the store. Ukrainian always runs first.
+3. **Task C** (`buildPromptC`) — translates the uk-UA master into each **non-uk-UA** language defined for the store, including English. Always runs on the fast model.
 4. **FAQ / HowTo** (`buildPromptFaq` / `buildPromptHowTo`) — optional; runs only when `input.supplementalContent` is present. Produces schema-free HTML artifacts for the CMS native FAQ/HowTo module fields.
 
 All prompt builders return a `PromptPayload` (`src/prompt-core/payload.ts`):

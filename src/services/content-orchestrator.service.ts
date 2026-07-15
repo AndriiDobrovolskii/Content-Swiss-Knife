@@ -14,8 +14,9 @@ import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
-import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, bcp47ToTaskCLang } from '../prompt-core/constants';
+import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
+import { validateStructuralParity } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { buildOptimizerPrompt } from '../prompts/optimizer';
@@ -23,7 +24,6 @@ import { buildReadabilityPrompt } from '../prompts/readability';
 import { buildKeywordsPrompt } from '../prompts/keywords';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { buildCopywriterPrompt } from '../prompts/copywriter';
-import { sortUkrainianFirst } from '../utils/locale-sort';
 import { SlugResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback } from '../utils/repair-gate';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
@@ -75,7 +75,7 @@ export class ContentOrchestratorService {
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
     // localized name authoritative across H1/title/URL without ever reusing a stale name.
     const reusedSlug = this.approvedSlugKey() === this.slugKey(input) ? this.content().slugData ?? null : null;
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {} });
+    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {}, mainHtmlLocale: 'uk-UA' });
     this.validationIssues.set([]);
 
     const isConsumables = input.templateId === 'consumables-resin';
@@ -84,11 +84,19 @@ export class ContentOrchestratorService {
     await this.withProgress(async () => {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);
 
-      // Step 1 — Generate base English HTML (with one repair attempt on hard errors)
+      // Step 1 — Generate the uk-UA MASTER HTML (with one repair attempt on hard errors). Every
+      // other locale is a Task C translation of this artifact (Step 4) — see buildMasterUaOverlay.
       this.progressMessage.set(useThinking ? 'Generating HTML Description (Deep Thinking)…' : 'Generating HTML Description…');
-      const basePayloadA = buildPromptA(input);
+      const masterInput: ProductInput = {
+        ...input,
+        customInstructions: [
+          input.customInstructions?.trim(),
+          buildMasterUaOverlay(input.website.name),
+        ].filter(Boolean).join('\n\n'),
+      };
+      const basePayloadA = buildPromptA(masterInput, 'Ukrainian (uk-UA)');
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name });
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
         html = stripCodeFences(html);
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
@@ -101,7 +109,7 @@ export class ContentOrchestratorService {
         basePayload: basePayloadA,
         produce: produceHtmlA,
         validate: html => [
-          ...validateGeneratedHtml(html, 'HTML (base)', input.name, undefined, { templateId: input.templateId }),
+          ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId }),
           ...validateSpecsGrounding(html, input.specs, 'HTML (base)'),
         ],
         withFeedback: appendRepairFeedback,
@@ -109,11 +117,12 @@ export class ContentOrchestratorService {
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
-      const finalHtmlEn = isConsumables ? trimConsumablesToLimit(htmlEn) : htmlEn;
-      this.content.update(c => ({ ...c, mainHtmlEn: finalHtmlEn }));
+      // mainHtmlEn now holds the uk-UA MASTER — see mainHtmlLocale. Renamed to versions['uk-UA'] in PR #1.
+      const finalMasterHtml = isConsumables ? trimConsumablesToLimit(htmlEn) : htmlEn;
+      this.content.update(c => ({ ...c, mainHtmlEn: finalMasterHtml }));
       this.validationIssues.set(
         isConsumables
-          ? validateGeneratedHtml(finalHtmlEn, 'HTML (base)', input.name, undefined, { templateId: input.templateId })
+          ? validateGeneratedHtml(finalMasterHtml, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId })
           : htmlIssues,
       );
 
@@ -128,7 +137,8 @@ export class ContentOrchestratorService {
         try {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
           const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, htmlEn);
-          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
+          // false — Slug always runs on the fast model; Deep Thinking applies to the uk-UA master only.
+          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, false, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
           const slugData = this.normalizeSlugResponse(rawSlug);
           this.content.update(c => ({ ...c, slugData }));
           this.approvedSlugKey.set(this.slugKey(input));
@@ -150,7 +160,8 @@ export class ContentOrchestratorService {
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
-        produce: (payload) => this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }),
+        // false — SEO metadata always runs on the fast model; Deep Thinking applies to the uk-UA master only.
+        produce: (payload) => this.llm.generateJson(payload, false, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -159,50 +170,50 @@ export class ContentOrchestratorService {
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      // Step 4 — Native per-language generation (Ukrainian always first). Each target language is
-      // generated directly via Task A (buildPromptA with a baseLanguageOverride), NOT translated
-      // from finalHtmlEn — mirrors generateUaContent()'s native path, generalized to every target
-      // language. Kept sequential (not Promise.all): matches every other loop in this pipeline,
-      // and avoids tripping provider rate limits since native generation is a heavier call than
-      // translation was.
-      const sortedTransLangs = [...transLangs].sort(sortUkrainianFirst);
-      for (const lang of sortedTransLangs) {
+      // Step 4 — Translation from the uk-UA master (Task C, fast model). Every non-master locale —
+      // INCLUDING English — is a structure-preserving translation, never an independent generation.
+      // Structural parity against the master is enforced deterministically, not merely requested in
+      // the prompt: a translation that is not isomorphic to the master is a failed translation.
+      // wrapVideoFigures/wrapImageFigures are NOT re-run here — the master already carries fully
+      // wrapped figures/videos, and wrapVideoFigures is not idempotent (re-running it on
+      // already-wrapped HTML nests a second <figure> and duplicates the <figcaption>).
+      // Sequential, not Promise.all — matches every other loop here and avoids provider rate limits.
+      for (const lang of transLangs) {
         const locale = taskLangToIso(lang, input.website.name);
-        const humanLang = isoToHumanLang(locale);
-        const baseLanguageOverride = `${humanLang} (${locale})`;
         const isExpert3d = isExpert3dStore(input.website.name);
 
-        this.progressMessage.set(`Generating ${lang} description…`);
+        this.progressMessage.set(`Translating to ${lang}…`);
 
-        const langInput: ProductInput = {
-          ...input,
-          customInstructions: [
-            input.customInstructions?.trim(),
-            buildNativeLangOverlay(lang, humanLang, input.website.name),
-          ].filter(Boolean).join('\n\n'),
-        };
-        const basePayloadLang = buildPromptA(langInput, baseLanguageOverride);
+        const basePayloadC = buildPromptC(
+          finalMasterHtml,
+          lang,
+          input.website.name,
+          getStore(input.website.name).group,
+          input.templateId,
+          { localizedName: localizedNames?.[locale], sourceLocale: 'uk-UA' },
+        );
+
         const { artifact: htmlLang, repairsUsed: langRepairs } = await runRepairGate<string>({
           label: `HTML (${lang})`,
           maxRepairs: repairBudget,
-          basePayload: basePayloadLang,
+          basePayload: basePayloadC,
           produce: async (payload) => {
-            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale });
+            // false → fast model. Deep Thinking applies to the uk-UA master pass only.
+            let html = await this.llm.generateText(payload, false, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale });
             html = stripCodeFences(html);
-            html = wrapVideoFigures(html, input.name);
             if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
               html = this.applySpanishExpert3dReplacements(html);
             }
-            html = wrapImageFigures(html);
             return fixNumberFormatting(html);
           },
           validate: (html) => [
             ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId }),
             ...validateSpecsGrounding(html, input.specs, `HTML (${lang})`),
+            ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
           ],
           withFeedback: appendRepairFeedback,
           onAttempt: (n, c) =>
-            this.progressMessage.set(`Repairing ${lang} description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+            this.progressMessage.set(`Repairing ${lang} translation (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
         if (langRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${langRepairs} repair(s) applied`);
         const finalLangHtml = isConsumables ? trimConsumablesToLimit(htmlLang) : htmlLang;
@@ -263,7 +274,7 @@ export class ContentOrchestratorService {
       }
 
       // Post-generation acceptance-criteria check (non-blocking — reports only).
-      this.runOutputValidation(input.website.name, input.name, input.templateId);
+      this.runOutputValidation(input.website.name, input.name, input.templateId, 'uk-UA');
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Done!');
@@ -296,10 +307,7 @@ export class ContentOrchestratorService {
         ...input,
         customInstructions: [
           input.customInstructions?.trim(),
-          '[UKRAINIAN NATIVE OUTPUT — IMAGE TEXT OVERRIDE] This description is generated natively in ' +
-          'Ukrainian with no separate translation pass. The image manifest figcaption/vision-description ' +
-          'text is sourced in English — do NOT copy it verbatim. Translate each figcaption and alt text ' +
-          'into natural, idiomatic Ukrainian preserving the same factual meaning before using it.',
+          buildMasterUaOverlay(input.website.name),
         ].filter(Boolean).join('\n\n'),
       };
       const basePayloadA = buildPromptA(uaInput, UA_BASE_LANGUAGE);
@@ -340,7 +348,8 @@ export class ContentOrchestratorService {
       try {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
         const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
-        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO });
+        // false — Slug always runs on the fast model; Deep Thinking applies to the uk-UA master only.
+        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, false, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO });
         const slugData = this.normalizeSlugResponse(rawSlug);
         this.content.update(c => ({ ...c, slugData }));
         this.approvedSlugKey.set(this.slugKey(input));
@@ -360,7 +369,8 @@ export class ContentOrchestratorService {
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
-        produce: (payload) => this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }),
+        // false — SEO metadata always runs on the fast model; Deep Thinking applies to the uk-UA master only.
+        produce: (payload) => this.llm.generateJson(payload, false, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>

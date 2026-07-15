@@ -10,6 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildPromptC } from './task-c';
+import { UK_SOURCE_ANTICALQUE, EXPERT3D_TOV_TRANSLATION_OVERLAY } from '../prompt-core/constants';
 
 const SAMPLE_HTML = '<p>Sample product description.</p>';
 
@@ -135,5 +136,39 @@ describe('buildPromptC — forbids inventing wrapping tags/links for figure-less
     const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
     expect(payload.userContent).not.toContain('Do NOT wrap the output');
     expect(payload.userContent).toContain('[IMAGE MANIFEST]');
+  });
+});
+
+describe('buildPromptC — opts (uk-UA master pipeline: H1 lock + anti-calque)', () => {
+  it('injects the localizedName as an [H1 LOCK] block into userContent, not systemBlocks', () => {
+    const payload = buildPromptC(SAMPLE_HTML, 'PL', 'Drukarka 3D', 'EU', undefined, { localizedName: 'Filament PLA Premium' });
+    expect(payload.userContent).toContain('[H1 LOCK — NON-NEGOTIABLE]');
+    expect(payload.userContent).toContain('Filament PLA Premium');
+    expect(payload.systemBlocks[0].text).not.toContain('Filament PLA Premium');
+    expect(payload.systemBlocks[1].text).not.toContain('Filament PLA Premium');
+  });
+
+  it('systemBlocks[0] (master prompt) is byte-identical with and without opts', () => {
+    const withOpts = buildPromptC(SAMPLE_HTML, 'PL', 'Drukarka 3D', 'EU', undefined, { localizedName: 'X', sourceLocale: 'uk-UA' });
+    const withoutOpts = buildPromptC(SAMPLE_HTML, 'PL', 'Drukarka 3D');
+    expect(withOpts.systemBlocks[0].text).toBe(withoutOpts.systemBlocks[0].text);
+  });
+
+  it('sourceLocale "uk-UA" + targetLang "PL" appends UK_SOURCE_ANTICALQUE[PL] to the task instruction', () => {
+    const payload = buildPromptC(SAMPLE_HTML, 'PL', 'Drukarka 3D', 'EU', undefined, { sourceLocale: 'uk-UA' });
+    expect(payload.systemBlocks[1].text).toContain(UK_SOURCE_ANTICALQUE['PL']);
+  });
+
+  it('no opts (standalone Translator path) adds no H1 lock and no anti-calque block', () => {
+    const payload = buildPromptC(SAMPLE_HTML, 'PL', 'Drukarka 3D');
+    expect(payload.userContent).not.toContain('[H1 LOCK');
+    expect(payload.systemBlocks[1].text).not.toContain(UK_SOURCE_ANTICALQUE['PL']);
+  });
+
+  it('targetLang "European English" on an EXPERT3D store selects EU_EN_INSTRUCTION and still appends the EXPERT3D ToV overlay', () => {
+    const payload = buildPromptC(SAMPLE_HTML, 'European English', 'EXPERT3D');
+    const taskBlock = payload.systemBlocks[1].text;
+    expect(taskBlock).toContain('EUROPEAN ENGLISH COPY EDITING');
+    expect(taskBlock).toContain(EXPERT3D_TOV_TRANSLATION_OVERLAY);
   });
 });
