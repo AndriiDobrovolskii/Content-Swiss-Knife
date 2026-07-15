@@ -90,10 +90,10 @@ Each group carries its own tone, currency, measurement rules (e.g. imperial conv
 
 A single `generate()` run executes an ordered, multi‑step pipeline. Each step writes its result into a signal, so the UI updates progressively as content arrives:
 
-1. **Base English HTML (Task A)** — the creative/thinking pass. Builds the full semantic description from the product input. Uses the high‑capability model (Anthropic Sonnet by default), optionally with extended thinking enabled.
+1. **uk-UA master HTML (Task A)** — the creative/thinking pass. Builds the full semantic description from the product input, natively in Ukrainian. Uses the high‑capability model (Anthropic Sonnet by default), optionally with extended thinking enabled. Every other locale — including English — is a translation of this artifact.
 2. **SEO metadata (Task B)** — runs the fast model (Anthropic Haiku) and returns strict JSON. The freshly generated HTML is passed back in as context so each `meta_description` can cite a genuine hard spec rather than generic copy.
 3. **URL slugs (Task Slug)** — immediately follows SEO metadata, on the fast model. The LLM proposes a localized `name` + `slug` per target language; a deterministic post‑processing layer (`normalizeSlug` / `ensureUniqueSlugs`) then guarantees the actual URL contract (latin‑only, lowercase, hyphen‑delimited, unique across languages) regardless of what the model returned. A slug failure is logged and skipped — it never aborts the rest of the run.
-4. **Translations (Task C)** — one fast‑model call per non‑English target language. Ukrainian is always generated first. Store‑specific link/URL rewrites (e.g. Spanish EXPERT3D internal links) are applied as a post‑step.
+4. **Translations (Task C)** — one fast‑model call per non‑uk-UA target language, translating the uk-UA master. A deterministic structural-parity check enforces that each translation is structurally isomorphic to the master. Store‑specific link/URL rewrites (e.g. Spanish EXPERT3D internal links) are applied as a post‑step.
 5. **FAQ / HowTo artifacts** — generated per language **only** when supplemental content is provided. These are schema‑free HTML blocks intended for native theme module fields.
 
 After the pipeline finishes, all artifacts run through `output-validator.ts`. Validation is **advisory**: issues are surfaced to the UI and logged, but never abort a run, so you always get usable output even when a minor acceptance check trips.

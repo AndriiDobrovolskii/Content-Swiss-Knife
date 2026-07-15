@@ -13,7 +13,8 @@
  *   HTML checks:   empty-output, duplicate-product-schema, no-faqpage-in-body, no-howto-in-body,
  *                  markdown-fence, br-spacing, unit-spacing, decimal-separator,
  *                  thousands-separator, latin-unit-in-cyrillic-text, es-forbidden-calque,
- *                  pt-forbidden-calque, lcp-image-lazy, image-not-lazy
+ *                  pt-forbidden-calque, lcp-image-lazy, image-not-lazy,
+ *                  image-manifest-missing, image-manifest-duplicate, image-unknown-src
  *   SEO checks:    seo-empty, meta-title-length, meta-description-length,
  *                  meta-description-cta, meta-description-currency
  *
@@ -230,16 +231,16 @@ describe('validateGeneratedHtml — Rule: br-spacing', () => {
 describe('validateGeneratedHtml — Rule: unit-spacing', () => {
   // Glued units that MUST be flagged
   const gluedCases: [string, string][] = [
-    ['<p>Nozzle: 0.4mm</p>',          'mm'],
-    ['<p>Height: 50cm</p>',           'cm'],
-    ['<p>Power: 10W</p>',             'W'],
-    ['<p>Temp: 200°C</p>',            '°C'],
-    ['<p>Weight: 2.5kg</p>',          'kg'],
-    ['<p>Resolution: 50µm</p>',       'µm'],
-    ['<p>Resolution: 50μm</p>',       'μm'],   // alternative µ character
-    ['<p>Speed: 300mm/s</p>',         'mm/s'],
-    ['<p>Strength: 44.2MPa</p>',      'MPa'],
-    ['<p>Modulus: 1.93GPa</p>',       'GPa'],
+    ['<p>Nozzle: 0.4mm</p>', 'mm'],
+    ['<p>Height: 50cm</p>', 'cm'],
+    ['<p>Power: 10W</p>', 'W'],
+    ['<p>Temp: 200°C</p>', '°C'],
+    ['<p>Weight: 2.5kg</p>', 'kg'],
+    ['<p>Resolution: 50µm</p>', 'µm'],
+    ['<p>Resolution: 50μm</p>', 'μm'],   // alternative µ character
+    ['<p>Speed: 300mm/s</p>', 'mm/s'],
+    ['<p>Strength: 44.2MPa</p>', 'MPa'],
+    ['<p>Modulus: 1.93GPa</p>', 'GPa'],
   ];
 
   gluedCases.forEach(([html, unit]) => {
@@ -594,6 +595,43 @@ describe('validateGeneratedHtml — context label is preserved in issues', () =>
 // ═══════════════════════════════════════════════════════════════════════════
 // validateSeoMetadata
 // ═══════════════════════════════════════════════════════════════════════════
+
+describe('validateGeneratedHtml — Rules: image-manifest-missing / image-manifest-duplicate / image-unknown-src', () => {
+  const MANIFEST = [{ urlFilename: 'a.jpg' }, { urlFilename: 'b.jpg' }];
+  const img = (f: string) => `<p>Lead-in.</p><figure><img src="https://cdn.example/x/y/${f}" alt="alt"><figcaption>c</figcaption></figure>`;
+
+  it('flags a manifest image absent from the HTML as error', () => {
+    const issues = validateGeneratedHtml(`<p>t</p>${img('a.jpg')}`, 'test', undefined, 'uk-UA', { imageManifest: MANIFEST });
+    const hit = findRule(issues, 'image-manifest-missing');
+    expect(hit?.severity).toBe('error');
+    expect(hit?.detail).toContain('b.jpg');
+  });
+
+  it('flags a duplicated manifest image as error', () => {
+    const issues = validateGeneratedHtml(`${img('a.jpg')}<p>t</p>${img('a.jpg')}<p>t</p>${img('b.jpg')}`, 'test', undefined, 'uk-UA', { imageManifest: MANIFEST });
+    expect(findRule(issues, 'image-manifest-duplicate')?.severity).toBe('error');
+  });
+
+  it('flags an <img> filename not present in the manifest as error (hallucinated src)', () => {
+    const issues = validateGeneratedHtml(`${img('a.jpg')}<p>t</p>${img('b.jpg')}<p>t</p>${img('invented-name.jpg')}`, 'test', undefined, 'uk-UA', { imageManifest: MANIFEST });
+    const hit = findRule(issues, 'image-unknown-src');
+    expect(hit?.severity).toBe('error');
+    expect(hit?.detail).toContain('invented-name.jpg');
+  });
+
+  it('passes when every manifest image appears exactly once and no unknown src exists', () => {
+    const issues = validateGeneratedHtml(`${img('a.jpg')}<p>t</p>${img('b.jpg')}`, 'test', undefined, 'uk-UA', { imageManifest: MANIFEST });
+    expectNoRule(issues, 'image-manifest-missing');
+    expectNoRule(issues, 'image-manifest-duplicate');
+    expectNoRule(issues, 'image-unknown-src');
+  });
+
+  it('skips the coverage check entirely when no manifest is passed (Expert-3DPrinter / legacy callers)', () => {
+    const issues = validateGeneratedHtml(`${img('whatever.jpg')}`, 'test', undefined, 'uk-UA', {});
+    expectNoRule(issues, 'image-manifest-missing');
+    expectNoRule(issues, 'image-unknown-src');
+  });
+});
 
 describe('validateSeoMetadata — Rule: seo-empty', () => {
   it('flags null input', () => {

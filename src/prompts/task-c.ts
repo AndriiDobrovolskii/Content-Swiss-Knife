@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, UNIT_LOCALIZATION_RULES } from '../prompt-core/constants';
+import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 const IMAGE_PRESERVATION_MANIFEST = `[IMAGE MANIFEST]
@@ -30,14 +30,18 @@ function deriveStoreLabel(storeName: string, targetLang: string): string {
   return match ? match[1] : 'N/A — standalone snippet, not tied to a specific store';
 }
 
-function pack(instruction: string, html: string, storeLabel: string): PromptPayload {
+function pack(instruction: string, html: string, storeLabel: string, localizedName?: string): PromptPayload {
   const context = HAS_FIGURE_MARKUP.test(html) ? IMAGE_PRESERVATION_MANIFEST : STANDALONE_SNIPPET_NOTE;
+  // Dynamic per-product — belongs in userContent, never in a cached system block.
+  const h1Lock = localizedName?.trim()
+    ? `\n\n[H1 LOCK — NON-NEGOTIABLE]\nThe <h1> of your output MUST be exactly, character-for-character:\n"${localizedName.trim()}"\nDo not re-translate, re-order, reformat, transliterate or truncate it. It is the storefront\nproduct-name field and the SEO meta_title core; any deviation desynchronizes the page.`
+    : '';
   return {
     systemBlocks: [
       { text: MASTER_SYSTEM_PROMPT, cache: true },
       { text: instruction, cache: true },
     ],
-    userContent: `[Store Name]: ${storeLabel}\n\n${context}\n\n[BASE HTML]:\n${html}`,
+    userContent: `[Store Name]: ${storeLabel}${h1Lock}\n\n${context}\n\n[BASE HTML]:\n${html}`,
   };
 }
 
@@ -47,6 +51,7 @@ export function buildPromptC(
   storeName: string,
   websiteGroup?: string,
   templateId?: string,
+  opts?: { localizedName?: string; sourceLocale?: string },
 ): PromptPayload {
   // Select the localization-specific instruction first…
   let instruction: string;
@@ -81,7 +86,14 @@ export function buildPromptC(
     instruction += `\n\n${EXPERT3D_TOV_TRANSLATION_OVERLAY}`;
   }
 
-  return pack(instruction, html, deriveStoreLabel(storeName, targetLang));
+  // Source-language interference guard. Only fires when translating FROM the uk-UA master —
+  // the standalone Translator (no sourceLocale) is unaffected.
+  if (opts?.sourceLocale === 'uk-UA') {
+    const antiCalque = UK_SOURCE_ANTICALQUE[targetLang];
+    if (antiCalque) instruction += `\n\n${antiCalque}`;
+  }
+
+  return pack(instruction, html, deriveStoreLabel(storeName, targetLang), opts?.localizedName);
 }
 
 // ── Generic (default) translation instruction ──────────────────────────────

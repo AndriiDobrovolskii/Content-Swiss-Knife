@@ -27,17 +27,32 @@ ${CONSUMABLES_SIMPLIFIED_SCHEMA}`;
 
 // ── Image-manifest helper ──────────────────────────────────────────────────
 
+/** Screen-reader alt/figcaption inferred from the filename — the ALT-strategy fallback for
+ *  entries whose vision analysis failed ('error') or was never run ('pending'):
+ *  "high-prec-scan-0-02mm-acc.jpg" → "high prec scan 0 02mm acc". The LLM upgrades this raw
+ *  token stream to a contextual description per the [IMAGE HANDLING] alt rules. */
+function altSeedFromFilename(urlFilename: string): string {
+  return urlFilename.replace(/\.[a-z0-9]+$/i, '').replace(/-+/g, ' ').trim();
+}
+
 function buildImageBlock(input: ProductInput, baseUrl: string): string {
   if (input.website.name === 'Expert-3DPrinter') return '[IMAGE MANIFEST]\nNone — skip all <img>.';
-  const done: ImageManifestEntry[] = (input.imageManifest ?? [])
-    .filter(e => e.status === 'done').sort((a, b) => a.order - b.order);
-  if (done.length === 0) return '[IMAGE MANIFEST]\nNone provided — do not emit <img> tags.';
+  // EVERY uploaded image ships. A vision-analysis failure ('error') or a skipped analysis
+  // ('pending') only degrades the alt/figcaption SOURCE to the filename — it never drops the
+  // image. The old `status === 'done'` filter is what silently shipped 9/14 images when
+  // analyzeImage() calls failed (M1 Ultra SafetyPro regression, 2026-07-15).
+  const entries: ImageManifestEntry[] = (input.imageManifest ?? [])
+    .slice().sort((a, b) => a.order - b.order);
+  if (entries.length === 0) return '[IMAGE MANIFEST]\nNone provided — do not emit <img> tags.';
   const brand = input.brandFolder ? input.brandFolder + '/' : '';
   const model = input.modelFolder ? input.modelFolder + '/' : '';
-  const lines = done.map((e, i) =>
-    `${i + 1}. ${e.urlFilename} — figcaption: "${e.altText || e.visionDescription}"`).join('\n');
-  const example = baseUrl ? `${baseUrl}${brand}${model}${done[0].urlFilename}` : '';
-  return `[IMAGE MANIFEST] — use ALL ${done.length}; each exactly once; distribute across §3–§4 prose in listed order (see PLACEMENT rules in [IMAGE HANDLING]):
+  const lines = entries.map((e, i) => {
+    const caption = e.altText?.trim() || e.visionDescription?.trim() || altSeedFromFilename(e.urlFilename);
+    const inferred = !e.altText?.trim() && !e.visionDescription?.trim();
+    return `${i + 1}. ${e.urlFilename} — figcaption: "${caption}"${inferred ? ' (seed inferred from filename — rewrite alt+figcaption contextually)' : ''}`;
+  }).join('\n');
+  const example = baseUrl ? `${baseUrl}${brand}${model}${entries[0].urlFilename}` : '';
+  return `[IMAGE MANIFEST] — COUNT=${entries.length}. HARD RULE: the output contains exactly ${entries.length} <img> tags — every file below appears exactly once, filename copied VERBATIM (never invent, rename, merge, or drop a file); distribute across §3–§4 prose in listed order (see PLACEMENT rules in [IMAGE HANDLING]):
 ${lines}
 [URL] base=${baseUrl} brandFolder=${input.brandFolder || '(none)'} modelFolder=${input.modelFolder || '(none)'}
 Build src as {base}{brandFolder}/{modelFolder}/{filename}. ${example ? 'Example: ' + example : ''}`;

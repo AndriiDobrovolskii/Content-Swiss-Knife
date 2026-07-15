@@ -60,6 +60,10 @@ export const TRANSLATOR_LANGUAGES = [
 export type TranslatorLanguage = typeof TRANSLATOR_LANGUAGES[number];
 
 export function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
+  // English is a TRANSLATION TARGET (master is uk-UA). These labels are the ones
+  // buildPromptC() dispatches on — see EU_EN_INSTRUCTION / usInstruction() in task-c.ts.
+  if (lang === 'en-GB' || lang === 'en-ES') return 'European English';
+  if (lang === 'en-US') return 'American English';
   if (lang === 'uk-UA') return group === 'US' ? 'Ukrainian' : 'UA';
   if (lang === 'ru-UA') return 'RU';
   if (lang === 'pl-PL') return 'PL';
@@ -70,13 +74,20 @@ export function bcp47ToTaskCLang(lang: string, group: WebsiteGroup): string {
   return lang;
 }
 
-/** Derives seoLangs and transLangs from STORE_REGISTRY — the single source of truth. */
+/** The master/base locale of the whole pipeline. Every other locale is a translation of it. */
+export const MASTER_LOCALE = 'uk-UA';
+
+/**
+ * Derives seoLangs and transLangs from STORE_REGISTRY — the single source of truth.
+ * transLangs = every published language of the store EXCEPT the master (uk-UA), which is
+ * generated natively by Task A. English is now a translation target like any other.
+ */
 export function getLangsForStore(storeName: string): { seoLangs: string[]; transLangs: string[] } {
   const store = getStore(storeName);
   return {
     seoLangs: store.languages,
     transLangs: store.languages
-      .filter(lang => !lang.startsWith('en-'))
+      .filter(lang => lang !== MASTER_LOCALE)
       .map(lang => bcp47ToTaskCLang(lang, store.group)),
   };
 }
@@ -480,6 +491,11 @@ REGISTER (formal, mandatory — B2B industrial capital equipment):
 VOCABULARY (European, mandatory — replace Brazilian analogues):
 - ecrã (NOT tela) · ficheiro (NOT arquivo) · utilizador (NOT usuário) · rato (NOT mouse) ·
   gestão · pormenor · equipa (NOT time) · autocolante (NOT adesivo where "sticker").
+- "tela" is BANNED in EVERY sense, not only "screen": screen/display → "ecrã" · canvas
+  (EN "canvas" — print/craft MATERIAL: canvas prints, fabric substrates, material lists) →
+  "lona" (never "tela", and never "ecrã" — a material is not a display). Material enumerations
+  such as "wood, paper, canvas, acrylic" → "madeira, papel, lona, acrílico"; "prints directly
+  on fabric and canvas" → "imprime diretamente em tecido e lona".
 - Tech: "resina" · "plataforma de impressão" / "base" (bed) · "extrusor" · "bico" (nozzle) ·
   "software de fatiamento (slicer)" · "impressão 3D" · "impressora 3D".
 
@@ -499,7 +515,8 @@ FORBIDDEN CALQUES / ANGLICISMS:
 - "performance" → "desempenho" · "workflow" → "fluxo de trabalho" · "footprint"/"pegada"
   (installation sense) → "área de instalação / ocupação" · "end-to-end"/"de ponta a ponta" →
   "integral / de princípio a fim" · "fixtures" → "fixações / utensílios de fixação".
-- Brazilianisms count as calques here: arquivo, tela, usuário, mouse, time — use the European forms above.
+- Brazilianisms count as calques here: arquivo, tela, usuário, mouse, time — use the European forms above
+  ("tela" in the canvas-material sense → "lona", see VOCABULARY).
 - 3D-printing/industrial terminology: "pó reclamado" → "pó recuperado" · "pó selecionado"
   (sifted powder) → "pó peneirado" · "embalamento" (packing-density sense, NOT literal parcel
   packaging) → "empacotamento" · "taxa de atualização" (powder refresh rate, NOT UI refresh rate)
@@ -546,6 +563,11 @@ especializado para as suas instalações em Portugal e restantes países da UE."
  * Extracted from EXPERT3D_ES_INSTRUCTION (task-c.ts, translation-only) so native Task A
  * generation (main pipeline) has the same vocabulary/showroom constraints without duplicating
  * them into the orchestrator as inline strings.
+ *
+ * @deprecated Unused by the main pipeline since the uk-UA-master + Task-C-translation revert —
+ * es-ES is now a Task C translation target and EXPERT3D_ES_INSTRUCTION (task-c.ts) already embeds
+ * these rules. Kept for the standalone Translator/tools, which still call buildNativeLangOverlay
+ * directly.
  */
 export const EXPERT3D_ES_NATIVE_VOCAB_OVERLAY =
   `[EXPERT3D ToV — CASTILIAN SPANISH (es-ES) VOCABULARY]
@@ -554,6 +576,23 @@ MANDATORY VOCABULARY: Ordenador (NOT computadora) · Fichero (NOT archivo) ·
 Laminador / software de laminado (NOT rebanador/slicer) · Plataforma de impresión / cama de
 impresión (bed) · Extrusor.
 SHOWROOM: EXPERT3D has no physical showroom — do not invent a showroom/visit/demo-unit claim.`;
+
+/**
+ * EXPERT3D per-locale ToV — Ukrainian (uk-UA). Carries the uk-UA register (formal «Ви») and
+ * anti-anglicism forbidden-stems rules that otherwise only live inside
+ * EXPERT3D_TOV_TRANSLATION_OVERLAY (a Task C / translation-path asset). The uk-UA MASTER is
+ * never translated, so buildMasterUaOverlay() injects this directly into Task A's
+ * customInstructions instead — mirrors the EXPERT3D_ES_NATIVE_VOCAB_OVERLAY precedent (a
+ * native-generation extract paralleling, not replacing, the translation-side instruction).
+ */
+export const EXPERT3D_UK_LOCALE_TOV =
+  `[EXPERT3D ToV — UKRAINIAN (uk-UA) — these rules WIN over any conflicting register line]
+REGISTER (formal, mandatory — B2B industrial capital equipment): formal "Ви" (з великої),
+technical and direct, no pathos. Never informal "ти".
+FORBIDDEN STEMS (drop or replace with a concrete fact): революцій-, інновацій-, ідеальн-,
+неймовірн-, найкращ- (when unproven).
+COLON CAPITALIZATION in "<b>Label:</b> continuation" list items and figcaptions: lowercase the
+first letter after the colon (it introduces an explanation of the bold label, not a new sentence).`;
 
 /**
  * EXPERT3D Tone of Voice — TRANSLATION overlay (Task C, EXPERT3D/Impresora-3D locales).
@@ -618,3 +657,83 @@ export function buildNativeLangOverlay(lang: string, humanLang: string, storeNam
   }
   return parts.join('\n\n');
 }
+
+/**
+ * customInstructions suffix for the uk-UA MASTER generation (Task A, pipeline Step 1).
+ * Two jobs:
+ *  1. The image-manifest figcaption/alt text is sourced in English by the Vision pre-pass —
+ *     Task A must translate it, not copy it verbatim.
+ *  2. EXPERT3D's uk-UA register/anti-anglicism rules live in EXPERT3D_UK_LOCALE_TOV. The master
+ *     is NOT translated, so those rules must be injected here or they are silently lost.
+ */
+export function buildMasterUaOverlay(storeName: string): string {
+  const parts = [
+    '[UKRAINIAN MASTER OUTPUT — IMAGE TEXT OVERRIDE] This description is the master artifact, ' +
+    'generated natively in Ukrainian. The image manifest figcaption/vision-description text is ' +
+    'sourced in English — do NOT copy it verbatim. Translate each figcaption and alt text into ' +
+    'natural, idiomatic Ukrainian preserving the same factual meaning before using it.',
+  ];
+  if (isExpert3dStore(storeName)) parts.push(EXPERT3D_UK_LOCALE_TOV);
+  return parts.join('\n\n');
+}
+
+/**
+ * Anti-calque constraints for translation FROM the uk-UA master. Keyed by the Task C target label.
+ * Appended to the (cached) Task C instruction system block — static text, one extra cache slot per
+ * target-language pair, no per-product variance.
+ *
+ * SEED CONTENT — NEEDS-PROOFREADER. Each list must be reviewed and extended by a native reviewer
+ * for that locale before this pipeline's output is treated as publish-ready.
+ */
+export const UK_SOURCE_ANTICALQUE: Record<string, string> = {
+  'PL': `[SOURCE-LANGUAGE INTERFERENCE — UKRAINIAN → POLISH]
+The source is Ukrainian. Polish and Ukrainian are closely related; a fluent-looking output can still
+be structurally Ukrainian. Guard against:
+- FALSE FRIENDS: do not carry a Ukrainian word into Polish on phonetic similarity alone. Verify the
+  Polish sense of every cognate before using it.
+- GENITIVE CHAINS: Ukrainian stacks genitives ("система подачі філаменту принтера"). Polish prefers
+  a prepositional or adjectival construction. Break chains of 3+ genitives.
+- "який дозволяє" / "що забезпечує" → do NOT default to "który pozwala" / "co zapewnia" in every
+  clause. Vary: participles, "dzięki czemu", a full stop and a new sentence.
+- VERBAL NOUNS: Ukrainian technical prose over-nominalizes. Prefer a finite Polish verb where the
+  Ukrainian used a verbal noun.
+- Write as a native Polish technical copywriter would write from scratch, not as a translator.`,
+
+  'RU': `[SOURCE-LANGUAGE INTERFERENCE — UKRAINIAN → RUSSIAN]
+The source is Ukrainian. Guard against:
+- FALSE FRIENDS and surzhyk forms carried over on phonetic similarity.
+- Ukrainian syntactic patterns and word order reproduced literally.
+- Use standard normative Russian technical vocabulary throughout.`,
+
+  'ES': `[SOURCE-LANGUAGE INTERFERENCE — UKRAINIAN → SPANISH]
+The source is Ukrainian, a heavily inflected language with free word order and long genitive chains.
+Do not reproduce Slavic sentence architecture in Spanish:
+- Break long multi-clause Ukrainian sentences into shorter Spanish ones.
+- Do not translate every "який/що" clause as "que". Use participles, "lo que permite", or a new
+  sentence.
+- Restore Spanish subject-verb-object order and article usage (Ukrainian has no articles — every
+  noun in the output needs its article decided, not omitted).`,
+
+  'PT': `[SOURCE-LANGUAGE INTERFERENCE — UKRAINIAN → EUROPEAN PORTUGUESE]
+The source is Ukrainian. Same guards as Spanish: break long Slavic multi-clause sentences, do not
+map every relative clause to "que", and decide every article explicitly (Ukrainian has none).
+European Portuguese only — see the pt-PT ToV asset for vocabulary.`,
+
+  'DE': `[SOURCE-LANGUAGE INTERFERENCE — UKRAINIAN → GERMAN]
+The source is Ukrainian. Do not carry Slavic clause order into German. Respect German verb-final
+subordinate clauses and compound-noun formation; do not calque Ukrainian genitive chains as
+prepositional "von"-chains where a compound noun is the native form.`,
+
+  'European English': `[SOURCE-LANGUAGE INTERFERENCE — UKRAINIAN → ENGLISH]
+The source is Ukrainian. The English version is a PUBLISHED, SEO-bearing storefront language — it
+must read as native English technical marketing copy, not as a translation.
+- Ukrainian has no articles. Every English noun phrase needs its article decided deliberately.
+- Do not carry Ukrainian word order. Restore natural English collocations: "resin 3D printer with a
+  monochrome 8K LCD", not "3D printer with LCD-display of monochrome 8K type".
+- Do not translate every "який/що" clause as "which". Prefer participles and shorter sentences.
+- Prefer the industry-standard English term over a literal rendering of the Ukrainian term.`,
+
+  'American English': `[SOURCE-LANGUAGE INTERFERENCE — UKRAINIAN → ENGLISH]
+Same rules as European English above; American spelling and Imperial-first measurement per the US
+instruction block.`,
+};

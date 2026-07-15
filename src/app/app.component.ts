@@ -9,7 +9,7 @@ import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { parseVisionResult } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
-import { getStore, getLangsForStore, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
+import { getStore, bcp47ToTaskCLang, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
@@ -93,6 +93,8 @@ const TRANSLATIONS = {
     englishOutput: 'US English Output',
     englishOutputGeneric: 'English',
     englishFaqTabLabel: 'English FAQ',
+    ukrainianOutput: 'Ukrainian',
+    ukrainianFaqTabLabel: 'Ukrainian FAQ',
     copyCode: 'Copy Code',
     htmlSource: 'HTML Source',
     livePreview: 'Live Preview (Rendered)',
@@ -242,6 +244,8 @@ const TRANSLATIONS = {
     englishOutput: 'Результат (Англійська)',
     englishOutputGeneric: 'Англійська',
     englishFaqTabLabel: 'Англ. FAQ',
+    ukrainianOutput: 'Українська',
+    ukrainianFaqTabLabel: 'Укр. FAQ',
     copyCode: 'Копіювати код',
     htmlSource: 'Джерело HTML',
     livePreview: 'Попередній перегляд',
@@ -364,7 +368,7 @@ export class AppComponent {
   selectedTemplateId = signal<string>('');
   customTemplate = signal<Partial<ContentTemplate['structure']>>({});
   showCustomTemplate = signal<boolean>(false);
-  
+
   // --- OPTIMIZER STATE ---
   optimizerInputHtml = signal<string>('');
   optimizerUseThinking = signal<boolean>(false);
@@ -383,12 +387,12 @@ export class AppComponent {
 
   // --- SEO META: isolated input state ---
   seoSelectedWebsite = signal<WebsiteOption | null>(null);
-  seoProductName     = signal<string>('');
-  seoDescription     = signal<string>('');
+  seoProductName = signal<string>('');
+  seoDescription = signal<string>('');
 
   // --- SLUG GENERATOR: isolated input state ---
   slugSelectedWebsite = signal<WebsiteOption | null>(null);
-  slugProductName     = signal<string>('');
+  slugProductName = signal<string>('');
 
   // --- IMAGE TOOLS STATE ---
   imgFiles = signal<InputImage[]>([]);
@@ -435,9 +439,9 @@ export class AppComponent {
   validationWarningCount = computed(() => this.validationIssues().filter(i => i.severity === 'warning').length);
 
   // Per-tool output presence — each tool's layout reads ONLY its own slice.
-  hasGeneratorOutput = computed(() => !!this.content().mainHtmlEn);
-  hasSeoOutput       = computed(() => !!this.content().seoData);
-  hasSlugOutput      = computed(() => !!this.content().slugData);
+  hasGeneratorOutput = computed(() => !!this.content().mainHtmlUa);
+  hasSeoOutput = computed(() => !!this.content().seoData);
+  hasSlugOutput = computed(() => !!this.content().slugData);
   // Aggregate for ZIP/TXT download enablement etc. Generator layout MUST use hasGeneratorOutput().
   hasOutput = computed(() => this.hasGeneratorOutput() || this.hasSeoOutput() || this.hasSlugOutput());
 
@@ -450,15 +454,24 @@ export class AppComponent {
     }
   });
 
-  // "US English Output" only for the US store; plain "English" for all other groups.
-  // Uses website recorded on the generated content so a post-generation dropdown change
-  // does not relabel an already-shown result.
+  // The base/master tab is labeled by the content's actual language (mainHtmlLocale), which is
+  // 'uk-UA' for every current generate()/generateUaContent() run. Falls back to the old
+  // group-based English logic when mainHtmlLocale is unset (e.g. SEO-only/Slug-only modes, where
+  // mainHtmlUa is empty anyway) — "US English Output" only for the US store, plain "English"
+  // otherwise. Uses website recorded on the generated content so a post-generation dropdown
+  // change does not relabel an already-shown result.
   baseOutputLabel = computed(() => {
+    if (this.content().mainHtmlLocale === 'uk-UA') return this.uiLabels().ukrainianOutput;
     const group = this.content().website?.group ?? this.selectedWebsite()?.group;
     return group === 'US'
       ? this.uiLabels().englishOutput
       : this.uiLabels().englishOutputGeneric;
   });
+
+  // Same locale-driven logic as baseOutputLabel, for the base tab's FAQ label.
+  baseFaqTabLabel = computed(() =>
+    this.content().mainHtmlLocale === 'uk-UA' ? this.uiLabels().ukrainianFaqTabLabel : this.uiLabels().englishFaqTabLabel
+  );
 
   // Ordered list of output tabs, derived from STORE_REGISTRY language order and the
   // presence of faqArtifacts. The template iterates this with @for — no @if guards per tab.
@@ -481,27 +494,26 @@ export class AppComponent {
     }
 
     const store = getStore(storeName);
-    const { transLangs } = getLangsForStore(storeName);
     const labels = this.uiLabels();
 
-    // transLangs is derived from the same non-English filter, in the same order, so a
-    // positional zip gives the ISO → task-label mapping without a reverse string search.
-    const nonEnglishIsos = store.languages.filter(iso => !iso.startsWith('en-'));
-    const isoToTaskKey = new Map(nonEnglishIsos.map((iso, i) => [iso, transLangs[i]]));
+    // The master locale for THIS generated content. Falls back to the store's first en-*
+    // language (historical default) for content generated before mainHtmlLocale was tracked,
+    // e.g. SEO-only/Slug-only runs where mainHtmlUa is empty anyway.
+    const masterIso = c.mainHtmlLocale ?? store.languages.find(iso => iso.startsWith('en-')) ?? store.languages[0];
 
     const tabs: TabDescriptor[] = [];
 
     for (const iso of store.languages) {
-      if (iso.startsWith('en-')) {
+      if (iso === masterIso) {
         tabs.push({ id: 'html', label: this.baseOutputLabel(), type: 'english', color: 'blue', iso, isFaq: false });
         if (c.faqArtifacts?.[iso]) {
-          tabs.push({ id: 'faq-html', label: labels.englishFaqTabLabel, type: 'faq-english', color: 'green', iso, isFaq: true });
+          tabs.push({ id: 'faq-html', label: this.baseFaqTabLabel(), type: 'faq-english', color: 'green', iso, isFaq: true });
         }
         continue;
       }
 
-      const taskKey = isoToTaskKey.get(iso);
-      if (!taskKey || !c.translations[taskKey]) continue;
+      const taskKey = bcp47ToTaskCLang(iso, store.group);
+      if (!c.translations[taskKey]) continue;
 
       tabs.push({ id: `trans-${taskKey}`, label: `${taskKey} ${labels.translation}`, type: 'translation', color: 'purple', iso, taskKey, isFaq: false });
       if (c.faqArtifacts?.[iso]) {
@@ -599,9 +611,9 @@ export class AppComponent {
   isOptimizerValid = computed(() => this.optimizerInputHtml().trim().length > 0);
 
   isTranslatorValid = computed(() => this.translatorInput().trim().length > 0);
-  
+
   isReadabilityValid = computed(() => this.readabilityInput().trim().length > 0);
-  
+
   isCopywriterValid = computed(() => this.selectedWebsite() && this.copywriterInput().trim().length > 0);
 
   selectedComparisonItems = computed(() => {
@@ -858,7 +870,7 @@ export class AppComponent {
   }
 
   clearHistory() {
-    if(confirm(this.uiLabels().alertHistoryClear)) {
+    if (confirm(this.uiLabels().alertHistoryClear)) {
       this.historyService.clear();
       this.comparisonIds.set([]);
       this.showComparison.set(false);
@@ -895,7 +907,7 @@ export class AppComponent {
         this.clearGenImgManifest();
         this.orchestrator.content.update(c => ({
           ...c,
-          mainHtmlEn: '',
+          mainHtmlUa: '',
           translations: {},
           faqArtifacts: {},
           website: undefined,
@@ -1054,17 +1066,36 @@ export class AppComponent {
             if (!file) throw new Error('File not found');
             const base64 = await this.fileToBase64ForVision(file);
             const specsExcerpt = this.specs().trim().slice(0, 400);
-            const prompt = buildVisionPrepassPrompt(this.productName(), specsExcerpt);
-            const raw = await this.llmService.analyzeImage(base64, 'image/jpeg', prompt, this.generatorUseThinking());
-            const result = parseVisionResult(raw);
+            const basePrompt = buildVisionPrepassPrompt(this.productName(), specsExcerpt);
+            // Run one vision call + parse under the ≤20-word contract.
+            const runVision = async (p: string) =>
+              parseVisionResult(await this.llmService.analyzeImage(base64, 'image/jpeg', p, this.generatorUseThinking()));
+            // One-shot self-repair: a comparison / multi-panel / text-dense image can push the
+            // caption past the 20-word ceiling (parseVisionResult throws by contract). Retry once
+            // with an explicit corrective reminder BEFORE falling back to filename-derived alt.
+            // Any non-length error, or a second failure, propagates to the catch block unchanged.
+            let result;
+            try {
+              result = await runVision(basePrompt);
+            } catch (parseErr) {
+              const overLength = parseErr instanceof Error && /exceeds \d+ words/.test(parseErr.message);
+              if (!overLength) throw parseErr;
+              result = await runVision(
+                basePrompt +
+                '\n\nYOUR PREVIOUS CAPTION EXCEEDED THE 20-WORD CEILING and was rejected. Rewrite it ' +
+                'strictly under 20 words: state the single overall point (for a comparison or multi-panel ' +
+                'image, name the comparison/takeaway — do NOT enumerate each side or every on-image label). ' +
+                'Cut the least essential detail.'
+              );
+            }
             this.genImgManifest.update(list =>
               list.map(e => e.id === entry.id
                 ? {
-                    ...e,
-                    status: 'done',
-                    visionDescription: result.caption,
-                    altText: e.altText || result.caption,
-                  }
+                  ...e,
+                  status: 'done',
+                  visionDescription: result.caption,
+                  altText: e.altText || result.caption,
+                }
                 : e)
             );
           } catch (err) {
@@ -1120,8 +1151,8 @@ export class AppComponent {
   onImageDrop(event: DragEvent) {
     event.preventDefault();
     if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
-       const newImages = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/')).map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
-       this.imgFiles.update(current => [...current, ...newImages]);
+      const newImages = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/')).map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+      this.imgFiles.update(current => [...current, ...newImages]);
     }
   }
 
@@ -1216,7 +1247,7 @@ export class AppComponent {
       let baseName = img.originalName;
       if (baseName.includes('.')) baseName = baseName.substring(0, baseName.lastIndexOf('.'));
       const fileName = `${baseName}.${ext}`;
-      
+
       return {
         fileName: fileName,
         altText: img.altText || ''

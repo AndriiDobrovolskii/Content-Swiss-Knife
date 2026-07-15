@@ -28,12 +28,12 @@ export const downloadPackage = async (content: GeneratedContent, productName: st
 
   // Determine English ISO code for this store (e.g. 'en-GB', 'en-ES', 'en-US')
   const enIso = store.languages.find(l => l.startsWith('en-')) ?? 'en-GB';
-  // mainHtmlEn holds the actual base description — English by default, but a locale like
-  // 'uk-UA' for native ua-generator output (see GeneratedContent.mainHtmlLocale).
+  // mainHtmlUa holds the actual base description — uk-UA under the current single-master
+  // pipeline (see GeneratedContent.mainHtmlLocale).
   const mainIso = content.mainHtmlLocale ?? enIso;
 
   // 1. Base description
-  zip.file(`description_${mainIso}.html`, content.mainHtmlEn);
+  zip.file(`description_${mainIso}.html`, content.mainHtmlUa);
 
   // 2. Translations — sort so Ukrainian comes first
   const sortedKeys = Object.keys(content.translations).sort(sortUkrainianFirst);
@@ -84,11 +84,11 @@ export const downloadTextPackage = (content: GeneratedContent, productName: stri
 
   let fullText = `Product: ${productName}\nGenerated: ${new Date().toLocaleString()}\n\n`;
 
-  if (content.mainHtmlEn) {
+  if (content.mainHtmlUa) {
     fullText += `--------------------------------------------------\n`;
     fullText += `LANGUAGE: ${content.mainHtmlLocale ?? 'English (US)'}\n`;
     fullText += `--------------------------------------------------\n\n`;
-    fullText += strip(content.mainHtmlEn).trim();
+    fullText += strip(content.mainHtmlUa).trim();
     fullText += `\n\n\n`;
   }
 

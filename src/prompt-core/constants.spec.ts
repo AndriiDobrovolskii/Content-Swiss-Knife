@@ -9,8 +9,9 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  getLangsForStore, taskLangToIso, isoToHumanLang, buildNativeLangOverlay,
-  EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, EXPERT3D_ES_NATIVE_VOCAB_OVERLAY,
+  getLangsForStore, taskLangToIso, isoToHumanLang, buildNativeLangOverlay, buildMasterUaOverlay,
+  bcp47ToTaskCLang, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV,
+  EXPERT3D_ES_NATIVE_VOCAB_OVERLAY, EXPERT3D_UK_LOCALE_TOV,
 } from './constants';
 
 describe('buildNativeLangOverlay', () => {
@@ -45,16 +46,16 @@ describe('buildNativeLangOverlay', () => {
 });
 
 describe('pt-PT locale wiring', () => {
-  it('getLangsForStore("EXPERT3D") includes pt-PT in seoLangs and PT in transLangs', () => {
+  it('getLangsForStore("EXPERT3D") includes pt-PT in seoLangs and European English/ES/PT in transLangs', () => {
     const { seoLangs, transLangs } = getLangsForStore('EXPERT3D');
     expect(seoLangs).toContain('pt-PT');
-    expect(transLangs).toEqual(['ES', 'PT', 'UA']);
+    expect(transLangs).toEqual(['European English', 'ES', 'PT']);
   });
 
-  it('getLangsForStore("Impresora-3D") includes pt-PT in seoLangs and PT in transLangs', () => {
+  it('getLangsForStore("Impresora-3D") includes pt-PT in seoLangs and European English/ES/PT in transLangs', () => {
     const { seoLangs, transLangs } = getLangsForStore('Impresora-3D');
     expect(seoLangs).toContain('pt-PT');
-    expect(transLangs).toEqual(['ES', 'PT', 'UA']);
+    expect(transLangs).toEqual(['European English', 'ES', 'PT']);
   });
 
   it('taskLangToIso("PT", "EXPERT3D") resolves to "pt-PT"', () => {
@@ -67,5 +68,48 @@ describe('pt-PT locale wiring', () => {
 
   it('isoToHumanLang("pt-PT") returns "European Portuguese"', () => {
     expect(isoToHumanLang('pt-PT')).toBe('European Portuguese');
+  });
+});
+
+describe('uk-UA master locale wiring', () => {
+  it('getLangsForStore("3DDevice") excludes uk-UA (master) and maps en-GB to European English', () => {
+    const { transLangs } = getLangsForStore('3DDevice');
+    expect(transLangs).toEqual(['European English', 'RU']);
+  });
+
+  it('getLangsForStore("Center 3D Print") excludes uk-UA (master) in registry order', () => {
+    const { transLangs } = getLangsForStore('Center 3D Print');
+    expect(transLangs).toEqual(['PL', 'European English', 'DE', 'RU']);
+  });
+
+  it('getLangsForStore("Drukarka 3D") excludes uk-UA (master), leaving only PL', () => {
+    const { transLangs } = getLangsForStore('Drukarka 3D');
+    expect(transLangs).toEqual(['PL']);
+  });
+
+  it('bcp47ToTaskCLang maps en-GB to "European English"', () => {
+    expect(bcp47ToTaskCLang('en-GB', 'UA')).toBe('European English');
+  });
+
+  it('taskLangToIso("European English", "3DDevice") resolves to "en-GB"', () => {
+    expect(taskLangToIso('European English', '3DDevice')).toBe('en-GB');
+  });
+
+  it('taskLangToIso("European English", "EXPERT3D") resolves to "en-ES"', () => {
+    expect(taskLangToIso('European English', 'EXPERT3D')).toBe('en-ES');
+  });
+});
+
+describe('buildMasterUaOverlay', () => {
+  it('EXPERT3D store includes the uk-UA locale ToV overlay', () => {
+    const overlay = buildMasterUaOverlay('EXPERT3D');
+    expect(overlay).toContain('UKRAINIAN MASTER OUTPUT');
+    expect(overlay).toContain(EXPERT3D_UK_LOCALE_TOV);
+  });
+
+  it('non-EXPERT3D store gets only the image-text-override note, no EXPERT3D overlay', () => {
+    const overlay = buildMasterUaOverlay('3DDevice');
+    expect(overlay).toContain('UKRAINIAN MASTER OUTPUT');
+    expect(overlay).not.toContain(EXPERT3D_UK_LOCALE_TOV);
   });
 });
