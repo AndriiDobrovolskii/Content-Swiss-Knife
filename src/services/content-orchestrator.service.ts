@@ -47,7 +47,7 @@ export class ContentOrchestratorService {
   isSuggestingKeywords = signal(false);
 
   content = signal<GeneratedContent>({
-    mainHtmlEn: '',
+    mainHtmlUa: '',
     translations: {},
     seoData: null,
     slugData: null
@@ -75,7 +75,7 @@ export class ContentOrchestratorService {
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
     // localized name authoritative across H1/title/URL without ever reusing a stale name.
     const reusedSlug = this.approvedSlugKey() === this.slugKey(input) ? this.content().slugData ?? null : null;
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {}, mainHtmlLocale: 'uk-UA' });
+    this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {}, mainHtmlLocale: 'uk-UA' });
     this.validationIssues.set([]);
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -85,6 +85,11 @@ export class ContentOrchestratorService {
 
     const isConsumables = input.templateId === 'consumables-resin';
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
+    // Extra headroom for the master specifically when an image manifest exists — Task A
+    // doesn't reliably hit "exactly N images" on the first pass, and a dropped image is a
+    // hard error (see checkImageManifestCoverage). Translations don't need this: they inherit
+    // whatever the master ends up shipping via masterImageManifest below.
+    const masterRepairBudget = imgManifest ? Math.max(repairBudget, 3) : repairBudget;
 
     await this.withProgress(async () => {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);
@@ -110,7 +115,7 @@ export class ContentOrchestratorService {
       };
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
         label: 'HTML (base)',
-        maxRepairs: repairBudget,
+        maxRepairs: masterRepairBudget,
         basePayload: basePayloadA,
         produce: produceHtmlA,
         validate: html => [
@@ -122,9 +127,16 @@ export class ContentOrchestratorService {
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
-      // mainHtmlEn now holds the uk-UA MASTER — see mainHtmlLocale. Renamed to versions['uk-UA'] in PR #1.
+      // mainHtmlUa now holds the uk-UA MASTER — see mainHtmlLocale. Renamed to versions['uk-UA'] in PR #1.
       const finalMasterHtml = isConsumables ? trimConsumablesToLimit(htmlEn) : htmlEn;
-      this.content.update(c => ({ ...c, mainHtmlEn: finalMasterHtml }));
+      this.content.update(c => ({ ...c, mainHtmlUa: finalMasterHtml }));
+      // Scope translation image-manifest validation to what the master actually shipped, not
+      // the raw upload manifest — a translation must mirror the master (validateStructuralParity
+      // already enforces this byte-for-byte); requiring it to also contain manifest images the
+      // master itself dropped is an unsatisfiable, contradictory validation (see 2026-07-15
+      // es-ES regression: repair feedback for "missing" manifest images the master never had
+      // drove the model to invent structure instead of translating).
+      const masterImageManifest = imgManifest?.filter(({ urlFilename }) => finalMasterHtml.includes(urlFilename));
       this.validationIssues.set(
         isConsumables
           ? validateGeneratedHtml(finalMasterHtml, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest })
@@ -212,7 +224,7 @@ export class ContentOrchestratorService {
             return fixNumberFormatting(html);
           },
           validate: (html) => [
-            ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId, imageManifest: imgManifest }),
+            ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId, imageManifest: masterImageManifest }),
             ...validateSpecsGrounding(html, input.specs, `HTML (${lang})`),
             ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
           ],
@@ -293,7 +305,7 @@ export class ContentOrchestratorService {
     const UA_ISO = 'uk-UA';
     const UA_BASE_LANGUAGE = 'Ukrainian (uk-UA)';
 
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
+    this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
     this.validationIssues.set([]);
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -344,7 +356,7 @@ export class ContentOrchestratorService {
       });
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
       const finalHtmlUa = isConsumables ? trimConsumablesToLimit(htmlUa) : htmlUa;
-      this.content.update(c => ({ ...c, mainHtmlEn: finalHtmlUa }));
+      this.content.update(c => ({ ...c, mainHtmlUa: finalHtmlUa }));
       this.validationIssues.set(
         isConsumables
           ? validateGeneratedHtml(finalHtmlUa, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest })
@@ -442,7 +454,7 @@ export class ContentOrchestratorService {
     // standalone run feeds the approved localized name to B as h1 + title core. Otherwise
     // clear it (and B falls back to the English formula → independence preserved).
     const existingSlug = this.approvedSlugKey() === this.slugKey(input) ? this.content().slugData ?? null : null;
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: existingSlug, website: input.website });
+    this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: existingSlug, website: input.website });
     this.validationIssues.set([]);
 
     await this.withProgress(async () => {
@@ -474,7 +486,7 @@ export class ContentOrchestratorService {
   }
 
   async generateSlugs(input: ProductInput, useThinking = false): Promise<void> {
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, website: input.website });
+    this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website });
     this.validationIssues.set([]);
 
     await this.withProgress(async () => {
@@ -586,7 +598,7 @@ export class ContentOrchestratorService {
   private runOutputValidation(storeName: string, productName?: string, templateId?: string, mainLocale?: string): void {
     const c = this.content();
     const issues: ValidationIssue[] = [
-      ...validateGeneratedHtml(c.mainHtmlEn, mainLocale ? `HTML (${mainLocale})` : 'HTML (base)', productName, mainLocale, { templateId }),
+      ...validateGeneratedHtml(c.mainHtmlUa, mainLocale ? `HTML (${mainLocale})` : 'HTML (base)', productName, mainLocale, { templateId }),
       ...Object.entries(c.translations).flatMap(([lang, html]) =>
         validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId })
       ),
@@ -601,7 +613,7 @@ export class ContentOrchestratorService {
   }
 
   resetState() {
-    this.content.set({ mainHtmlEn: '', translations: {}, seoData: null, slugData: null, faqArtifacts: {} });
+    this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, faqArtifacts: {} });
     this.validationIssues.set([]);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');

@@ -9,7 +9,7 @@ import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { parseVisionResult } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
-import { getStore, getLangsForStore, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
+import { getStore, bcp47ToTaskCLang, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
@@ -93,6 +93,8 @@ const TRANSLATIONS = {
     englishOutput: 'US English Output',
     englishOutputGeneric: 'English',
     englishFaqTabLabel: 'English FAQ',
+    ukrainianOutput: 'Ukrainian',
+    ukrainianFaqTabLabel: 'Ukrainian FAQ',
     copyCode: 'Copy Code',
     htmlSource: 'HTML Source',
     livePreview: 'Live Preview (Rendered)',
@@ -242,6 +244,8 @@ const TRANSLATIONS = {
     englishOutput: 'Результат (Англійська)',
     englishOutputGeneric: 'Англійська',
     englishFaqTabLabel: 'Англ. FAQ',
+    ukrainianOutput: 'Українська',
+    ukrainianFaqTabLabel: 'Укр. FAQ',
     copyCode: 'Копіювати код',
     htmlSource: 'Джерело HTML',
     livePreview: 'Попередній перегляд',
@@ -435,7 +439,7 @@ export class AppComponent {
   validationWarningCount = computed(() => this.validationIssues().filter(i => i.severity === 'warning').length);
 
   // Per-tool output presence — each tool's layout reads ONLY its own slice.
-  hasGeneratorOutput = computed(() => !!this.content().mainHtmlEn);
+  hasGeneratorOutput = computed(() => !!this.content().mainHtmlUa);
   hasSeoOutput = computed(() => !!this.content().seoData);
   hasSlugOutput = computed(() => !!this.content().slugData);
   // Aggregate for ZIP/TXT download enablement etc. Generator layout MUST use hasGeneratorOutput().
@@ -450,15 +454,24 @@ export class AppComponent {
     }
   });
 
-  // "US English Output" only for the US store; plain "English" for all other groups.
-  // Uses website recorded on the generated content so a post-generation dropdown change
-  // does not relabel an already-shown result.
+  // The base/master tab is labeled by the content's actual language (mainHtmlLocale), which is
+  // 'uk-UA' for every current generate()/generateUaContent() run. Falls back to the old
+  // group-based English logic when mainHtmlLocale is unset (e.g. SEO-only/Slug-only modes, where
+  // mainHtmlUa is empty anyway) — "US English Output" only for the US store, plain "English"
+  // otherwise. Uses website recorded on the generated content so a post-generation dropdown
+  // change does not relabel an already-shown result.
   baseOutputLabel = computed(() => {
+    if (this.content().mainHtmlLocale === 'uk-UA') return this.uiLabels().ukrainianOutput;
     const group = this.content().website?.group ?? this.selectedWebsite()?.group;
     return group === 'US'
       ? this.uiLabels().englishOutput
       : this.uiLabels().englishOutputGeneric;
   });
+
+  // Same locale-driven logic as baseOutputLabel, for the base tab's FAQ label.
+  baseFaqTabLabel = computed(() =>
+    this.content().mainHtmlLocale === 'uk-UA' ? this.uiLabels().ukrainianFaqTabLabel : this.uiLabels().englishFaqTabLabel
+  );
 
   // Ordered list of output tabs, derived from STORE_REGISTRY language order and the
   // presence of faqArtifacts. The template iterates this with @for — no @if guards per tab.
@@ -481,27 +494,26 @@ export class AppComponent {
     }
 
     const store = getStore(storeName);
-    const { transLangs } = getLangsForStore(storeName);
     const labels = this.uiLabels();
 
-    // transLangs is derived from the same non-English filter, in the same order, so a
-    // positional zip gives the ISO → task-label mapping without a reverse string search.
-    const nonEnglishIsos = store.languages.filter(iso => !iso.startsWith('en-'));
-    const isoToTaskKey = new Map(nonEnglishIsos.map((iso, i) => [iso, transLangs[i]]));
+    // The master locale for THIS generated content. Falls back to the store's first en-*
+    // language (historical default) for content generated before mainHtmlLocale was tracked,
+    // e.g. SEO-only/Slug-only runs where mainHtmlUa is empty anyway.
+    const masterIso = c.mainHtmlLocale ?? store.languages.find(iso => iso.startsWith('en-')) ?? store.languages[0];
 
     const tabs: TabDescriptor[] = [];
 
     for (const iso of store.languages) {
-      if (iso.startsWith('en-')) {
+      if (iso === masterIso) {
         tabs.push({ id: 'html', label: this.baseOutputLabel(), type: 'english', color: 'blue', iso, isFaq: false });
         if (c.faqArtifacts?.[iso]) {
-          tabs.push({ id: 'faq-html', label: labels.englishFaqTabLabel, type: 'faq-english', color: 'green', iso, isFaq: true });
+          tabs.push({ id: 'faq-html', label: this.baseFaqTabLabel(), type: 'faq-english', color: 'green', iso, isFaq: true });
         }
         continue;
       }
 
-      const taskKey = isoToTaskKey.get(iso);
-      if (!taskKey || !c.translations[taskKey]) continue;
+      const taskKey = bcp47ToTaskCLang(iso, store.group);
+      if (!c.translations[taskKey]) continue;
 
       tabs.push({ id: `trans-${taskKey}`, label: `${taskKey} ${labels.translation}`, type: 'translation', color: 'purple', iso, taskKey, isFaq: false });
       if (c.faqArtifacts?.[iso]) {
@@ -895,7 +907,7 @@ export class AppComponent {
         this.clearGenImgManifest();
         this.orchestrator.content.update(c => ({
           ...c,
-          mainHtmlEn: '',
+          mainHtmlUa: '',
           translations: {},
           faqArtifacts: {},
           website: undefined,

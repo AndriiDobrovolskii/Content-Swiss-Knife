@@ -80,13 +80,13 @@ export interface ReadabilityScore {
 }
 
 export interface GeneratedContent {
-  mainHtmlEn: string;
+  mainHtmlUa: string;
   translations: Record<string, string>; // e.g., 'UA': '<html>...</html>'
   seoData: SeoResponse | null;
   slugData?: SlugResponse | null;
   website?: WebsiteOption; // store this content was generated for (optional for backward compat)
   faqArtifacts?: Record<string, string>;   // ISO code → schema-free faq_[ISO].html
-  mainHtmlLocale?: string; // ISO code for mainHtmlEn's actual language, e.g. 'uk-UA' for native ua-generator output. Undefined = English (historical default).
+  mainHtmlLocale?: string; // ISO code for mainHtmlUa's actual language, e.g. 'uk-UA' for native ua-generator output. Undefined = English (historical default).
 }
 
 export interface HistoryItem {
