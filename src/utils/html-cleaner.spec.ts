@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { cleanHtmlStructure } from './html-cleaner';
+import { cleanHtmlStructure, stripCkeditorArtifacts } from './html-cleaner';
 
 function parse(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
@@ -143,6 +143,49 @@ describe('cleanHtmlStructure — idempotency', () => {
       <img src="a.jpg" alt="A"></div>`;
     const once = cleanHtmlStructure(html);
     const twice = cleanHtmlStructure(once);
+    expect(twice).toBe(once);
+  });
+});
+
+describe('stripCkeditorArtifacts', () => {
+  it('unwraps <figure class="table"> around a <table>, keeping .table-responsive', () => {
+    const html = `<div class="table-responsive"><figure class="table"><table><tr><td>A</td></tr></table></figure></div>`;
+    const doc = parse(stripCkeditorArtifacts(html));
+    expect(doc.querySelector('figure.table')).toBeNull();
+    expect(doc.querySelector('div.table-responsive > table')).not.toBeNull();
+  });
+
+  it('removes data-list-item-id from <li> while keeping list content', () => {
+    const html = `<ul><li data-list-item-id="abc123">Item text</li></ul>`;
+    const doc = parse(stripCkeditorArtifacts(html));
+    const li = doc.querySelector('li')!;
+    expect(li.hasAttribute('data-list-item-id')).toBe(false);
+    expect(li.textContent).toBe('Item text');
+  });
+
+  it('unwraps a <p> that only wraps an <img> inside a <figure>', () => {
+    const html = `<figure><p><img src="a.jpg" alt="A"></p><figcaption>Cap</figcaption></figure>`;
+    const doc = parse(stripCkeditorArtifacts(html));
+    const figure = doc.querySelector('figure')!;
+    expect(figure.querySelector('p')).toBeNull();
+    expect(figure.firstElementChild?.tagName).toBe('IMG');
+  });
+
+  it('does NOT unwrap a <p> inside <figure> that has text alongside the image', () => {
+    const html = `<figure><p>Caption text <img src="a.jpg" alt="A"></p></figure>`;
+    const doc = parse(stripCkeditorArtifacts(html));
+    expect(doc.querySelector('figure > p')).not.toBeNull();
+  });
+
+  it('leaves already-clean HTML untouched', () => {
+    const html = `<div class="table-responsive"><table><tbody><tr><td>A</td></tr></tbody></table></div><figure><img src="a.jpg" alt="A"><figcaption>Cap</figcaption></figure>`;
+    expect(stripCkeditorArtifacts(html)).toBe(html);
+  });
+
+  it('is idempotent', () => {
+    const html = `<div class="table-responsive"><figure class="table"><table><tr><td>A</td></tr></table></figure></div><ul><li data-list-item-id="x">A</li></ul>`;
+    const once = stripCkeditorArtifacts(html);
+    const twice = stripCkeditorArtifacts(once);
     expect(twice).toBe(once);
   });
 });

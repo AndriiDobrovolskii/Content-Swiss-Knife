@@ -1,6 +1,12 @@
 /* highlight.js — GitHub light theme (default) */
 @import 'highlight.js/styles/github.min.css';
 
+/* CKEditor 5 always renders its editing surface on a white background (it has no
+   dark theme of its own), but its content div inherits `color` from <body> by normal
+   CSS cascade. In dark mode <body> is dark:text-slate-100 (near-white) — unreadable
+   on white. Override just the editing surface, not the rest of the app. */
+.dark .ck-content { color: #1e293b; }
+
 /* highlight.js — GitHub Dark overrides (Tailwind dark: class strategy) */
 .dark .hljs                          { background: #0d1117; color: #e6edf3; }
 .dark .hljs-comment,
