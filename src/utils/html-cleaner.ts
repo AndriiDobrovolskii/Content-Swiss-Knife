@@ -262,3 +262,44 @@ export const cleanHtmlStructure = (html: string): string => {
   // already present as a trailing sibling of the <img>.
   return wrapImageFigures(doc.body.innerHTML);
 };
+
+/**
+ * stripCkeditorArtifacts
+ *
+ * Deterministic cleanup for HTML round-tripped through CKEditor 5's
+ * GeneralHtmlSupport + Table + List plugins (see HtmlEditorComponent).
+ * Removes editor-internal markup that has no place in published output and
+ * would otherwise trip validateStructuralParity()'s <figure> count check.
+ *
+ * Scope is deliberately narrow — three known CKEditor artifacts, confirmed
+ * against a real npm ckeditor5 bundle round-trip. Not a general HTML sanitizer.
+ * Pure function, no LLM, mirrors output-validator.ts / html-cleaner.ts style.
+ */
+export function stripCkeditorArtifacts(html: string): string {
+  if (!html) return '';
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  // CKEditor's Table plugin wraps every <table> in <figure class="table">.
+  // Unwrap it — the pre-existing .table-responsive div is the only wrapper kept.
+  doc.querySelectorAll('figure.table').forEach(fig => {
+    const table = fig.querySelector('table');
+    if (table) fig.replaceWith(table);
+  });
+
+  // CKEditor's List plugin stamps every <li> with a tracking id — never present
+  // in generator output, not meaningful once copied out.
+  doc.querySelectorAll('li[data-list-item-id]').forEach(li => li.removeAttribute('data-list-item-id'));
+
+  // GeneralHtmlSupport auto-wraps loose inline content inside block containers:
+  // figure > img becomes figure > p > img. Unwrap <p> wrappers whose only
+  // child is an <img>, restoring the figure > img direct-child relationship
+  // (some store CSS themes target that selector directly).
+  doc.querySelectorAll('figure > p').forEach(p => {
+    const onlyChild = p.firstElementChild;
+    const wrapsOnlyImg = onlyChild?.tagName === 'IMG' && p.childNodes.length === 1;
+    if (wrapsOnlyImg) p.replaceWith(onlyChild!);
+  });
+
+  return doc.body.innerHTML;
+}

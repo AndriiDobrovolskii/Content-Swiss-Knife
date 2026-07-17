@@ -1,4 +1,4 @@
-import { Component, signal, inject, computed, effect } from '@angular/core';
+import { Component, signal, inject, computed, effect, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../services/content-orchestrator.service';
 import { HistoryService } from '../services/history.service';
@@ -14,6 +14,7 @@ import { getStore, bcp47ToTaskCLang, TRANSLATOR_LANGUAGES } from '../prompt-core
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { HtmlEditorComponent } from './components/html-editor/html-editor.component';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
 import saveAs from 'file-saver';
 
@@ -33,6 +34,8 @@ const TRANSLATIONS = {
     imageTools: 'Image Tools',
     seoGenerator: 'SEO Meta',
     copywriter: 'Copywriter',
+    htmlEditor: 'HTML Editor',
+    loadingHtmlEditor: 'Loading editor…',
     seoGenBtn: 'Generate Metadata',
     seoOnlyTitle: 'SEO Metadata Generator',
     slugGenerator: 'Slugs',
@@ -111,6 +114,7 @@ const TRANSLATIONS = {
     copyRewrite: 'Copy Rewritten Text',
     alertFillFields: 'Please fill in all mandatory fields:\n- Target Website\n- Product Name\n- Original Description',
     alertHistoryClear: 'Are you sure you want to delete all generated history? This cannot be undone.',
+    alertUnsavedHtmlEditor: 'You have unsaved changes in the HTML Editor. Switch tabs anyway?',
     readyOptimize: 'Ready to Optimize',
     pasteHtmlStart: 'Paste HTML in the sidebar to start.',
     readyTranslate: 'Ready to Translate',
@@ -184,6 +188,8 @@ const TRANSLATIONS = {
     imageTools: 'Інструменти зображень',
     seoGenerator: 'SEO Мета',
     copywriter: 'Копірайтер',
+    htmlEditor: 'HTML-редактор',
+    loadingHtmlEditor: 'Завантаження редактора…',
     seoGenBtn: 'Генерувати метадані',
     seoOnlyTitle: 'Генератор SEO метаданих',
     slugGenerator: 'Слаги',
@@ -262,6 +268,7 @@ const TRANSLATIONS = {
     copyRewrite: 'Копіювати текст',
     alertFillFields: 'Будь ласка, заповніть обов\'язкові поля:\n- Цільовий сайт\n- Назва товару\n- Оригінальний опис',
     alertHistoryClear: 'Ви впевнені, що хочете видалити всю історію? Цю дію неможливо відмінити.',
+    alertUnsavedHtmlEditor: 'У вас є незбережені зміни в HTML-редакторі. Все одно перейти?',
     readyOptimize: 'Готовий до оптимізації',
     pasteHtmlStart: 'Вставте HTML у бічну панель, щоб почати.',
     readyTranslate: 'Готовий до перекладу',
@@ -330,7 +337,7 @@ const TRANSLATIONS = {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent],
+  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent {
@@ -340,6 +347,10 @@ export class AppComponent {
 
   // App Mode
   appMode = signal<AppMode>('generator');
+  // Queried by template reference variable, not by type — a type-locator query
+  // (viewChild(HtmlEditorComponent)) would force an eager runtime reference to the
+  // class and silently defeat the @defer code-splitting on this component.
+  htmlEditorRef = viewChild<HtmlEditorComponent>('htmlEditorRef');
 
   // UI Language
   uiLanguage = signal<'en' | 'uk'>('en');
@@ -665,6 +676,11 @@ export class AppComponent {
   }
 
   setMode(mode: AppMode) {
+    if (this.appMode() === 'html-editor' && mode !== 'html-editor'
+        && this.htmlEditorRef()?.hasUnsavedChanges()
+        && !confirm(this.uiLabels().alertUnsavedHtmlEditor)) {
+      return;
+    }
     this.appMode.set(mode);
   }
 
