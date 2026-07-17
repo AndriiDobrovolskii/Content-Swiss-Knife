@@ -4,7 +4,7 @@
  * Deterministic anti-hallucination guard for the technical-specifications table.
  *
  * WHY THIS EXISTS
- * Task A (base English generation) can invent a spec row that has no basis in the
+ * Task A (master generation) can invent a spec row that has no basis in the
  * source `input.specs` (observed: a phantom "Throughput | 0330 kg/hr" row that then
  * propagated through Task C into every locale). CLAUDE.md requires "spec count on
  * output = spec count on input"; this module enforces it.
@@ -17,7 +17,9 @@
  *   table contains derived numbers and must NOT be grounded. Within scope, each spec is
  *   a <tbody> <tr> with plain <td> cells (label = first <td>); the <thead> header row and
  *   the top key-specs table are both excluded.
- * - Runs at the BASE English stage only (labels + source both English). Never on Task C.
+ * - Runs at the pipeline's ground-truth master stage only (labels + source in the master's
+ *   language — currently uk-UA; was English before the uk-UA master pivot). Never on Task C
+ *   translations, which by definition can't be grounded against the original-language source.
  * - Pure function, no DOM mutation, no LLM. Mirrors output-validator.ts style.
  *
  * NOT frozen. output-validator.ts stays untouched (we import only its type).
@@ -100,9 +102,13 @@ export function validateSpecsGrounding(
       if (words.length === 0) continue; // label had only generic words — cannot ground, skip
 
       const grounded = words.some(w => {
-        // Word-boundary check prevents 'film' from matching inside 'filament', etc.
+        // Unicode-aware boundary (not \b): JS \b is defined over ASCII \w only, even with
+        // /u, so a Cyrillic word like "робоча" never satisfies \bробоча\b — it silently
+        // never matches, turning every non-Latin label into a false "hallucination". The
+        // \p{L}/\p{N} lookaround below still prevents 'film' from matching inside
+        // 'filament', but works correctly for Cyrillic (and any other) scripts too.
         const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        return new RegExp(`\\b${escaped}\\b`).test(sourceNorm);
+        return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'u').test(sourceNorm);
       });
       if (!grounded) {
         issues.push({

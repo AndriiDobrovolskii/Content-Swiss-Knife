@@ -6,6 +6,10 @@ Hopper Capacity: 105 L
 Layer Thickness: 110 μm
 Laser: Ytterbium Fibre, 120 W`;
 
+const SRC_UK = `Робоча зона: 400 × 400 мм
+Тип лазера: Діодний, 10 Вт
+Товщина шару: 100 мкм`;
+
 /** Mirrors the real schema: section.specs → table → thead(Parameter|Value) → tbody rows. */
 function specSection(rows: string): string {
   return `<section class="specs"><table>` +
@@ -55,5 +59,18 @@ describe('validateSpecsGrounding — Rule: spec-row-not-grounded', () => {
     const issue = validateSpecsGrounding(html, SRC, 'HTML (base)')
       .find(i => i.rule === 'spec-row-not-grounded');
     expect(issue?.context).toBe('HTML (base)');
+  });
+
+  // Regression: JS \b is ASCII-only and never matches adjacent to Cyrillic, which made
+  // every Cyrillic label a false "hallucination" once the master pivoted to uk-UA.
+  it('does NOT flag a grounded Cyrillic row present in source ("Робоча зона")', () => {
+    const html = specSection(`<tr><td>Робоча зона</td><td>400 × 400 мм</td></tr>`);
+    expect(validateSpecsGrounding(html, SRC_UK, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('flags a hallucinated Cyrillic row whose label is absent from source ("Гарантія")', () => {
+    const html = specSection(`<tr><td>Гарантія</td><td>24 місяці</td></tr>`);
+    const issues = validateSpecsGrounding(html, SRC_UK, 'HTML (uk-UA)');
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
   });
 });
