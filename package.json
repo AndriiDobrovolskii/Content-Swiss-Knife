@@ -29,7 +29,7 @@
     "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.11.1",
     "cheerio": "^1.2.0",
-    "ckeditor5": "^44.3.0",
+    "ckeditor5": "^48.3.1",
     "concurrently": "^9.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",

@@ -27,6 +27,10 @@ html.dark {
   --ck-color-button-on-color: #38bdf8; /* sky-400 */
   --ck-color-focus-border: #38bdf8;
   --ck-color-focus-outer-shadow: rgba(56, 189, 248, 0.3);
+  /* Separate from --ck-color-base-background — drives the Fullscreen plugin's
+     main-wrapper and toolbar backgrounds specifically (verified against the
+     installed ckeditor5-fullscreen package's CSS, not guessed). */
+  --ck-color-base-foreground: #0f172a; /* slate-900 */
 }
 
 /* GeneralHtmlSupport's <p>/inline content still inherits `color` from <body>
@@ -44,15 +48,31 @@ html.dark {
 
 /* Compact by default: the editable area and Source view grow to fit their content
    with no bound, which for a large pasted document expands the editor beyond any
-   reasonable size. Give both a fixed height with their own internal scroll instead. */
-.ck.ck-editor:not(.ck-editor_fullscreen) .ck-editor__editable_inline {
+   reasonable size. Give both a fixed height with their own internal scroll instead.
+   No fullscreen-state guard needed here: the Fullscreen plugin reparents the
+   toolbar/editable DOM into a separate .ck-fullscreen__main-wrapper (appended
+   outside this element entirely, confirmed against the installed package's CSS —
+   there is no modifier class like ".ck-editor_fullscreen" added to .ck-editor
+   itself), so this selector naturally stops matching once fullscreen is active. */
+.ck.ck-editor .ck-editor__editable_inline {
   min-height: 200px;
   max-height: 400px;
   overflow-y: auto;
 }
-.ck.ck-editor:not(.ck-editor_fullscreen) .ck-source-editing-area textarea {
+.ck.ck-editor .ck-source-editing-area textarea {
   min-height: 200px;
   max-height: 400px;
+}
+
+/* Fullscreen mode: the plugin renders the editable as a fixed-width "page"
+   (795px, min-height 297mm — an A4-paper metaphor) with a hardcoded white
+   background (not a --ck-color-* variable, so the variables above don't reach
+   it) — override explicitly for dark-mode consistency with the rest of the app.
+   Selector matches the plugin's own full class chain plus `.dark`, so this is
+   strictly higher specificity and wins regardless of load order (same reasoning
+   as the html.dark vs :root fix above). */
+.dark .ck-fullscreen__main-wrapper .ck-fullscreen__editable .ck.ck-editor__editable:not(.ck-editor__nested-editable) {
+  background: var(--ck-color-base-background);
 }
 
 /* highlight.js — GitHub Dark overrides (Tailwind dark: class strategy) */

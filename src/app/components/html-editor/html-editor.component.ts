@@ -2,8 +2,10 @@ import { Component, computed, input, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CKEditorComponent, CKEditorModule } from '@ckeditor/ckeditor5-angular';
 import {
-  ClassicEditor, Essentials, Paragraph, Heading, Bold, Italic, Link,
-  List, Table, TableToolbar, GeneralHtmlSupport, SourceEditing
+  ClassicEditor, Essentials, Paragraph, Heading, Bold, Italic, Underline,
+  Strikethrough, Subscript, Superscript, Highlight, Alignment, Link,
+  BlockQuote, HorizontalLine, List, Image, ImageInsert, MediaEmbed,
+  Table, TableToolbar, GeneralHtmlSupport, SourceEditing, Fullscreen
 } from 'ckeditor5';
 import 'ckeditor5/ckeditor5.css';
 import { stripCkeditorArtifacts } from '../../../utils/html-cleaner';
@@ -74,12 +76,20 @@ export class HtmlEditorComponent {
   config = {
     licenseKey: 'GPL',
     plugins: [
-      Essentials, Paragraph, Heading, Bold, Italic, Link,
-      List, Table, TableToolbar, GeneralHtmlSupport, SourceEditing,
+      Essentials, Paragraph, Heading, Bold, Italic, Underline, Strikethrough,
+      Subscript, Superscript, Highlight, Alignment, Link, BlockQuote,
+      HorizontalLine, List, Image, ImageInsert, MediaEmbed, Table,
+      TableToolbar, GeneralHtmlSupport, SourceEditing, Fullscreen,
     ],
     toolbar: [
-      'undo', 'redo', '|', 'heading', '|', 'bold', 'italic', 'link', '|',
-      'bulletedList', 'numberedList', '|', 'insertTable', '|', 'sourceEditing',
+      'undo', 'redo', '|',
+      'heading', '|',
+      'bold', 'italic', 'underline', 'strikethrough', 'subscript', 'superscript', '|',
+      'highlight', 'alignment', '|',
+      'link', 'blockQuote', 'horizontalLine', '|',
+      'bulletedList', 'numberedList', '|',
+      'insertImage', 'mediaEmbed', 'insertTable', '|',
+      'sourceEditing', 'fullscreen',
     ],
     htmlSupport: {
       allow: [{ name: /.*/, attributes: true, classes: true, styles: true }],
