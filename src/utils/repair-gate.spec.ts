@@ -102,7 +102,7 @@ describe('runRepairGate', () => {
     expect(result.finalIssues).toHaveLength(1);
   });
 
-  it('retries up to maxRepairs when errors persist, returns last artifact and finalIssues', async () => {
+  it('retries up to maxRepairs when errors persist, returns the earliest attempt when none improve', async () => {
     const artifacts = [{ v: 1 }, { v: 2 }, { v: 3 }];
     const produce = vi.fn()
       .mockResolvedValueOnce(artifacts[0])
@@ -121,7 +121,7 @@ describe('runRepairGate', () => {
 
     expect(produce).toHaveBeenCalledTimes(3); // initial + 2 repairs
     expect(result.repairsUsed).toBe(2);
-    expect(result.artifact).toBe(artifacts[2]);
+    expect(result.artifact).toBe(artifacts[0]);
     expect(result.finalIssues).toHaveLength(1);
   });
 

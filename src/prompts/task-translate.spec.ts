@@ -38,7 +38,7 @@ describe('buildTranslatePrompt — code/markup preservation', () => {
 
   it('forbids geographic/entity substitution (Spain stays Spain, not another country)', () => {
     const block = systemBlock();
-    expect(block).toMatch(/NEVER changed to a different country/i);
+    expect(block).toMatch(/the referent country stays the same one/i);
   });
 });
 
@@ -48,13 +48,13 @@ describe('buildTranslatePrompt — number/separator directives', () => {
 
   it('states digits never change while separators/units may localize', () => {
     const block = roleBlock();
-    expect(block).toMatch(/digit sequence itself never\s+changes/i);
+    expect(block).toMatch(/Keep every digit sequence byte-identical/i);
     expect(block).toContain('2,5 мм');
   });
 
   it('scopes decimal-comma to real quantities and exempts versions/standards/IPs/files', () => {
     const block = roleBlock();
-    expect(block).toMatch(/software\/firmware versions/i);
+    expect(block).toMatch(/software\/firmware\s+versions/i);
     expect(block).toContain('802.11');
     expect(block).toMatch(/IP addresses/i);
   });
@@ -67,8 +67,8 @@ describe('buildTranslatePrompt — number/separator directives', () => {
 describe('buildTranslatePrompt — output format lockdown', () => {
   it('bans markdown code fences and commentary', () => {
     const block = buildTranslatePrompt('x', 'German').systemBlocks[0].text;
-    expect(block).toMatch(/Do NOT wrap the response in markdown code fences/i);
-    expect(block).toMatch(/Output ONLY the translated/i);
+    expect(block).toMatch(/Emit exactly one artifact/i);
+    expect(block).toContain('would appear, write the translation itself');
   });
 });
 
@@ -107,7 +107,7 @@ describe('buildTranslatePrompt — per-language orthography', () => {
 
   it('pt-PT forbids Brazilian forms', () => {
     const instruction = buildTranslatePrompt('x', 'Portuguese (pt-PT)').systemBlocks[1].text;
-    expect(instruction).toMatch(/never Brazilian/i);
+    expect(instruction).toMatch(/replaces Brazilian/i);
     expect(instruction).toContain('ficheiro');
   });
 });
