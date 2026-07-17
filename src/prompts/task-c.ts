@@ -16,6 +16,29 @@ length, or structure of the figcaption/alt beyond translating them. If [BASE HTM
 
 const HAS_FIGURE_MARKUP = /<figure\b/i;
 
+/**
+ * Count `<h3>` category blocks inside `<section class="specs">` so the preservation
+ * instruction can state an exact, non-negotiable number instead of asking the model to
+ * count for itself (the failure this guards against: the fast model silently dropping
+ * repeated/near-identical spec categories while translating — see 2026-07-15 es-ES
+ * regression, xTool M1 Ultra SafetyPro, where 4 of 5 categories were dropped).
+ */
+function countSpecCategories(html: string): number {
+  const section = html.match(/<section\s+class="specs"[\s\S]*?<\/section>/i);
+  if (!section) return 0;
+  return (section[0].match(/<h3\b/gi) ?? []).length;
+}
+
+function buildSpecTablePreservation(count: number): string {
+  return `[SPEC TABLE PRESERVATION]
+TRANSLATION PASS — NOT base generation: [BASE HTML] below contains exactly ${count} <h3>+<table>
+category block(s) under <section class="specs">. Reproduce ALL ${count} of them — do NOT omit,
+merge, split, or summarize any category, even when categories look repetitive or near-identical
+to each other. Translate only the <h3> category label and the <table> cell text (plus locale
+number formatting); keep every row and every category exactly as structured. Dropping a category
+is a failed translation, not an acceptable shortcut.`;
+}
+
 const STANDALONE_SNIPPET_NOTE = `[STANDALONE SNIPPET]
 This is a short, self-contained text/HTML fragment submitted directly for translation — not an
 excerpt of a longer product description. Translate the [BASE HTML] content below exactly as given;
@@ -32,6 +55,8 @@ function deriveStoreLabel(storeName: string, targetLang: string): string {
 
 function pack(instruction: string, html: string, storeLabel: string, localizedName?: string): PromptPayload {
   const context = HAS_FIGURE_MARKUP.test(html) ? IMAGE_PRESERVATION_MANIFEST : STANDALONE_SNIPPET_NOTE;
+  const specCount = countSpecCategories(html);
+  const specBlock = specCount > 0 ? `\n\n${buildSpecTablePreservation(specCount)}` : '';
   // Dynamic per-product — belongs in userContent, never in a cached system block.
   const h1Lock = localizedName?.trim()
     ? `\n\n[H1 LOCK — NON-NEGOTIABLE]\nThe <h1> of your output MUST be exactly, character-for-character:\n"${localizedName.trim()}"\nDo not re-translate, re-order, reformat, transliterate or truncate it. It is the storefront\nproduct-name field and the SEO meta_title core; any deviation desynchronizes the page.`
@@ -41,7 +66,7 @@ function pack(instruction: string, html: string, storeLabel: string, localizedNa
       { text: MASTER_SYSTEM_PROMPT, cache: true },
       { text: instruction, cache: true },
     ],
-    userContent: `[Store Name]: ${storeLabel}${h1Lock}\n\n${context}\n\n[BASE HTML]:\n${html}`,
+    userContent: `[Store Name]: ${storeLabel}${h1Lock}\n\n${context}${specBlock}\n\n[BASE HTML]:\n${html}`,
   };
 }
 

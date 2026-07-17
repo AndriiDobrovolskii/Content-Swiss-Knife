@@ -48,4 +48,23 @@ describe('validateStructuralParity', () => {
     const issues = validateStructuralParity(master, translated, 'HTML (RU)');
     expect(issues.some(i => i.rule === 'structural-parity-media')).toBe(true);
   });
+
+  // Regression guard for the 2026-07-15 es-ES incident (xTool M1 Ultra SafetyPro): a
+  // translation that drops 4 of 5 <h3>+<table> spec categories while keeping everything else
+  // intact must be caught by <h3>/<table>/<tr>/<td> count mismatches.
+  it('flags a structural-parity-count issue when a translation drops spec-table categories', () => {
+    const master = `<section class="specs">
+<h3>Processing range</h3><table><tr><td>a</td></tr></table>
+<h3>Software</h3><table><tr><td>b</td></tr></table>
+<h3>Easy operation</h3><table><tr><td>c</td></tr></table>
+<h3>Accuracy</h3><table><tr><td>d</td></tr></table>
+<h3>General information</h3><table><tr><td>e</td></tr></table>
+</section>`;
+    const translated = `<section class="specs">
+<h3>Información general</h3><table><tr><td>e</td></tr></table>
+</section>`;
+    const issues = validateStructuralParity(master, translated, 'HTML (ES)');
+    expect(issues.some(i => i.rule === 'structural-parity-count' && i.detail.includes('<h3>'))).toBe(true);
+    expect(issues.some(i => i.rule === 'structural-parity-count' && i.detail.includes('<table>'))).toBe(true);
+  });
 });

@@ -24,8 +24,8 @@ const serper = new SerperRetrieval(process.env.SERPER_API_KEY);
 
 app.post('/api/llm/generate', async (req, res) => {
   try {
-    const { systemBlocks = [], userContent = '', mode = 'text', taskLabel, productName, store, lang } = req.body;
-    const { result, usage } = await provider.generate({ systemBlocks, userContent }, mode);
+    const { systemBlocks = [], userContent = '', mode = 'text', effort, taskLabel, productName, store, lang } = req.body;
+    const { result, usage } = await provider.generate({ systemBlocks, userContent }, mode, effort);
 
     if (usage) {
       try {

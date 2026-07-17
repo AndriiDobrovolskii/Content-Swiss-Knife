@@ -7,6 +7,7 @@ import { cleanHtmlStructure, stripCodeFences } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
+import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { validateSpecsGrounding } from '../utils/specs-grounding';
 import { validateSlugs } from '../utils/slug-validator';
@@ -24,10 +25,10 @@ import { buildReadabilityPrompt } from '../prompts/readability';
 import { buildKeywordsPrompt } from '../prompts/keywords';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { buildCopywriterPrompt } from '../prompts/copywriter';
-import { SlugResponse } from '../app/types';
+import { SlugResponse, SeoResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback } from '../utils/repair-gate';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
-import { PromptPayload } from '../prompt-core/payload';
+import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
 
 // ── Orchestrator ────────────────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ export class ContentOrchestratorService {
     return `${input.website.name}::${input.name.trim()}`;
   }
 
-  async generate(input: ProductInput, useThinking = false): Promise<void> {
+  async generate(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
     // localized name authoritative across H1/title/URL without ever reusing a stale name.
@@ -106,11 +107,13 @@ export class ContentOrchestratorService {
       };
       const basePayloadA = buildPromptA(masterInput, 'Ukrainian (uk-UA)');
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' }, creativeEffort);
         html = stripCodeFences(html);
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
+        html = normalizeTerminology(html, 'uk-UA');
+        html = canonicalizeMultiInOne(html, 'uk-UA');
         return html;
       };
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
@@ -154,8 +157,8 @@ export class ContentOrchestratorService {
         try {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
           const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, htmlEn);
-          // false — Slug always runs on the fast model; Deep Thinking applies to the uk-UA master only.
-          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, false, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
+          // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
+          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }, creativeEffort);
           const slugData = this.normalizeSlugResponse(rawSlug);
           this.content.update(c => ({ ...c, slugData }));
           this.approvedSlugKey.set(this.slugKey(input));
@@ -177,8 +180,8 @@ export class ContentOrchestratorService {
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
-        // false — SEO metadata always runs on the fast model; Deep Thinking applies to the uk-UA master only.
-        produce: (payload) => this.llm.generateJson(payload, false, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }),
+        // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }, creativeEffort)),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -210,22 +213,22 @@ export class ContentOrchestratorService {
           { localizedName: localizedNames?.[locale], sourceLocale: 'uk-UA' },
         );
 
-        const { artifact: htmlLang, repairsUsed: langRepairs } = await runRepairGate<string>({
+        const { artifact: htmlLang, finalIssues: langFinalIssues, repairsUsed: langRepairs } = await runRepairGate<string>({
           label: `HTML (${lang})`,
           maxRepairs: repairBudget,
           basePayload: basePayloadC,
           produce: async (payload) => {
-            // false → fast model. Deep Thinking applies to the uk-UA master pass only.
-            let html = await this.llm.generateText(payload, false, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale });
+            // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
+            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale }, creativeEffort);
             html = stripCodeFences(html);
             if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
               html = this.applySpanishExpert3dReplacements(html);
             }
-            return fixNumberFormatting(html);
+            html = normalizeTerminology(fixNumberFormatting(html), locale);
+            return canonicalizeMultiInOne(html, locale);
           },
           validate: (html) => [
             ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId, imageManifest: masterImageManifest }),
-            ...validateSpecsGrounding(html, input.specs, `HTML (${lang})`),
             ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
           ],
           withFeedback: appendRepairFeedback,
@@ -233,6 +236,9 @@ export class ContentOrchestratorService {
             this.progressMessage.set(`Repairing ${lang} translation (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
         if (langRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${langRepairs} repair(s) applied`);
+        if (langFinalIssues.length > 0) {
+          this.validationIssues.update(issues => [...issues, ...langFinalIssues]);
+        }
         const finalLangHtml = isConsumables ? trimConsumablesToLimit(htmlLang) : htmlLang;
         this.content.update(c => ({
           ...c,
@@ -273,7 +279,7 @@ export class ContentOrchestratorService {
             maxRepairs: this.maxRepairs(),
             basePayload: basePayloadFaq,
             produce: async (payload) => {
-              const html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode });
+              const html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode }, creativeEffort);
               return stripCodeFences(html);
             },
             validate: validateFaqHtml,
@@ -301,7 +307,7 @@ export class ContentOrchestratorService {
   /** Native uk-UA generation: Task A is called directly in Ukrainian (no English base,
    *  no Task C translation loop). SEO/slug/FAQ are scoped to uk-UA only. Mirrors generate()'s
    *  repair gates and validators for the artifacts it shares. */
-  async generateUaContent(input: ProductInput, useThinking = false): Promise<void> {
+  async generateUaContent(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
     const UA_ISO = 'uk-UA';
     const UA_BASE_LANGUAGE = 'Ukrainian (uk-UA)';
 
@@ -334,11 +340,13 @@ export class ContentOrchestratorService {
       };
       const basePayloadA = buildPromptA(uaInput, UA_BASE_LANGUAGE);
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
         html = stripCodeFences(html);
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
+        html = normalizeTerminology(html, UA_ISO);
+        html = canonicalizeMultiInOne(html, UA_ISO);
         return html;
       };
       const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
@@ -370,8 +378,8 @@ export class ContentOrchestratorService {
       try {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
         const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
-        // false — Slug always runs on the fast model; Deep Thinking applies to the uk-UA master only.
-        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, false, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO });
+        // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
+        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
         const slugData = this.normalizeSlugResponse(rawSlug);
         this.content.update(c => ({ ...c, slugData }));
         this.approvedSlugKey.set(this.slugKey(input));
@@ -391,8 +399,8 @@ export class ContentOrchestratorService {
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
-        // false — SEO metadata always runs on the fast model; Deep Thinking applies to the uk-UA master only.
-        produce: (payload) => this.llm.generateJson(payload, false, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }),
+        // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort)),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -425,7 +433,7 @@ export class ContentOrchestratorService {
           maxRepairs: this.maxRepairs(),
           basePayload: basePayloadFaq,
           produce: async (payload) => {
-            const html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
+            const html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
             return stripCodeFences(html);
           },
           validate: validateFaqHtml,
@@ -469,7 +477,7 @@ export class ContentOrchestratorService {
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
-        produce: (payload) => this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -511,7 +519,25 @@ export class ContentOrchestratorService {
     const unique = ensureUniqueSlugs(slugs);
     return {
       site_name: raw.site_name ?? '',
-      slugs: slugs.map((s, i) => ({ ...s, slug: unique[i] })),
+      slugs: slugs.map((s, i) => ({
+        ...s,
+        slug: unique[i],
+        name: canonicalizeMultiInOne(s.name, s.language),
+      })),
+    };
+  }
+
+  /** Keeps "N-in-N"/"N в N" hyphenation in sync with the HTML body's canonical form — see
+   *  canonicalizeMultiInOne (S4, 2026-07-16 EXPERT3D audit: body/metadata drifted apart). */
+  private canonicalizeSeoData(seo: SeoResponse): SeoResponse {
+    return {
+      ...seo,
+      seo_data: (seo.seo_data ?? []).map(item => ({
+        ...item,
+        h1: canonicalizeMultiInOne(item.h1, item.language),
+        meta_title: canonicalizeMultiInOne(item.meta_title, item.language),
+        meta_description: canonicalizeMultiInOne(item.meta_description, item.language),
+      })),
     };
   }
 
@@ -599,9 +625,10 @@ export class ContentOrchestratorService {
     const c = this.content();
     const issues: ValidationIssue[] = [
       ...validateGeneratedHtml(c.mainHtmlUa, mainLocale ? `HTML (${mainLocale})` : 'HTML (base)', productName, mainLocale, { templateId }),
-      ...Object.entries(c.translations).flatMap(([lang, html]) =>
-        validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId })
-      ),
+      ...Object.entries(c.translations).flatMap(([lang, html]) => [
+        ...validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId }),
+        ...validateStructuralParity(c.mainHtmlUa, html, `HTML (${lang})`),
+      ]),
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
     ];

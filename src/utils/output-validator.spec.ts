@@ -523,6 +523,55 @@ describe('validateGeneratedHtml — Rule: pt-forbidden-calque', () => {
     const html = '<p>Supera os sistemas legados de sinterização em custo por peça.</p>';
     expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
   });
+
+  it('flags "estampación en caliente" ES calque and "foilagem" PT calque', () => {
+    const es = '<p>El proceso de laminado en caliente aplica la lámina metálica.</p>';
+    expect(findRule(validateGeneratedHtml(es, 'test', undefined, 'es-ES'), 'es-forbidden-calque')?.severity).toBe('warning');
+    const pt = '<p>Modo de lâmina e acessórios de foilagem.</p>';
+    expect(findRule(validateGeneratedHtml(pt, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: uk-forbidden-calque (error severity — master is universal)', () => {
+  it('flags a Russicism as an ERROR (not warning) in uk-UA output', () => {
+    const html = '<p>Можна переключатися між режимами по USB.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'uk-forbidden-calque')?.severity).toBe('error');
+  });
+
+  it('does NOT flag the same text in a non-uk-UA locale', () => {
+    const html = '<p>Можна переключатися між режимами по USB.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'ru-UA'), 'uk-forbidden-calque');
+  });
+
+  it('flags "по IP-адресі" and "типу дерева" Russicisms', () => {
+    const html = '<p>Доступ по IP-адресі на поверхнях типу дерева.</p>';
+    const issues = validateGeneratedHtml(html, 'test', undefined, 'uk-UA').filter(i => i.rule === 'uk-forbidden-calque');
+    expect(issues.length).toBeGreaterThan(0);
+  });
+
+  it('does NOT false-positive on legitimate Ukrainian text with no Russicisms', () => {
+    const html = '<p>Перемикання відбувається через USB-кабель, а не за IP-адресою.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'uk-forbidden-calque');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: uk-ambiguous-calque (warning severity)', () => {
+  it('flags "кружка" as a warning, not an error', () => {
+    const html = '<p>У комплекті керамічна кружка.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'uk-ambiguous-calque')?.severity).toBe('warning');
+  });
+});
+
+describe('validateGeneratedHtml — Rule: lead-in-capitalization', () => {
+  it('flags a lowercase-starting figcaption <b> lead-in', () => {
+    const html = '<figure><img src="a.jpg" alt="a"><figcaption><b>порівняння з альтернативами:</b> опис</figcaption></figure>';
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'lead-in-capitalization')?.severity).toBe('warning');
+  });
+
+  it('does NOT flag a capitalized figcaption lead-in', () => {
+    const html = '<figure><img src="a.jpg" alt="a"><figcaption><b>Порівняння з альтернативами:</b> опис</figcaption></figure>';
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'lead-in-capitalization');
+  });
 });
 
 describe('validateGeneratedHtml — Rules: lcp-image-lazy / image-not-lazy', () => {
