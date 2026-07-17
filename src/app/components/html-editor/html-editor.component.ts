@@ -1,6 +1,6 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, input, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { CKEditorModule } from '@ckeditor/ckeditor5-angular';
+import { CKEditorComponent, CKEditorModule } from '@ckeditor/ckeditor5-angular';
 import {
   ClassicEditor, Essentials, Paragraph, Heading, Bold, Italic, Link,
   List, Table, TableToolbar, GeneralHtmlSupport, SourceEditing
@@ -50,7 +50,6 @@ export class HtmlEditorComponent {
   pastedHtml = signal<string>('');
   originalHtml = signal<string>('');
   loaded = signal<boolean>(false);
-  currentData = signal<string>('');
   issues = signal<ValidationIssue[]>([]);
   showIssues = signal<boolean>(false);
   copiedFlash = signal<boolean>(false);
@@ -58,6 +57,13 @@ export class HtmlEditorComponent {
   // Exposed so app.component.ts can guard mode-switches against silently
   // discarding an in-progress edit (this component owns all its own state).
   hasUnsavedChanges = computed(() => this.loaded());
+
+  // Template-ref locator (not type-based) — <ckeditor> is conditionally
+  // rendered behind `@if (loaded())`. Data is read lazily from here at copy
+  // time instead of mirroring getData() into a signal on every keystroke —
+  // getData() re-serializes the whole document model to HTML and doing that
+  // per keystroke visibly stalls typing on large pasted documents.
+  ckeditorRef = viewChild<CKEditorComponent<ClassicEditor>>('ckeditorRef');
 
   Editor = ClassicEditor;
 
@@ -88,7 +94,6 @@ export class HtmlEditorComponent {
     const html = this.pastedHtml().trim();
     if (!html) return;
     this.originalHtml.set(html);
-    this.currentData.set(html);
     this.issues.set([]);
     this.showIssues.set(false);
     this.loaded.set(true);
@@ -97,21 +102,13 @@ export class HtmlEditorComponent {
   reset() {
     this.pastedHtml.set('');
     this.originalHtml.set('');
-    this.currentData.set('');
     this.issues.set([]);
     this.showIssues.set(false);
     this.loaded.set(false);
   }
 
-  // `event` typed `any`: @ckeditor/ckeditor5-angular's ChangeEvent export name has moved
-  // across major versions. Tighten to the exact type once the pinned 9.x API is confirmed
-  // locally (`npm ls @ckeditor/ckeditor5-angular` + its .d.ts) — do not guess it here.
-  onChange(event: any) {
-    this.currentData.set(event.editor.getData());
-  }
-
   copy() {
-    const cleaned = stripCkeditorArtifacts(this.currentData());
+    const cleaned = stripCkeditorArtifacts(this.ckeditorRef()?.editorInstance?.getData() ?? '');
     // validateStructuralParity() is documented as a uk-UA-master vs. translation check;
     // it's reused here purely for its structural-isomorphism mechanics (element counts +
     // media src identity) to diff the original paste against the CKEditor-edited output.
@@ -125,7 +122,7 @@ export class HtmlEditorComponent {
   }
 
   copyAnyway() {
-    this.doCopy(stripCkeditorArtifacts(this.currentData()));
+    this.doCopy(stripCkeditorArtifacts(this.ckeditorRef()?.editorInstance?.getData() ?? ''));
   }
 
   private doCopy(html: string) {

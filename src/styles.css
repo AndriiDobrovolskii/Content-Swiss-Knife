@@ -1,11 +1,59 @@
 /* highlight.js — GitHub light theme (default) */
 @import 'highlight.js/styles/github.min.css';
 
-/* CKEditor 5 always renders its editing surface on a white background (it has no
-   dark theme of its own), but its content div inherits `color` from <body> by normal
-   CSS cascade. In dark mode <body> is dark:text-slate-100 (near-white) — unreadable
-   on white. Override just the editing surface, not the rest of the app. */
-.dark .ck-content { color: #1e293b; }
+/* CKEditor 5 has no dark theme of its own — it themes entirely through --ck-color-*
+   custom properties, which we override here (names verified against the exact
+   installed ckeditor5@44.3.0 package, not guessed) so the toolbar/dropdowns/buttons
+   follow the app's existing dark palette instead of staying white.
+   Selector is `html.dark`, not `.dark` — CKEditor's own CSS (lazy-loaded, so it
+   always arrives in the DOM after this global stylesheet) declares these same
+   variables on `:root`, equal specificity to a bare `.dark` class. Whichever rule
+   loads last would win regardless of the dark-mode class, silently no-op'ing this
+   override. `html.dark` (element+class) outranks `:root` unconditionally. */
+html.dark {
+  color-scheme: dark;
+  --ck-color-base-background: #1e293b; /* slate-800 */
+  --ck-color-base-border: #334155;     /* slate-700 */
+  --ck-color-base-text: #f8fafc;       /* slate-50 */
+  --ck-color-text: #f8fafc;
+  --ck-color-toolbar-background: #0f172a; /* slate-900 */
+  --ck-color-toolbar-border: #334155;
+  --ck-color-dropdown-panel-background: #1e293b;
+  --ck-color-dropdown-panel-border: #334155;
+  --ck-color-panel-background: #1e293b;
+  --ck-color-panel-border: #334155;
+  --ck-color-button-default-background: transparent;
+  --ck-color-button-on-background: #334155;
+  --ck-color-button-on-color: #38bdf8; /* sky-400 */
+  --ck-color-focus-border: #38bdf8;
+  --ck-color-focus-outer-shadow: rgba(56, 189, 248, 0.3);
+}
+
+/* GeneralHtmlSupport's <p>/inline content still inherits `color` from <body>
+   (dark:text-slate-100, near-white) rather than picking up --ck-color-base-text —
+   the variables above theme CKEditor's own UI chrome, not the editable content div. */
+.dark .ck-content { color: var(--ck-color-base-text); }
+
+/* The Source (code) view is a plain native <textarea> CKEditor renders outside its
+   own themed chrome — same inherited-white-on-white problem as .ck-content above. */
+.dark .ck-source-editing-area textarea {
+  background-color: var(--ck-color-base-background);
+  color: var(--ck-color-base-text);
+  font-family: monospace;
+}
+
+/* Compact by default: the editable area and Source view grow to fit their content
+   with no bound, which for a large pasted document expands the editor beyond any
+   reasonable size. Give both a fixed height with their own internal scroll instead. */
+.ck.ck-editor:not(.ck-editor_fullscreen) .ck-editor__editable_inline {
+  min-height: 200px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.ck.ck-editor:not(.ck-editor_fullscreen) .ck-source-editing-area textarea {
+  min-height: 200px;
+  max-height: 400px;
+}
 
 /* highlight.js — GitHub Dark overrides (Tailwind dark: class strategy) */
 .dark .hljs                          { background: #0d1117; color: #e6edf3; }
