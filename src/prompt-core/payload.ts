@@ -16,3 +16,9 @@ export interface UsageMeta {
   lang?: string;
 }
 
+/** Sonnet 5 thinking depth for a creative-mode call. 'disabled' routes to Sonnet 5 with
+ *  thinking off (no output_config.effort sent); low/medium/high map to adaptive thinking +
+ *  output_config.effort. Ignored on non-creative (Haiku) calls. Only affects the LLM call —
+ *  keep this out of UsageMeta, which is tracking-only. */
+export type CreativeEffort = 'disabled' | 'low' | 'medium' | 'high';
+

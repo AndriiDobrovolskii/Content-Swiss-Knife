@@ -63,22 +63,29 @@ const CYR_MULTI_UNITS_RE = new RegExp(
 // Single-letter Cyrillic SI units: г, л, м, т (mass tonne), В, А.
 const CYR_SINGLE_UNITS_RE = new RegExp('(\\d)([глмт\u0412\u0410])' + CYR_BOUNDARY, 'g');
 
+/**
+ * Non-breaking space (U+00A0) between a digit and its unit — a unit must never wrap onto its
+ * own line. Renders identically to &nbsp; in HTML; counts as 1 character in charLength() same
+ * as a regular space.
+ */
+const NBSP = ' ';
+
 function ensureUnitSpaces(text: string): string {
   // Cyrillic units (uk/ru output) — multi-character first, longest match wins.
-  text = text.replace(CYR_MULTI_UNITS_RE, '$1 $2');
+  text = text.replace(CYR_MULTI_UNITS_RE, `$1${NBSP}$2`);
   // Cyrillic single-letter SI units.
-  text = text.replace(CYR_SINGLE_UNITS_RE, '$1 $2');
+  text = text.replace(CYR_SINGLE_UNITS_RE, `$1${NBSP}$2`);
   // Multi-character Latin units first (longest match wins).
-  text = text.replace(/(\d)(kHz|MHz|GHz|mW|kW|mA|mV|mm|cm|km|µm|μm|nm|mg|ml|MPa|GPa|kPa|Pa)\b/g, '$1 $2');
+  text = text.replace(/(\d)(kHz|MHz|GHz|mW|kW|mA|mV|mm|cm|km|µm|μm|nm|mg|ml|MPa|GPa|kPa|Pa)\b/g, `$1${NBSP}$2`);
   // Single- or double-char units.
-  text = text.replace(/(\d)(Hz|kg|px|pt|dpi|bar|psi)\b/g, '$1 $2');
+  text = text.replace(/(\d)(Hz|kg|px|pt|dpi|bar|psi)\b/g, `$1${NBSP}$2`);
   // Degree units (no word boundary — degree sign is not a word char).
-  text = text.replace(/(\d)(°[CF])/g, '$1 $2');
+  text = text.replace(/(\d)(°[CF])/g, `$1${NBSP}$2`);
   // Remaining single-letter SI units: g, l/L (litre), m (metre), W, V, A.
-  text = text.replace(/(\d)([glL]|[mWVA])\b/g, '$1 $2');
+  text = text.replace(/(\d)([glL]|[mWVA])\b/g, `$1${NBSP}$2`);
   // K (Kelvin): only when preceded by ≥3 digit-sequence (e.g. 6500K → 6500 K), NOT 4K/8K
-  text = text.replace(/(\d{3,})(K)\b/g, '$1 $2');
+  text = text.replace(/(\d{3,})(K)\b/g, `$1${NBSP}$2`);
   // Percentage.
-  text = text.replace(/(\d)(%)/g, '$1 $2');
+  text = text.replace(/(\d)(%)/g, `$1${NBSP}$2`);
   return text;
 }

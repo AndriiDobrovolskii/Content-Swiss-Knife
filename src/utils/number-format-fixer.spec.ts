@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { fixNumberFormatting } from './number-format-fixer';
 
 describe('fixNumberFormatting — thousands separators', () => {
@@ -46,11 +46,11 @@ describe('fixNumberFormatting — thousands separators', () => {
     });
 
     it('strips non-breaking space (U+00A0)', () => {
-      expect(fixNumberFormatting('power 1\u00A0000 mW')).toBe('power 1000 mW');
+      expect(fixNumberFormatting('power 1 000 mW')).toBe('power 1000 mW');
     });
 
     it('strips thin space (U+202F)', () => {
-      expect(fixNumberFormatting('price 1\u202F000 UAH')).toBe('price 1000 UAH');
+      expect(fixNumberFormatting('price 1 000 UAH')).toBe('price 1000 UAH');
     });
   });
 
@@ -86,40 +86,40 @@ describe('fixNumberFormatting — thousands separators', () => {
 });
 
 describe('fixNumberFormatting — unit spaces', () => {
-  it('adds space: 2mm → 2 mm', () => {
-    expect(fixNumberFormatting('layer height 2mm')).toBe('layer height 2 mm');
+  it('adds a non-breaking space: 2mm → 2 mm', () => {
+    expect(fixNumberFormatting('layer height 2mm')).toBe('layer height 2 mm');
   });
 
-  it('adds space after decimal: 1.75mm → 1.75 mm', () => {
-    expect(fixNumberFormatting('diameter 1.75mm')).toBe('diameter 1.75 mm');
+  it('adds a non-breaking space after decimal: 1.75mm → 1.75 mm', () => {
+    expect(fixNumberFormatting('diameter 1.75mm')).toBe('diameter 1.75 mm');
   });
 
-  it('adds space for µm', () => {
-    expect(fixNumberFormatting('resolution 50µm')).toBe('resolution 50 µm');
+  it('adds a non-breaking space for µm', () => {
+    expect(fixNumberFormatting('resolution 50µm')).toBe('resolution 50 µm');
   });
 
-  it('adds space for μm (alternate encoding)', () => {
-    expect(fixNumberFormatting('resolution 50μm')).toBe('resolution 50 μm');
+  it('adds a non-breaking space for μm (alternate encoding)', () => {
+    expect(fixNumberFormatting('resolution 50μm')).toBe('resolution 50 μm');
   });
 
-  it('adds space for °C', () => {
-    expect(fixNumberFormatting('max temp 260°C')).toBe('max temp 260 °C');
+  it('adds a non-breaking space for °C', () => {
+    expect(fixNumberFormatting('max temp 260°C')).toBe('max temp 260 °C');
   });
 
-  it('adds space for °F', () => {
-    expect(fixNumberFormatting('max temp 500°F')).toBe('max temp 500 °F');
+  it('adds a non-breaking space for °F', () => {
+    expect(fixNumberFormatting('max temp 500°F')).toBe('max temp 500 °F');
   });
 
-  it('adds space for W (watts)', () => {
-    expect(fixNumberFormatting('power 50W')).toBe('power 50 W');
+  it('adds a non-breaking space for W (watts)', () => {
+    expect(fixNumberFormatting('power 50W')).toBe('power 50 W');
   });
 
-  it('adds space for mW', () => {
-    expect(fixNumberFormatting('laser 500mW')).toBe('laser 500 mW');
+  it('adds a non-breaking space for mW', () => {
+    expect(fixNumberFormatting('laser 500mW')).toBe('laser 500 mW');
   });
 
-  it('adds space for kHz', () => {
-    expect(fixNumberFormatting('frequency 20kHz')).toBe('frequency 20 kHz');
+  it('adds a non-breaking space for kHz', () => {
+    expect(fixNumberFormatting('frequency 20kHz')).toBe('frequency 20 kHz');
   });
 
   it('does NOT modify already-spaced values (idempotent)', () => {
@@ -129,7 +129,7 @@ describe('fixNumberFormatting — unit spaces', () => {
 
   it('processes alt text values (human-readable spec mentions get the space)', () => {
     const html = '<img alt="2mm layer height sample">';
-    expect(fixNumberFormatting(html)).toContain('alt="2 mm layer height sample"');
+    expect(fixNumberFormatting(html)).toContain('alt="2 mm layer height sample"');
   });
 
   it('does NOT add space for display resolution K: 4K stays 4K', () => {
@@ -137,63 +137,63 @@ describe('fixNumberFormatting — unit spaces', () => {
     expect(fixNumberFormatting('8K resolution')).toBe('8K resolution');
   });
 
-  it('does add space for Kelvin K: 6500K → 6500 K', () => {
-    expect(fixNumberFormatting('6500K color temp')).toBe('6500 K color temp');
+  it('does add a non-breaking space for Kelvin K: 6500K → 6500 K', () => {
+    expect(fixNumberFormatting('6500K color temp')).toBe('6500 K color temp');
   });
 
-  it('adds space for MPa', () => {
-    expect(fixNumberFormatting('tensile 60MPa')).toBe('tensile 60 MPa');
+  it('adds a non-breaking space for MPa', () => {
+    expect(fixNumberFormatting('tensile 60MPa')).toBe('tensile 60 MPa');
   });
 
-  it('adds space for GPa', () => {
-    expect(fixNumberFormatting('modulus 1.93GPa')).toBe('modulus 1.93 GPa');
+  it('adds a non-breaking space for GPa', () => {
+    expect(fixNumberFormatting('modulus 1.93GPa')).toBe('modulus 1.93 GPa');
   });
 });
 
 describe('fixNumberFormatting — Cyrillic unit spaces (uk/ru output, [UNIT LOCALIZATION])', () => {
-  it('adds space for Вт and кВт (with decimal comma value)', () => {
-    expect(fixNumberFormatting('<p>Потужність 10Вт, 1,5кВт</p>')).toBe('<p>Потужність 10 Вт, 1,5 кВт</p>');
+  it('adds a non-breaking space for Вт and кВт (with decimal comma value)', () => {
+    expect(fixNumberFormatting('<p>Потужність 10Вт, 1,5кВт</p>')).toBe('<p>Потужність 10 Вт, 1,5 кВт</p>');
   });
 
-  it('adds space for мм in a spec-table cell', () => {
-    expect(fixNumberFormatting('<td>200мм</td>')).toBe('<td>200 мм</td>');
+  it('adds a non-breaking space for мм in a spec-table cell', () => {
+    expect(fixNumberFormatting('<td>200мм</td>')).toBe('<td>200 мм</td>');
   });
 
-  it('adds space for мкм', () => {
-    expect(fixNumberFormatting('<td>50мкм</td>')).toBe('<td>50 мкм</td>');
+  it('adds a non-breaking space for мкм', () => {
+    expect(fixNumberFormatting('<td>50мкм</td>')).toBe('<td>50 мкм</td>');
   });
 
-  it('adds space for ГГц', () => {
-    expect(fixNumberFormatting('<td>2,4ГГц</td>')).toBe('<td>2,4 ГГц</td>');
+  it('adds a non-breaking space for ГГц', () => {
+    expect(fixNumberFormatting('<td>2,4ГГц</td>')).toBe('<td>2,4 ГГц</td>');
   });
 
-  it('adds space for composite мм/с', () => {
-    expect(fixNumberFormatting('швидкість 300мм/с')).toBe('швидкість 300 мм/с');
+  it('adds a non-breaking space for composite мм/с', () => {
+    expect(fixNumberFormatting('швидкість 300мм/с')).toBe('швидкість 300 мм/с');
   });
 
-  it('adds space for кг, г, л, мл', () => {
-    expect(fixNumberFormatting('вага 2,5кг')).toBe('вага 2,5 кг');
-    expect(fixNumberFormatting('маса 500г')).toBe('маса 500 г');
-    expect(fixNumberFormatting("об'єм 1л")).toBe("об'єм 1 л");
-    expect(fixNumberFormatting('смола 500мл')).toBe('смола 500 мл');
+  it('adds a non-breaking space for кг, г, л, мл', () => {
+    expect(fixNumberFormatting('вага 2,5кг')).toBe('вага 2,5 кг');
+    expect(fixNumberFormatting('маса 500г')).toBe('маса 500 г');
+    expect(fixNumberFormatting("об'єм 1л")).toBe("об'єм 1 л");
+    expect(fixNumberFormatting('смола 500мл')).toBe('смола 500 мл');
   });
 
-  it('adds space for В, кВ, А, мА·год', () => {
-    expect(fixNumberFormatting('напруга 220В')).toBe('напруга 220 В');
-    expect(fixNumberFormatting('ізоляція 5кВ')).toBe('ізоляція 5 кВ');
-    expect(fixNumberFormatting('струм 2А')).toBe('струм 2 А');
-    expect(fixNumberFormatting('акумулятор 5000мА·год')).toBe('акумулятор 5000 мА·год');
+  it('adds a non-breaking space for В, кВ, А, мА·год', () => {
+    expect(fixNumberFormatting('напруга 220В')).toBe('напруга 220 В');
+    expect(fixNumberFormatting('ізоляція 5кВ')).toBe('ізоляція 5 кВ');
+    expect(fixNumberFormatting('струм 2А')).toBe('струм 2 А');
+    expect(fixNumberFormatting('акумулятор 5000мА·год')).toBe('акумулятор 5000 мА·год');
   });
 
-  it('adds space for data units ГБ / Мбіт / Мбит', () => {
-    expect(fixNumberFormatting("пам'ять 32ГБ")).toBe("пам'ять 32 ГБ");
-    expect(fixNumberFormatting('швидкість 100Мбіт')).toBe('швидкість 100 Мбіт');
-    expect(fixNumberFormatting('скорость 100Мбит')).toBe('скорость 100 Мбит');
+  it('adds a non-breaking space for data units ГБ / Мбіт / Мбит', () => {
+    expect(fixNumberFormatting("пам'ять 32ГБ")).toBe("пам'ять 32 ГБ");
+    expect(fixNumberFormatting('швидкість 100Мбіт')).toBe('швидкість 100 Мбіт');
+    expect(fixNumberFormatting('скорость 100Мбит')).toBe('скорость 100 Мбит');
   });
 
-  it('adds space for м² and об/хв', () => {
-    expect(fixNumberFormatting('площа 2м²')).toBe('площа 2 м²');
-    expect(fixNumberFormatting('оберти 3000об/хв')).toBe('оберти 3000 об/хв');
+  it('adds a non-breaking space for м² and об/хв', () => {
+    expect(fixNumberFormatting('площа 2м²')).toBe('площа 2 м²');
+    expect(fixNumberFormatting('оберти 3000об/хв')).toBe('оберти 3000 об/хв');
   });
 
   it('does NOT split when the letters continue a Cyrillic word (word-boundary guard)', () => {
@@ -205,7 +205,7 @@ describe('fixNumberFormatting — Cyrillic unit spaces (uk/ru output, [UNIT LOCA
 
   it('does NOT touch Cyrillic units inside src/href, still fixes alt', () => {
     const html = '<img src="laser-500мВт.jpg" alt="модуль 500мВт">';
-    expect(fixNumberFormatting(html)).toBe('<img src="laser-500мВт.jpg" alt="модуль 500 мВт">');
+    expect(fixNumberFormatting(html)).toBe('<img src="laser-500мВт.jpg" alt="модуль 500 мВт">');
   });
 
   it('does NOT modify already-spaced Cyrillic values (idempotent)', () => {
@@ -216,25 +216,25 @@ describe('fixNumberFormatting — Cyrillic unit spaces (uk/ru output, [UNIT LOCA
 });
 
 describe('fixNumberFormatting — combined', () => {
-  it('strips thousands separator AND adds unit space in one pass', () => {
-    expect(fixNumberFormatting('power 1,000mW')).toBe('power 1000 mW');
+  it('strips thousands separator AND adds a non-breaking unit space in one pass', () => {
+    expect(fixNumberFormatting('power 1,000mW')).toBe('power 1000 mW');
   });
 
   it('handles a realistic HTML snippet (EN)', () => {
     const input = '<li><strong>Laser Power:</strong> 1,000 mW, spot size 50µm, max temp 80°C</li>';
-    const expected = '<li><strong>Laser Power:</strong> 1000 mW, spot size 50 µm, max temp 80 °C</li>';
+    const expected = '<li><strong>Laser Power:</strong> 1000 mW, spot size 50 µm, max temp 80 °C</li>';
     expect(fixNumberFormatting(input)).toBe(expected);
   });
 
   it('handles a realistic HTML snippet (UA)', () => {
     const input = '<li>Потужність: 1 000 мВт, розмір плями 50µm</li>';
-    const expected = '<li>Потужність: 1000 мВт, розмір плями 50 µm</li>';
+    const expected = '<li>Потужність: 1000 мВт, розмір плями 50 µm</li>';
     expect(fixNumberFormatting(input)).toBe(expected);
   });
 
   it('handles a realistic cyrillized UA snippet (thousands + Cyrillic unit spacing)', () => {
     const input = '<li>Потужність: 1 000мВт, швидкість 1 250мм/с, темп. 80°C</li>';
-    const expected = '<li>Потужність: 1000 мВт, швидкість 1250 мм/с, темп. 80 °C</li>';
+    const expected = '<li>Потужність: 1000 мВт, швидкість 1250 мм/с, темп. 80 °C</li>';
     expect(fixNumberFormatting(input)).toBe(expected);
   });
 
@@ -270,17 +270,17 @@ describe('fixNumberFormatting — tag protection', () => {
 
   it('still processes alt attribute value', () => {
     const html = '<img alt="500mW laser spot 50µm">';
-    expect(fixNumberFormatting(html)).toBe('<img alt="500 mW laser spot 50 µm">');
+    expect(fixNumberFormatting(html)).toBe('<img alt="500 mW laser spot 50 µm">');
   });
 
   it('processes alt but leaves src untouched in the same tag', () => {
     const html = '<img src="laser-500mW-module.jpg" alt="500mW module" loading="lazy">';
-    expect(fixNumberFormatting(html)).toBe('<img src="laser-500mW-module.jpg" alt="500 mW module" loading="lazy">');
+    expect(fixNumberFormatting(html)).toBe('<img src="laser-500mW-module.jpg" alt="500 mW module" loading="lazy">');
   });
 
   it('still processes text nodes between tags', () => {
     const html = '<figcaption>Spot size: 50µm, power 1,000mW</figcaption>';
-    expect(fixNumberFormatting(html)).toBe('<figcaption>Spot size: 50 µm, power 1000 mW</figcaption>');
+    expect(fixNumberFormatting(html)).toBe('<figcaption>Spot size: 50 µm, power 1000 mW</figcaption>');
   });
 
   it('handles a full figure block: src/href untouched, text and alt formatted', () => {
@@ -295,9 +295,9 @@ describe('fixNumberFormatting — tag protection', () => {
     const expected = [
       '<figure>',
       '<a href="/products/laser-1.000mW-module">',
-      '<img src="laser-1.000mW-12mm.jpg" alt="1000 mW laser 12 mm spot">',
+      '<img src="laser-1.000mW-12mm.jpg" alt="1000 mW laser 12 mm spot">',
       '</a>',
-      '<figcaption>Laser module — power 1000 mW, spot 12 mm</figcaption>',
+      '<figcaption>Laser module — power 1000 mW, spot 12 mm</figcaption>',
       '</figure>',
     ].join('');
     expect(fixNumberFormatting(input)).toBe(expected);

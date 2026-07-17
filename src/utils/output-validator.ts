@@ -75,6 +75,10 @@ const ES_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
   { re: /\bproducci[oó]n puentes?\b/i, fix: 'producción de transición' },
   { re: /\bfixtures?\b/i, fix: 'fijaciones / utillajes de sujeción' },
   { re: /\benvases prot[eé]sicos?\b/i, fix: 'encajes protésicos' },
+  // Hot foil stamping ≠ lamination (a different finishing process — RAE DLE: laminar/laminado
+  // means bonding a protective plastic film). "Estampación/estampado en caliente" is the
+  // standing Spanish printing-industry term (Atelier Print & Press, Grupo Macho, ProPrintweb).
+  { re: /\blaminad[oa] en caliente\b/i, fix: 'estampación en caliente / estampado en caliente' },
 ];
 
 function checkExpert3dSpanishCalques(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
@@ -127,6 +131,17 @@ const PT_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
   { re: /\bgantr(y|ies)\b/i, fix: 'pórtico(s)' },
   { re: /\bpowder bed fusion\b/i, fix: 'fusão em leito de pó' },
   { re: /\bsistemas? legados?\b/i, fix: 'sistema(s) convencional(is) / de geração anterior' },
+  // "Foilagem" is attested in no Portuguese dictionary (Priberam, Infopédia) — a fabricated
+  // anglicism. European printers (Grafibeira, Printipo, UV Artes Gráficas) use "estampagem a
+  // quente" as the standard heading term for hot foil stamping.
+  { re: /\bfoilagem\b/i, fix: 'estampagem a quente' },
+  { re: /\bchassis\b/i, fix: 'corpo/estrutura' },
+  // AO90 orthography gaps found in QA (2026-07-16 EXPERT3D pass) not yet covered above.
+  { re: /\bprojectad\w*/i, fix: 'projetad... (post-AO90 spelling)' },
+  { re: /\bselecç\w*/i, fix: 'seleç... (post-AO90 spelling)' },
+  { re: /\bjacto\b/i, fix: 'jato (post-AO90 spelling)' },
+  { re: /\bimpressora de stencil\b/i, fix: 'moldura de serigrafia' },
+  { re: /\bbálsa\b/i, fix: 'balsa (no accent)' },
 ];
 
 function checkExpert3dPortugueseCalques(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
@@ -142,6 +157,89 @@ function checkExpert3dPortugueseCalques(html: string, locale: string | undefined
         context,
       });
     }
+  }
+}
+
+/**
+ * Ukrainian Russicism check. Ungated by store — since the uk-UA generation became the pipeline
+ * MASTER for every store, a Russicism there is not a localized style issue, it propagates into
+ * every downstream translation. Error severity (unlike the ES/PT calque lists, which stay
+ * warning-only): these are unacceptable in the master, not advisory. Split into a confident
+ * unambiguous list and a small context-dependent list that stays warning-only, mirroring how
+ * ES_FORBIDDEN_CALQUES treats "huellas" as ambiguous.
+ */
+// NOTE: no \b immediately touching a Cyrillic character — JS \b is defined over ASCII \w
+// ([A-Za-z0-9_]) without the /u + \p{L} treatment, so Cyrillic letters are never "word"
+// characters to it. A \b directly adjacent to Cyrillic text silently never matches (same
+// issue the CYR_BOUNDARY workaround in number-format-fixer.ts exists for). \b is kept only
+// where it borders a Latin/digit token (USB, IP), where it works correctly.
+const UK_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
+  { re: /переключа\w*/i, fix: 'перемика... (Russicism)' },
+  { re: /направляюч\w*/i, fix: 'напрямн... (Russicism)' },
+  { re: /по\s+USB\b/i, fix: 'через USB (Russicism: "по" + instrumental)' },
+  { re: /по\s+IP-адрес\w*/i, fix: 'за IP-адресою (Russicism: "по" + instrumental)' },
+  { re: /типу\s+дерева/i, fix: 'як-от дерево / на кшталт дерева (Russicism classifier)' },
+  { re: /(каретж|каредж)\w*/i, fix: 'каретка (non-existent word; agree gender: ножова каретка, змінна каретка)' },
+  { re: /проходок\w*/i, fix: 'проходів (Russicism)' },
+  { re: /зависл\w*\s+речовин\w*/i, fix: 'зважені частинки (imprecise term)' },
+  { re: /зіпер\w*/i, fix: 'застібка(-и)-блискавка(-и) (anglicism)' },
+  { re: /асист[ау]/i, fix: 'підведення повітря / повітряний потік (not асистент — a different, legitimate word)' },
+];
+
+const UK_AMBIGUOUS_CALQUES: Array<{ re: RegExp; fix: string }> = [
+  { re: /кружк\w*/i, fix: 'кухоль/кухлі (Russicism unless describing an actual Russian-market product)' },
+  { re: /тюбик\w*/i, fix: 'трубка/трубки if a rigid/flexible tube component; тюбик is correct only for a squeeze-tube of paste' },
+];
+
+function checkUkrainianCalques(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
+  if (locale !== 'uk-UA') return;
+  const text = html.replace(/<[^>]*>/g, ' ');
+  for (const { re, fix } of UK_FORBIDDEN_CALQUES) {
+    const m = text.match(re);
+    if (m) {
+      issues.push({
+        severity: 'error',
+        rule: 'uk-forbidden-calque',
+        detail: `Russicism/calque "${m[0]}" — use "${fix}". Unacceptable in the uk-UA master (every locale translates from it).`,
+        context,
+      });
+    }
+  }
+  for (const { re, fix } of UK_AMBIGUOUS_CALQUES) {
+    const m = text.match(re);
+    if (m) {
+      issues.push({
+        severity: 'warning',
+        rule: 'uk-ambiguous-calque',
+        detail: `Possible Russicism/calque "${m[0]}" — use "${fix}".`,
+        context,
+      });
+    }
+  }
+}
+
+/**
+ * Capitalization consistency for figcaption lead-ins and Killer-Specs "why it matters" cells.
+ * Warning-only cross-locale check — a translated lead-in starting lowercase while the source
+ * convention capitalizes is likely an inconsistency worth a proofreading pass, not a hard error.
+ */
+function checkLeadInCapitalization(html: string, issues: ValidationIssue[], context: string): void {
+  if (/<figcaption[^>]*>\s*<b>\s*[\p{Ll}]/u.test(html)) {
+    issues.push({
+      severity: 'warning',
+      rule: 'lead-in-capitalization',
+      detail: '<figcaption><b> lead-in starts with a lowercase letter — check capitalization matches the master\'s convention.',
+      context,
+    });
+  }
+  const killerSpecsTable = html.match(/<table>[\s\S]*?(?:Por qu[eé] es importante|Why it matters|Чому це важливо|Porqu[eê] [eé] importante)[\s\S]*?<\/table>/i);
+  if (killerSpecsTable && /<td>\s*[\p{Ll}]/u.test(killerSpecsTable[0])) {
+    issues.push({
+      severity: 'warning',
+      rule: 'lead-in-capitalization',
+      detail: 'Killer-Specs "why it matters" column may have lowercase-starting cells — check capitalization matches the master\'s convention.',
+      context,
+    });
   }
 }
 
@@ -411,6 +509,8 @@ export function validateGeneratedHtml(
   checkNumberFormatting(html, locale, issues, context);
   checkExpert3dSpanishCalques(html, locale, issues, context);
   checkExpert3dPortugueseCalques(html, locale, issues, context);
+  checkUkrainianCalques(html, locale, issues, context);
+  checkLeadInCapitalization(html, issues, context);
   // Uncyrillized Latin units (uk/ru) — runs on the name/URL-stripped variant: units inside a
   // brand/model suffix stay Latin by design ([PRODUCT NAME LOCALIZATION] keeps model codes as-is).
   checkCyrillicUnitLocalization(htmlForUnitCheck, locale, issues, context);

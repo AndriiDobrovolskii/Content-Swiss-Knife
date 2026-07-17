@@ -24,7 +24,12 @@ export class AnthropicProvider {
       .map(b => ({ type: 'text', text: b.text, ...(b.cache ? { cache_control: { type: 'ephemeral', ttl: '1h' } } : {}) }));
   }
 
-  async generate(payload, mode = 'text') {
+  // `effort` is a per-request override of this.thinkingEffort — 'disabled' means Sonnet 5
+  // with thinking off (no output_config sent at all); 'low'/'medium'/'high' means adaptive
+  // thinking at that depth. Falls back to the fixed this.thinkingEffort when omitted, so
+  // callers that don't pass it (e.g. analyzeImage) keep their current behavior. Ignored on
+  // non-creative modes — Haiku never runs thinking.
+  async generate(payload, mode = 'text', effort) {
     const { systemBlocks = [], userContent = '' } = normalizePayload(payload);
 
     return withRetry(async () => {
@@ -39,8 +44,12 @@ export class AnthropicProvider {
         messages: [{ role: 'user', content: userContent }],
       };
       if (isCreative) {
-        config.thinking = { type: 'adaptive' };
-        config.output_config = { effort: this.thinkingEffort };
+        if (effort === 'disabled') {
+          config.thinking = { type: 'disabled' };
+        } else {
+          config.thinking = { type: 'adaptive' };
+          config.output_config = { effort: effort || this.thinkingEffort };
+        }
       }
 
       const hasCacheBlocks = systemBlocks.some(b => b?.cache);

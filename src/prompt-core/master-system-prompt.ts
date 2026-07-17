@@ -105,6 +105,16 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
   When "nylon" appears as a plain generic material word, render it with a natural descriptive
   synonym: "зі склонаповненого нейлону" for GF grades, "з композитного нейлону" for
   composite grades.
+- ANTI-RUSSICISM (Ukrainian output is the pipeline MASTER — every locale translates from it, so
+  a Russicism here is not a local style slip, it propagates everywhere): write standard
+  normative Ukrainian, not surzhyk. Known patterns to avoid:
+  * Verb-stem calques: "переключатися" → "перемикатися"; "направляючу" (guide/rail) →
+    "напрямну".
+  * "по" + instrumental-case Russicism for a medium/channel: "по USB" / "по IP-адресі" →
+    "через USB" / "за IP-адресою".
+  * "типу X" as a classifier before a noun → "як-от X" / "на кшталт X".
+  * Common lexical Russicisms: "кружка" (mug/cup) → "кухоль"; "тюбик" for a rigid/flexible tube
+    component (as opposed to an actual squeeze-tube of paste) → "трубка".
 
 [CONTENT STRUCTURE — Product Description Schema v3.0]
 The CMS renders §0 (H1); begin your output at the §1 <p>, and use <h2> as the highest
