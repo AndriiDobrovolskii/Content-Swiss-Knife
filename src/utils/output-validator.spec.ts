@@ -350,6 +350,17 @@ describe('validateGeneratedHtml — Rule: decimal-separator', () => {
     const html = '<p>Durchmesser von 1.75 mm garantiert konsistente Extrusion.</p>';
     expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'de-DE'), 'decimal-separator')?.severity).toBe('warning');
   });
+
+  it('does NOT flag protocol/standard version numbers (IEEE 802.11, USB 3.0, Bluetooth 5.0, HDMI 2.1)', () => {
+    const html = '<td>Protocolo Wi-Fi (Wi-Fi Protocol)</td><td>IEEE 802.11 a/b/g/n</td>' +
+      '<p>Conector USB 3.0, Bluetooth 5.0 e saída HDMI 2.1.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'decimal-separator');
+  });
+
+  it('still flags a genuine dot decimal immediately after an unrelated word', () => {
+    const html = '<p>Precisão de 0.05 mm por eixo.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'decimal-separator')).toBeDefined();
+  });
 });
 
 describe('validateGeneratedHtml — Rule: thousands-separator', () => {
@@ -433,6 +444,11 @@ describe('validateGeneratedHtml — Rule: latin-unit-in-cyrillic-text', () => {
   it('still flags a genuine uncyrillized "V" that is not part of VAC / V AC', () => {
     const html = '<p>Вихідна напруга 5 V на порту USB.</p>';
     expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text')).toBeDefined();
+  });
+
+  it('does NOT flag a UL94 flammability classification code (V-0/V-1/V-2) as an uncyrillized voltage unit', () => {
+    const html = '<p>Камера виготовлена з матеріалу класу UL94 V-0, що забезпечує пасивний захист.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
   });
 
   it('does NOT flag Latin units inside the product name (model suffix "10W")', () => {
@@ -530,6 +546,16 @@ describe('validateGeneratedHtml — Rule: pt-forbidden-calque', () => {
     const pt = '<p>Modo de lâmina e acessórios de foilagem.</p>';
     expect(findRule(validateGeneratedHtml(pt, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque')?.severity).toBe('warning');
   });
+
+  it('does NOT flag the English gloss in the generator\'s "Termo local (English Source)" convention', () => {
+    const html = '<h3>Eletrónica (Electronics)</h3><table><tr><td>Corpo (Body)</td><td>alumínio</td></tr></table>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque');
+  });
+
+  it('does NOT flag "chassis" (standard European Portuguese, unlike Brazilian "chassi")', () => {
+    const html = '<p>O chassis é fabricado em alumínio e aço.</p>';
+    expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'pt-forbidden-calque');
+  });
 });
 
 describe('validateGeneratedHtml — Rule: uk-forbidden-calque (error severity — master is universal)', () => {
@@ -571,6 +597,18 @@ describe('validateGeneratedHtml — Rule: lead-in-capitalization', () => {
   it('does NOT flag a capitalized figcaption lead-in', () => {
     const html = '<figure><img src="a.jpg" alt="a"><figcaption><b>Порівняння з альтернативами:</b> опис</figcaption></figure>';
     expectNoRule(validateGeneratedHtml(html, 'test'), 'lead-in-capitalization');
+  });
+
+  it('does NOT flag a Killer-Specs Value column that legitimately starts lowercase ("до 6...")', () => {
+    const html = '<table><tr><th>Характеристика</th><th>Значення</th><th>Чому це важливо</th></tr>' +
+      '<tr><td>Хотенди</td><td>до 6 змінних хотендів</td><td>Заміна цілого хотенда усуває відходи.</td></tr></table>';
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'lead-in-capitalization');
+  });
+
+  it('flags a Killer-Specs "why it matters" cell that starts lowercase', () => {
+    const html = '<table><tr><th>Характеристика</th><th>Значення</th><th>Чому це важливо</th></tr>' +
+      '<tr><td>Хотенди</td><td>До 6 змінних хотендів</td><td>усуває більшу частину відходів матеріалу.</td></tr></table>';
+    expect(findRule(validateGeneratedHtml(html, 'test'), 'lead-in-capitalization')?.severity).toBe('warning');
   });
 });
 

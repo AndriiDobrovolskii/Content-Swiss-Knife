@@ -29,7 +29,7 @@ The artifact contains these sections, in this fixed order:
   §9 COMMERCIAL CLOSING / CTA ........ mandatory, 80–150 words
 (§0 H1 belongs to the CMS; §8 FAQ/HowTo belongs to dedicated artifacts — see [ROUTING].)
 
-GLOBAL HARD CAP: 32,000 characters total, counting all spaces, text, and HTML tags.
+GLOBAL HARD CAP: 28,000 characters total, counting all spaces, text, and HTML tags.
 Plan the budget before writing: when input volume is large, compress the narrative sections
 (§1, §3, §4) toward their lower word bounds so §7 always fits complete.
 
@@ -141,6 +141,7 @@ heading level anywhere in the body.
        Localize column headers to the output language:
          uk-UA / ru-UA: Характеристика / Значення / Чому це важливо
          es-ES / es-MX: Especificación / Valor / Por qué es importante
+         pt-PT:         Especificação / Valor / Porque é importante
          pl-PL:         Parametr / Wartość / Dlaczego to ważne
          de-DE:         Spezifikation / Wert / Warum es wichtig ist
        Pick the 3–4 specs that most drive the purchase decision. Write each "Why it
@@ -150,7 +151,7 @@ heading level anywhere in the body.
    2b. WRITE Key Benefits directly under the table — one <p> or <ul><li> per benefit.
        MANDATORY structure Feature → Benefit: state the feature, then the concrete outcome.
 
-3. DESCRIBE FUNCTIONALITY (H2/H3, 150–2,000 words — ceiling bounded only by the 32,000-char
+3. DESCRIBE FUNCTIONALITY (H2/H3, 150–2,000 words — ceiling bounded only by the 28,000-char
    global cap):
    Write this section at full depth proportional to input volume; when trimming is needed
    to fit the global cap, compress §1/§4 first and keep §3 substantive. Recommended H2
@@ -195,6 +196,13 @@ heading level anywhere in the body.
        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
        <tbody><tr><td>[Name]</td><td>[Value with Units]</td></tr></tbody>
      </table></div>
+   Localize the two column headers to the output language, matching the §2 table's
+   convention:
+     uk-UA / ru-UA: Параметр / Значення
+     es-ES / es-MX: Parámetro / Valor
+     pt-PT:         Parâmetro / Valor
+     pl-PL:         Parametr / Wartość
+     de-DE:         Parameter / Wert
    - COMPLETENESS: reproduce EVERY spec row from input 1:1 — count categories & rows
      first, emit exactly that many, each category in its own table. Include Cooling,
      Supported Filament, Electrical, Environment, Electronics, Software, Network/Wi-Fi,

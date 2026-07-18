@@ -163,6 +163,15 @@ describe('stripCkeditorArtifacts', () => {
     expect(li.textContent).toBe('Item text');
   });
 
+  it('unwraps a nested <figure class="image"> that CKEditor\'s Image feature wraps around an <img> already inside the generator\'s own <figure>', () => {
+    const html = `<figure><figure class="image"><img src="a.jpg" alt="A"></figure><figcaption>Cap</figcaption></figure>`;
+    const doc = parse(stripCkeditorArtifacts(html));
+    expect(doc.querySelectorAll('figure').length).toBe(1);
+    const figure = doc.querySelector('figure')!;
+    expect(figure.firstElementChild?.tagName).toBe('IMG');
+    expect(figure.querySelector('figcaption')?.textContent).toBe('Cap');
+  });
+
   it('unwraps a <p> that only wraps an <img> inside a <figure>', () => {
     const html = `<figure><p><img src="a.jpg" alt="A"></p><figcaption>Cap</figcaption></figure>`;
     const doc = parse(stripCkeditorArtifacts(html));

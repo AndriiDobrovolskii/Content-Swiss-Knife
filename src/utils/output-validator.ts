@@ -38,7 +38,7 @@ function checkNumberFormatting(html: string, locale: string | undefined, issues:
   // Decimal point where a comma is required. Excludes multi-part versions (1.2.3) and
   // v-prefixed versions (v1.5). Known limitation: a bare two-part version like "AMS 2.0"
   // can still false-positive — accepted, severity stays 'warning'.
-  const dotDecimal = text.match(/(?<![\w.])\d+\.(?!\d{3}(?!\d))\d+(?!\.\d)/);
+  const dotDecimal = text.match(/(?<![\w.])(?<!IEEE\s)(?<!USB\s)(?<!Bluetooth\s)(?<!HDMI\s)\d+\.(?!\d{3}(?!\d))\d+(?!\.\d)/i);
   if (dotDecimal) {
     issues.push({
       severity: 'warning',
@@ -83,7 +83,7 @@ const ES_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
 
 function checkExpert3dSpanishCalques(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
   if (locale !== 'es-ES') return;
-  const text = html.replace(/<[^>]*>/g, ' ');
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)/g, ' ');
   for (const { re, fix } of ES_FORBIDDEN_CALQUES) {
     const m = text.match(re);
     if (m) {
@@ -135,7 +135,6 @@ const PT_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
   // anglicism. European printers (Grafibeira, Printipo, UV Artes Gráficas) use "estampagem a
   // quente" as the standard heading term for hot foil stamping.
   { re: /\bfoilagem\b/i, fix: 'estampagem a quente' },
-  { re: /\bchassis\b/i, fix: 'corpo/estrutura' },
   // AO90 orthography gaps found in QA (2026-07-16 EXPERT3D pass) not yet covered above.
   { re: /\bprojectad\w*/i, fix: 'projetad... (post-AO90 spelling)' },
   { re: /\bselecç\w*/i, fix: 'seleç... (post-AO90 spelling)' },
@@ -146,7 +145,7 @@ const PT_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
 
 function checkExpert3dPortugueseCalques(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
   if (locale !== 'pt-PT') return;
-  const text = html.replace(/<[^>]*>/g, ' ');
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)/g, ' ');
   for (const { re, fix } of PT_FORBIDDEN_CALQUES) {
     const m = text.match(re);
     if (m) {
@@ -233,13 +232,21 @@ function checkLeadInCapitalization(html: string, issues: ValidationIssue[], cont
     });
   }
   const killerSpecsTable = html.match(/<table>[\s\S]*?(?:Por qu[eé] es importante|Why it matters|Чому це важливо|Porqu[eê] [eé] importante)[\s\S]*?<\/table>/i);
-  if (killerSpecsTable && /<td>\s*[\p{Ll}]/u.test(killerSpecsTable[0])) {
-    issues.push({
-      severity: 'warning',
-      rule: 'lead-in-capitalization',
-      detail: 'Killer-Specs "why it matters" column may have lowercase-starting cells — check capitalization matches the master\'s convention.',
-      context,
+  if (killerSpecsTable) {
+    const rows = killerSpecsTable[0].match(/<tr>[\s\S]*?<\/tr>/g) ?? [];
+    const hasLowercaseWhyCell = rows.some(row => {
+      const cells = row.match(/<td>[\s\S]*?<\/td>/g);
+      const lastCell = cells?.[cells.length - 1];
+      return lastCell ? /<td>\s*[\p{Ll}]/u.test(lastCell) : false;
     });
+    if (hasLowercaseWhyCell) {
+      issues.push({
+        severity: 'warning',
+        rule: 'lead-in-capitalization',
+        detail: 'Killer-Specs "why it matters" column may have lowercase-starting cells — check capitalization matches the master\'s convention.',
+        context,
+      });
+    }
   }
 }
 
@@ -255,7 +262,7 @@ function checkLeadInCapitalization(html: string, issues: ValidationIssue[], cont
  * the fix message covers the whole unit.
  */
 const LATIN_UNIT_IN_CYRILLIC =
-  /\d\s?(mm\/s|m\/s|kHz|MHz|GHz|Hz|mAh|mA|mV|kV|kW|mW|Mbit|Gbit|µm|μm|nm|mm²|mm³|cm²|cm³|m²|m³|mm|cm|km|kg|mg|ml|GB|MB|TB|rpm|V(?!\s?AC)|[WAglLm])(?![\w²³])/;
+  /\d\s?(mm\/s|m\/s|kHz|MHz|GHz|Hz|mAh|mA|mV|kV|kW|mW|Mbit|Gbit|µm|μm|nm|mm²|mm³|cm²|cm³|m²|m³|mm|cm|km|kg|mg|ml|GB|MB|TB|rpm|V(?!\s?AC)(?!-\d)|[WAglLm])(?![\w²³])/;
 
 function checkCyrillicUnitLocalization(
   strippedHtml: string,

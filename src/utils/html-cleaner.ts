@@ -287,6 +287,15 @@ export function stripCkeditorArtifacts(html: string): string {
     if (table) fig.replaceWith(table);
   });
 
+  // CKEditor's core Image feature re-wraps any <img> in its own
+  // <figure class="image">, even when it's already inside the generator's own
+  // <figure>. Unwrap the inner wrapper, restoring the single-figure structure
+  // (prevents a doubled <figure> count tripping validateStructuralParity()).
+  doc.querySelectorAll('figure > figure.image').forEach(fig => {
+    const img = fig.querySelector('img');
+    if (img) fig.replaceWith(img);
+  });
+
   // CKEditor's List plugin stamps every <li> with a tracking id — never present
   // in generator output, not meaningful once copied out.
   doc.querySelectorAll('li[data-list-item-id]').forEach(li => li.removeAttribute('data-list-item-id'));
