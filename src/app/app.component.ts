@@ -177,6 +177,11 @@ const TRANSLATIONS = {
     validationTitle: 'Acceptance criteria check',
     validationErrorsLabel: 'error(s)',
     validationWarningsLabel: 'warning(s)',
+    repairReportTitle: 'Repair Gate Report',
+    repairReportArtifactsFixed: 'artifact(s) repaired',
+    repairReportStillFailing: 'still unresolved',
+    repairReportFixed: 'fixed',
+    repairReportPersisted: 'still failing',
   },
   uk: {
     appTitle: 'SEO Content',
@@ -331,6 +336,11 @@ const TRANSLATIONS = {
     validationTitle: 'Перевірка критеріїв якості',
     validationErrorsLabel: 'помилок',
     validationWarningsLabel: 'попереджень',
+    repairReportTitle: 'Звіт про виправлення',
+    repairReportArtifactsFixed: 'артефакт(и) виправлено',
+    repairReportStillFailing: 'ще не вирішено',
+    repairReportFixed: 'виправлено',
+    repairReportPersisted: 'досі не пройдено',
   }
 };
 
@@ -452,6 +462,11 @@ export class AppComponent {
   validationIssues = this.orchestrator.validationIssues;
   validationErrorCount = computed(() => this.validationIssues().filter(i => i.severity === 'error').length);
   validationWarningCount = computed(() => this.validationIssues().filter(i => i.severity === 'warning').length);
+
+  // Per-artifact repair-gate attempt history for the current generation run.
+  repairReport = computed(() => this.orchestrator.repairReport());
+  repairedArtifactsCount = computed(() => this.repairReport().filter(r => r.status !== 'clean').length);
+  repairUnresolvedCount = computed(() => this.repairReport().filter(r => r.status === 'unresolved').length);
 
   // Per-tool output presence — each tool's layout reads ONLY its own slice.
   hasGeneratorOutput = computed(() => !!this.content().mainHtmlUa);
@@ -934,6 +949,7 @@ export class AppComponent {
           website: undefined,
         }));
         this.orchestrator.validationIssues.set([]);
+        this.orchestrator.repairReport.set([]);
         break;
 
       case 'seo-generator':
@@ -943,6 +959,7 @@ export class AppComponent {
         this.activeTab.set('seo');
         this.orchestrator.content.update(c => ({ ...c, seoData: null }));
         this.orchestrator.validationIssues.set([]);
+        this.orchestrator.repairReport.set([]);
         break;
 
       case 'slug-generator':

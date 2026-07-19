@@ -26,7 +26,7 @@ import { buildKeywordsPrompt } from '../prompts/keywords';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { buildCopywriterPrompt } from '../prompts/copywriter';
 import { SlugResponse, SeoResponse } from '../app/types';
-import { runRepairGate, appendRepairFeedback } from '../utils/repair-gate';
+import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport } from '../utils/repair-gate';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
 
@@ -61,6 +61,8 @@ export class ContentOrchestratorService {
 
   // Post-generation acceptance-criteria check results (see output-validator.ts).
   validationIssues = signal<ValidationIssue[]>([]);
+  // Per-artifact repair-gate attempt history for the current generation run (see repair-gate.ts).
+  repairReport = signal<RepairArtifactReport[]>([]);
   maxRepairs = signal(1);
 
   /** Tracks the product+store key of the last successfully generated slug, so the main
@@ -78,6 +80,7 @@ export class ContentOrchestratorService {
     const reusedSlug = this.approvedSlugKey() === this.slugKey(input) ? this.content().slugData ?? null : null;
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {}, mainHtmlLocale: 'uk-UA' });
     this.validationIssues.set([]);
+    this.repairReport.set([]);
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
     // image-unknown-src): every uploaded image must ship in every language version.
@@ -116,7 +119,7 @@ export class ContentOrchestratorService {
         html = canonicalizeMultiInOne(html, 'uk-UA');
         return html;
       };
-      const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
+      const htmlAResult = await runRepairGate<string>({
         label: 'HTML (base)',
         maxRepairs: masterRepairBudget,
         basePayload: basePayloadA,
@@ -129,7 +132,9 @@ export class ContentOrchestratorService {
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
+      const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlAResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult)]);
       // mainHtmlUa now holds the uk-UA MASTER — see mainHtmlLocale. Renamed to versions['uk-UA'] in PR #1.
       const finalMasterHtml = isConsumables ? trimConsumablesToLimit(htmlEn) : htmlEn;
       this.content.update(c => ({ ...c, mainHtmlUa: finalMasterHtml }));
@@ -176,7 +181,7 @@ export class ContentOrchestratorService {
       // h1 + title core; HTML context still feeds meta_description's hard spec.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
       const promptB = buildPromptB(input.website.name, input.name, seoLangs, htmlEn, localizedNames);
-      const { artifact: seoJson, repairsUsed: bRepairs } = await runRepairGate({
+      const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
@@ -187,7 +192,9 @@ export class ContentOrchestratorService {
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
+      const { artifact: seoJson, repairsUsed: bRepairs } = seoResult;
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
+      this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
       // Step 4 — Translation from the uk-UA master (Task C, fast model). Every non-master locale —
@@ -213,7 +220,7 @@ export class ContentOrchestratorService {
           { localizedName: localizedNames?.[locale], sourceLocale: 'uk-UA' },
         );
 
-        const { artifact: htmlLang, finalIssues: langFinalIssues, repairsUsed: langRepairs } = await runRepairGate<string>({
+        const htmlLangResult = await runRepairGate<string>({
           label: `HTML (${lang})`,
           maxRepairs: repairBudget,
           basePayload: basePayloadC,
@@ -235,7 +242,9 @@ export class ContentOrchestratorService {
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing ${lang} translation (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
+        const { artifact: htmlLang, finalIssues: langFinalIssues, repairsUsed: langRepairs } = htmlLangResult;
         if (langRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${langRepairs} repair(s) applied`);
+        this.repairReport.update(r => [...r, toArtifactReport(`HTML (${lang})`, htmlLangResult)]);
         if (langFinalIssues.length > 0) {
           this.validationIssues.update(issues => [...issues, ...langFinalIssues]);
         }
@@ -274,7 +283,7 @@ export class ContentOrchestratorService {
             }
             return issues;
           };
-          const { artifact: faqHtml, repairsUsed: faqRepairs } = await runRepairGate<string>({
+          const faqResult = await runRepairGate<string>({
             label: `FAQ (${isoCode})`,
             maxRepairs: this.maxRepairs(),
             basePayload: basePayloadFaq,
@@ -287,7 +296,9 @@ export class ContentOrchestratorService {
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing FAQ (${isoCode}) (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           });
+          const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
           if (faqRepairs > 0) console.info(`[repair-gate] FAQ (${isoCode}): ${faqRepairs} repair(s) applied`);
+          this.repairReport.update(r => [...r, toArtifactReport(`FAQ (${isoCode})`, faqResult)]);
           if (faqHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
           } else {
@@ -313,6 +324,7 @@ export class ContentOrchestratorService {
 
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
     this.validationIssues.set([]);
+    this.repairReport.set([]);
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
     // image-unknown-src): every uploaded image must ship in every language version.
@@ -349,7 +361,7 @@ export class ContentOrchestratorService {
         html = canonicalizeMultiInOne(html, UA_ISO);
         return html;
       };
-      const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = await runRepairGate<string>({
+      const htmlUaResult = await runRepairGate<string>({
         label: 'HTML (uk-UA)',
         maxRepairs: repairBudget,
         basePayload: basePayloadA,
@@ -362,7 +374,9 @@ export class ContentOrchestratorService {
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
+      const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlUaResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult)]);
       const finalHtmlUa = isConsumables ? trimConsumablesToLimit(htmlUa) : htmlUa;
       this.content.update(c => ({ ...c, mainHtmlUa: finalHtmlUa }));
       this.validationIssues.set(
@@ -395,7 +409,7 @@ export class ContentOrchestratorService {
       // Step 3 — SEO metadata for ALL site languages, grounded in the uk-UA description.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
       const promptB = buildPromptB(input.website.name, input.name, seoLangs, finalHtmlUa, localizedNames);
-      const { artifact: seoJson, repairsUsed: bRepairs } = await runRepairGate({
+      const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
@@ -406,7 +420,9 @@ export class ContentOrchestratorService {
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
+      const { artifact: seoJson, repairsUsed: bRepairs } = seoResult;
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
+      this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
       // Step 4 — FAQ artifact (uk-UA only). Runs ONLY when Supplemental Content is supplied.
@@ -428,7 +444,7 @@ export class ContentOrchestratorService {
           }
           return issues;
         };
-        const { artifact: faqHtml, repairsUsed: faqRepairs } = await runRepairGate<string>({
+        const faqResult = await runRepairGate<string>({
           label: 'FAQ (uk-UA)',
           maxRepairs: this.maxRepairs(),
           basePayload: basePayloadFaq,
@@ -441,7 +457,9 @@ export class ContentOrchestratorService {
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing FAQ (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
+        const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
         if (faqRepairs > 0) console.info(`[repair-gate] FAQ (uk-UA): ${faqRepairs} repair(s) applied`);
+        this.repairReport.update(r => [...r, toArtifactReport('FAQ (uk-UA)', faqResult)]);
         if (faqHtml.startsWith('<')) {
           this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [UA_ISO]: faqHtml } }));
         } else {
@@ -464,6 +482,7 @@ export class ContentOrchestratorService {
     const existingSlug = this.approvedSlugKey() === this.slugKey(input) ? this.content().slugData ?? null : null;
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: existingSlug, website: input.website });
     this.validationIssues.set([]);
+    this.repairReport.set([]);
 
     await this.withProgress(async () => {
       const { seoLangs } = getLangsForStore(input.website.name);
@@ -473,7 +492,7 @@ export class ContentOrchestratorService {
         ? slugsToLocalizedNames(existingSlug.slugs)
         : undefined;
       const promptB = buildPromptB(input.website.name, input.name, seoLangs, input.description, localizedNames);
-      const { artifact: seoJson, repairsUsed: bRepairs } = await runRepairGate({
+      const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
@@ -483,7 +502,9 @@ export class ContentOrchestratorService {
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
+      const { artifact: seoJson, repairsUsed: bRepairs } = seoResult;
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
+      this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
       this.validationIssues.set(validateSeoMetadata(this.content().seoData, ''));
@@ -496,6 +517,7 @@ export class ContentOrchestratorService {
   async generateSlugs(input: ProductInput, useThinking = false): Promise<void> {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website });
     this.validationIssues.set([]);
+    this.repairReport.set([]);
 
     await this.withProgress(async () => {
       const { seoLangs } = getLangsForStore(input.website.name);
@@ -642,6 +664,7 @@ export class ContentOrchestratorService {
   resetState() {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, faqArtifacts: {} });
     this.validationIssues.set([]);
+    this.repairReport.set([]);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');
     this.copywriterOutput.set('');

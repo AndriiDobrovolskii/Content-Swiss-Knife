@@ -1244,6 +1244,55 @@
           </div>
         }
 
+        @if (repairReport().length > 0 && repairedArtifactsCount() > 0 && !isGenerating()) {
+          <div class="max-w-5xl mx-auto mb-6 rounded-xl border p-4 text-sm"
+               [class]="repairUnresolvedCount() > 0
+                 ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
+                 : 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200'">
+            <div class="flex items-center gap-2 font-bold mb-2">
+              <i class="fa-solid fa-wrench"></i>
+              <span>{{ uiLabels().repairReportTitle }}</span>
+              <span class="font-normal opacity-80">
+                — {{ repairedArtifactsCount() }} {{ uiLabels().repairReportArtifactsFixed }}
+                @if (repairUnresolvedCount() > 0) {
+                  , {{ repairUnresolvedCount() }} {{ uiLabels().repairReportStillFailing }}
+                }
+              </span>
+            </div>
+            <div class="space-y-3">
+              @for (report of repairReport(); track report.label) {
+                @if (report.status !== 'clean') {
+                  <details class="text-sm">
+                    <summary class="cursor-pointer font-mono flex items-center gap-2">
+                      <i class="fa-solid" [class]="report.status === 'repaired' ? 'fa-circle-check text-green-500' : 'fa-circle-xmark text-red-500'"></i>
+                      {{ report.label }} — {{ report.repairsUsed }} attempt(s), status: {{ report.status }}
+                    </summary>
+                    <ul class="mt-2 ml-6 space-y-2">
+                      @for (attempt of report.attempts; track attempt.attempt) {
+                        <li>
+                          <div class="font-semibold">Attempt {{ attempt.attempt }}</div>
+                          <ul class="ml-4 list-disc">
+                            @for (issue of attempt.resolved; track issue.rule) {
+                              <li class="text-green-700 dark:text-green-400">
+                                {{ uiLabels().repairReportFixed }}: [{{ issue.rule }}] {{ issue.detail }}
+                              </li>
+                            }
+                            @for (issue of attempt.persisted; track issue.rule) {
+                              <li class="text-red-700 dark:text-red-400">
+                                {{ uiLabels().repairReportPersisted }}: [{{ issue.rule }}] {{ issue.detail }}
+                              </li>
+                            }
+                          </ul>
+                        </li>
+                      }
+                    </ul>
+                  </details>
+                }
+              }
+            </div>
+          </div>
+        }
+
         @if (appMode() !== 'generator' && !content().mainHtmlUa && !content().seoData && !content().slugData && !isGenerating()) {
           <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
             <i class="fa-regular fa-file-code text-6xl mb-4 opacity-50"></i>

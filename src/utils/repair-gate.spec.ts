@@ -123,6 +123,16 @@ describe('runRepairGate', () => {
     expect(result.repairsUsed).toBe(2);
     expect(result.artifact).toBe(artifacts[0]);
     expect(result.finalIssues).toHaveLength(1);
+
+    expect(result.attempts).toHaveLength(2);
+    expect(result.attempts[0].attempt).toBe(1);
+    expect(result.attempts[0].issuesBefore).toHaveLength(1);
+    expect(result.attempts[0].resolved).toHaveLength(0);
+    expect(result.attempts[0].persisted).toHaveLength(1);
+    expect(result.attempts[0].persisted[0].rule).toBe('seo-empty');
+    expect(result.attempts[1].attempt).toBe(2);
+    expect(result.attempts[1].resolved).toHaveLength(0);
+    expect(result.attempts[1].persisted).toHaveLength(1);
   });
 
   it('stops retrying as soon as all errors are resolved', async () => {
@@ -146,6 +156,14 @@ describe('runRepairGate', () => {
     expect(produce).toHaveBeenCalledTimes(2);
     expect(result.repairsUsed).toBe(1);
     expect(result.artifact).toBe(goodArtifact);
+
+    expect(result.attempts).toHaveLength(1);
+    expect(result.attempts[0].attempt).toBe(1);
+    expect(result.attempts[0].issuesBefore).toHaveLength(1);
+    expect(result.attempts[0].issuesAfter).toHaveLength(0);
+    expect(result.attempts[0].resolved).toHaveLength(1);
+    expect(result.attempts[0].resolved[0].rule).toBe('seo-empty');
+    expect(result.attempts[0].persisted).toHaveLength(0);
   });
 
   it('calls onAttempt with the attempt number and error count (not total issue count)', async () => {
