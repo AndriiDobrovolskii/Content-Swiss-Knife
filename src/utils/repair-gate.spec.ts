@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runRepairGate, appendRepairFeedback } from './repair-gate';
+import { runRepairGate, appendRepairFeedback, formatRepairReportMarkdown, RepairArtifactReport } from './repair-gate';
 import { PromptPayload } from '../prompt-core/payload';
 import { ValidationIssue } from './output-validator';
 
@@ -269,5 +269,78 @@ describe('runRepairGate', () => {
         withFeedback: appendRepairFeedback,
       })
     ).rejects.toThrow('LLM error');
+  });
+});
+
+describe('formatRepairReportMarkdown', () => {
+  const META = { product: 'Test Product', store: 'Test Store', generatedAt: '2026-07-19T12:00:00.000Z' };
+
+  it('ranks a rule that recurs across artifacts above a rule that only fails once, and marks fixed-by-repair correctly', () => {
+    const recurringIssueA = makeIssue('figcaption-missing');
+    const recurringIssueB = makeIssue('figcaption-missing');
+    const persistingIssue = makeIssue('spec-count-mismatch');
+
+    const reports: RepairArtifactReport[] = [
+      {
+        label: 'HTML (base)',
+        repairsUsed: 1,
+        finalIssues: [],
+        status: 'repaired',
+        attempts: [
+          {
+            attempt: 1,
+            issuesBefore: [recurringIssueA],
+            issuesAfter: [],
+            resolved: [recurringIssueA],
+            persisted: [],
+          },
+        ],
+      },
+      {
+        label: 'HTML (es-ES)',
+        repairsUsed: 1,
+        finalIssues: [persistingIssue],
+        status: 'unresolved',
+        attempts: [
+          {
+            attempt: 1,
+            issuesBefore: [recurringIssueB, persistingIssue],
+            issuesAfter: [persistingIssue],
+            resolved: [recurringIssueB],
+            persisted: [persistingIssue],
+          },
+        ],
+      },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+
+    const tableStart = md.indexOf('## Recurring rule failures');
+    const figcaptionIdx = md.indexOf('`figcaption-missing`', tableStart);
+    const specCountIdx = md.indexOf('`spec-count-mismatch`', tableStart);
+    expect(tableStart).toBeGreaterThan(-1);
+    expect(figcaptionIdx).toBeGreaterThan(-1);
+    expect(specCountIdx).toBeGreaterThan(-1);
+    expect(figcaptionIdx).toBeLessThan(specCountIdx); // recurring rule (2 occurrences) ranked first
+
+    const figcaptionRow = md.split('\n').find(l => l.includes('`figcaption-missing`'))!;
+    const specCountRow = md.split('\n').find(l => l.includes('`spec-count-mismatch`'))!;
+    expect(figcaptionRow).toContain('2'); // occurrences
+    expect(figcaptionRow).toContain('✅ yes');
+    expect(specCountRow).toContain('⚠️ no');
+
+    // Recurring-failures table appears before the per-artifact detail section.
+    expect(md.indexOf('## Recurring rule failures')).toBeLessThan(md.indexOf('## Per-artifact detail'));
+  });
+
+  it('returns a short "no repairs needed" message when every report is clean', () => {
+    const reports: RepairArtifactReport[] = [
+      { label: 'HTML (base)', repairsUsed: 0, finalIssues: [], status: 'clean', attempts: [] },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+
+    expect(md).toContain('No repairs were needed');
+    expect(md).not.toContain('## Recurring rule failures');
   });
 });

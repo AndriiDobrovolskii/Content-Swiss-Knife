@@ -10,6 +10,7 @@ import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { parseVisionResult } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
+import { formatRepairReportMarkdown } from '../utils/repair-gate';
 import { getStore, bcp47ToTaskCLang, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
@@ -182,6 +183,7 @@ const TRANSLATIONS = {
     repairReportStillFailing: 'still unresolved',
     repairReportFixed: 'fixed',
     repairReportPersisted: 'still failing',
+    repairReportDownload: 'Download .md',
   },
   uk: {
     appTitle: 'SEO Content',
@@ -341,6 +343,7 @@ const TRANSLATIONS = {
     repairReportStillFailing: 'ще не вирішено',
     repairReportFixed: 'виправлено',
     repairReportPersisted: 'досі не пройдено',
+    repairReportDownload: 'Завантажити .md',
   }
 };
 
@@ -950,6 +953,7 @@ export class AppComponent {
         }));
         this.orchestrator.validationIssues.set([]);
         this.orchestrator.repairReport.set([]);
+        this.orchestrator.repairReportMeta.set(null);
         break;
 
       case 'seo-generator':
@@ -960,6 +964,7 @@ export class AppComponent {
         this.orchestrator.content.update(c => ({ ...c, seoData: null }));
         this.orchestrator.validationIssues.set([]);
         this.orchestrator.repairReport.set([]);
+        this.orchestrator.repairReportMeta.set(null);
         break;
 
       case 'slug-generator':
@@ -1295,6 +1300,16 @@ export class AppComponent {
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     saveAs(blob, `image-metadata-${Date.now()}.json`);
+  }
+
+  downloadRepairReportMd(): void {
+    const reports = this.orchestrator.repairReport();
+    const meta = this.orchestrator.repairReportMeta();
+    if (reports.length === 0 || !meta) return;
+
+    const md = formatRepairReportMarkdown(reports, meta);
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    saveAs(blob, `repair-report_${meta.store}_${meta.product.replace(/[^\w-]+/g, '-')}_${Date.now()}.md`);
   }
 
   formatBytes(bytes: number, decimals = 2) {

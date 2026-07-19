@@ -26,7 +26,7 @@ import { buildKeywordsPrompt } from '../prompts/keywords';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { buildCopywriterPrompt } from '../prompts/copywriter';
 import { SlugResponse, SeoResponse } from '../app/types';
-import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport } from '../utils/repair-gate';
+import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta } from '../utils/repair-gate';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
 
@@ -63,6 +63,7 @@ export class ContentOrchestratorService {
   validationIssues = signal<ValidationIssue[]>([]);
   // Per-artifact repair-gate attempt history for the current generation run (see repair-gate.ts).
   repairReport = signal<RepairArtifactReport[]>([]);
+  repairReportMeta = signal<RepairReportMeta | null>(null);
   maxRepairs = signal(1);
 
   /** Tracks the product+store key of the last successfully generated slug, so the main
@@ -81,6 +82,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {}, mainHtmlLocale: 'uk-UA' });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
     // image-unknown-src): every uploaded image must ship in every language version.
@@ -325,6 +327,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
     // image-unknown-src): every uploaded image must ship in every language version.
@@ -483,6 +486,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: existingSlug, website: input.website });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
       const { seoLangs } = getLangsForStore(input.website.name);
@@ -518,6 +522,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
       const { seoLangs } = getLangsForStore(input.website.name);
@@ -665,6 +670,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, faqArtifacts: {} });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.repairReportMeta.set(null);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');
     this.copywriterOutput.set('');
