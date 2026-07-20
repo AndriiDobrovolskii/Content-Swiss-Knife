@@ -10,7 +10,7 @@
  * output = spec count on input"; this module enforces it.
  *
  * DESIGN
- * - A row is grounded by EITHER of two independent signals (OR'd):
+ * - A row is grounded by ANY of three independent signals (OR'd):
  *   1. Stemmed label match — the row's label (first <td>) shares a stemmed significant word
  *      with `sourceSpecs`. Stemming (not exact match) absorbs grammatical-case drift between
  *      two independent translations of the same term (see caller: `sourceSpecs` is expected to
@@ -20,11 +20,18 @@
  *      translation 1:1, so this is a deterministic anchor even when a label's wording drifts
  *      to a synonym the stemmed match doesn't catch (e.g. "Build Volume" → "Об'єм друку" vs.
  *      "Робоча зона" across two independent LLM translation passes).
+ *   3. Latin-token anchor — the row's value has a Latin-script technical loanword (material or
+ *      interface code — "PEI", "eMMC", "USB") that also appears in `sourceSpecs`. These stay
+ *      untranslated across independent translation passes (unlike prose words), so they anchor
+ *      rows the other two signals miss: no qualifying number (an "Included Build Plate Type"
+ *      row) or only a trivial single-digit one ("8 GB" storage, below the numeric anchor's
+ *      ≥2-digit floor).
  *   An invented row (observed: a phantom "Throughput | 0330 kg/hr" row that then propagated
- *   through Task C into every locale) has neither: an invented label matches no source word,
- *   and requiring ALL numbers in a row (not just one) keeps a fabricated value from
- *   coincidentally grounding off an unrelated real source number. CLAUDE.md requires "spec
- *   count on output = spec count on input"; this module enforces it.
+ *   through Task C into every locale) has none of the three: an invented label matches no
+ *   source word, requiring ALL numbers in a row (not just one) keeps a fabricated value from
+ *   coincidentally grounding off an unrelated real source number, and a fabricated value
+ *   typically doesn't happen to reuse a real source loanword. CLAUDE.md requires "spec count on
+ *   output = spec count on input"; this module enforces it.
  * - Scoped to <section class="specs"> tables only — the "why it matters" key-specs
  *   table contains derived numbers and must NOT be grounded. Within scope, each spec is
  *   a <tbody> <tr> with plain <td> cells (label = first <td>, value = second); the <thead>
@@ -98,6 +105,18 @@ function extractNumberTokens(text: string): string[] {
 }
 
 /**
+ * Latin-script technical tokens (material/interface codes — PEI, USB, eMMC, ABS, IEEE) that
+ * Ukrainian technical writing keeps verbatim instead of translating (see
+ * task-translate.ts's Ukrainian config: "material trade names ... stay verbatim in Latin").
+ * ≥3 chars so a bare unit remnant (a stray "C" or "W") doesn't create noise. No word-boundary
+ * anchoring needed — the character class itself stops at the first non-Latin-alnum character,
+ * so e.g. "USB" extracts cleanly out of "USB-порт".
+ */
+function extractLatinTokens(text: string): string[] {
+  return (text.match(/[a-z][a-z0-9]{2,}/gi) ?? []).map(t => t.toLowerCase());
+}
+
+/**
  * Validate that every <section class="specs"> spec row is grounded in the source specs.
  *
  * @param html        the master HTML from Task A
@@ -135,6 +154,7 @@ export function validateSpecsGrounding(
       .map(stem),
   );
   const sourceNumbers = new Set(extractNumberTokens(sourceSpecs));
+  const sourceLatinTokens = new Set(extractLatinTokens(sourceSpecs));
 
   for (const table of specTables) {
     // Iterate <tbody> rows only — the <thead> "Parameter | Value" header row is not a spec.
@@ -155,12 +175,19 @@ export function validateSpecsGrounding(
       // signal even when its label's wording drifts between two independent translation passes.
       // Requires ALL of the row's numbers to match (not a substring — "0330" ≠ "330") so a
       // fabricated value can't coincidentally ground off an unrelated real source number.
-      const valueNumbers = cells[1] ? extractNumberTokens(cells[1].textContent ?? '') : [];
+      const valueText = cells[1]?.textContent ?? '';
+      const valueNumbers = cells[1] ? extractNumberTokens(valueText) : [];
       const numericGrounded = valueNumbers.length > 0 && valueNumbers.every(n => sourceNumbers.has(n));
+
+      // Loanword anchor: a material/interface code (PEI, eMMC, USB) surviving translation
+      // untouched is reliable evidence even when the row has no qualifying number (e.g. an
+      // "Included Build Plate Type" row) or only a trivial single-digit one (e.g. "8 GB" storage).
+      const valueLatinTokens = cells[1] ? extractLatinTokens(valueText) : [];
+      const latinTokenGrounded = valueLatinTokens.some(t => sourceLatinTokens.has(t));
 
       const labelGrounded = words.some(w => sourceStems.has(stem(w)));
 
-      const grounded = numericGrounded || labelGrounded;
+      const grounded = numericGrounded || latinTokenGrounded || labelGrounded;
       if (!grounded) {
         issues.push({
           severity: 'error',

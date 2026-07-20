@@ -105,6 +105,29 @@ describe('validateSpecsGrounding — Rule: spec-row-not-grounded', () => {
       const issues = validateSpecsGrounding(html, SRC_EN_DIMS, 'HTML (uk-UA)');
       expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
     });
+
+    // Round 2 (real report): the numeric anchor doesn't cover every legitimate row — a row can
+    // have no number at all, or only a trivial single-digit one the numeric anchor deliberately
+    // ignores. A Latin material/interface code that survives translation untouched anchors these.
+    const SRC_UK_TECH =
+      `Тип пластини поверхні: текстурована PEI-пластина\n` +
+      `Обсяг сховища: вбудовані 8 ГБ eMMC та USB-порт`;
+
+    it('Latin-token anchor grounds a row with no qualifying number at all ("Included Build Plate Type" -> "Тип столу (комплектний)", real P2S false positive)', () => {
+      const html = specSection(`<tr><td>Тип столу (комплектний)</td><td>текстурована PEI-пластина</td></tr>`);
+      expect(validateSpecsGrounding(html, SRC_UK_TECH, 'HTML (uk-UA)')).toHaveLength(0);
+    });
+
+    it('Latin-token anchor grounds a row whose only number is a trivial single digit ("Storage" -> "Накопичувач", real P2S false positive)', () => {
+      const html = specSection(`<tr><td>Накопичувач</td><td>вбудовані 8 ГБ eMMC та USB-порт</td></tr>`);
+      expect(validateSpecsGrounding(html, SRC_UK_TECH, 'HTML (uk-UA)')).toHaveLength(0);
+    });
+
+    it('does NOT ground a fabricated row sharing none of the three signals (label, number, or Latin token)', () => {
+      const html = specSection(`<tr><td>Функція самоочищення</td><td>автоматична</td></tr>`);
+      const issues = validateSpecsGrounding(html, SRC_UK_TECH, 'HTML (uk-UA)');
+      expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+    });
   });
 
   describe('isAlreadyCyrillic', () => {
