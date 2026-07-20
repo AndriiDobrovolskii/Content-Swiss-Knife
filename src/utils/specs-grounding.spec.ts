@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSpecsGrounding } from './specs-grounding';
+import { validateSpecsGrounding, isAlreadyCyrillic } from './specs-grounding';
 
 const SRC = `Build Volume: 330 × 330 × 565 mm (61.5 L)
 Hopper Capacity: 105 L
@@ -72,5 +72,53 @@ describe('validateSpecsGrounding — Rule: spec-row-not-grounded', () => {
     const html = specSection(`<tr><td>Гарантія</td><td>24 місяці</td></tr>`);
     const issues = validateSpecsGrounding(html, SRC_UK, 'HTML (uk-UA)');
     expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  // Regression: input.specs is typically the manufacturer's English sheet, but the master HTML
+  // is generated natively in Ukrainian — two independent LLM translations of the same source
+  // term can diverge in word choice or grammatical case even though neither is wrong.
+  describe('translation-drift hardening', () => {
+    const SRC_EN_DIMS = `Build Volume (W*D*H): 305*320*325 mm`;
+
+    it('stemmed match survives grammatical-case drift ("Сопло" label vs. inflected "сопла" in source)', () => {
+      const srcUk = 'Максимальна температура сопла: 350 C';
+      const html = specSection(`<tr><td>Сопло</td><td>Гартована сталь</td></tr>`);
+      expect(validateSpecsGrounding(html, srcUk, 'HTML (uk-UA)')).toHaveLength(0);
+    });
+
+    it('numeric anchor grounds a row whose label wording fully diverges from source but whose value numbers all match ("Build Volume" -> "Об\'єм друку")', () => {
+      const html = specSection(`<tr><td>Об'єм друку</td><td>305×320×325 мм³</td></tr>`);
+      // Sanity: the label alone shares no stem with the English source at all.
+      expect(validateSpecsGrounding(html, SRC_EN_DIMS, 'HTML (uk-UA)')).toHaveLength(0);
+    });
+
+    it('does NOT ground a fabricated row whose label AND value numbers are both absent from source', () => {
+      const html = specSection(`<tr><td>Пропускна здатність</td><td>0330 кг/год</td></tr>`);
+      const issues = validateSpecsGrounding(html, SRC_EN_DIMS, 'HTML (uk-UA)');
+      expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+    });
+
+    it('requires ALL of a multi-number row\'s numbers to match, not just one (no coincidental single-number collision)', () => {
+      // "325" alone coincides with the source's build-volume dimension, but the other two
+      // numbers in this fabricated row do not — must still be flagged.
+      const html = specSection(`<tr><td>Якийсь параметр</td><td>325×999×111 мм</td></tr>`);
+      const issues = validateSpecsGrounding(html, SRC_EN_DIMS, 'HTML (uk-UA)');
+      expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+    });
+  });
+
+  describe('isAlreadyCyrillic', () => {
+    it('returns true for Cyrillic specs', () => {
+      expect(isAlreadyCyrillic(SRC_UK)).toBe(true);
+    });
+
+    it('returns false for English specs', () => {
+      expect(isAlreadyCyrillic(SRC)).toBe(false);
+    });
+
+    it('returns false when Cyrillic is only a small fraction of the text', () => {
+      const mixed = 'Printing Technology: Fused Deposition Modeling. Chassis: Aluminum and Steel. Матеріал.';
+      expect(isAlreadyCyrillic(mixed)).toBe(false);
+    });
   });
 });

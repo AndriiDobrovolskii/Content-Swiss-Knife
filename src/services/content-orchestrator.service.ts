@@ -9,7 +9,7 @@ import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
-import { validateSpecsGrounding } from '../utils/specs-grounding';
+import { validateSpecsGrounding, isAlreadyCyrillic } from '../utils/specs-grounding';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -74,6 +74,30 @@ export class ContentOrchestratorService {
     return `${input.website.name}::${input.name.trim()}`;
   }
 
+  /**
+   * `input.specs` is usually pasted verbatim from a manufacturer sheet (typically English), but
+   * the master HTML is generated natively in Ukrainian — grounding `validateSpecsGrounding`
+   * against the raw source would false-positive on every translated spec-row label (see
+   * specs-grounding.ts DESIGN). Localize once per generation (never per repair attempt — the
+   * repair loop reuses this same string across all its attempts) via the cheap fast-model
+   * Translator prompt; skip the call entirely when the specs are already Cyrillic.
+   * On translation failure, return '' so validateSpecsGrounding's existing empty-source no-op
+   * disables the guard for this run instead of re-introducing false positives.
+   */
+  private async groundingSpecs(input: ProductInput): Promise<string> {
+    if (!input.specs?.trim() || isAlreadyCyrillic(input.specs)) return input.specs;
+    try {
+      const translated = await this.llm.generateText(
+        buildTranslatePrompt(input.specs, 'Ukrainian'),
+        false, // fast model — a cheap lookup call, not master generation
+        { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
+      );
+      return translated?.trim() ? translated : input.specs;
+    } catch {
+      return '';
+    }
+  }
+
   async generate(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
@@ -99,6 +123,9 @@ export class ContentOrchestratorService {
 
     await this.withProgress(async () => {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);
+      // Localized once for the whole run — every repair-gate attempt below reuses this same
+      // string instead of re-translating on each pass (see groundingSpecs doc comment).
+      const groundingSpecs = await this.groundingSpecs(input);
 
       // Step 1 — Generate the uk-UA MASTER HTML (with one repair attempt on hard errors). Every
       // other locale is a Task C translation of this artifact (Step 4) — see buildMasterUaOverlay.
@@ -128,7 +155,7 @@ export class ContentOrchestratorService {
         produce: produceHtmlA,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, input.specs, 'HTML (base)'),
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)'),
         ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -339,6 +366,9 @@ export class ContentOrchestratorService {
 
     await this.withProgress(async () => {
       const { seoLangs } = getLangsForStore(input.website.name);
+      // Localized once for the whole run — every repair-gate attempt below reuses this same
+      // string instead of re-translating on each pass (see groundingSpecs doc comment).
+      const groundingSpecs = await this.groundingSpecs(input);
 
       // Step 1 — Task A generated NATIVELY in Ukrainian (no English base, no Task C).
       // Image manifest figcaption/alt text is sourced in English (Vision pre-pass output), so a
@@ -371,7 +401,7 @@ export class ContentOrchestratorService {
         produce: produceHtmlUa,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, input.specs, 'HTML (uk-UA)'),
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)'),
         ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
