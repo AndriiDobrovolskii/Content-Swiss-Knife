@@ -184,6 +184,7 @@ const TRANSLATIONS = {
     repairReportFixed: 'fixed',
     repairReportPersisted: 'still failing',
     repairReportDownload: 'Download .md',
+    repairReportWarningsOnly: 'warning(s) — informational, no repair needed',
   },
   uk: {
     appTitle: 'SEO Content',
@@ -344,6 +345,7 @@ const TRANSLATIONS = {
     repairReportFixed: 'виправлено',
     repairReportPersisted: 'досі не пройдено',
     repairReportDownload: 'Завантажити .md',
+    repairReportWarningsOnly: 'попередження — інформаційно, виправлення не потрібне',
   }
 };
 

@@ -10,6 +10,10 @@ const TASK_A_INSTRUCTION =
 OUTPUT: pure HTML body only (no JSON, no Markdown, no code fences).
 Rewrite the input into an attractive, high-fact-density description: ~80% linguistic uniqueness,
 100% technical fidelity. Add <hr> after each </section>. Follow [CONTENT STRUCTURE] exactly.
+Before writing, reconcile any conflicting component counts or repeated figures in the input per
+[SOURCE FIDELITY]; the body must never show two different counts of the same thing. Preserve the
+input's story shape per [NARRATIVE FIDELITY], and keep every image's alt, figcaption and lead-in
+consistent with its manifest caption per the IMAGE GROUNDING LOCK.
 CRITICAL: §2 (Killer Specs table) has NO H2 heading and NO <section> wrapper — place the Killer
 Specs table directly after the hook paragraph without any surrounding heading or section element.`;
 
@@ -27,12 +31,23 @@ ${CONSUMABLES_SIMPLIFIED_SCHEMA}`;
 
 // ── Image-manifest helper ──────────────────────────────────────────────────
 
-/** Screen-reader alt/figcaption inferred from the filename — the ALT-strategy fallback for
- *  entries whose vision analysis failed ('error') or was never run ('pending'):
- *  "high-prec-scan-0-02mm-acc.jpg" → "high prec scan 0 02mm acc". The LLM upgrades this raw
- *  token stream to a contextual description per the [IMAGE HANDLING] alt rules. */
+/** Screen-reader alt/figcaption inferred from the filename — the fallback SOURCE for entries
+ *  whose vision analysis failed ('error') or was never run ('pending'):
+ *  "high-prec-scan-0-02mm-acc.jpg" → "high prec scan 0 02mm acc". The LLM turns this raw token
+ *  stream into a contextual description, but in DESCRIPTIVE MODE only (see the IMAGE GROUNDING
+ *  LOCK): it may name the object the filename denotes and must not invent any comparison or
+ *  causal claim the filename does not itself carry. */
 function altSeedFromFilename(urlFilename: string): string {
   return urlFilename.replace(/\.[a-z0-9]+$/i, '').replace(/-+/g, ' ').trim();
+}
+
+/** A filename or caption that signals a side-by-side / before-after / metric comparison. These
+ *  are exactly the images where a wrong caption becomes a factual error rather than a vague
+ *  label, so the manifest tags them and the master prompt locks the surrounding prose to the
+ *  contrast. Product-agnostic — matches on comparison grammar, never on a device or part name. */
+function isComparisonImage(urlFilename: string, caption: string): boolean {
+  return /(?:^|[-_])(vs|versus|compare|comparison|before|after|waste)(?:[-_]|$)/i.test(urlFilename)
+    || /\b(vs|versus|compared|less|more|reduc)/i.test(caption);
 }
 
 function buildImageBlock(input: ProductInput, baseUrl: string): string {
@@ -49,10 +64,19 @@ function buildImageBlock(input: ProductInput, baseUrl: string): string {
   const lines = entries.map((e, i) => {
     const caption = e.altText?.trim() || e.visionDescription?.trim() || altSeedFromFilename(e.urlFilename);
     const inferred = !e.altText?.trim() && !e.visionDescription?.trim();
-    return `${i + 1}. ${e.urlFilename} — figcaption: "${caption}"${inferred ? ' (seed inferred from filename — rewrite alt+figcaption contextually)' : ''}`;
+    // Flag precedence: an inferred (filename-only) seed is the weakest signal, so its
+    // descriptive-mode restriction wins even when the filename also looks comparative — the
+    // model has no verified contrast to preserve. A vision-backed comparison caption gets the
+    // COMPARISON tag so the surrounding prose keeps the contrast and its direction.
+    const flag = inferred
+      ? ' (FILENAME-INFERRED — descriptive mode: name only the object; no comparative or causal claim)'
+      : (isComparisonImage(e.urlFilename, caption)
+        ? ' (COMPARISON — caption states a contrast; alt, figcaption and lead-in must preserve WHAT differs and its direction, and add nothing beyond it)'
+        : '');
+    return `${i + 1}. ${e.urlFilename} — caption: "${caption}"${flag}`;
   }).join('\n');
   const example = baseUrl ? `${baseUrl}${brand}${model}${entries[0].urlFilename}` : '';
-  return `[IMAGE MANIFEST] — COUNT=${entries.length}. HARD RULE: the output contains exactly ${entries.length} <img> tags — every file below appears exactly once, filename copied VERBATIM (never invent, rename, merge, or drop a file); distribute across §3–§4 prose in listed order (see PLACEMENT rules in [IMAGE HANDLING]):
+  return `[IMAGE MANIFEST] — COUNT=${entries.length}. HARD RULE: the output contains exactly ${entries.length} <img> tags — every file below appears exactly once, filename copied VERBATIM (never invent, rename, merge, or drop a file); anchor each image to the paragraph that discusses its subject, following listed order unless [NARRATIVE FIDELITY] places the subject elsewhere (see PLACEMENT rules in [IMAGE HANDLING]). Each "caption" is the SOURCE OF TRUTH for that image per the IMAGE GROUNDING LOCK:
 ${lines}
 [URL] base=${baseUrl} brandFolder=${input.brandFolder || '(none)'} modelFolder=${input.modelFolder || '(none)'}
 Build src as {base}{brandFolder}/{modelFolder}/{filename}. ${example ? 'Example: ' + example : ''}`;

@@ -131,7 +131,18 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
   lines.push('');
 
   if (repaired.length === 0) {
+    const warnings = reports.flatMap(r => r.finalIssues.filter(i => i.severity === 'warning').map(i => ({ ...i, label: r.label })));
+    if (warnings.length === 0) {
+      lines.push('No repairs were needed — every artifact passed validation on the first generation.');
+      return lines.join('\n');
+    }
     lines.push('No repairs were needed — every artifact passed validation on the first generation.');
+    lines.push('');
+    lines.push('## Warnings (no repairs needed)');
+    lines.push('');
+    for (const issue of warnings) {
+      lines.push(`- [${issue.label}] \`${issue.rule}\` — ${issue.detail}`);
+    }
     return lines.join('\n');
   }
 

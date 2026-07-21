@@ -343,4 +343,20 @@ describe('formatRepairReportMarkdown', () => {
     expect(md).toContain('No repairs were needed');
     expect(md).not.toContain('## Recurring rule failures');
   });
+
+  it('lists warning-severity finalIssues under a dedicated section when every report is clean but warnings exist', () => {
+    const warning = makeIssue('decimal-separator', 'warning');
+    const reports: RepairArtifactReport[] = [
+      { label: 'HTML (uk-UA)', repairsUsed: 0, finalIssues: [warning], status: 'clean', attempts: [] },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+
+    expect(md).toContain('No repairs were needed');
+    expect(md).toContain('## Warnings (no repairs needed)');
+    expect(md).toContain('[HTML (uk-UA)]');
+    expect(md).toContain('`decimal-separator`');
+    expect(md).toContain('detail for decimal-separator');
+    expect(md).not.toContain('## Recurring rule failures');
+  });
 });

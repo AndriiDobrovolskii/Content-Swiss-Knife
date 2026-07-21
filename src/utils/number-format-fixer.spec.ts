@@ -148,6 +148,39 @@ describe('fixNumberFormatting — unit spaces', () => {
   it('adds a non-breaking space for GPa', () => {
     expect(fixNumberFormatting('modulus 1.93GPa')).toBe('modulus 1.93 GPa');
   });
+
+  it('does NOT insert a space into Shore-hardness durometer notation (TPU/TPE/Shore + A)', () => {
+    expect(fixNumberFormatting('Bambu PET-CF/TPU 95A and other fiber materials')).toBe(
+      'Bambu PET-CF/TPU 95A and other fiber materials',
+    );
+    expect(fixNumberFormatting('flexible filament TPE 85A')).toBe('flexible filament TPE 85A');
+    expect(fixNumberFormatting('rated Shore 60A durometer')).toBe('rated Shore 60A durometer');
+  });
+
+  it('does NOT insert a space into a 3-digit Shore value (TPU 100A)', () => {
+    expect(fixNumberFormatting('rigid-flex blend TPU 100A')).toBe('rigid-flex blend TPU 100A');
+  });
+
+  it('does NOT insert a space into a hyphenated Shore value (TPU-95A, TPE-85A)', () => {
+    expect(fixNumberFormatting('material TPU-95A')).toBe('material TPU-95A');
+    expect(fixNumberFormatting('material TPE-85A')).toBe('material TPE-85A');
+  });
+
+  it('still adds a non-breaking space to a genuine glued amperage value not preceded by TPU/TPE/Shore', () => {
+    expect(fixNumberFormatting('rated current 5A')).toBe('rated current 5 A');
+    expect(fixNumberFormatting('max output 10A')).toBe('max output 10 A');
+  });
+
+  it('is idempotent on an already-correct Shore-hardness value (no space introduced on a second pass)', () => {
+    const once = fixNumberFormatting('Bambu PET-CF/TPU 95A and other fiber materials');
+    expect(fixNumberFormatting(once)).toBe(once);
+  });
+
+  it('does NOT insert a space into an alphanumeric model/SKU code (K1A, K-1A, X_1A)', () => {
+    expect(fixNumberFormatting('model K1A variant')).toBe('model K1A variant');
+    expect(fixNumberFormatting('model K-1A variant')).toBe('model K-1A variant');
+    expect(fixNumberFormatting('model X_1A variant')).toBe('model X_1A variant');
+  });
 });
 
 describe('fixNumberFormatting — Cyrillic unit spaces (uk/ru output, [UNIT LOCALIZATION])', () => {

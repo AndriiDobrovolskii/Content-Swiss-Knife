@@ -53,10 +53,13 @@ ALT-TEXT RULES for "caption":
 HARD LENGTH LIMIT (overrides every rule below): the caption MUST be a single phrase of 20 words
 or fewer (about <= 125 characters). This ceiling wins over completeness — a caption of 21+ words
 is rejected outright, so if a detail does not fit, drop it.
-- COMPARISON / MULTI-PANEL / TEXT-DENSE images (two products side by side, before/after, a chart,
-  a graphic carrying several labels or headings): state the single overall point in one phrase —
-  name the comparison or the takeaway. Do NOT enumerate each side, panel, or on-image label; pick
-  the one element that carries the meaning and omit the rest.
+- COMPARISON / MULTI-PANEL / CLAIM images (two items side by side, before/after, a chart, or a
+  graphic carrying model names, "vs", quantities or %): the SUBJECT of the caption is the
+  comparison itself — WHAT differs and in WHICH DIRECTION (which side is less/more, or the winning
+  value). Lead with that contrast in one phrase. A salient foreground object (the item in focus,
+  the nicer-looking result) must NOT replace the comparison as the subject: when the scene
+  contrasts two states, captioning only the appealing object is a REJECTED caption. Name the two
+  things compared and the direction of the result — do not enumerate every panel or label.
 
 Within that limit, apply these in priority order:
 - FUNCTION OVER APPEARANCE: state what the image demonstrates about the product — a capability,
@@ -67,6 +70,12 @@ Within that limit, apply these in priority order:
 - BE SPECIFIC AND MEASURABLE: name the visible material, mode, part, or numeric property. Where a
   marketing adjective ("amazing", "beautiful", "innovative", "high-quality") would appear,
   substitute the visible property it implies ("0.06 mm laser spot", "enclosed Class-1 housing").
+- COMPONENT IDENTITY: name a specific internal part or sub-assembly only when its form in the
+  image is unambiguous. When the exact part is uncertain, or two component types could be
+  confused, use a more general true description ("the head assembly", "an internal module", "the
+  control panel") rather than committing to a subsystem the pixels do not confirm. An on-image
+  text label (a material name, a mode, a number) may be folded in, but a label must never be used
+  to infer a component type it does not itself establish.
 - READ ON-IMAGE TEXT selectively: fold in only the ONE most meaningful label, engraved word, or
   heading; never transcribe multiple text elements or every label present.
 - NO REDUNDANT OPENER: never begin with "Image of", "Photo of", "Picture of", "Screenshot of",

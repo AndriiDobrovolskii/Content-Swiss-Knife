@@ -361,6 +361,21 @@ describe('validateGeneratedHtml — Rule: decimal-separator', () => {
     const html = '<p>Precisão de 0.05 mm por eixo.</p>';
     expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'decimal-separator')).toBeDefined();
   });
+
+  it('does NOT flag bare 802.1x/802.11-family standard numbers with no "IEEE" prefix', () => {
+    for (const [locale, html] of [
+      ['uk-UA', '<p>Підтримується стандарт 802.1Q для тегування VLAN.</p>'],
+      ['es-ES', '<p>Compatible con el estándar 802.11ac de doble banda.</p>'],
+      ['pt-PT', '<p>Suporta o protocolo 802.1x para autenticação de rede.</p>'],
+    ] as const) {
+      expectNoRule(validateGeneratedHtml(html, 'test', undefined, locale), 'decimal-separator');
+    }
+  });
+
+  it('still flags a genuinely double-broken value (dot instead of comma AND no space) for a unit the unit-spacing check does not cover', () => {
+    const html = '<p>Частота Wi-Fi модуля: 2.4GHz.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'decimal-separator')).toBeDefined();
+  });
 });
 
 describe('validateGeneratedHtml — Rule: thousands-separator', () => {
@@ -484,6 +499,18 @@ describe('validateGeneratedHtml — Rule: latin-unit-in-cyrillic-text', () => {
     const issue = findRule(validateGeneratedHtml(html, 'HTML (UA)', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
     expect(issue?.context).toBe('HTML (UA)');
     expect(issue?.detail).toContain('"W"');
+  });
+
+  it('does NOT flag a bare-letter unit glued to a model/SKU/revision code (K1A, K-1A, X_1A)', () => {
+    for (const model of ['K1A', 'K-1A', 'X_1A']) {
+      const html = `<p>Модель ${model} має покращену систему охолодження.</p>`;
+      expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text');
+    }
+  });
+
+  it('still flags a genuine decimal amperage value (2.5A) — the "." before the digit is deliberately not excluded', () => {
+    const html = '<p>Максимальний струм 2.5A на канал.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'latin-unit-in-cyrillic-text')).toBeDefined();
   });
 });
 

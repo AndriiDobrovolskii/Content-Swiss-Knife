@@ -82,7 +82,12 @@ function ensureUnitSpaces(text: string): string {
   // Degree units (no word boundary — degree sign is not a word char).
   text = text.replace(/(\d)(°[CF])/g, `$1${NBSP}$2`);
   // Remaining single-letter SI units: g, l/L (litre), m (metre), W, V, A.
-  text = text.replace(/(\d)([glL]|[mWVA])\b/g, `$1${NBSP}$2`);
+  // Two exclusions, both preventing corruption of real content rather than just a validator warning:
+  //  - (?<![A-Za-z_-]) — a letter/hyphen/underscore directly before the digit means this is part of
+  //    an alphanumeric model/SKU/revision code (e.g. "K1A", "K-1A", "X_1A"), not a measurement.
+  //  - (?<!(?:TPU|TPE|Shore)[\s-]\d{0,3}) — Shore-hardness durometer notation ("TPU 95A", "TPU-100A",
+  //    "Shore 60A") never takes a space; it only looks like a bare Ampere unit.
+  text = text.replace(/(?<![A-Za-z_-])(?<!(?:TPU|TPE|Shore)[\s-]\d{0,3})(\d)([glL]|[mWVA])\b/g, `$1${NBSP}$2`);
   // K (Kelvin): only when preceded by ≥3 digit-sequence (e.g. 6500K → 6500 K), NOT 4K/8K
   text = text.replace(/(\d{3,})(K)\b/g, `$1${NBSP}$2`);
   // Percentage.

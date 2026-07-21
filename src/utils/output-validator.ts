@@ -35,10 +35,23 @@ function checkNumberFormatting(html: string, locale: string | undefined, issues:
 
   const text = html.replace(/\s(?:href|src)="[^"]*"/gi, ''); // drop URLs to cut false positives
 
-  // Decimal point where a comma is required. Excludes multi-part versions (1.2.3) and
-  // v-prefixed versions (v1.5). Known limitation: a bare two-part version like "AMS 2.0"
-  // can still false-positive — accepted, severity stays 'warning'.
-  const dotDecimal = text.match(/(?<![\w.])(?<!IEEE\s)(?<!USB\s)(?<!Bluetooth\s)(?<!HDMI\s)\d+\.(?!\d{3}(?!\d))\d+(?!\.\d)/i);
+  // Decimal point where a comma is required.
+  // (?<![\w.])             — not part of a longer number/word (blocks "1.2.3", "v1.5")
+  // (?<!IEEE\s) etc.       — not "IEEE 802.11", "USB 3.0", "Bluetooth 5.0", "HDMI 2.1" (space-separated version numbers)
+  // \d+\.(?!\d{3}(?!\d))\d+ — the actual dot-decimal, excluding a 3-digit thousands group
+  // (?=(\d+))\1            — emulated atomic group: matches the fraction digits, but "locked in" so the
+  //                          suffix check below can't be satisfied by backtracking to a shorter digit run
+  //                          (a plain greedy \d+ would retry "802.1" out of "802.11ac" once "ac" fails the
+  //                          suffix check on the full "11" — this construct forbids that retry)
+  // (?!(?:Q|D|X|AB|ac|ax|be|[abgnx])(?![a-zA-Z])) — not an 802.1x/802.11-family standard suffix glued to the number
+  //                          (narrow on purpose: excluding *any* trailing letter would also hide a genuinely
+  //                          double-broken value like a comma-less, space-less "1.75mm" for units the separate
+  //                          unit-spacing check doesn't cover, e.g. "2.4GHz")
+  // (?!\.\d)               — not followed by another ".digit" (multi-part version)
+  // Known limitation: a bare two-part version like "AMS 2.0" can still false-positive — accepted, severity stays 'warning'.
+  const dotDecimal = text.match(
+    /(?<![\w.])(?<!IEEE\s)(?<!USB\s)(?<!Bluetooth\s)(?<!HDMI\s)\d+\.(?!\d{3}(?!\d))(?=(\d+))\1(?!(?:Q|D|X|AB|ac|ax|be|[abgnx])(?![a-zA-Z]))(?!\.\d)/i,
+  );
   if (dotDecimal) {
     issues.push({
       severity: 'warning',
@@ -256,13 +269,19 @@ function checkLeadInCapitalization(html: string, issues: ValidationIssue[], cont
  * K, ppm) is deliberately absent from the pattern, so those never fire. VAC / "V AC" is the
  * one exception that DOES need an explicit carve-out: it shares the bare "V" token with the
  * genuine voltage unit, so "V" only matches when NOT immediately followed by (optional space
- * +) "AC". Runs on text with the product name and href/src values already stripped (same
- * guard as unit-spacing) — Latin units inside a brand/model suffix like "Ortur … 10W" are the
- * name, not prose. Composite units flag on their first Latin part (e.g. "kg" inside "kg/h") —
- * the fix message covers the whole unit.
+ * +) "AC". The bare single-letter units (W, A, g, l, L, m) get an analogous carve-out via the
+ * leading (?<![A-Za-z_-]): a digit directly preceded by a letter/hyphen/underscore is a
+ * model/SKU/revision code (e.g. "K1A", "K-1A", "X_1A"), not a measurement — a genuine value is
+ * never glued to the end of an alphanumeric code like that. Deliberately NOT excluding a
+ * preceding "." — a period directly before the digit is far more often a real decimal
+ * measurement ("2.5A", "3.5A" current ratings) than a "Rev.1A"-style code, and excluding it
+ * would silently drop those warnings. Runs on text with the product name and href/src values
+ * already stripped (same guard as unit-spacing) — Latin units inside a brand/model suffix like
+ * "Ortur … 10W" are the name, not prose. Composite units flag on their first Latin part (e.g.
+ * "kg" inside "kg/h") — the fix message covers the whole unit.
  */
 const LATIN_UNIT_IN_CYRILLIC =
-  /\d\s?(mm\/s|m\/s|kHz|MHz|GHz|Hz|mAh|mA|mV|kV|kW|mW|Mbit|Gbit|µm|μm|nm|mm²|mm³|cm²|cm³|m²|m³|mm|cm|km|kg|mg|ml|GB|MB|TB|rpm|V(?!\s?AC)(?!-\d)|[WAglLm])(?![\w²³])/;
+  /(?<![A-Za-z_-])\d\s?(mm\/s|m\/s|kHz|MHz|GHz|Hz|mAh|mA|mV|kV|kW|mW|Mbit|Gbit|µm|μm|nm|mm²|mm³|cm²|cm³|m²|m³|mm|cm|km|kg|mg|ml|GB|MB|TB|rpm|V(?!\s?AC)(?!-\d)|[WAglLm])(?![\w²³])/;
 
 function checkCyrillicUnitLocalization(
   strippedHtml: string,

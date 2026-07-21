@@ -1244,7 +1244,7 @@
           </div>
         }
 
-        @if (repairReport().length > 0 && repairedArtifactsCount() > 0 && !isGenerating()) {
+        @if (repairReport().length > 0 && (repairedArtifactsCount() > 0 || validationWarningCount() > 0) && !isGenerating()) {
           <div class="max-w-5xl mx-auto mb-6 rounded-xl border p-4 text-sm"
                [class]="repairUnresolvedCount() > 0
                  ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
@@ -1257,6 +1257,9 @@
                 @if (repairUnresolvedCount() > 0) {
                   , {{ repairUnresolvedCount() }} {{ uiLabels().repairReportStillFailing }}
                 }
+                @if (repairedArtifactsCount() === 0 && validationWarningCount() > 0) {
+                  , {{ validationWarningCount() }} {{ uiLabels().repairReportWarningsOnly }}
+                }
               </span>
               <button type="button"
                       class="ml-auto text-xs px-2 py-1 rounded border border-current opacity-80 hover:opacity-100"
@@ -1266,10 +1269,13 @@
             </div>
             <div class="space-y-3">
               @for (report of repairReport(); track report.label) {
-                @if (report.status !== 'clean') {
+                @if (report.status !== 'clean' || report.finalIssues.some(i => i.severity === 'warning')) {
                   <details class="text-sm">
                     <summary class="cursor-pointer font-mono flex items-center gap-2">
-                      <i class="fa-solid" [class]="report.status === 'repaired' ? 'fa-circle-check text-green-500' : 'fa-circle-xmark text-red-500'"></i>
+                      <i class="fa-solid"
+                         [class]="report.status === 'repaired' ? 'fa-circle-check text-green-500'
+                           : report.status === 'unresolved' ? 'fa-circle-xmark text-red-500'
+                           : 'fa-circle-info text-amber-500'"></i>
                       {{ report.label }} — {{ report.repairsUsed }} attempt(s), status: {{ report.status }}
                     </summary>
                     <ul class="mt-2 ml-6 space-y-2">
@@ -1286,6 +1292,15 @@
                               <li class="text-red-700 dark:text-red-400">
                                 {{ uiLabels().repairReportPersisted }}: [{{ issue.rule }}] {{ issue.detail }}
                               </li>
+                            }
+                          </ul>
+                        </li>
+                      }
+                      @if (report.status === 'clean') {
+                        <li>
+                          <ul class="ml-4 list-disc">
+                            @for (issue of report.finalIssues; track issue.rule) {
+                              <li class="text-amber-700 dark:text-amber-400">[{{ issue.rule }}] {{ issue.detail }}</li>
                             }
                           </ul>
                         </li>
