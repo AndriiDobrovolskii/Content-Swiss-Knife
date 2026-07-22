@@ -264,50 +264,64 @@ export const cleanHtmlStructure = (html: string): string => {
 };
 
 /**
- * stripCkeditorArtifacts
+ * stripTiptapArtifacts
  *
- * Deterministic cleanup for HTML round-tripped through CKEditor 5's
- * GeneralHtmlSupport + Table + List plugins (see HtmlEditorComponent).
- * Removes editor-internal markup that has no place in published output and
- * would otherwise trip validateStructuralParity()'s <figure> count check.
- *
- * Scope is deliberately narrow — three known CKEditor artifacts, confirmed
- * against a real npm ckeditor5 bundle round-trip. Not a general HTML sanitizer.
- * Pure function, no LLM, mirrors output-validator.ts / html-cleaner.ts style.
+ * Deterministic cleanup for HTML round-tripped through the TipTap-based
+ * HtmlEditorComponent. Scope starts empty/minimal — grow it only when a
+ * concrete artifact is actually observed (e.g. a possible trailing empty
+ * <p> from StarterKit's TrailingNode extension). Not a general HTML
+ * sanitizer. Pure function, no LLM, mirrors output-validator.ts /
+ * html-cleaner.ts style.
  */
-export function stripCkeditorArtifacts(html: string): string {
+export function stripTiptapArtifacts(html: string): string {
   if (!html) return '';
 
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
-  // CKEditor's Table plugin wraps every <table> in <figure class="table">.
-  // Unwrap it — the pre-existing .table-responsive div is the only wrapper kept.
-  doc.querySelectorAll('figure.table').forEach(fig => {
-    const table = fig.querySelector('table');
-    if (table) fig.replaceWith(table);
-  });
+  // StarterKit's TrailingNode extension can leave an empty paragraph at the
+  // very end of the document so the cursor always has somewhere to land
+  // after a trailing atom node (image/table/etc.) — never present in
+  // generator output, not meaningful once copied out.
+  const last = doc.body.lastElementChild;
+  if (last && last.tagName === 'P' && last.innerHTML.trim() === '') {
+    last.remove();
+  }
 
-  // CKEditor's core Image feature re-wraps any <img> in its own
-  // <figure class="image">, even when it's already inside the generator's own
-  // <figure>. Unwrap the inner wrapper, restoring the single-figure structure
-  // (prevents a doubled <figure> count tripping validateStructuralParity()).
-  doc.querySelectorAll('figure > figure.image').forEach(fig => {
-    const img = fig.querySelector('img');
-    if (img) fig.replaceWith(img);
-  });
+  return doc.body.innerHTML;
+}
 
-  // CKEditor's List plugin stamps every <li> with a tracking id — never present
-  // in generator output, not meaningful once copied out.
-  doc.querySelectorAll('li[data-list-item-id]').forEach(li => li.removeAttribute('data-list-item-id'));
+const DANGEROUS_URL_PATTERN = /^\s*(javascript|data):/i;
 
-  // GeneralHtmlSupport auto-wraps loose inline content inside block containers:
-  // figure > img becomes figure > p > img. Unwrap <p> wrappers whose only
-  // child is an <img>, restoring the figure > img direct-child relationship
-  // (some store CSS themes target that selector directly).
-  doc.querySelectorAll('figure > p').forEach(p => {
-    const onlyChild = p.firstElementChild;
-    const wrapsOnlyImg = onlyChild?.tagName === 'IMG' && p.childNodes.length === 1;
-    if (wrapsOnlyImg) p.replaceWith(onlyChild!);
+/**
+ * sanitizeUntrustedHtml
+ *
+ * Because the TipTap schema's generic passthrough node/mark (genericBlock,
+ * genericInlineSpan) and global-attributes extension deliberately preserve
+ * arbitrary class/style/href/src verbatim (the whole point of the fidelity
+ * design in HtmlEditorComponent), this strips the handful of attack
+ * surfaces that verbatim preservation would otherwise let through: inline
+ * event-handler attributes, `javascript:`/`data:` URLs in href/src, and
+ * <script>/<style> tags entirely. Deliberately narrow — not a general
+ * sanitizer library. Called on both load (before the HTML reaches TipTap)
+ * and on copy (before the final clipboard write), as two independent gates.
+ */
+export function sanitizeUntrustedHtml(html: string): string {
+  if (!html) return '';
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  doc.querySelectorAll('script, style').forEach(el => el.remove());
+
+  doc.querySelectorAll('*').forEach(el => {
+    Array.from(el.attributes).forEach(attr => {
+      if (/^on/i.test(attr.name)) {
+        el.removeAttribute(attr.name);
+        return;
+      }
+      if ((attr.name === 'href' || attr.name === 'src') && DANGEROUS_URL_PATTERN.test(attr.value)) {
+        el.removeAttribute(attr.name);
+      }
+    });
   });
 
   return doc.body.innerHTML;

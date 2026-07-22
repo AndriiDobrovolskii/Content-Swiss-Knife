@@ -16,6 +16,19 @@ export default defineConfig({
     // happy-dom is lighter than jsdom and sufficient for DOMParser used in output-validator.
     environment: 'happy-dom',
 
+    // The TipTap round-trip specs parse HTML containing real-looking video
+    // <iframe src="https://...">s (schema fidelity tests, not real browsing).
+    // Without this, happy-dom actually attempts a network fetch for those
+    // iframes and logs noisy aborted-request errors after the test run.
+    environmentOptions: {
+      happyDOM: {
+        settings: {
+          navigation: { disableChildFrameNavigation: true },
+          disableIframePageLoading: true,
+        },
+      },
+    },
+
     // Glob pattern: only *.spec.ts files under src/
     include: ['src/**/*.spec.ts'],
 

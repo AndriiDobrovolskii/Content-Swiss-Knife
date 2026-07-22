@@ -1,14 +1,11 @@
-import { Component, computed, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, input, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { CKEditorComponent, CKEditorModule } from '@ckeditor/ckeditor5-angular';
-import {
-  ClassicEditor, Essentials, Paragraph, Heading, Bold, Italic, Underline,
-  Strikethrough, Subscript, Superscript, Highlight, Alignment, Link,
-  BlockQuote, HorizontalLine, List, Image, ImageInsert, MediaEmbed,
-  Table, TableToolbar, GeneralHtmlSupport, SourceEditing, Fullscreen
-} from 'ckeditor5';
-import 'ckeditor5/ckeditor5.css';
-import { stripCkeditorArtifacts } from '../../../utils/html-cleaner';
+import { Editor } from '@tiptap/core';
+import { TIPTAP_EXTENSIONS } from './extensions';
+import { reconstructTableThead } from './extensions/table-thead';
+import { stripTiptapArtifacts, sanitizeUntrustedHtml } from '../../../utils/html-cleaner';
+import { wrapImageFigures } from '../../../utils/image-figure';
+import { ensureRel0 } from '../../../utils/video-url';
 import { validateStructuralParity } from '../../../utils/structural-parity';
 import type { ValidationIssue } from '../../../utils/output-validator';
 
@@ -24,6 +21,16 @@ const LABELS = {
     reloadBtn: 'Start over',
     issuesTitle: 'Structure changed since load:',
     copied: 'Copied!',
+    linkUrlPlaceholder: 'https://…',
+    apply: 'Apply',
+    remove: 'Remove',
+    cancel: 'Cancel',
+    imageSrc: 'Image URL',
+    imageAlt: 'Alt text',
+    imageCaption: 'Caption',
+    insert: 'Insert',
+    mediaUrl: 'YouTube / Vimeo URL',
+    mediaCaption: 'Caption',
   },
   uk: {
     title: 'HTML-редактор',
@@ -36,13 +43,63 @@ const LABELS = {
     reloadBtn: 'Почати заново',
     issuesTitle: 'Структура змінилась з моменту завантаження:',
     copied: 'Скопійовано!',
+    linkUrlPlaceholder: 'https://…',
+    apply: 'Застосувати',
+    remove: 'Прибрати',
+    cancel: 'Скасувати',
+    imageSrc: 'URL зображення',
+    imageAlt: 'Alt-текст',
+    imageCaption: 'Підпис',
+    insert: 'Вставити',
+    mediaUrl: 'URL YouTube / Vimeo',
+    mediaCaption: 'Підпис',
   },
 };
+
+interface ToolbarState {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strike: boolean;
+  subscript: boolean;
+  superscript: boolean;
+  highlightColor: string | null;
+  align: 'left' | 'center' | 'right' | 'justify';
+  headingLevel: 0 | 1 | 2 | 3 | 4;
+  bulletList: boolean;
+  orderedList: boolean;
+  blockquote: boolean;
+  link: boolean;
+  inTable: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+const EMPTY_TOOLBAR_STATE: ToolbarState = {
+  bold: false,
+  italic: false,
+  underline: false,
+  strike: false,
+  subscript: false,
+  superscript: false,
+  highlightColor: null,
+  align: 'left',
+  headingLevel: 0,
+  bulletList: false,
+  orderedList: false,
+  blockquote: false,
+  link: false,
+  inTable: false,
+  canUndo: false,
+  canRedo: false,
+};
+
+const HIGHLIGHT_COLORS = ['#fef08a', '#bbf7d0', '#fbcfe8', '#bfdbfe'];
 
 @Component({
   selector: 'app-html-editor',
   standalone: true,
-  imports: [CommonModule, CKEditorModule],
+  imports: [CommonModule],
   templateUrl: './html-editor.component.html',
 })
 export class HtmlEditorComponent {
@@ -56,45 +113,89 @@ export class HtmlEditorComponent {
   showIssues = signal<boolean>(false);
   copiedFlash = signal<boolean>(false);
 
+  sourceMode = signal<boolean>(false);
+  sourceHtml = signal<string>('');
+  fullscreen = signal<boolean>(false);
+
+  toolbarState = signal<ToolbarState>(EMPTY_TOOLBAR_STATE);
+  highlightColors = HIGHLIGHT_COLORS;
+
+  imageForm = signal<{ src: string; alt: string; figcaption: string } | null>(null);
+  mediaForm = signal<{ url: string; figcaption: string } | null>(null);
+  linkPopover = signal<{ url: string } | null>(null);
+
   // Exposed so app.component.ts can guard mode-switches against silently
   // discarding an in-progress edit (this component owns all its own state).
   hasUnsavedChanges = computed(() => this.loaded());
 
-  // Template-ref locator (not type-based) — <ckeditor> is conditionally
-  // rendered behind `@if (loaded())`. Data is read lazily from here at copy
-  // time instead of mirroring getData() into a signal on every keystroke —
-  // getData() re-serializes the whole document model to HTML and doing that
-  // per keystroke visibly stalls typing on large pasted documents.
-  ckeditorRef = viewChild<CKEditorComponent<ClassicEditor>>('ckeditorRef');
+  // Template-ref locator — the host div is conditionally rendered behind
+  // `@if (!sourceMode())`. TipTap attaches to it imperatively; HTML is read
+  // lazily at copy time instead of mirroring getHTML() into a signal on
+  // every keystroke — getHTML() re-serializes the whole document model and
+  // doing that per keystroke visibly stalls typing on large documents.
+  editorHost = viewChild<ElementRef<HTMLDivElement>>('editorHost');
 
-  Editor = ClassicEditor;
+  private editor?: Editor;
+  private pendingContent = '';
 
-  // NOTE: htmlSupport.allow is intentionally maximal (allow everything not owned by
-  // another loaded feature). This is the upper bound validated in the prototype.
-  // Narrow it later only if a specific unwanted tag/attribute is observed leaking
-  // through from a paste — do not narrow speculatively.
-  config = {
-    licenseKey: 'GPL',
-    plugins: [
-      Essentials, Paragraph, Heading, Bold, Italic, Underline, Strikethrough,
-      Subscript, Superscript, Highlight, Alignment, Link, BlockQuote,
-      HorizontalLine, List, Image, ImageInsert, MediaEmbed, Table,
-      TableToolbar, GeneralHtmlSupport, SourceEditing, Fullscreen,
-    ],
-    toolbar: [
-      'undo', 'redo', '|',
-      'heading', '|',
-      'bold', 'italic', 'underline', 'strikethrough', 'subscript', 'superscript', '|',
-      'highlight', 'alignment', '|',
-      'link', 'blockQuote', 'horizontalLine', '|',
-      'bulletedList', 'numberedList', '|',
-      'insertImage', 'mediaEmbed', 'insertTable', '|',
-      'sourceEditing', 'fullscreen',
-    ],
-    htmlSupport: {
-      allow: [{ name: /.*/, attributes: true, classes: true, styles: true }],
-    },
-  };
+  private readonly _editorLifecycle = effect(() => {
+    const host = this.editorHost();
+    const loaded = this.loaded();
+    const sourceMode = this.sourceMode();
+
+    if (!loaded || sourceMode) {
+      if (this.editor) {
+        this.editor.destroy();
+        this.editor = undefined;
+      }
+      return;
+    }
+    if (!host || this.editor) return;
+
+    this.editor = new Editor({
+      element: host.nativeElement,
+      extensions: TIPTAP_EXTENSIONS,
+      content: this.pendingContent,
+      onTransaction: () => this.refreshToolbarState(),
+      onSelectionUpdate: () => this.refreshToolbarState(),
+    });
+    this.refreshToolbarState();
+  });
+
+  ngOnDestroy() {
+    this.editor?.destroy();
+  }
+
+  private refreshToolbarState() {
+    const e = this.editor;
+    if (!e) return;
+
+    const headingLevel = ([1, 2, 3, 4] as const).find(level => e.isActive('heading', { level })) ?? 0;
+    const align = (['center', 'right', 'justify'] as const).find(a => e.isActive({ textAlign: a })) ?? 'left';
+
+    const next: ToolbarState = {
+      bold: e.isActive('bold'),
+      italic: e.isActive('italic'),
+      underline: e.isActive('underline'),
+      strike: e.isActive('strike'),
+      subscript: e.isActive('subscript'),
+      superscript: e.isActive('superscript'),
+      highlightColor: (e.getAttributes('highlight')['color'] as string | undefined) ?? null,
+      align,
+      headingLevel,
+      bulletList: e.isActive('bulletList'),
+      orderedList: e.isActive('orderedList'),
+      blockquote: e.isActive('blockquote'),
+      link: e.isActive('link'),
+      inTable: e.isActive('table') || e.isActive('tableCell') || e.isActive('tableHeader'),
+      canUndo: e.can().undo(),
+      canRedo: e.can().redo(),
+    };
+
+    const prev = this.toolbarState();
+    const changed = (Object.keys(next) as (keyof ToolbarState)[]).some(key => next[key] !== prev[key]);
+    if (changed) this.toolbarState.set(next);
+  }
 
   updatePastedHtml(event: Event) {
     this.pastedHtml.set((event.target as HTMLTextAreaElement).value);
@@ -103,9 +204,12 @@ export class HtmlEditorComponent {
   load() {
     const html = this.pastedHtml().trim();
     if (!html) return;
-    this.originalHtml.set(html);
+    const sanitized = sanitizeUntrustedHtml(html);
+    this.originalHtml.set(sanitized);
+    this.pendingContent = sanitized;
     this.issues.set([]);
     this.showIssues.set(false);
+    this.sourceMode.set(false);
     this.loaded.set(true);
   }
 
@@ -114,25 +218,31 @@ export class HtmlEditorComponent {
     this.originalHtml.set('');
     this.issues.set([]);
     this.showIssues.set(false);
+    this.sourceMode.set(false);
     this.loaded.set(false);
   }
 
   copy() {
-    const cleaned = stripCkeditorArtifacts(this.ckeditorRef()?.editorInstance?.getData() ?? '');
-    // validateStructuralParity() is documented as a uk-UA-master vs. translation check;
-    // it's reused here purely for its structural-isomorphism mechanics (element counts +
-    // media src identity) to diff the original paste against the CKEditor-edited output.
-    const found = validateStructuralParity(this.originalHtml(), cleaned, 'HTML Editor');
+    const html = this.buildCopyHtml();
+    const found = validateStructuralParity(this.originalHtml(), html, 'HTML Editor');
     if (found.length) {
       this.issues.set(found);
       this.showIssues.set(true);
       return;
     }
-    this.doCopy(cleaned);
+    this.doCopy(html);
   }
 
   copyAnyway() {
-    this.doCopy(stripCkeditorArtifacts(this.ckeditorRef()?.editorInstance?.getData() ?? ''));
+    this.doCopy(this.buildCopyHtml());
+  }
+
+  private buildCopyHtml(): string {
+    const raw = this.sourceMode() ? this.sourceHtml() : (this.editor?.getHTML() ?? '');
+    const stripped = stripTiptapArtifacts(raw);
+    const tableFixed = reconstructTableThead(stripped);
+    const figuresFixed = wrapImageFigures(tableFixed);
+    return sanitizeUntrustedHtml(figuresFixed);
   }
 
   private doCopy(html: string) {
@@ -141,4 +251,179 @@ export class HtmlEditorComponent {
     this.copiedFlash.set(true);
     setTimeout(() => this.copiedFlash.set(false), 1500);
   }
+
+  // --- Source mode ---
+
+  toggleSourceMode() {
+    if (this.sourceMode()) {
+      this.pendingContent = this.sourceHtml();
+      this.sourceMode.set(false);
+    } else {
+      this.sourceHtml.set(this.editor?.getHTML() ?? '');
+      this.sourceMode.set(true);
+    }
+  }
+
+  updateSourceHtml(event: Event) {
+    this.sourceHtml.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  // --- Fullscreen ---
+
+  toggleFullscreen() {
+    this.fullscreen.update(v => !v);
+  }
+
+  // --- Formatting commands ---
+
+  toggleBold() { this.editor?.chain().focus().toggleBold().run(); }
+  toggleItalic() { this.editor?.chain().focus().toggleItalic().run(); }
+  toggleUnderline() { this.editor?.chain().focus().toggleUnderline().run(); }
+  toggleStrike() { this.editor?.chain().focus().toggleStrike().run(); }
+  toggleSubscript() { this.editor?.chain().focus().toggleSubscript().run(); }
+  toggleSuperscript() { this.editor?.chain().focus().toggleSuperscript().run(); }
+
+  toggleHighlight(color: string) {
+    if (this.toolbarState().highlightColor === color) {
+      this.editor?.chain().focus().unsetHighlight().run();
+    } else {
+      this.editor?.chain().focus().toggleHighlight({ color }).run();
+    }
+  }
+
+  setAlign(align: 'left' | 'center' | 'right' | 'justify') {
+    this.editor?.chain().focus().setTextAlign(align).run();
+  }
+
+  setHeading(level: 0 | 2 | 3 | 4) {
+    if (level === 0) this.editor?.chain().focus().setParagraph().run();
+    else this.editor?.chain().focus().toggleHeading({ level }).run();
+  }
+
+  toggleBulletList() { this.editor?.chain().focus().toggleBulletList().run(); }
+  toggleOrderedList() { this.editor?.chain().focus().toggleOrderedList().run(); }
+  toggleBlockquote() { this.editor?.chain().focus().toggleBlockquote().run(); }
+  insertHorizontalRule() { this.editor?.chain().focus().setHorizontalRule().run(); }
+  undo() { this.editor?.chain().focus().undo().run(); }
+  redo() { this.editor?.chain().focus().redo().run(); }
+
+  // --- Link mini-popover ---
+
+  openLinkPopover() {
+    const existing = this.editor?.getAttributes('link')['href'] as string | undefined;
+    this.linkPopover.set({ url: existing ?? '' });
+  }
+
+  updateLinkUrl(event: Event) {
+    this.linkPopover.set({ url: (event.target as HTMLInputElement).value });
+  }
+
+  applyLink() {
+    const popover = this.linkPopover();
+    if (!popover) return;
+    const url = popover.url.trim();
+    if (url) {
+      this.editor?.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    } else {
+      this.editor?.chain().focus().extendMarkRange('link').unsetLink().run();
+    }
+    this.linkPopover.set(null);
+  }
+
+  removeLink() {
+    this.editor?.chain().focus().extendMarkRange('link').unsetLink().run();
+    this.linkPopover.set(null);
+  }
+
+  closeLinkPopover() {
+    this.linkPopover.set(null);
+  }
+
+  // --- Insert image ---
+
+  openImageForm() {
+    this.imageForm.set({ src: '', alt: '', figcaption: '' });
+  }
+
+  updateImageForm(patch: Partial<{ src: string; alt: string; figcaption: string }>) {
+    const current = this.imageForm();
+    if (current) this.imageForm.set({ ...current, ...patch });
+  }
+
+  confirmInsertImage() {
+    const form = this.imageForm();
+    if (!form || !form.src.trim()) {
+      this.imageForm.set(null);
+      return;
+    }
+    const hasExistingImage = (this.editor?.getHTML() ?? '').includes('<img');
+    const figureContent: Record<string, unknown>[] = [
+      {
+        type: 'figureImg',
+        attrs: {
+          src: form.src.trim(),
+          alt: form.alt.trim() || null,
+          loading: hasExistingImage ? 'lazy' : null,
+        },
+      },
+    ];
+    if (form.figcaption.trim()) {
+      figureContent.push({
+        type: 'figcaption',
+        content: [{ type: 'text', text: form.figcaption.trim() }],
+      });
+    }
+    this.editor?.chain().focus().insertContent({ type: 'imageFigure', content: figureContent }).run();
+    this.imageForm.set(null);
+  }
+
+  cancelInsertImage() {
+    this.imageForm.set(null);
+  }
+
+  // --- Insert media (video embed) ---
+
+  openMediaForm() {
+    this.mediaForm.set({ url: '', figcaption: '' });
+  }
+
+  updateMediaForm(patch: Partial<{ url: string; figcaption: string }>) {
+    const current = this.mediaForm();
+    if (current) this.mediaForm.set({ ...current, ...patch });
+  }
+
+  confirmInsertMedia() {
+    const form = this.mediaForm();
+    if (!form || !form.url.trim()) {
+      this.mediaForm.set(null);
+      return;
+    }
+    this.editor
+      ?.chain()
+      .focus()
+      .insertContent({
+        type: 'videoEmbedFigure',
+        attrs: { src: ensureRel0(form.url.trim()), figcaption: form.figcaption.trim() },
+      })
+      .run();
+    this.mediaForm.set(null);
+  }
+
+  cancelInsertMedia() {
+    this.mediaForm.set(null);
+  }
+
+  // --- Table ---
+
+  insertTable() {
+    this.editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  }
+
+  addRowBefore() { this.editor?.chain().focus().addRowBefore().run(); }
+  addRowAfter() { this.editor?.chain().focus().addRowAfter().run(); }
+  deleteRow() { this.editor?.chain().focus().deleteRow().run(); }
+  addColumnBefore() { this.editor?.chain().focus().addColumnBefore().run(); }
+  addColumnAfter() { this.editor?.chain().focus().addColumnAfter().run(); }
+  deleteColumn() { this.editor?.chain().focus().deleteColumn().run(); }
+  deleteTable() { this.editor?.chain().focus().deleteTable().run(); }
 }

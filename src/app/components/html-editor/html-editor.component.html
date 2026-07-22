@@ -1,4 +1,5 @@
-<div class="absolute inset-0 overflow-y-auto p-6 space-y-6 bg-slate-50 dark:bg-slate-900">
+<div class="absolute inset-0 overflow-y-auto p-6 space-y-6 bg-slate-50 dark:bg-slate-900"
+     [class.fixed]="fullscreen()" [class.z-50]="fullscreen()" [class.overflow-y-auto]="fullscreen()">
 
   <div>
     <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -25,7 +26,135 @@
     </div>
   } @else {
     <div class="max-w-4xl space-y-4">
-      <ckeditor #ckeditorRef [editor]="Editor" [data]="originalHtml()" [config]="config"></ckeditor>
+
+      <!-- Toolbar -->
+      <div class="flex flex-wrap items-center gap-1 p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300">
+
+        <button (click)="undo()" [disabled]="sourceMode() || !toolbarState().canUndo" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-rotate-left"></i></button>
+        <button (click)="redo()" [disabled]="sourceMode() || !toolbarState().canRedo" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-rotate-right"></i></button>
+
+        <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+        <div class="flex bg-slate-100 dark:bg-slate-700 rounded p-0.5">
+          <button (click)="setHeading(0)" [disabled]="sourceMode()" [class.bg-white]="toolbarState().headingLevel === 0" [class.dark:bg-slate-600]="toolbarState().headingLevel === 0" [class.shadow-sm]="toolbarState().headingLevel === 0" class="px-2 py-1 rounded text-xs font-medium">P</button>
+          <button (click)="setHeading(2)" [disabled]="sourceMode()" [class.bg-white]="toolbarState().headingLevel === 2" [class.dark:bg-slate-600]="toolbarState().headingLevel === 2" [class.shadow-sm]="toolbarState().headingLevel === 2" class="px-2 py-1 rounded text-xs font-medium">H2</button>
+          <button (click)="setHeading(3)" [disabled]="sourceMode()" [class.bg-white]="toolbarState().headingLevel === 3" [class.dark:bg-slate-600]="toolbarState().headingLevel === 3" [class.shadow-sm]="toolbarState().headingLevel === 3" class="px-2 py-1 rounded text-xs font-medium">H3</button>
+          <button (click)="setHeading(4)" [disabled]="sourceMode()" [class.bg-white]="toolbarState().headingLevel === 4" [class.dark:bg-slate-600]="toolbarState().headingLevel === 4" [class.shadow-sm]="toolbarState().headingLevel === 4" class="px-2 py-1 rounded text-xs font-medium">H4</button>
+        </div>
+
+        <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+        <button (click)="toggleBold()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().bold" [class.dark:bg-slate-600]="toolbarState().bold" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-bold"></i></button>
+        <button (click)="toggleItalic()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().italic" [class.dark:bg-slate-600]="toolbarState().italic" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-italic"></i></button>
+        <button (click)="toggleUnderline()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().underline" [class.dark:bg-slate-600]="toolbarState().underline" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-underline"></i></button>
+        <button (click)="toggleStrike()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().strike" [class.dark:bg-slate-600]="toolbarState().strike" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-strikethrough"></i></button>
+        <button (click)="toggleSubscript()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().subscript" [class.dark:bg-slate-600]="toolbarState().subscript" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-subscript"></i></button>
+        <button (click)="toggleSuperscript()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().superscript" [class.dark:bg-slate-600]="toolbarState().superscript" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-superscript"></i></button>
+
+        <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+        @for (color of highlightColors; track color) {
+          <button (click)="toggleHighlight(color)" [disabled]="sourceMode()"
+            class="w-5 h-5 rounded border border-slate-300 dark:border-slate-600"
+            [class.ring-2]="toolbarState().highlightColor === color" [class.ring-rose-500]="toolbarState().highlightColor === color"
+            [style.background-color]="color"></button>
+        }
+
+        <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+        <button (click)="setAlign('left')" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().align === 'left'" [class.dark:bg-slate-600]="toolbarState().align === 'left'" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-align-left"></i></button>
+        <button (click)="setAlign('center')" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().align === 'center'" [class.dark:bg-slate-600]="toolbarState().align === 'center'" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-align-center"></i></button>
+        <button (click)="setAlign('right')" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().align === 'right'" [class.dark:bg-slate-600]="toolbarState().align === 'right'" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-align-right"></i></button>
+        <button (click)="setAlign('justify')" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().align === 'justify'" [class.dark:bg-slate-600]="toolbarState().align === 'justify'" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-align-justify"></i></button>
+
+        <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+        <div class="relative">
+          <button (click)="linkPopover() ? closeLinkPopover() : openLinkPopover()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().link" [class.dark:bg-slate-600]="toolbarState().link" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-link"></i></button>
+          @if (linkPopover(); as popover) {
+            <div class="absolute top-full left-0 mt-1 z-20 p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg shadow-lg flex gap-1 w-64">
+              <input type="text" [value]="popover.url" (input)="updateLinkUrl($event)" [placeholder]="t().linkUrlPlaceholder"
+                class="flex-1 min-w-0 p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-200">
+              <button (click)="applyLink()" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs">{{ t().apply }}</button>
+              @if (toolbarState().link) {
+                <button (click)="removeLink()" class="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-xs text-slate-600 dark:text-slate-300">{{ t().remove }}</button>
+              }
+            </div>
+          }
+        </div>
+        <button (click)="toggleBlockquote()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().blockquote" [class.dark:bg-slate-600]="toolbarState().blockquote" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-quote-right"></i></button>
+        <button (click)="insertHorizontalRule()" [disabled]="sourceMode()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-minus"></i></button>
+
+        <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+        <button (click)="toggleBulletList()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().bulletList" [class.dark:bg-slate-600]="toolbarState().bulletList" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-list-ul"></i></button>
+        <button (click)="toggleOrderedList()" [disabled]="sourceMode()" [class.bg-slate-200]="toolbarState().orderedList" [class.dark:bg-slate-600]="toolbarState().orderedList" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-list-ol"></i></button>
+
+        <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+        <div class="relative">
+          <button (click)="imageForm() ? cancelInsertImage() : openImageForm()" [disabled]="sourceMode()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-image"></i></button>
+          @if (imageForm(); as form) {
+            <div class="absolute top-full left-0 mt-1 z-20 p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg shadow-lg space-y-1.5 w-64">
+              <input type="text" [value]="form.src" (input)="updateImageForm({ src: $any($event.target).value })" [placeholder]="t().imageSrc"
+                class="w-full p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-200">
+              <input type="text" [value]="form.alt" (input)="updateImageForm({ alt: $any($event.target).value })" [placeholder]="t().imageAlt"
+                class="w-full p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-200">
+              <input type="text" [value]="form.figcaption" (input)="updateImageForm({ figcaption: $any($event.target).value })" [placeholder]="t().imageCaption"
+                class="w-full p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-200">
+              <div class="flex justify-end gap-1">
+                <button (click)="cancelInsertImage()" class="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-xs text-slate-600 dark:text-slate-300">{{ t().cancel }}</button>
+                <button (click)="confirmInsertImage()" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs">{{ t().insert }}</button>
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="relative">
+          <button (click)="mediaForm() ? cancelInsertMedia() : openMediaForm()" [disabled]="sourceMode()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-film"></i></button>
+          @if (mediaForm(); as form) {
+            <div class="absolute top-full left-0 mt-1 z-20 p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg shadow-lg space-y-1.5 w-64">
+              <input type="text" [value]="form.url" (input)="updateMediaForm({ url: $any($event.target).value })" [placeholder]="t().mediaUrl"
+                class="w-full p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-200">
+              <input type="text" [value]="form.figcaption" (input)="updateMediaForm({ figcaption: $any($event.target).value })" [placeholder]="t().mediaCaption"
+                class="w-full p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-200">
+              <div class="flex justify-end gap-1">
+                <button (click)="cancelInsertMedia()" class="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-xs text-slate-600 dark:text-slate-300">{{ t().cancel }}</button>
+                <button (click)="confirmInsertMedia()" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs">{{ t().insert }}</button>
+              </div>
+            </div>
+          }
+        </div>
+
+        <button (click)="insertTable()" [disabled]="sourceMode()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"><i class="fa-solid fa-table"></i></button>
+
+        @if (toolbarState().inTable && !sourceMode()) {
+          <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+          <button (click)="addRowBefore()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" title="Add row above"><i class="fa-solid fa-arrow-up-short-wide"></i></button>
+          <button (click)="addRowAfter()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" title="Add row below"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
+          <button (click)="deleteRow()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" title="Delete row"><i class="fa-solid fa-eraser"></i></button>
+          <button (click)="addColumnBefore()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" title="Add column left"><i class="fa-solid fa-arrow-left"></i></button>
+          <button (click)="addColumnAfter()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" title="Add column right"><i class="fa-solid fa-arrow-right"></i></button>
+          <button (click)="deleteColumn()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" title="Delete column"><i class="fa-solid fa-eraser"></i></button>
+          <button (click)="deleteTable()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-red-500" title="Delete table"><i class="fa-solid fa-trash"></i></button>
+        }
+
+        <div class="flex-1"></div>
+
+        <button (click)="toggleSourceMode()" [class.bg-slate-200]="sourceMode()" [class.dark:bg-slate-600]="sourceMode()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" title="Source"><i class="fa-solid fa-code"></i></button>
+        <button (click)="toggleFullscreen()" [class.bg-slate-200]="fullscreen()" [class.dark:bg-slate-600]="fullscreen()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" title="Fullscreen"><i class="fa-solid" [class.fa-expand]="!fullscreen()" [class.fa-compress]="fullscreen()"></i></button>
+      </div>
+
+      @if (!sourceMode()) {
+        <div #editorHost
+          class="min-h-[200px] overflow-y-auto p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-200"
+          [style.max-height]="fullscreen() ? 'calc(100vh - 14rem)' : '400px'"></div>
+      } @else {
+        <textarea
+          [value]="sourceHtml()"
+          (input)="updateSourceHtml($event)"
+          class="w-full p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg min-h-[200px] max-h-[400px] focus:ring-2 focus:ring-rose-500 outline-none resize-y text-sm font-mono text-slate-800 dark:text-slate-200"></textarea>
+      }
 
       @if (showIssues()) {
         <div class="p-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-sm">

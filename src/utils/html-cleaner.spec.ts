@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { cleanHtmlStructure, stripCkeditorArtifacts } from './html-cleaner';
+import { cleanHtmlStructure, stripTiptapArtifacts, sanitizeUntrustedHtml } from './html-cleaner';
 
 function parse(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
@@ -147,54 +147,56 @@ describe('cleanHtmlStructure — idempotency', () => {
   });
 });
 
-describe('stripCkeditorArtifacts', () => {
-  it('unwraps <figure class="table"> around a <table>, keeping .table-responsive', () => {
-    const html = `<div class="table-responsive"><figure class="table"><table><tr><td>A</td></tr></table></figure></div>`;
-    const doc = parse(stripCkeditorArtifacts(html));
-    expect(doc.querySelector('figure.table')).toBeNull();
-    expect(doc.querySelector('div.table-responsive > table')).not.toBeNull();
-  });
-
-  it('removes data-list-item-id from <li> while keeping list content', () => {
-    const html = `<ul><li data-list-item-id="abc123">Item text</li></ul>`;
-    const doc = parse(stripCkeditorArtifacts(html));
-    const li = doc.querySelector('li')!;
-    expect(li.hasAttribute('data-list-item-id')).toBe(false);
-    expect(li.textContent).toBe('Item text');
-  });
-
-  it('unwraps a nested <figure class="image"> that CKEditor\'s Image feature wraps around an <img> already inside the generator\'s own <figure>', () => {
-    const html = `<figure><figure class="image"><img src="a.jpg" alt="A"></figure><figcaption>Cap</figcaption></figure>`;
-    const doc = parse(stripCkeditorArtifacts(html));
-    expect(doc.querySelectorAll('figure').length).toBe(1);
-    const figure = doc.querySelector('figure')!;
-    expect(figure.firstElementChild?.tagName).toBe('IMG');
-    expect(figure.querySelector('figcaption')?.textContent).toBe('Cap');
-  });
-
-  it('unwraps a <p> that only wraps an <img> inside a <figure>', () => {
-    const html = `<figure><p><img src="a.jpg" alt="A"></p><figcaption>Cap</figcaption></figure>`;
-    const doc = parse(stripCkeditorArtifacts(html));
-    const figure = doc.querySelector('figure')!;
-    expect(figure.querySelector('p')).toBeNull();
-    expect(figure.firstElementChild?.tagName).toBe('IMG');
-  });
-
-  it('does NOT unwrap a <p> inside <figure> that has text alongside the image', () => {
-    const html = `<figure><p>Caption text <img src="a.jpg" alt="A"></p></figure>`;
-    const doc = parse(stripCkeditorArtifacts(html));
-    expect(doc.querySelector('figure > p')).not.toBeNull();
+describe('stripTiptapArtifacts', () => {
+  it('removes a trailing empty <p> left by StarterKit\'s TrailingNode extension', () => {
+    const html = `<p>Real content</p><p></p>`;
+    const doc = parse(stripTiptapArtifacts(html));
+    expect(doc.body.children.length).toBe(1);
+    expect(doc.body.lastElementChild?.textContent).toBe('Real content');
   });
 
   it('leaves already-clean HTML untouched', () => {
     const html = `<div class="table-responsive"><table><tbody><tr><td>A</td></tr></tbody></table></div><figure><img src="a.jpg" alt="A"><figcaption>Cap</figcaption></figure>`;
-    expect(stripCkeditorArtifacts(html)).toBe(html);
+    expect(stripTiptapArtifacts(html)).toBe(html);
   });
 
   it('is idempotent', () => {
-    const html = `<div class="table-responsive"><figure class="table"><table><tr><td>A</td></tr></table></figure></div><ul><li data-list-item-id="x">A</li></ul>`;
-    const once = stripCkeditorArtifacts(html);
-    const twice = stripCkeditorArtifacts(once);
+    const html = `<p>Real content</p><p></p>`;
+    const once = stripTiptapArtifacts(html);
+    const twice = stripTiptapArtifacts(once);
     expect(twice).toBe(once);
+  });
+});
+
+describe('sanitizeUntrustedHtml', () => {
+  it('strips inline event-handler attributes', () => {
+    const html = `<p onclick="alert(1)">Text</p>`;
+    const doc = parse(sanitizeUntrustedHtml(html));
+    expect(doc.querySelector('p')?.hasAttribute('onclick')).toBe(false);
+    expect(doc.querySelector('p')?.textContent).toBe('Text');
+  });
+
+  it('strips javascript: URLs from href', () => {
+    const html = `<a href="javascript:alert(1)">Link</a>`;
+    const doc = parse(sanitizeUntrustedHtml(html));
+    expect(doc.querySelector('a')?.hasAttribute('href')).toBe(false);
+  });
+
+  it('strips data: URLs from src', () => {
+    const html = `<img src="data:text/html,<script>alert(1)</script>" alt="A">`;
+    const doc = parse(sanitizeUntrustedHtml(html));
+    expect(doc.querySelector('img')?.hasAttribute('src')).toBe(false);
+  });
+
+  it('removes <script> and <style> tags entirely', () => {
+    const html = `<p>Text</p><script>alert(1)</script><style>p{color:red}</style>`;
+    const doc = parse(sanitizeUntrustedHtml(html));
+    expect(doc.querySelector('script')).toBeNull();
+    expect(doc.querySelector('style')).toBeNull();
+  });
+
+  it('leaves safe hrefs/srcs and normal attributes untouched', () => {
+    const html = `<a href="https://example.com" class="link">Link</a><img src="/img/a.jpg" alt="A">`;
+    expect(sanitizeUntrustedHtml(html)).toBe(html);
   });
 });
