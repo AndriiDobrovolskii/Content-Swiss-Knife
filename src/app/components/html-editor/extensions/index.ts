@@ -20,6 +20,7 @@ import { Table, TableRow, TableCell, TableHeader } from './table-extensions';
 import { GenericBlock } from './generic-block-node';
 import { GenericInlineSpan } from './generic-inline-mark';
 import { GlobalAttributes } from './global-attributes';
+import { SearchReplace } from './search-replace-extension';
 
 // This app's own convention (hard rules, image-figure.ts, every real
 // fixture) uses <b> exclusively for bold lead-ins — StarterKit's bundled
@@ -55,4 +56,5 @@ export const TIPTAP_EXTENSIONS = [
   GenericBlock,
   GenericInlineSpan,
   GlobalAttributes,
+  SearchReplace,
 ];

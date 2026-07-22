@@ -49,3 +49,9 @@ html.dark { color-scheme: dark; }
 .dark .hljs-built_in                 { color: #d2a8ff; }
 .dark .hljs-addition                 { color: #aff5b4; background: #033a16; }
 .dark .hljs-deletion                 { color: #ffdcd7; background: #67060c; }
+
+/* WYSIWYG Find & Replace match highlighting (extensions/search-replace-extension.ts) */
+.search-match { background: rgba(250, 204, 21, 0.4); }
+.search-match-current { background: rgba(249, 115, 22, 0.55); }
+.dark .search-match { background: rgba(250, 204, 21, 0.25); }
+.dark .search-match-current { background: rgba(249, 115, 22, 0.4); }

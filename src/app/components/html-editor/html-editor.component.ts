@@ -5,6 +5,7 @@ import { EditorView } from '@codemirror/view';
 import { SearchQuery, setSearchQuery, findNext, findPrevious, replaceNext, replaceAll as cmReplaceAll } from '@codemirror/search';
 import { TIPTAP_EXTENSIONS } from './extensions';
 import { reconstructTableThead } from './extensions/table-thead';
+import { searchReplaceKey } from './extensions/search-replace-extension';
 import { stripTiptapArtifacts, sanitizeUntrustedHtml } from '../../../utils/html-cleaner';
 import { wrapImageFigures } from '../../../utils/image-figure';
 import { ensureRel0 } from '../../../utils/video-url';
@@ -254,11 +255,11 @@ export class HtmlEditorComponent {
           this.sourceHtml(),
           this.darkMode(),
           value => this.sourceHtml.set(value),
-          () => this.refreshFindReplaceMatchInfo(),
+          () => this.refreshCodeMirrorMatchInfo(),
         ),
         parent: host.nativeElement,
       });
-      if (this.lastFindReplaceQuery) this.dispatchFindReplaceQuery(this.lastFindReplaceQuery);
+      if (this.lastFindReplaceQuery) this.dispatchCodeMirrorQuery(this.lastFindReplaceQuery);
 
       onCleanup(() => {
         this.cmView?.destroy();
@@ -296,9 +297,13 @@ export class HtmlEditorComponent {
       element: host.nativeElement,
       extensions: TIPTAP_EXTENSIONS,
       content: this.pendingContent,
-      onTransaction: () => this.refreshToolbarState(),
+      onTransaction: () => {
+        this.refreshToolbarState();
+        this.refreshWysiwygMatchInfo();
+      },
       onSelectionUpdate: () => this.refreshToolbarState(),
     });
+    if (this.lastFindReplaceQuery) this.dispatchWysiwygQuery(this.lastFindReplaceQuery);
     this.refreshToolbarState();
   });
 
@@ -406,9 +411,10 @@ export class HtmlEditorComponent {
   }
 
   // --- Find & Replace ---
-  // Source mode is driven by CodeMirror's @codemirror/search commands.
-  // WYSIWYG mode's engine (the custom ProseMirror search/replace plugin)
-  // is wired in a later phase — until then queries are a no-op there.
+  // One shared panel/UI; the active engine depends on sourceMode() — the
+  // CodeMirror instance in Source mode, or the custom ProseMirror
+  // searchReplace plugin (extensions/search-replace-extension.ts) in the
+  // normal WYSIWYG view.
 
   @HostListener('document:keydown', ['$event'])
   onGlobalKeydown(event: KeyboardEvent) {
@@ -432,15 +438,11 @@ export class HtmlEditorComponent {
 
   onFindReplaceQueryChange(query: FindReplaceQuery) {
     this.lastFindReplaceQuery = query;
-    if (this.sourceMode()) {
-      this.dispatchFindReplaceQuery(query);
-    } else {
-      this.findReplaceMatchCount.set(0);
-      this.findReplaceCurrentMatch.set(0);
-    }
+    if (this.sourceMode()) this.dispatchCodeMirrorQuery(query);
+    else this.dispatchWysiwygQuery(query);
   }
 
-  private dispatchFindReplaceQuery(query: FindReplaceQuery) {
+  private dispatchCodeMirrorQuery(query: FindReplaceQuery) {
     if (!this.cmView) return;
     const searchQuery = new SearchQuery({
       search: query.search,
@@ -450,38 +452,75 @@ export class HtmlEditorComponent {
       regexp: query.regexp,
     });
     this.cmView.dispatch({ effects: setSearchQuery.of(searchQuery) });
-    this.refreshFindReplaceMatchInfo();
+    this.refreshCodeMirrorMatchInfo();
   }
 
-  private refreshFindReplaceMatchInfo() {
+  private refreshCodeMirrorMatchInfo() {
     if (!this.cmView) return;
     const { count, current } = getSearchMatchInfo(this.cmView);
     this.findReplaceMatchCount.set(count);
     this.findReplaceCurrentMatch.set(current);
   }
 
+  private dispatchWysiwygQuery(query: FindReplaceQuery) {
+    if (!this.editor) return;
+    this.editor.commands.searchReplaceSetQuery(query.search, {
+      caseSensitive: query.caseSensitive,
+      wholeWord: query.wholeWord,
+      regexp: query.regexp,
+    });
+    this.refreshWysiwygMatchInfo();
+  }
+
+  private refreshWysiwygMatchInfo() {
+    if (!this.editor || this.sourceMode()) return;
+    const state = searchReplaceKey.getState(this.editor.state);
+    this.findReplaceMatchCount.set(state?.matches.length ?? 0);
+    this.findReplaceCurrentMatch.set(state && state.currentIndex >= 0 ? state.currentIndex + 1 : 0);
+  }
+
   onFindNext() {
-    if (!this.sourceMode() || !this.cmView) return;
-    findNext(this.cmView);
-    this.refreshFindReplaceMatchInfo();
+    if (this.sourceMode()) {
+      if (!this.cmView) return;
+      findNext(this.cmView);
+      this.refreshCodeMirrorMatchInfo();
+    } else {
+      this.editor?.commands.searchReplaceNext();
+      this.refreshWysiwygMatchInfo();
+    }
   }
 
   onFindPrevious() {
-    if (!this.sourceMode() || !this.cmView) return;
-    findPrevious(this.cmView);
-    this.refreshFindReplaceMatchInfo();
+    if (this.sourceMode()) {
+      if (!this.cmView) return;
+      findPrevious(this.cmView);
+      this.refreshCodeMirrorMatchInfo();
+    } else {
+      this.editor?.commands.searchReplacePrevious();
+      this.refreshWysiwygMatchInfo();
+    }
   }
 
   onReplaceOne() {
-    if (!this.sourceMode() || !this.cmView) return;
-    replaceNext(this.cmView);
-    this.refreshFindReplaceMatchInfo();
+    if (this.sourceMode()) {
+      if (!this.cmView) return;
+      replaceNext(this.cmView);
+      this.refreshCodeMirrorMatchInfo();
+    } else {
+      this.editor?.commands.searchReplaceCurrent(this.lastFindReplaceQuery?.replace ?? '');
+      this.refreshWysiwygMatchInfo();
+    }
   }
 
   onReplaceAll() {
-    if (!this.sourceMode() || !this.cmView) return;
-    cmReplaceAll(this.cmView);
-    this.refreshFindReplaceMatchInfo();
+    if (this.sourceMode()) {
+      if (!this.cmView) return;
+      cmReplaceAll(this.cmView);
+      this.refreshCodeMirrorMatchInfo();
+    } else {
+      this.editor?.commands.searchReplaceAll(this.lastFindReplaceQuery?.replace ?? '');
+      this.refreshWysiwygMatchInfo();
+    }
   }
 
   // --- Fullscreen ---
