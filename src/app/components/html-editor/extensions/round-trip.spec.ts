@@ -62,10 +62,9 @@ describe('imageFigure — attribute fidelity', () => {
     expect(imgs[1].getAttribute('loading')).toBe('lazy');
     imgs.forEach(img => expect(img.getAttribute('decoding')).toBe('async'));
     expect(doc.querySelectorAll('figcaption')).toHaveLength(2);
-    // Bold normalizes to <strong> on serialize (StarterKit's Bold mark
-    // default, same normalization CKEditor's own Bold plugin already did —
-    // not a regression), so assert on the mark's presence, not the tag.
-    expect(doc.querySelector('figcaption strong')?.textContent).toBe('Lead-in:');
+    // This app's convention uses <b> exclusively for lead-ins (see
+    // extensions/index.ts's BoldAsB) — must round-trip as <b>, not <strong>.
+    expect(doc.querySelector('figcaption b')?.textContent).toBe('Lead-in:');
   });
 });
 
@@ -164,5 +163,25 @@ describe('generic block passthrough', () => {
     const once = roundTrip(html);
     const twice = roundTrip(once);
     expect(twice).toBe(once);
+  });
+});
+
+describe('table rendering — no TipTap-invented noise', () => {
+  it('never emits a <colgroup> or an auto-generated width style on <table>', () => {
+    const html = `<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>`;
+    const result = roundTrip(html);
+    expect(result).not.toContain('colgroup');
+    expect(result).not.toContain('<col ');
+    expect(result).not.toMatch(/<table[^>]*style=/);
+  });
+
+  it('omits default colspan="1"/rowspan="1" but preserves a real merged-cell span', () => {
+    const html = `<table><tbody><tr><td>A</td><td colspan="2">B</td></tr></tbody></table>`;
+    const result = roundTrip(html);
+    const doc = new DOMParser().parseFromString(result, 'text/html');
+    const cells = doc.querySelectorAll('td');
+    expect(cells[0].hasAttribute('colspan')).toBe(false);
+    expect(cells[0].hasAttribute('rowspan')).toBe(false);
+    expect(cells[1].getAttribute('colspan')).toBe('2');
   });
 });
