@@ -1,7 +1,8 @@
-import { Component, ElementRef, NgZone, computed, effect, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, NgZone, computed, effect, input, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Editor } from '@tiptap/core';
 import { EditorView } from '@codemirror/view';
+import { SearchQuery, setSearchQuery, findNext, findPrevious, replaceNext, replaceAll as cmReplaceAll } from '@codemirror/search';
 import { TIPTAP_EXTENSIONS } from './extensions';
 import { reconstructTableThead } from './extensions/table-thead';
 import { stripTiptapArtifacts, sanitizeUntrustedHtml } from '../../../utils/html-cleaner';
@@ -9,8 +10,10 @@ import { wrapImageFigures } from '../../../utils/image-figure';
 import { ensureRel0 } from '../../../utils/video-url';
 import { validateStructuralParity } from '../../../utils/structural-parity';
 import type { ValidationIssue } from '../../../utils/output-validator';
-import { beautifyHtml, createSourceEditorState, themeCompartment } from './source-view';
+import { beautifyHtml, createSourceEditorState, getSearchMatchInfo, themeCompartment } from './source-view';
 import { vscodeLight, vscodeDark } from '@uiw/codemirror-theme-vscode';
+import { FindReplacePanelComponent } from './find-replace-panel.component';
+import type { FindReplaceQuery } from './find-replace-query';
 
 const LABELS = {
   en: {
@@ -68,6 +71,7 @@ const LABELS = {
     deleteTableTooltip: 'Delete table',
     sourceModeTooltip: 'Source code',
     fullscreenTooltip: 'Fullscreen',
+    findReplaceTooltip: 'Find and replace (Ctrl+F)',
   },
   uk: {
     title: 'HTML-редактор',
@@ -124,6 +128,7 @@ const LABELS = {
     deleteTableTooltip: 'Видалити таблицю',
     sourceModeTooltip: 'Вихідний код',
     fullscreenTooltip: 'На весь екран',
+    findReplaceTooltip: 'Знайти і замінити (Ctrl+F)',
   },
 };
 
@@ -170,7 +175,7 @@ const HIGHLIGHT_COLORS = ['#fef08a', '#bbf7d0', '#fbcfe8', '#bfdbfe'];
 @Component({
   selector: 'app-html-editor',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FindReplacePanelComponent],
   templateUrl: './html-editor.component.html',
 })
 export class HtmlEditorComponent {
@@ -187,6 +192,11 @@ export class HtmlEditorComponent {
   sourceMode = signal<boolean>(false);
   sourceHtml = signal<string>('');
   fullscreen = signal<boolean>(false);
+
+  findReplaceOpen = signal<boolean>(false);
+  findReplaceMatchCount = signal<number>(0);
+  findReplaceCurrentMatch = signal<number>(0);
+  private lastFindReplaceQuery: FindReplaceQuery | null = null;
 
   toolbarState = signal<ToolbarState>(EMPTY_TOOLBAR_STATE);
   highlightColors = HIGHLIGHT_COLORS;
@@ -240,9 +250,15 @@ export class HtmlEditorComponent {
       if (!host || this.cmView) return;
 
       this.cmView = new EditorView({
-        state: createSourceEditorState(this.sourceHtml(), this.darkMode(), value => this.sourceHtml.set(value)),
+        state: createSourceEditorState(
+          this.sourceHtml(),
+          this.darkMode(),
+          value => this.sourceHtml.set(value),
+          () => this.refreshFindReplaceMatchInfo(),
+        ),
         parent: host.nativeElement,
       });
+      if (this.lastFindReplaceQuery) this.dispatchFindReplaceQuery(this.lastFindReplaceQuery);
 
       onCleanup(() => {
         this.cmView?.destroy();
@@ -387,6 +403,85 @@ export class HtmlEditorComponent {
       this.sourceHtml.set(beautifyHtml(this.editor?.getHTML() ?? ''));
       this.sourceMode.set(true);
     }
+  }
+
+  // --- Find & Replace ---
+  // Source mode is driven by CodeMirror's @codemirror/search commands.
+  // WYSIWYG mode's engine (the custom ProseMirror search/replace plugin)
+  // is wired in a later phase — until then queries are a no-op there.
+
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(event: KeyboardEvent) {
+    if (!this.loaded()) return;
+    const mod = event.ctrlKey || event.metaKey;
+    if (mod && (event.key === 'f' || event.key === 'h')) {
+      event.preventDefault();
+      this.openFindReplace();
+    } else if (event.key === 'Escape' && this.findReplaceOpen()) {
+      this.closeFindReplace();
+    }
+  }
+
+  openFindReplace() {
+    this.findReplaceOpen.set(true);
+  }
+
+  closeFindReplace() {
+    this.findReplaceOpen.set(false);
+  }
+
+  onFindReplaceQueryChange(query: FindReplaceQuery) {
+    this.lastFindReplaceQuery = query;
+    if (this.sourceMode()) {
+      this.dispatchFindReplaceQuery(query);
+    } else {
+      this.findReplaceMatchCount.set(0);
+      this.findReplaceCurrentMatch.set(0);
+    }
+  }
+
+  private dispatchFindReplaceQuery(query: FindReplaceQuery) {
+    if (!this.cmView) return;
+    const searchQuery = new SearchQuery({
+      search: query.search,
+      replace: query.replace,
+      caseSensitive: query.caseSensitive,
+      wholeWord: query.wholeWord,
+      regexp: query.regexp,
+    });
+    this.cmView.dispatch({ effects: setSearchQuery.of(searchQuery) });
+    this.refreshFindReplaceMatchInfo();
+  }
+
+  private refreshFindReplaceMatchInfo() {
+    if (!this.cmView) return;
+    const { count, current } = getSearchMatchInfo(this.cmView);
+    this.findReplaceMatchCount.set(count);
+    this.findReplaceCurrentMatch.set(current);
+  }
+
+  onFindNext() {
+    if (!this.sourceMode() || !this.cmView) return;
+    findNext(this.cmView);
+    this.refreshFindReplaceMatchInfo();
+  }
+
+  onFindPrevious() {
+    if (!this.sourceMode() || !this.cmView) return;
+    findPrevious(this.cmView);
+    this.refreshFindReplaceMatchInfo();
+  }
+
+  onReplaceOne() {
+    if (!this.sourceMode() || !this.cmView) return;
+    replaceNext(this.cmView);
+    this.refreshFindReplaceMatchInfo();
+  }
+
+  onReplaceAll() {
+    if (!this.sourceMode() || !this.cmView) return;
+    cmReplaceAll(this.cmView);
+    this.refreshFindReplaceMatchInfo();
   }
 
   // --- Fullscreen ---

@@ -12,6 +12,7 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, lineNumbers, highlightActiveLine, keymap } from '@codemirror/view';
 import { html } from '@codemirror/lang-html';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { search, getSearchQuery } from '@codemirror/search';
 import { vscodeLight, vscodeDark } from '@uiw/codemirror-theme-vscode';
 
 /** Inline tags that must never be split across lines/indented — doing so
@@ -42,6 +43,7 @@ export function createSourceEditorState(
   doc: string,
   dark: boolean,
   onDocChanged: (value: string) => void,
+  onUpdate?: (update: { docChanged: boolean; selectionSet: boolean }) => void,
 ): EditorState {
   return EditorState.create({
     doc,
@@ -54,9 +56,35 @@ export function createSourceEditorState(
       themeCompartment.of(dark ? vscodeDark : vscodeLight),
       EditorView.lineWrapping,
       baseSizingTheme,
+      // Search *state* only — no keymap/panel wired here. The shared
+      // FindReplacePanelComponent drives setSearchQuery/findNext/findPrevious/
+      // replaceNext/replaceAll directly, so CodeMirror's own built-in search
+      // panel never renders (there is exactly one Find/Replace UI, shared
+      // with the WYSIWYG mode's ProseMirror engine).
+      search(),
       EditorView.updateListener.of(update => {
         if (update.docChanged) onDocChanged(update.state.doc.toString());
+        onUpdate?.({ docChanged: update.docChanged, selectionSet: update.selectionSet });
       }),
     ],
   });
+}
+
+/** Total match count + 1-based index of the match under the current
+ * selection (0 if none/no query yet), for the shared Find/Replace panel's
+ * match counter. */
+export function getSearchMatchInfo(view: EditorView): { count: number; current: number } {
+  const query = getSearchQuery(view.state);
+  if (!query.valid || !query.search) return { count: 0, current: 0 };
+
+  const matches: { from: number; to: number }[] = [];
+  const cursor = query.getCursor(view.state);
+  for (let result = cursor.next(); !result.done; result = cursor.next()) {
+    matches.push({ from: result.value.from, to: result.value.to });
+  }
+  if (matches.length === 0) return { count: 0, current: 0 };
+
+  const sel = view.state.selection.main;
+  const index = matches.findIndex(m => m.from === sel.from && m.to === sel.to);
+  return { count: matches.length, current: (index === -1 ? 0 : index) + 1 };
 }
