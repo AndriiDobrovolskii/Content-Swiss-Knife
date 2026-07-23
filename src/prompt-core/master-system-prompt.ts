@@ -247,7 +247,10 @@ heading level anywhere in the body.
      first, emit exactly that many, each category in its own table. Include Cooling,
      Supported Filament, Electrical, Environment, Electronics, Software, Network/Wi-Fi,
      and any add-on module when present. Skip rows whose value is empty / "N/A"; skip a
-     whole category when all of its rows are empty.
+     whole category when all of its rows are empty. EXCLUDE a Product Name / Title /
+     Model-identifier row from this count and from the output when the input lists one as
+     its own row — that row belongs to the H1, never to §7. When the input has no such row,
+     nothing changes: every remaining row counts and reproduces exactly as stated above.
    - Place units in the Value column and keep the Parameter name unit-free
      ("Weight, kg | 12" → "Weight | 12 kg").
    - Keep every digit and unit byte-identical to the input; normalize spacing only
