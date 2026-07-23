@@ -12,6 +12,7 @@ import {
   getLangsForStore, taskLangToIso, isoToHumanLang, buildNativeLangOverlay, buildMasterUaOverlay,
   bcp47ToTaskCLang, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV,
   EXPERT3D_ES_NATIVE_VOCAB_OVERLAY, EXPERT3D_UK_LOCALE_TOV,
+  resolveLocaleValue,
 } from './constants';
 
 describe('buildNativeLangOverlay', () => {
@@ -97,6 +98,31 @@ describe('uk-UA master locale wiring', () => {
 
   it('taskLangToIso("European English", "EXPERT3D") resolves to "en-ES"', () => {
     expect(taskLangToIso('European English', 'EXPERT3D')).toBe('en-ES');
+  });
+});
+
+describe('resolveLocaleValue', () => {
+  const map = { 'en-gb': 'English', 'es-es': 'Spanish', 'uk-ua': 'Ukrainian' };
+
+  it('resolves an exact key match', () => {
+    expect(resolveLocaleValue(map, 'es-es', 'FALLBACK')).toBe('Spanish');
+  });
+
+  it('is case-insensitive on the exact match', () => {
+    expect(resolveLocaleValue(map, 'ES-ES', 'FALLBACK')).toBe('Spanish');
+  });
+
+  it('falls back to a same-base-language key when the exact code is missing', () => {
+    expect(resolveLocaleValue(map, 'es-AR', 'FALLBACK')).toBe('Spanish');
+  });
+
+  it('does not let a short base language falsely match an unrelated key (hyphen-boundary check)', () => {
+    // base 'e' must not match 'en-gb' — only a hyphen-bounded prefix counts.
+    expect(resolveLocaleValue(map, 'e', 'FALLBACK')).toBe('FALLBACK');
+  });
+
+  it('falls back to the provided fallback when no key matches at all', () => {
+    expect(resolveLocaleValue(map, 'xx-yy', 'FALLBACK')).toBe('FALLBACK');
   });
 });
 

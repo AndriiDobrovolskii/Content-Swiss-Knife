@@ -150,6 +150,28 @@ describe('generic block passthrough', () => {
     expect(doc.querySelector('section.specs > div.table-responsive > table')).not.toBeNull();
   });
 
+  it('preserves a combined §7 spec table with colspan category-header <th> rows (post table-finalize.ts)', () => {
+    const html =
+      `<section class="specs"><h2>Technical specifications of the Anycubic Kobra 3</h2>` +
+      `<div class="table-responsive"><table>` +
+      `<tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold; background-color: #f5f5f5;">Загальні відомості</th></tr>` +
+      `<tr><td>Матеріал</td><td>PLA</td></tr>` +
+      `<tr><td>Вага</td><td>5 кг</td></tr>` +
+      `<tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold; background-color: #f5f5f5;">Продуктивність</th></tr>` +
+      `<tr><td>Швидкість</td><td>500 мм/с</td></tr>` +
+      `</table></div>` +
+      `</section>`;
+    const result = roundTrip(html);
+    const doc = new DOMParser().parseFromString(result, 'text/html');
+
+    expect(doc.querySelectorAll('section.specs table')).toHaveLength(1);
+    const headerRows = doc.querySelectorAll('section.specs th[colspan="2"]');
+    expect(headerRows).toHaveLength(2);
+    expect(headerRows[0].textContent).toBe('Загальні відомості');
+    expect(headerRows[1].textContent).toBe('Продуктивність');
+    expect(doc.querySelectorAll('section.specs td')).toHaveLength(6);
+  });
+
   it('correctly types header vs. data cells (th vs td) through the round-trip', () => {
     const html = `<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>`;
     const result = roundTrip(html);

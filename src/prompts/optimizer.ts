@@ -18,6 +18,17 @@ output is the opening "<" of the §1 hook paragraph; the last character is the f
 §9. Global hard cap: 32,000 characters including all spaces, text, and HTML tags. Where a preamble,
 explanation, JSON wrapper, or Markdown fence would appear, write the HTML itself.
 
+OUTPUT LANGUAGE (HARD CONSTRAINT): determine the output language SOLELY from the language of
+[INPUT HTML]'s own visible prose — its paragraphs, headings, and list items. Write 100% of the
+output in that one language: every paragraph, heading, table cell (in both the §2a highlight table
+and the full §7 table), figcaption, and list item, from the first character to the last, with zero
+language switching partway through. Do NOT let brand names, company names, or any URL's domain/path
+(e.g. an <img src> pointing at a .es domain, or a company name that sounds Spanish/French/etc.)
+influence this decision — those are not language signal, and this task has produced incorrect
+output before by treating them as if they were. If [INPUT HTML] itself already mixes languages,
+match the language of its longest/majority stretch of prose and normalize the entire output into
+that single language.
+
 SCOPE: this is a REWRITE task: restructure [INPUT HTML] below into the Schema v3.0 §1–§9 order
 already defined in [CONTENT STRUCTURE] above (Hook → Killer Specs + Key Benefits → Functionality →
 Applications → Compatibility [conditional] → Package Contents [conditional] → Technical

@@ -30,6 +30,8 @@ import { SlugResponse, SeoResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta } from '../utils/repair-gate';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
+import { mergeSmallSpecCategories, DEFAULT_MIN_ROWS } from '../utils/spec-category-merge';
+import { finalizeTablesForDisplay } from '../utils/table-finalize';
 
 // ── Orchestrator ────────────────────────────────────────────────────────────
 
@@ -166,8 +168,12 @@ export class ContentOrchestratorService {
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlAResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult)]);
+      // Deterministic §7 category merge (dissolve <3-row categories into "Загальні відомості",
+      // placed first) — runs once here, before this HTML is used for Slug/SEO grounding or
+      // handed to Task C, so every downstream consumer sees the same, already-merged master.
+      const mergedHtmlEn = mergeSmallSpecCategories(htmlEn);
       // mainHtmlUa now holds the uk-UA MASTER — see mainHtmlLocale. Renamed to versions['uk-UA'] in PR #1.
-      const finalMasterHtml = isConsumables ? trimConsumablesToLimit(htmlEn) : htmlEn;
+      const finalMasterHtml = isConsumables ? trimConsumablesToLimit(mergedHtmlEn) : mergedHtmlEn;
       this.content.update(c => ({ ...c, mainHtmlUa: finalMasterHtml }));
       // Scope translation image-manifest validation to what the master actually shipped, not
       // the raw upload manifest — a translation must mirror the master (validateStructuralParity
@@ -192,7 +198,7 @@ export class ContentOrchestratorService {
       } else {
         try {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
-          const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, htmlEn);
+          const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn);
           // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
           const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }, creativeEffort);
           const slugData = this.normalizeSlugResponse(rawSlug);
@@ -211,7 +217,7 @@ export class ContentOrchestratorService {
       // Step 3 — Generate SEO Metadata. Localized names (if any) are consumed VERBATIM as
       // h1 + title core; HTML context still feeds meta_description's hard spec.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
-      const promptB = buildPromptB(input.website.name, input.name, seoLangs, htmlEn, localizedNames);
+      const promptB = buildPromptB(input.website.name, input.name, seoLangs, mergedHtmlEn, localizedNames);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -341,6 +347,20 @@ export class ContentOrchestratorService {
       // Post-generation acceptance-criteria check (non-blocking — reports only).
       this.runOutputValidation(input.website.name, input.name, input.templateId, 'uk-UA');
 
+      // Deterministic table-shape finalization (§2 killer-specs → 2-col, §7 → one colspan
+      // table) — runs strictly AFTER runOutputValidation() so checkLeadInCapitalization's
+      // marker-text detection always sees the pre-transform 3-column shape. Applied to the
+      // master and every translation independently; validateStructuralParity already enforces
+      // they share the same (merged) category structure, so no cross-locale drift is possible.
+      this.content.update(c => ({
+        ...c,
+        mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, 'uk-UA'),
+        translations: Object.fromEntries(
+          Object.entries(c.translations).map(([lang, html]) =>
+            [lang, finalizeTablesForDisplay(html, taskLangToIso(lang, input.website.name))]),
+        ),
+      }));
+
       this.historyService.add(input, this.content());
       this.progressMessage.set('Done!');
     }, 'Error during generation.', 'Generation failed. Check console for details.');
@@ -413,7 +433,9 @@ export class ContentOrchestratorService {
       const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlUaResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult)]);
-      const finalHtmlUa = isConsumables ? trimConsumablesToLimit(htmlUa) : htmlUa;
+      // Deterministic §7 category merge — see the identical hook in generate() for rationale.
+      const mergedHtmlUa = mergeSmallSpecCategories(htmlUa);
+      const finalHtmlUa = isConsumables ? trimConsumablesToLimit(mergedHtmlUa) : mergedHtmlUa;
       this.content.update(c => ({ ...c, mainHtmlUa: finalHtmlUa }));
       this.validationIssues.set(
         isConsumables
@@ -505,6 +527,10 @@ export class ContentOrchestratorService {
 
       // Post-generation acceptance-criteria check (non-blocking — reports only).
       this.runOutputValidation(input.website.name, input.name, input.templateId, UA_ISO);
+
+      // Deterministic table-shape finalization — see the identical hook in generate() for
+      // rationale. Master-only here (no translations loop in this native uk-UA path).
+      this.content.update(c => ({ ...c, mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, UA_ISO) }));
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Done!');
@@ -619,9 +645,22 @@ export class ContentOrchestratorService {
     this.optimizerOutput.set('');
     this.progressMessage.set('Optimizing HTML…');
     await this.withProgress(async () => {
-      let optimized = await this.llm.generateText(buildOptimizerPrompt(htmlInput, productName), useThinking, { taskLabel: 'Optimizer', productName });
+      let optimized = await this.llm.generateText(
+        buildOptimizerPrompt(htmlInput, productName),
+        useThinking,
+        { taskLabel: 'Optimizer', productName },
+      );
       optimized = stripCodeFences(optimized);
       optimized = cleanHtmlStructure(optimized);
+      // Automatic locale for the deterministic post-processing headers — no manual selector; the
+      // LLM is instructed (see TASK_OPTIMIZE_INSTRUCTION) to auto-detect and preserve the input's
+      // own language. Sampling the LLM's own OUTPUT (not the raw input) keeps these headers
+      // self-consistent with whatever language the model actually wrote, even if it doesn't
+      // perfectly follow that instruction.
+      const sample = optimized.slice(0, 4000).replace(/<[^>]+>/g, ' ');
+      const locale = isAlreadyCyrillic(sample) ? 'uk-ua' : 'en-gb';
+      optimized = mergeSmallSpecCategories(optimized, DEFAULT_MIN_ROWS, locale);
+      optimized = finalizeTablesForDisplay(optimized, locale);
       this.optimizerOutput.set(optimized);
       this.progressMessage.set('Optimization Complete!');
     }, 'Error during optimization.', 'Optimization failed.');

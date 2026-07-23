@@ -118,6 +118,68 @@ export function isoToHumanLang(iso: string): string {
   return map[iso] ?? iso;
 }
 
+/** §2 killer-specs 2-column headers (post Step-B collapse), keyed by lowercase BCP47. */
+export const KILLER_SPECS_HEADERS: Record<string, [param: string, benefit: string]> = {
+  'uk-ua': ['Параметр', 'Ваша перевага'],
+  'ru-ua': ['Параметр', 'Ваше преимущество'],
+  'es-es': ['Parámetro', 'Su ventaja'],
+  'es-mx': ['Parámetro', 'Su ventaja'],
+  'es-us': ['Parámetro', 'Su ventaja'],
+  'pt-pt': ['Parâmetro', 'A sua vantagem'],
+  'pl-pl': ['Parametr', 'Twoja korzyść'],
+  'de-de': ['Parameter', 'Ihr Vorteil'],
+  'en-gb': ['Parameter', 'Your Advantage'],
+  'en-es': ['Parameter', 'Your Advantage'],
+  'en-us': ['Parameter', 'Your Advantage'],
+};
+
+/** §7 "Parameter/Value" table headers, keyed by lowercase BCP47 — see master-system-prompt.ts's
+ *  own §7 localization table. Used by the Optimizer's post-processing (Generator's Task
+ *  A/C output already carries LLM-authored localized headers natively). */
+export const SPEC_TABLE_HEADERS: Record<string, [param: string, value: string]> = {
+  'uk-ua': ['Параметр', 'Значення'],
+  'ru-ua': ['Параметр', 'Значение'],
+  'es-es': ['Parámetro', 'Valor'],
+  'es-mx': ['Parámetro', 'Valor'],
+  'es-us': ['Parámetro', 'Valor'],
+  'pt-pt': ['Parâmetro', 'Valor'],
+  'pl-pl': ['Parametr', 'Wartość'],
+  'de-de': ['Parameter', 'Wert'],
+  'en-gb': ['Parameter', 'Value'],
+  'en-es': ['Parameter', 'Value'],
+  'en-us': ['Parameter', 'Value'],
+};
+
+/** Localized "General Information" spec-category label, keyed by lowercase BCP47 — used to
+ *  dissolve small spec categories (see spec-category-merge.ts). */
+export const BASE_CATEGORY_LABELS: Record<string, string> = {
+  'uk-ua': 'Загальні відомості',
+  'ru-ua': 'Общие сведения',
+  'es-es': 'Información general',
+  'es-mx': 'Información general',
+  'es-us': 'Información general',
+  'pt-pt': 'Informações gerais',
+  'pl-pl': 'Informacje ogólne',
+  'de-de': 'Allgemeine Informationen',
+  'en-gb': 'General Information',
+  'en-es': 'General Information',
+  'en-us': 'General Information',
+};
+
+/** Resolves a value from a locale-keyed map: exact match first, then a same-base-language match
+ *  anchored on the hyphen boundary (so a short/unusual locale string like `'e'` can't accidentally
+ *  match `'en-gb'`), then `fallback`. */
+export function resolveLocaleValue<T>(map: Record<string, T>, locale: string, fallback: T): T {
+  const norm = locale.toLowerCase();
+  if (map[norm] !== undefined) return map[norm];
+  const baseLang = norm.split('-')[0];
+  const matchingKey = Object.keys(map).find(k => {
+    const keyNorm = k.toLowerCase();
+    return keyNorm === baseLang || keyNorm.startsWith(baseLang + '-');
+  });
+  return matchingKey !== undefined ? map[matchingKey] : fallback;
+}
+
 /** Brand lists per store group. */
 export const BRANDS_ES = ['Raise3D', 'Formlabs', 'xTool', 'Shining3D', 'XGRIDS', 'PUDU', 'Metal3D'];
 export const BRANDS_DEFAULT = [
