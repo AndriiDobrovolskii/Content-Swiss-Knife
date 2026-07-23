@@ -10,6 +10,7 @@ import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { validateSpecsGrounding, isAlreadyCyrillic } from '../utils/specs-grounding';
+import { validateSpecCountParity } from '../utils/spec-count-parity';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -156,6 +157,7 @@ export class ContentOrchestratorService {
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)'),
+          ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
         ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -402,6 +404,7 @@ export class ContentOrchestratorService {
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)'),
+          ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
         ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
