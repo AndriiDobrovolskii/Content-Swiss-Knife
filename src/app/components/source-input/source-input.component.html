@@ -24,9 +24,18 @@
       class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 outline-none resize-y text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
       [ngClass]="[textHeight, ringClass]"
       [class.border-red-300]="required && !value"
+      [class.opacity-60]="busy()"
       [value]="value"
+      [readonly]="busy()"
       (input)="onTextInput($event)"
       [placeholder]="placeholder"></textarea>
+    @if (enableTableNormalize && value) {
+      <button (click)="canonicalize()" [disabled]="busy()"
+        class="text-xs font-medium active:scale-95 transition-transform disabled:opacity-50"
+        [ngClass]="linkClass">
+        <i class="fa-solid fa-table-cells mr-1"></i>{{ busy() ? labels['processing'] : labels['normalizeBtn'] }}
+      </button>
+    }
   }
 
   @if (mode() === 'pdf') {

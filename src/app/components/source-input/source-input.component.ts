@@ -21,6 +21,7 @@ export class SourceInputComponent {
   @Input() required = false;
   @Input() textHeight = 'h-32';                 // tailwind height class for the textarea
   @Input() labels: Record<string, string> = {}; // pass uiLabels() from parent for i18n
+  @Input() enableTableNormalize = false;        // shows "Normalize to table" for Text/PDF/URL sources
 
   private orchestrator = inject(ContentOrchestratorService);
 
@@ -45,6 +46,28 @@ export class SourceInputComponent {
 
   onTextInput(event: Event) {
     this.setText((event.target as HTMLTextAreaElement).value);
+  }
+
+  private static readonly TABLE_HEADER_RE = /\|\s*Item\s*\|\s*Specification\s*\|/i;
+
+  async canonicalize() {
+    const text = this.value?.trim();
+    if (!text) return;
+    if (SourceInputComponent.TABLE_HEADER_RE.test(text)) return; // already tabular — skip the call
+    this.busy.set(true);
+    try {
+      const table = await this.orchestrator.canonicalizeSpecs(text);
+      if (table?.trim()) {
+        this.setText(table);
+      } else {
+        alert('Normalization returned no result — try again or edit manually.');
+      }
+    } catch (e: any) {
+      const msg = e?.error?.error || e?.message || 'Failed to normalize specs';
+      alert(msg);
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   async fetchFromUrl(url: string) {

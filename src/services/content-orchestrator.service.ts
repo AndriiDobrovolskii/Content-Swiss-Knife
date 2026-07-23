@@ -15,6 +15,7 @@ import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
+import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
@@ -773,6 +774,24 @@ export class ContentOrchestratorService {
       this.isGenerating.set(false);
       this.progressMessage.set('');
     }
+  }
+
+  /**
+   * One-time, user-reviewable normalization of Tech Specs source text into a canonical
+   * "| Item | Specification |" Markdown table. NOT auto-applied — the result is written back into
+   * the same editable field by the caller (SourceInputComponent.canonicalize()) so a human reviews
+   * it before it ever reaches `input.specs`. Deliberately does not translate — groundingSpecs()
+   * still handles uk-UA localization as a separate step.
+   */
+  async canonicalizeSpecs(text: string): Promise<string> {
+    const result = await this.llm.generateText(
+      buildSpecsCanonicalizePrompt(text),
+      false, // fast model — structuring, not creative generation
+      { taskLabel: 'Specs canonicalize' },
+    );
+    const cleaned = stripCodeFences(result).trim();
+    const tableStart = cleaned.indexOf('|');
+    return tableStart > 0 ? cleaned.slice(tableStart).trim() : cleaned;
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
