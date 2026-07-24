@@ -13,6 +13,20 @@ import { PromptPayload } from '../prompt-core/payload';
 const TASK_OPTIMIZE_INSTRUCTION =
   `TASK OPTIMIZE — REWRITE AN EXISTING HTML DESCRIPTION
 
+SCOPE OVERRIDE — LOCALE INDEPENDENCE (read before everything below): this task has no
+[Store Name] and is not bound to any store, region, or currency. The entire [REGIONAL STRATEGY]
+section in [MASTER_SYSTEM_PROMPT] above is INAPPLICABLE here — do not use it to select language,
+currency, or region, and do not infer a store from an image URL's domain or a brand's country of
+origin. Every language-keyed table elsewhere in this prompt (§2a/§7 column headers, §9 H2
+templates, [COMMERCIAL CLAIMS] phrase substitutions, [PRODUCT NAME LOCALIZATION], [UNIT
+LOCALIZATION]) is a REFERENCE PATTERN, not an allow-list: [INPUT HTML]'s language may be ANY
+language, including ones with no worked example above. When it isn't listed, apply the SAME
+transformation the listed examples demonstrate, translated accurately and idiomatically into the
+detected language yourself. Never fall back to the nearest listed language or to English.
+SELF-CHECK before emitting: re-scan your own draft. If any table header, H2 label, CTA phrase, or
+fixed template string is in a different language than the surrounding prose — even one word —
+rewrite it. Zero exceptions.
+
 OUTPUT CONTRACT: emit exactly one artifact — the rewritten HTML body. The first character of your
 output is the opening "<" of the §1 hook paragraph; the last character is the final closing tag of
 §9. Global hard cap: 32,000 characters including all spaces, text, and HTML tags. Where a preamble,
@@ -65,6 +79,9 @@ PHASE 1 — STRUCTURAL CLEANUP (apply before restructuring):
 - Emit every table and element schema-free and framework-free per [MICRODATA ARCHITECTURE],
   matching §7's plain-table format: where a Bootstrap table class or itemscope/itemtype/itemprop
   attribute appears in the input, strip the attribute and keep the element.
+- Consolidate any §7 spec category with fewer than 3 rows into one leading category, titled to
+  match this document's own output language — never invent a category label in a different
+  language than the rest of the output.
 
 LENGTH COMPRESSION: plan against the 32,000-character cap before writing. When the input HTML
 approaches or exceeds the cap, condense organically: summarize wordy narrative paragraphs, merge

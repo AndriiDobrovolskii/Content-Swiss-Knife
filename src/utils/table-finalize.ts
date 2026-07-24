@@ -19,7 +19,7 @@ const DEFAULT_HEADERS: [string, string] = KILLER_SPECS_HEADERS['en-gb'];
 // from ordinary rows — a deliberate, isolated inline-style exception (see CLAUDE.md's own
 // precedent for the <figure> wrapper styles). Centralized here so a future palette/spacing
 // tweak is a one-line change instead of a find-and-replace.
-const CATEGORY_HEADER_STYLE = 'text-align: center; padding: 10px; font-weight: bold; background-color: #f5f5f5;';
+const CATEGORY_HEADER_STYLE = 'text-align: center; padding: 10px; font-weight: bold;';
 
 // Marker phrases for the §2 "why it matters" header cell, one per locale family — see
 // master-system-prompt.ts §2. Deliberately more complete than output-validator.ts's
@@ -43,7 +43,7 @@ const WHY_IT_MATTERS_MARKERS = [
  * one of the known "why it matters" marker phrases in its header row. A table matching (a)+(b)
  * but not (c) is left untouched.
  */
-export function collapseKillerSpecsToTwoColumns(html: string, locale: string): string {
+export function collapseKillerSpecsToTwoColumns(html: string, locale = ''): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const candidate = Array.from(doc.querySelectorAll('table'))
     .find(t => !t.closest('section.specs') && t.querySelectorAll('thead th').length === 3);
@@ -59,7 +59,14 @@ export function collapseKillerSpecsToTwoColumns(html: string, locale: string): s
     return html;
   }
 
-  const [paramHeader, benefitHeader] = KILLER_SPECS_HEADERS[locale.toLowerCase()] ?? DEFAULT_HEADERS;
+  // Locale-agnostic fallback: the Optimizer (unlike Task A/C) never has a known store locale, and
+  // its input can be in ANY language, not just STORE_REGISTRY's set. When `locale` isn't a
+  // recognized key, reuse the header text the model already wrote for THIS table instead of
+  // defaulting to English — the artifact is its own source of truth for what language it's in.
+  const ths = Array.from(table.querySelectorAll('thead th'));
+  const [paramHeader, benefitHeader] =
+    KILLER_SPECS_HEADERS[locale.toLowerCase()] ??
+    [ths[0]?.textContent?.trim() || 'Parameter', ths[2]?.textContent?.trim() || 'Why it matters'];
 
   for (const row of Array.from(table.querySelectorAll('tbody tr'))) {
     const cells = row.querySelectorAll('td');
@@ -114,6 +121,6 @@ export function flattenSpecCategoriesToColspanTable(html: string): string {
 }
 
 /** Composed entry point — call once per locale, after validation/repair-gate acceptance. */
-export function finalizeTablesForDisplay(html: string, locale: string): string {
+export function finalizeTablesForDisplay(html: string, locale = ''): string {
   return flattenSpecCategoriesToColspanTable(collapseKillerSpecsToTwoColumns(html, locale));
 }

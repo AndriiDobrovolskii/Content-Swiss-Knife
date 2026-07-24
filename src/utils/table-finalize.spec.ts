@@ -38,11 +38,24 @@ describe('collapseKillerSpecsToTwoColumns', () => {
     expect(cells).toEqual(["Об'єм друку: 250x250x260 мм", 'Досить місця для великих моделей.']);
   });
 
-  it('falls back to the English header pair for an unmapped locale', () => {
+  it("derives the fallback pair from the document's own header text for an unmapped locale", () => {
     const result = collapseKillerSpecsToTwoColumns(killerSpecsTable('Why it matters'), 'xx-XX');
     const doc = new DOMParser().parseFromString(result, 'text/html');
     const headers = Array.from(doc.querySelectorAll('thead th')).map(th => th.textContent);
-    expect(headers).toEqual(['Parameter', 'Your Advantage']);
+    expect(headers).toEqual(['Характеристика', 'Why it matters']);
+  });
+
+  it('derives a Spanish fallback pair from the document when no locale is passed (Optimizer path)', () => {
+    const spanishTable =
+      `<p>Hook paragraph.</p>` +
+      `<table><thead><tr><th>Especificación</th><th>Valor</th><th>Por qué es importante</th></tr></thead>` +
+      `<tbody>` +
+      `<tr><td>Volumen de impresión</td><td>250x250x260 mm</td><td>Suficiente espacio para modelos grandes.</td></tr>` +
+      `</tbody></table>`;
+    const result = collapseKillerSpecsToTwoColumns(spanishTable);
+    const doc = new DOMParser().parseFromString(result, 'text/html');
+    const headers = Array.from(doc.querySelectorAll('thead th')).map(th => th.textContent);
+    expect(headers).toEqual(['Especificación', 'Por qué es importante']);
   });
 
   it('is a no-op when the only table present is inside section.specs', () => {

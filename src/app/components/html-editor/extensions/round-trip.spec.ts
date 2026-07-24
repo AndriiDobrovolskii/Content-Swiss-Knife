@@ -154,10 +154,10 @@ describe('generic block passthrough', () => {
     const html =
       `<section class="specs"><h2>Technical specifications of the Anycubic Kobra 3</h2>` +
       `<div class="table-responsive"><table>` +
-      `<tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold; background-color: #f5f5f5;">Загальні відомості</th></tr>` +
+      `<tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold;">Загальні відомості</th></tr>` +
       `<tr><td>Матеріал</td><td>PLA</td></tr>` +
       `<tr><td>Вага</td><td>5 кг</td></tr>` +
-      `<tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold; background-color: #f5f5f5;">Продуктивність</th></tr>` +
+      `<tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold;">Продуктивність</th></tr>` +
       `<tr><td>Швидкість</td><td>500 мм/с</td></tr>` +
       `</table></div>` +
       `</section>`;

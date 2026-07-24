@@ -30,9 +30,9 @@ import { SlugResponse, SeoResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta } from '../utils/repair-gate';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
-import { mergeSmallSpecCategories, DEFAULT_MIN_ROWS } from '../utils/spec-category-merge';
+import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
-
+import { validateLanguageConsistency } from '../utils/language-consistency';
 // ── Orchestrator ────────────────────────────────────────────────────────────
 
 @Injectable({
@@ -645,23 +645,30 @@ export class ContentOrchestratorService {
     this.optimizerOutput.set('');
     this.progressMessage.set('Optimizing HTML…');
     await this.withProgress(async () => {
-      let optimized = await this.llm.generateText(
-        buildOptimizerPrompt(htmlInput, productName),
-        useThinking,
-        { taskLabel: 'Optimizer', productName },
-      );
-      optimized = stripCodeFences(optimized);
-      optimized = cleanHtmlStructure(optimized);
-      // Automatic locale for the deterministic post-processing headers — no manual selector; the
-      // LLM is instructed (see TASK_OPTIMIZE_INSTRUCTION) to auto-detect and preserve the input's
-      // own language. Sampling the LLM's own OUTPUT (not the raw input) keeps these headers
-      // self-consistent with whatever language the model actually wrote, even if it doesn't
-      // perfectly follow that instruction.
-      const sample = optimized.slice(0, 4000).replace(/<[^>]+>/g, ' ');
-      const locale = isAlreadyCyrillic(sample) ? 'uk-ua' : 'en-gb';
-      optimized = mergeSmallSpecCategories(optimized, DEFAULT_MIN_ROWS, locale);
-      optimized = finalizeTablesForDisplay(optimized, locale);
-      this.optimizerOutput.set(optimized);
+      // Wrapped in the repair gate as a deterministic backstop against mid-document language
+      // drift: optimizer.ts's SCOPE OVERRIDE is the first line of defense but has proven
+      // unreliable against a strong contextual cue (store name / image domain) — see
+      // language-consistency.ts's header comment for the reproduced xTool F2 / impresora-3d.es
+      // case (EN hook, ES from §2 onward).
+      const result = await runRepairGate<string>({
+        label: 'Optimizer',
+        maxRepairs: 1,
+        basePayload: buildOptimizerPrompt(htmlInput, productName),
+        produce: async payload => {
+          let out = await this.llm.generateText(payload, useThinking, { taskLabel: 'Optimizer', productName });
+          out = stripCodeFences(out);
+          out = cleanHtmlStructure(out);
+          // No locale guess: table-finalize.ts derives the killer-specs header fallback from the
+          // document's own already-localized header text when no known locale is passed.
+          // Small-category consolidation is delegated to the LLM itself (see optimizer.ts
+          // PHASE 1) since it requires inventing a new label, which a locale-less deterministic
+          // step can't do safely.
+          return finalizeTablesForDisplay(out);
+        },
+        validate: html => validateLanguageConsistency(html, htmlInput),
+        withFeedback: (payload, errors) => appendRepairFeedback(payload, errors),
+      });
+      this.optimizerOutput.set(result.artifact);
       this.progressMessage.set('Optimization Complete!');
     }, 'Error during optimization.', 'Optimization failed.');
   }
