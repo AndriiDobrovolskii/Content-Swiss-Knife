@@ -139,6 +139,11 @@ function extractLatinTokens(text: string): string[] {
  * @param sourceSpecs the source specs, already localized into the master's language by the
  *                    caller (NOT necessarily raw `input.specs` verbatim — see DESIGN above)
  * @param context     reporting label, e.g. "HTML (base)"
+ * @param allowedParams the source's §7-eligible parameter labels, from
+ *                      spec-count-parity.ts's expectedSpecParameterLabels(). Used only to give
+ *                      the repair model something to reconcile against; grounding decisions are
+ *                      unaffected. Defaults to [] so existing 3-arg call sites keep working (the
+ *                      guidance clause is then omitted rather than fabricated).
  * @returns one 'spec-row-not-grounded' error per ungrounded row (empty if all grounded
  *          or if no <section class="specs"> table exists)
  */
@@ -146,6 +151,7 @@ export function validateSpecsGrounding(
   html: string,
   sourceSpecs: string,
   context: string,
+  allowedParams: readonly string[] = [],
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!html?.trim() || !sourceSpecs?.trim()) return issues;
@@ -218,13 +224,29 @@ export function validateSpecsGrounding(
           severity: 'error',
           rule: 'spec-row-not-grounded',
           detail:
-            `Spec row "${label}" has no support in the source specs — likely a hallucinated ` +
-            `row. Remove any spec-table row whose parameter is not present in the provided ` +
-            `source specifications. Do not invent values or units.`,
+            `Spec row "${label}" is not supported by the source specifications. Reconcile before ` +
+            `removing: if it corresponds to one of the allowed parameters under different ` +
+            `wording, KEEP the row and correct only its label to match. Remove the row only if ` +
+            `it corresponds to no allowed parameter. Never invent values or units.`,
           context,
         });
       }
     }
+  }
+
+  // Emitted once per artifact, only when at least one row failed — gives the repair model the
+  // reconciliation target the per-row messages refer to, without repeating the whole list N times.
+  if (issues.length > 0 && allowedParams.length > 0) {
+    issues.push({
+      severity: 'error',
+      rule: 'spec-rows-allowed-parameters',
+      detail:
+        `ALLOWED PARAMETERS (the complete set of §7-eligible parameters in the source ` +
+        `specifications): ${allowedParams.join(', ')}. Every §7 row must correspond to exactly ` +
+        `one of these. Do not add a parameter that is not on this list, and do not add a row for ` +
+        `the product's own name.`,
+      context,
+    });
   }
 
   // A model that fabricates more than half a spec table is not a realistic failure mode; a

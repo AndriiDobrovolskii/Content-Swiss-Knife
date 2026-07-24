@@ -10,7 +10,7 @@ import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from '../utils/specs-grounding';
-import { validateSpecCountParity } from '../utils/spec-count-parity';
+import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -147,6 +147,10 @@ export class ContentOrchestratorService {
       // incident this guards against was invisible for exactly this reason — a console.warn is
       // not observability for editors who never open devtools.
       const groundingDisabled = !!input.specs?.trim() && !groundingSpecs;
+      // Same source of truth as validateSpecCountParity's expected count — see design note D4
+      // (specs-grounding fail-open PR): deriving the repair model's "allowed parameters" list
+      // from the same function that derives the expected row count means the two can't disagree.
+      const allowedSpecParams = expectedSpecParameterLabels(input.specs, input.name);
 
       // Step 1 — Generate the uk-UA MASTER HTML (with one repair attempt on hard errors). Every
       // other locale is a Task C translation of this artifact (Step 4) — see buildMasterUaOverlay.
@@ -176,7 +180,7 @@ export class ContentOrchestratorService {
         produce: produceHtmlA,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)'),
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
@@ -422,6 +426,9 @@ export class ContentOrchestratorService {
       // the grounding source failed its post-condition" (guard silently off). See the sibling
       // groundingDisabled comment in the base-HTML generate() path above.
       const groundingDisabled = !!input.specs?.trim() && !groundingSpecs;
+      // Same source of truth as validateSpecCountParity's expected count — see the sibling
+      // allowedSpecParams comment in the base-HTML generate() path above.
+      const allowedSpecParams = expectedSpecParameterLabels(input.specs, input.name);
 
       // Step 1 — Task A generated NATIVELY in Ukrainian (no English base, no Task C).
       // Image manifest figcaption/alt text is sourced in English (Vision pre-pass output), so a
@@ -454,7 +461,7 @@ export class ContentOrchestratorService {
         produce: produceHtmlUa,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)'),
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,

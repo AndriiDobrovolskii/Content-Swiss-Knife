@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { countExpectedSpecRows, countActualSpecRows, validateSpecCountParity } from './spec-count-parity';
+import { countExpectedSpecRows, countActualSpecRows, validateSpecCountParity, expectedSpecParameterLabels } from './spec-count-parity';
 
 const ORTUR_H20_SPECS = `| Item | Specification |
 | :--- | :--- |
@@ -97,5 +97,42 @@ describe('validateSpecCountParity', () => {
   it('propagates context', () => {
     const issues = validateSpecCountParity(specSection(1), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (base)');
     expect(issues[0].context).toBe('HTML (base)');
+  });
+});
+
+describe('expectedSpecParameterLabels', () => {
+  it('on the real 20w-specs.md shape (Ortur H20) returns 15 labels and does NOT contain the Product Name row', () => {
+    const labels = expectedSpecParameterLabels(ORTUR_H20_SPECS, 'H20 Laser Engraving Machine');
+    expect(labels).toHaveLength(15);
+    expect(labels).not.toContain('Product Name');
+    expect(labels.some(l => /product name/i.test(l))).toBe(false);
+  });
+
+  it('excludes rows whose value is empty / "N/A"', () => {
+    const md = `| Item | Specification |\n| :--- | :--- |\n| Weight | 12 kg |\n| Color | N/A |\n| Warranty | - |`;
+    expect(expectedSpecParameterLabels(md, '')).toEqual(['Weight']);
+  });
+
+  it('strips markdown emphasis from labels (**Material** -> Material)', () => {
+    const md = `| Item | Specification |\n| :--- | :--- |\n| **Material** | Aluminum |`;
+    expect(expectedSpecParameterLabels(md, '')).toEqual(['Material']);
+  });
+
+  it('returns [] when no canonical table is detected', () => {
+    expect(expectedSpecParameterLabels('This laser engraver has a 10W head and WiFi.', '')).toEqual([]);
+  });
+
+  it('structural invariant: countExpectedSpecRows === expectedSpecParameterLabels(...).length on every fixture', () => {
+    const cases: Array<[string, string]> = [
+      [ORTUR_H20_SPECS, 'H20 Laser Engraving Machine'],
+      [ORTUR_H20_SPECS, 'Some Unrelated Product'],
+      [`| Item | Specification |\n| :--- | :--- |\n| Compatible Nozzle Model | E3D V6 |\n| Weight | 12 kg |`, 'Creality K1 Max'],
+      [`| Item | Specification |\n| :--- | :--- |\n| Full Name | Ortur H20 Laser Engraving Machine |\n| Weight | 2.5 kg |`, 'H20 Laser Engraving Machine'],
+      [`| Item | Specification |\n| :--- | :--- |\n| Weight | 12 kg |\n| Color | N/A |\n| Warranty | - |`, ''],
+      ['This laser engraver has a 10W head and WiFi.', ''],
+    ];
+    for (const [specs, name] of cases) {
+      expect(countExpectedSpecRows(specs, name)).toBe(expectedSpecParameterLabels(specs, name).length);
+    }
   });
 });

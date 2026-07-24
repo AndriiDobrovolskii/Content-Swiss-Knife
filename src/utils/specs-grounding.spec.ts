@@ -150,6 +150,55 @@ describe('validateSpecsGrounding — Rule: spec-row-not-grounded', () => {
   });
 });
 
+describe('validateSpecsGrounding — allowedParams (repair guidance)', () => {
+  const ALLOWED = ['Build Volume', 'Hopper Capacity', 'Layer Thickness', 'Laser'];
+
+  it('emits exactly one spec-rows-allowed-parameters issue when >=1 row is ungrounded and allowedParams is non-empty', () => {
+    const html = specSection(`<tr><td>Throughput</td><td>0330 kg/hr</td></tr>`);
+    const issues = validateSpecsGrounding(html, SRC, 'HTML (base)', ALLOWED);
+    const allowedIssues = issues.filter(i => i.rule === 'spec-rows-allowed-parameters');
+    expect(allowedIssues).toHaveLength(1);
+    expect(allowedIssues[0].detail).toContain('ALLOWED PARAMETERS');
+    for (const p of ALLOWED) expect(allowedIssues[0].detail).toContain(p);
+  });
+
+  it('emits no spec-rows-allowed-parameters issue when every row is grounded', () => {
+    const html = specSection(`<tr><td>Hopper Capacity</td><td>105 L</td></tr>`);
+    const issues = validateSpecsGrounding(html, SRC, 'HTML (base)', ALLOWED);
+    expect(issues.filter(i => i.rule === 'spec-rows-allowed-parameters')).toHaveLength(0);
+  });
+
+  it('3-arg back-compat: allowedParams defaults to [], per-row errors unchanged, no ALLOWED PARAMETERS clause anywhere', () => {
+    const html = specSection(`<tr><td>Throughput</td><td>0330 kg/hr</td></tr>`);
+    const issues = validateSpecsGrounding(html, SRC, 'HTML (base)');
+    expect(issues.filter(i => i.rule === 'spec-rows-allowed-parameters')).toHaveLength(0);
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+    expect(issues.map(i => i.detail).join('\n')).not.toContain('ALLOWED PARAMETERS');
+  });
+
+  it('per-row detail instructs reconciliation (KEEP) rather than blind deletion', () => {
+    const html = specSection(`<tr><td>Throughput</td><td>0330 kg/hr</td></tr>`);
+    const issues = validateSpecsGrounding(html, SRC, 'HTML (base)', ALLOWED);
+    const rowIssue = issues.find(i => i.rule === 'spec-row-not-grounded');
+    expect(rowIssue?.detail).toContain('KEEP');
+    expect(rowIssue?.detail).not.toContain('Remove any spec-table row');
+  });
+
+  it('when the mass-failure breaker trips, the allowed-parameters issue is collapsed away too (single warning only)', () => {
+    const source = 'Param0: 1000 units\nParam1: 1007 units\nParam2: 1014 units\nParam3: 1021 units';
+    const html = specSection(
+      `<tr><td>Param0</td><td>1000</td></tr>` +
+      `<tr><td>Param1</td><td>1007</td></tr>` +
+      `<tr><td>Fab0 Property</td><td>9000</td></tr>` +
+      `<tr><td>Fab1 Property</td><td>9001</td></tr>` +
+      `<tr><td>Fab2 Property</td><td>9002</td></tr>`,
+    );
+    const issues = validateSpecsGrounding(html, source, 'HTML (base)', ALLOWED);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].rule).toBe('spec-row-not-grounded-mass-failure');
+  });
+});
+
 describe('mass-failure circuit breaker', () => {
   // Deterministic fixtures: `count` grounded rows via the numeric anchor (distinct 4-digit
   // values starting at 1000), and `count` ungrounded rows with fabricated labels/values that

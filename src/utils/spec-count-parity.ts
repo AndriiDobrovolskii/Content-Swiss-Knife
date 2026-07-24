@@ -114,15 +114,32 @@ function isProductNameRow(item: string, spec: string, productName: string): bool
 }
 
 /**
+ * The canonical source's §7-eligible parameter LABELS, after the same two exclusions
+ * countExpectedSpecRows applies (empty/"N/A" values, and the product-name row — which becomes
+ * the H1 and must never appear as a spec row per master-system-prompt.ts §7 COMPLETENESS).
+ *
+ * Exported because specs-grounding.ts needs the same list for its repair guidance. Deriving both
+ * the count and the list from one function means they cannot disagree — a bug the fix that
+ * introduced this function replaced had them derived independently, and the parser leaked the
+ * Product Name row into the model's "allowed parameters", instructing it to add a row §7
+ * forbids.
+ *
+ * @returns [] when no canonical table is detected (callers treat that as "cannot verify").
+ */
+export function expectedSpecParameterLabels(canonicalSpecs: string, productName: string): string[] {
+  return parseCanonicalRows(canonicalSpecs)
+    .filter(({ item, spec }) => !isEmptyValue(spec) && !isProductNameRow(item, spec, productName))
+    .map(({ item }) => item.replace(/[*_`]/g, '').trim());
+}
+
+/**
  * @param canonicalSpecs  `input.specs` as submitted — expected to already be a canonical
  *                        "| Item | Specification |" table (see module doc).
  * @param productName     `input.name` — used to detect and exclude a Product Name source row.
  * @returns the expected §7 row count, or 0 if no canonical table was detected (caller no-ops).
  */
 export function countExpectedSpecRows(canonicalSpecs: string, productName: string): number {
-  return parseCanonicalRows(canonicalSpecs)
-    .filter(({ item, spec }) => !isEmptyValue(spec) && !isProductNameRow(item, spec, productName))
-    .length;
+  return expectedSpecParameterLabels(canonicalSpecs, productName).length;
 }
 
 /** Sums <tbody><tr> rows across every table inside <section class="specs"> — mirrors the
