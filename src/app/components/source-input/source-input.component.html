@@ -36,6 +36,12 @@
         <i class="fa-solid fa-table-cells mr-1"></i>{{ busy() ? labels['processing'] : labels['normalizeBtn'] }}
       </button>
     }
+    @if (malformedTableLines().length) {
+      <p class="text-[10px] text-amber-600 dark:text-amber-400">
+        <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+        {{ labels['malformedTableWarning'] }} {{ malformedTableLines().join(', ') }}
+      </p>
+    }
   }
 
   @if (mode() === 'pdf') {

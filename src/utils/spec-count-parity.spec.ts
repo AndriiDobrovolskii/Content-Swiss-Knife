@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { countExpectedSpecRows, countActualSpecRows, validateSpecCountParity, expectedSpecParameterLabels } from './spec-count-parity';
+import { countExpectedSpecRows, countActualSpecRows, validateSpecCountParity, expectedSpecParameterLabels, findMalformedTableLines } from './spec-count-parity';
 
 const ORTUR_H20_SPECS = `| Item | Specification |
 | :--- | :--- |
@@ -155,5 +155,67 @@ describe('expectedSpecParameterLabels', () => {
     for (const [specs, name] of cases) {
       expect(countExpectedSpecRows(specs, name)).toBe(expectedSpecParameterLabels(specs, name).length);
     }
+  });
+});
+
+describe('findMalformedTableLines', () => {
+  // Mirrors the real Knowlege/20w-specs.md defect: line 10 ("Laser Head Power") is missing its
+  // closing "|". File uses CRLF line endings on disk — reproduced here to prove that doesn't
+  // interfere with detection.
+  const REAL_DEFECT_SHAPE =
+    '| Item | Specification |\r\n' +
+    '| :--- | :--- |\r\n' +
+    '| **Product Name** | H20 Laser Engraving Machine |\r\n' +
+    '| **Material** | Aluminum Alloy |\r\n' +
+    '| **Screen** | 1.3-inch OLED |\r\n' +
+    '| **Exhaust Fan** | Yes |\r\n' +
+    '| **Emergency Stop Button** | Yes |\r\n' +
+    '| **Interfaces** | USB, DC Interface, TF Card |\r\n' +
+    '| **Child Lock** | Yes |\r\n' +
+    '| **Laser Head Power** | 20W\r\n' +
+    '| **Laser Head Focusing Method** | Manual focus |';
+
+  it('flags the real defect shape (missing closing "|") at the correct 1-indexed line number', () => {
+    expect(findMalformedTableLines(REAL_DEFECT_SHAPE)).toEqual([10]);
+  });
+
+  it('returns [] for a well-formed table', () => {
+    expect(findMalformedTableLines(ORTUR_H20_SPECS)).toEqual([]);
+  });
+
+  it('never flags the header or separator rows', () => {
+    const md = `| Item | Specification |\n| :--- | :--- |\n| Weight | 12 kg |`;
+    expect(findMalformedTableLines(md)).toEqual([]);
+  });
+});
+
+describe('validateSpecCountParity — spec-table-malformed-row', () => {
+  it('emits a spec-table-malformed-row warning even when actual === expected by coincidence (independent of the count check)', () => {
+    // Malformed row (line 6, missing closing "|") comes AFTER every well-formed row, so it
+    // cannot itself change countExpectedSpecRows's result (parseCanonicalRows stops scanning at
+    // the first malformed line either way) — expected is computed dynamically and actual is set
+    // to match it exactly, isolating "counts coincidentally agree" from "source is malformed".
+    const md =
+      '| Item | Specification |\r\n' +
+      '| :--- | :--- |\r\n' +
+      '| **Material** | Aluminum Alloy |\r\n' +
+      '| **Screen** | 1.3-inch OLED |\r\n' +
+      '| **Exhaust Fan** | Yes |\r\n' +
+      '| **Laser Head Power** | 20W\r\n';
+    const expected = countExpectedSpecRows(md, '');
+    expect(expected).toBeGreaterThan(0);
+
+    const issues = validateSpecCountParity(specSection(expected), md, '', 'HTML (uk-UA)');
+    const malformedIssues = issues.filter(i => i.rule === 'spec-table-malformed-row');
+    expect(malformedIssues).toHaveLength(1);
+    expect(malformedIssues[0].severity).toBe('warning');
+    expect(malformedIssues[0].detail).toContain('line(s) 6');
+    // No spec-count-mismatch alongside it — counts genuinely matched (by coincidence).
+    expect(issues.filter(i => i.rule === 'spec-count-mismatch')).toHaveLength(0);
+  });
+
+  it('emits no spec-table-malformed-row warning for a well-formed source', () => {
+    const issues = validateSpecCountParity(specSection(15), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)');
+    expect(issues.filter(i => i.rule === 'spec-table-malformed-row')).toHaveLength(0);
   });
 });

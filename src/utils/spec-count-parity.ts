@@ -51,6 +51,19 @@ function isSeparatorRow(cells: string[]): boolean {
 }
 
 /**
+ * 1-indexed line numbers that look like canonical table rows (start with "|") but fail
+ * MD_ROW_RE's well-formed shape — typically a missing closing "|". Such a line is skipped by
+ * parseCanonicalRows, understating `expected` with no signal (real case:
+ * "| **Laser Head Power** | 20W" in the Ortur H20 source sheet).
+ */
+export function findMalformedTableLines(markdown: string): number[] {
+  return markdown.split('\n')
+    .map((line, i) => ({ line, num: i + 1 }))
+    .filter(({ line }) => /^\s*\|/.test(line) && !MD_ROW_RE.test(line))
+    .map(({ num }) => num);
+}
+
+/**
  * Locates a canonical Markdown table by its header+separator pair (e.g. "| Item |
  * Specification |" followed by "| :--- | :--- |") — this anchors the table start regardless of
  * what precedes it (a heading, prose, blank lines), and regardless of what language the header
@@ -180,24 +193,41 @@ export function validateSpecCountParity(
 ): ValidationIssue[] {
   if (!html?.trim() || !canonicalSpecs?.trim()) return [];
 
+  const issues: ValidationIssue[] = [];
+
+  // Independent of the count check below — a malformed row is a source-data-quality problem
+  // regardless of whether the counts happen to match by coincidence.
+  const malformed = findMalformedTableLines(canonicalSpecs);
+  if (malformed.length > 0) {
+    issues.push({
+      severity: 'warning',
+      rule: 'spec-table-malformed-row',
+      detail: `Source spec table has malformed row(s) at line(s) ${malformed.join(', ')} — likely a ` +
+        `missing closing "|". These rows are silently excluded from row counting, so the ` +
+        `expected count above may be understated.`,
+      context,
+    });
+  }
+
   const expected = countExpectedSpecRows(canonicalSpecs, productName);
-  if (expected === 0) return []; // no canonical table detected — cannot verify
+  if (expected === 0) return issues; // no canonical table detected — cannot verify count parity
 
   const actual = countActualSpecRows(html);
-  if (actual < 0) return []; // DOMParser unavailable
+  if (actual < 0) return issues; // DOMParser unavailable
 
-  if (actual === expected) return [];
+  if (actual === expected) return issues;
 
   const detail = `§7 spec-table row count is ${actual}, expected ${expected} (canonical input rows, ` +
     `excluding empty/"N/A" values and the product-name row).`;
 
   if (actual > expected) {
-    return [{ severity: 'warning', rule: 'spec-count-mismatch', detail, context }];
+    issues.push({ severity: 'warning', rule: 'spec-count-mismatch', detail, context });
+    return issues;
   }
 
   const shortfall = expected - actual;
   const severity: ValidationSeverity = shortfall >= 2 ? 'error' : 'warning';
-  return [{
+  issues.push({
     severity,
     rule: 'spec-count-mismatch',
     detail: severity === 'error'
@@ -205,5 +235,6 @@ export function validateSpecCountParity(
         `specifications. Never invent a parameter, value, or unit to satisfy the count.`
       : detail,
     context,
-  }];
+  });
+  return issues;
 }
