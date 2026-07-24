@@ -10,6 +10,14 @@ const SRC_UK = `Робоча зона: 400 × 400 мм
 Тип лазера: Діодний, 10 Вт
 Товщина шару: 100 мкм`;
 
+// Label-anchor-only fixture (Fixture B, generalization requirement): no qualifying numbers, no
+// Latin loanwords — the one anchor type that never fired in the Ortur H20 incident. Reused
+// across the mass-failure circuit breaker and thousands-separator test blocks below, not just
+// the translation-drift hardening suite it originated in.
+const SRC_UK_TECH =
+  `Тип пластини поверхні: текстурована PEI-пластина\n` +
+  `Обсяг сховища: вбудовані 8 ГБ eMMC та USB-порт`;
+
 /** Mirrors the real schema: section.specs → table → thead(Parameter|Value) → tbody rows. */
 function specSection(rows: string): string {
   return `<section class="specs"><table>` +
@@ -109,10 +117,6 @@ describe('validateSpecsGrounding — Rule: spec-row-not-grounded', () => {
     // Round 2 (real report): the numeric anchor doesn't cover every legitimate row — a row can
     // have no number at all, or only a trivial single-digit one the numeric anchor deliberately
     // ignores. A Latin material/interface code that survives translation untouched anchors these.
-    const SRC_UK_TECH =
-      `Тип пластини поверхні: текстурована PEI-пластина\n` +
-      `Обсяг сховища: вбудовані 8 ГБ eMMC та USB-порт`;
-
     it('Latin-token anchor grounds a row with no qualifying number at all ("Included Build Plate Type" -> "Тип столу (комплектний)", real P2S false positive)', () => {
       const html = specSection(`<tr><td>Тип столу (комплектний)</td><td>текстурована PEI-пластина</td></tr>`);
       expect(validateSpecsGrounding(html, SRC_UK_TECH, 'HTML (uk-UA)')).toHaveLength(0);
@@ -143,6 +147,95 @@ describe('validateSpecsGrounding — Rule: spec-row-not-grounded', () => {
       const mixed = 'Printing Technology: Fused Deposition Modeling. Chassis: Aluminum and Steel. Матеріал.';
       expect(isAlreadyCyrillic(mixed)).toBe(false);
     });
+  });
+});
+
+describe('mass-failure circuit breaker', () => {
+  // Deterministic fixtures: `count` grounded rows via the numeric anchor (distinct 4-digit
+  // values starting at 1000), and `count` ungrounded rows with fabricated labels/values that
+  // share no number, Latin token, or label stem with the source.
+  function numericSource(count: number): string {
+    return Array.from({ length: count }, (_, i) => `Param${i}: ${1000 + i * 7} units`).join('\n');
+  }
+  function groundedRows(count: number): string {
+    return Array.from({ length: count }, (_, i) => `<tr><td>Param${i}</td><td>${1000 + i * 7}</td></tr>`).join('');
+  }
+  function ungroundedRows(count: number): string {
+    return Array.from({ length: count }, (_, i) => `<tr><td>Fabricated${i} Property</td><td>${9000 + i}</td></tr>`).join('');
+  }
+
+  it('15 graded / 8 ungrounded (real Ortur H20 incident shape) — trips, collapses to one warning listing all 8 labels', () => {
+    const source = numericSource(7);
+    const html = specSection(groundedRows(7) + ungroundedRows(8));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].rule).toBe('spec-row-not-grounded-mass-failure');
+    for (let i = 0; i < 8; i++) {
+      expect(issues[0].detail).toContain(`Fabricated${i} Property`);
+    }
+  });
+
+  it('15 graded / 1 ungrounded — unchanged: one error, breaker does not engage', () => {
+    const source = numericSource(14);
+    const html = specSection(groundedRows(14) + ungroundedRows(1));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('error');
+    expect(issues[0].rule).toBe('spec-row-not-grounded');
+  });
+
+  it('3 graded / 2 ungrounded — stays two individual errors (2 >= 3 is false, absolute-minimum guard)', () => {
+    const source = numericSource(1);
+    const html = specSection(groundedRows(1) + ungroundedRows(2));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(2);
+    expect(issues.every(i => i.severity === 'error' && i.rule === 'spec-row-not-grounded')).toBe(true);
+  });
+
+  it('10 graded / 5 ungrounded — stays five individual errors (5 > 5 is false, strict >)', () => {
+    const source = numericSource(5);
+    const html = specSection(groundedRows(5) + ungroundedRows(5));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(5);
+    expect(issues.every(i => i.severity === 'error')).toBe(true);
+  });
+
+  it('10 graded / 6 ungrounded — trips (6 >= 3 and 6 > 5)', () => {
+    const source = numericSource(4);
+    const html = specSection(groundedRows(4) + ungroundedRows(6));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].rule).toBe('spec-row-not-grounded-mass-failure');
+  });
+
+  it('denominator counts GRADED rows, not scanned rows: 4 skipped short-label rows + 6-of-11 ungrounded must still trip', () => {
+    // Under a scanned-rows denominator this would be 6/15 = 40% (no trip) and 6 real rows would
+    // ship deleted. Excluding the 4 skipped rows makes it 6/11 = 54.5% (trips) — this is the
+    // test that proves the fix (design note D6).
+    const source = numericSource(5);
+    const skipped = ['Тип', 'ПЗ', 'На', 'Рік']
+      .map(label => `<tr><td>${label}</td><td>1</td></tr>`).join('');
+    const html = specSection(skipped + groundedRows(5) + ungroundedRows(6));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].rule).toBe('spec-row-not-grounded-mass-failure');
+    expect(issues[0].detail).toContain('6 of 11 graded');
+  });
+
+  it('cross-fixture (generalization): a fully-legitimate label-anchor-only table never trips, regardless of anchor type', () => {
+    const html = specSection(
+      `<tr><td>Тип столу (комплектний)</td><td>текстурована PEI-пластина</td></tr>` +
+      `<tr><td>Накопичувач</td><td>вбудовані 8 ГБ eMMC та USB-порт</td></tr>`,
+    );
+    expect(validateSpecsGrounding(html, SRC_UK_TECH, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('propagates context on the collapsed mass-failure warning', () => {
+    const source = numericSource(4);
+    const html = specSection(groundedRows(4) + ungroundedRows(6));
+    const issues = validateSpecsGrounding(html, source, 'HTML (base)');
+    expect(issues[0].context).toBe('HTML (base)');
   });
 });
 

@@ -60,6 +60,10 @@ const LABEL_STOPWORDS = new Set([
 /** Minimum significant-word length considered evidence. */
 const MIN_LABEL_WORD_LEN = 4;
 
+/** Below this absolute count, a cluster of failures is plausibly real hallucination, so the
+ *  breaker stays out of the way even on a small table where the ratio alone would trip. */
+const MASS_FAILURE_MIN_ROWS = 3;
+
 /**
  * Normalize free text to a lowercase token stream for lexical containment checks.
  * Decimal comma → dot so "61,5" and "61.5" compare equal; punctuation → spaces.
@@ -157,6 +161,13 @@ export function validateSpecsGrounding(
   const sourceNumbers = new Set(extractNumberTokens(sourceSpecs));
   const sourceLatinTokens = new Set(extractLatinTokens(sourceSpecs));
 
+  // Denominator = rows actually GRADED, not rows scanned. Rows that exit early (empty label, or
+  // a label of only generic/short words) can never fail, so counting them inflates the
+  // denominator and suppresses the breaker — MIN_LABEL_WORD_LEN filters short Ukrainian labels
+  // ("Тип", "ПЗ") in practice, not just in theory.
+  let evaluatedRows = 0;
+  const failedLabels: string[] = [];
+
   for (const table of specTables) {
     // Iterate <tbody> rows only — the <thead> "Parameter | Value" header row is not a spec.
     for (const row of Array.from(table.querySelectorAll('tbody tr'))) {
@@ -188,8 +199,10 @@ export function validateSpecsGrounding(
 
       const labelGrounded = words.some(w => sourceStems.has(stem(w)));
 
+      evaluatedRows++;
       const grounded = numericGrounded || latinTokenGrounded || labelGrounded;
       if (!grounded) {
+        failedLabels.push(label);
         issues.push({
           severity: 'error',
           rule: 'spec-row-not-grounded',
@@ -201,6 +214,23 @@ export function validateSpecsGrounding(
         });
       }
     }
+  }
+
+  // A model that fabricates more than half a spec table is not a realistic failure mode; a
+  // broken or degraded grounding source is. Prefer shipping an unverified table over deleting a
+  // verified one — the gate may only narrow output when it trusts its own input.
+  if (issues.length >= MASS_FAILURE_MIN_ROWS && issues.length > evaluatedRows / 2) {
+    return [{
+      severity: 'warning',
+      rule: 'spec-row-not-grounded-mass-failure',
+      detail:
+        `${issues.length} of ${evaluatedRows} graded spec-table rows failed grounding. Mass ` +
+        `failure across half a table is far more likely a broken/degraded grounding source ` +
+        `(e.g. a failed specs translation) than mass hallucination, so the per-row grounding ` +
+        `guard is disabled for this artifact rather than deleting rows it cannot verify. ` +
+        `Rows: ${failedLabels.join(', ')}.`,
+      context,
+    }];
   }
 
   return issues;
