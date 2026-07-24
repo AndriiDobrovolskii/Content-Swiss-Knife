@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSpecsGrounding, isAlreadyCyrillic } from './specs-grounding';
+import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from './specs-grounding';
 
 const SRC = `Build Volume: 330 × 330 × 565 mm (61.5 L)
 Hopper Capacity: 105 L
@@ -142,6 +142,49 @@ describe('validateSpecsGrounding — Rule: spec-row-not-grounded', () => {
     it('returns false when Cyrillic is only a small fraction of the text', () => {
       const mixed = 'Printing Technology: Fused Deposition Modeling. Chassis: Aluminum and Steel. Матеріал.';
       expect(isAlreadyCyrillic(mixed)).toBe(false);
+    });
+  });
+});
+
+describe('sanitizeGroundedTranslation', () => {
+  describe("script: 'Cyrillic' (default master locale, uk-UA)", () => {
+    it('returns valid Ukrainian translation, cleaned', () => {
+      expect(sanitizeGroundedTranslation(SRC_UK, 'Cyrillic')).toBe(SRC_UK);
+    });
+
+    it('returns "" for an English echo (untranslated fallback) — the Ortur H20 regression', () => {
+      expect(sanitizeGroundedTranslation(SRC, 'Cyrillic')).toBe('');
+    });
+
+    it('returns "" for garbled non-Cyrillic text', () => {
+      expect(sanitizeGroundedTranslation('####!!! 123 ???', 'Cyrillic')).toBe('');
+    });
+
+    it('returns "" for empty/whitespace-only translation', () => {
+      expect(sanitizeGroundedTranslation('   ', 'Cyrillic')).toBe('');
+      expect(sanitizeGroundedTranslation('', 'Cyrillic')).toBe('');
+    });
+
+    it('returns "" for null/undefined', () => {
+      expect(sanitizeGroundedTranslation(null, 'Cyrillic')).toBe('');
+      expect(sanitizeGroundedTranslation(undefined, 'Cyrillic')).toBe('');
+    });
+
+    it('strips code fences before the script check', () => {
+      const fenced = '```html\n' + SRC_UK + '\n```';
+      expect(sanitizeGroundedTranslation(fenced, 'Cyrillic')).toBe(SRC_UK);
+    });
+  });
+
+  describe("script: 'Latin' (forward-compat for a future non-Cyrillic master)", () => {
+    const SRC_ES = 'Volumen de impresión: 330 × 330 × 565 mm (61,5 L)\nCapacidad de la tolva: 105 L';
+
+    it('returns Spanish text, not ""', () => {
+      expect(sanitizeGroundedTranslation(SRC_ES, 'Latin')).toBe(SRC_ES);
+    });
+
+    it('returns "" for Cyrillic text requested under script: Latin', () => {
+      expect(sanitizeGroundedTranslation(SRC_UK, 'Latin')).toBe('');
     });
   });
 });

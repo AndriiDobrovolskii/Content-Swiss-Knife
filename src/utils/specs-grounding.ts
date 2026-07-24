@@ -48,6 +48,7 @@
  */
 
 import type { ValidationIssue } from './output-validator';
+import { stripCodeFences } from './html-cleaner';
 
 /** Words too generic to serve as grounding evidence for a label. */
 const LABEL_STOPWORDS = new Set([
@@ -205,6 +206,20 @@ export function validateSpecsGrounding(
   return issues;
 }
 
+/** Unicode script names this codebase grounds against. Typed, not `string`, so a typo is a
+ *  compile error rather than a runtime SyntaxError inside `new RegExp`. */
+export type MasterScript = 'Cyrillic' | 'Latin';
+
+const SCRIPT_RATIO_THRESHOLD = 0.3;
+
+/** Ratio of letters in `text` belonging to `script`. 0 when there are no letters at all. */
+function scriptRatio(text: string, script: MasterScript): number {
+  const letters = text.match(/\p{L}/gu) ?? [];
+  if (letters.length === 0) return 0;
+  const matches = text.match(new RegExp(`\\p{Script=${script}}`, 'gu')) ?? [];
+  return matches.length / letters.length;
+}
+
 /**
  * True when `text` already appears to be in a Cyrillic-script language (e.g. an admin pasted
  * already-localized uk-UA specs). Used upstream to skip a redundant translation call before
@@ -212,8 +227,26 @@ export function validateSpecsGrounding(
  * Cyrillic brand name or two doesn't trigger a false skip.
  */
 export function isAlreadyCyrillic(text: string): boolean {
-  const letters = text.match(/\p{L}/gu) ?? [];
-  if (letters.length === 0) return false;
-  const cyrillic = text.match(/\p{Script=Cyrillic}/gu) ?? [];
-  return cyrillic.length / letters.length > 0.3;
+  return scriptRatio(text, 'Cyrillic') > SCRIPT_RATIO_THRESHOLD;
+}
+
+/**
+ * Sanitizes a raw LLM translation before it is used as validateSpecsGrounding's grounding source.
+ *
+ * Never returns text outside the master's script, and never falls back to the untranslated input
+ * — both reintroduce the exact false-positive mode this guard exists to prevent (see the Ortur
+ * H20 incident: an English grounding source made every translated label an unfalsifiable
+ * "hallucination" and the repair gate deleted 8 of 15 real rows).
+ *
+ * '' means "grounding disabled for this run" — the same contract as validateSpecsGrounding's own
+ * empty-source no-op. Callers MUST surface that state (see `specs-grounding-disabled` in
+ * content-orchestrator.service.ts) rather than letting it pass silently.
+ */
+export function sanitizeGroundedTranslation(
+  translated: string | null | undefined,
+  script: MasterScript,
+): string {
+  const cleaned = stripCodeFences(translated ?? '').trim();
+  if (!cleaned) return '';
+  return scriptRatio(cleaned, script) > SCRIPT_RATIO_THRESHOLD ? cleaned : '';
 }

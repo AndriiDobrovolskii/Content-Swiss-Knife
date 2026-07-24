@@ -9,7 +9,7 @@ import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
-import { validateSpecsGrounding, isAlreadyCyrillic } from '../utils/specs-grounding';
+import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from '../utils/specs-grounding';
 import { validateSpecCountParity } from '../utils/spec-count-parity';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
@@ -17,7 +17,7 @@ import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
-import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang } from '../prompt-core/constants';
+import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { validateStructuralParity } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
@@ -85,18 +85,30 @@ export class ContentOrchestratorService {
    * specs-grounding.ts DESIGN). Localize once per generation (never per repair attempt — the
    * repair loop reuses this same string across all its attempts) via the cheap fast-model
    * Translator prompt; skip the call entirely when the specs are already Cyrillic.
-   * On translation failure, return '' so validateSpecsGrounding's existing empty-source no-op
-   * disables the guard for this run instead of re-introducing false positives.
+   * Fails open on BOTH the catch path AND the success path: '' means "grounding disabled for
+   * this run" whenever the translation call throws, comes back empty, or comes back in the
+   * wrong script (sanitizeGroundedTranslation) — never a silent fallback to the untranslated
+   * input, which is what turned this guard into a data-deletion machine on the Ortur H20
+   * incident. Callers must surface groundingDisabled (see the `specs-grounding-disabled` issue
+   * below) rather than let '' pass unnoticed.
    */
   private async groundingSpecs(input: ProductInput): Promise<string> {
-    if (!input.specs?.trim() || isAlreadyCyrillic(input.specs)) return input.specs;
+    if (!input.specs?.trim()) return '';
+    if (isAlreadyCyrillic(input.specs)) return input.specs;
     try {
       const translated = await this.llm.generateText(
         buildTranslatePrompt(input.specs, 'Ukrainian'),
         false, // fast model — a cheap lookup call, not master generation
         { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
       );
-      return translated?.trim() ? translated : input.specs;
+      const grounded = sanitizeGroundedTranslation(translated, masterScriptFor(input.website.name));
+      if (!grounded) {
+        console.warn(
+          `[groundingSpecs] Translation for "${input.name}" did not yield usable text in the ` +
+          `master's script — specs grounding DISABLED for this run.`,
+        );
+      }
+      return grounded;
     } catch {
       return '';
     }
@@ -130,6 +142,11 @@ export class ContentOrchestratorService {
       // Localized once for the whole run — every repair-gate attempt below reuses this same
       // string instead of re-translating on each pass (see groundingSpecs doc comment).
       const groundingSpecs = await this.groundingSpecs(input);
+      // Distinguishes "no specs supplied" (guard legitimately inert) from "specs supplied but
+      // the grounding source failed its post-condition" (guard silently off). The Ortur H20
+      // incident this guards against was invisible for exactly this reason — a console.warn is
+      // not observability for editors who never open devtools.
+      const groundingDisabled = !!input.specs?.trim() && !groundingSpecs;
 
       // Step 1 — Generate the uk-UA MASTER HTML (with one repair attempt on hard errors). Every
       // other locale is a Task C translation of this artifact (Step 4) — see buildMasterUaOverlay.
@@ -161,6 +178,15 @@ export class ContentOrchestratorService {
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)'),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
+          ...(groundingDisabled ? [{
+            severity: 'warning' as const,
+            rule: 'specs-grounding-disabled',
+            detail:
+              'Specs grounding was DISABLED for this run: the source-specs translation did not ' +
+              'yield usable text in the master\'s script. §7 rows were NOT verified against the ' +
+              'source specifications.',
+            context: 'HTML (base)',
+          }] : []),
         ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -392,6 +418,10 @@ export class ContentOrchestratorService {
       // Localized once for the whole run — every repair-gate attempt below reuses this same
       // string instead of re-translating on each pass (see groundingSpecs doc comment).
       const groundingSpecs = await this.groundingSpecs(input);
+      // Distinguishes "no specs supplied" (guard legitimately inert) from "specs supplied but
+      // the grounding source failed its post-condition" (guard silently off). See the sibling
+      // groundingDisabled comment in the base-HTML generate() path above.
+      const groundingDisabled = !!input.specs?.trim() && !groundingSpecs;
 
       // Step 1 — Task A generated NATIVELY in Ukrainian (no English base, no Task C).
       // Image manifest figcaption/alt text is sourced in English (Vision pre-pass output), so a
@@ -426,6 +456,15 @@ export class ContentOrchestratorService {
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)'),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
+          ...(groundingDisabled ? [{
+            severity: 'warning' as const,
+            rule: 'specs-grounding-disabled',
+            detail:
+              'Specs grounding was DISABLED for this run: the source-specs translation did not ' +
+              'yield usable text in the master\'s script. §7 rows were NOT verified against the ' +
+              'source specifications.',
+            context: 'HTML (uk-UA)',
+          }] : []),
         ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
