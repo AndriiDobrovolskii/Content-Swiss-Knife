@@ -142,20 +142,34 @@
 
         <div class="flex-1"></div>
 
+        <button (click)="findReplaceOpen() ? closeFindReplace() : openFindReplace()" [class.bg-slate-200]="findReplaceOpen()" [class.dark:bg-slate-600]="findReplaceOpen()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" [title]="t().findReplaceTooltip"><i class="fa-solid fa-magnifying-glass"></i></button>
         <button (click)="toggleSourceMode()" [class.bg-slate-200]="sourceMode()" [class.dark:bg-slate-600]="sourceMode()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" [title]="t().sourceModeTooltip"><i class="fa-solid fa-code"></i></button>
         <button (click)="toggleFullscreen()" [class.bg-slate-200]="fullscreen()" [class.dark:bg-slate-600]="fullscreen()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" [title]="t().fullscreenTooltip"><i class="fa-solid" [class.fa-expand]="!fullscreen()" [class.fa-compress]="fullscreen()"></i></button>
       </div>
 
-      @if (!sourceMode()) {
-        <div #editorHost
-          class="min-h-[200px] overflow-y-auto p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-200"
-          [style.max-height]="fullscreen() ? 'calc(100vh - 14rem)' : '400px'"></div>
-      } @else {
-        <textarea
-          [value]="sourceHtml()"
-          (input)="updateSourceHtml($event)"
-          class="w-full p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg min-h-[200px] max-h-[400px] focus:ring-2 focus:ring-rose-500 outline-none resize-y text-sm font-mono text-slate-800 dark:text-slate-200"></textarea>
-      }
+      <div class="relative">
+        @if (!sourceMode()) {
+          <div #editorHost
+            class="min-h-[200px] overflow-y-auto p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-200"
+            [style.max-height]="fullscreen() ? 'calc(100vh - 14rem)' : '400px'"></div>
+        } @else {
+          <div #sourceHost
+            class="min-h-[200px] overflow-y-auto border border-slate-300 dark:border-slate-700 rounded-lg text-sm"
+            [style.max-height]="fullscreen() ? 'calc(100vh - 14rem)' : '400px'"></div>
+        }
+
+        <app-find-replace-panel
+          [lang]="lang()"
+          [open]="findReplaceOpen()"
+          [matchCount]="findReplaceMatchCount()"
+          [currentMatch]="findReplaceCurrentMatch()"
+          (queryChange)="onFindReplaceQueryChange($event)"
+          (next)="onFindNext()"
+          (previous)="onFindPrevious()"
+          (replaceOne)="onReplaceOne()"
+          (replaceAll)="onReplaceAll()"
+          (close)="closeFindReplace()"></app-find-replace-panel>
+      </div>
 
       @if (showIssues()) {
         <div class="p-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-sm">
