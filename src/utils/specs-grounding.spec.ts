@@ -239,6 +239,55 @@ describe('mass-failure circuit breaker', () => {
   });
 });
 
+describe('numeric grounding — thousands separators', () => {
+  it('20,000 (comma-group) source grounds a 20000 HTML value — the incident\'s own case', () => {
+    const source = 'Maximum Speed: 20,000 mm/min';
+    const html = specSection(`<tr><td>Максимальна швидкість</td><td>20000</td></tr>`);
+    expect(validateSpecsGrounding(html, source, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('20 000 (space and NBSP variants) source grounds a 20000 HTML value', () => {
+    const htmlValue = specSection(`<tr><td>Швидкість переміщення</td><td>20000</td></tr>`);
+    expect(validateSpecsGrounding(htmlValue, 'Speed: 20 000 mm/min', 'HTML (uk-UA)')).toHaveLength(0);
+    expect(validateSpecsGrounding(htmlValue, "Speed: 20 000 mm/min", 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('1,234,567 (multi-group) source grounds a 1234567 HTML value', () => {
+    const source = 'Total Cycles: 1,234,567';
+    const html = specSection(`<tr><td>Кількість циклів</td><td>1234567</td></tr>`);
+    expect(validateSpecsGrounding(html, source, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('regression: 61,5 (decimal comma) source does NOT ground a fabricated 615 HTML value', () => {
+    const source = 'Hopper Capacity: 61,5 L';
+    const html = specSection(`<tr><td>Місткість бункера</td><td>615</td></tr>`);
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('regression: 0,330 кг/год source grounds a matching 0,330 HTML value (decimal-guard path stays consistent end-to-end)', () => {
+    const source = 'Feed Rate: 0,330 кг/год';
+    const html = specSection(`<tr><td>Швидкість подачі</td><td>0,330</td></tr>`);
+    expect(validateSpecsGrounding(html, source, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('regression: 305*320*325 mm dimensions do NOT glue into a fabricated 305320325', () => {
+    const source = 'Build Volume (W*D*H): 305*320*325 mm';
+    const html = specSection(`<tr><td>Якийсь параметр</td><td>305320325</td></tr>`);
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('end-to-end: real Ortur H20 "Maximum Speed" and "Camera" rows ground cleanly against post-fixNumberFormatting HTML values', () => {
+    const source = `Maximum Speed: 20,000 mm/min\nCamera: 200,000 Pixel`;
+    const html = specSection(
+      `<tr><td>Максимальна швидкість</td><td>20000</td></tr>` +
+      `<tr><td>Камера</td><td>200000</td></tr>`,
+    );
+    expect(validateSpecsGrounding(html, source, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+});
+
 describe('sanitizeGroundedTranslation', () => {
   describe("script: 'Cyrillic' (default master locale, uk-UA)", () => {
     it('returns valid Ukrainian translation, cleaned', () => {

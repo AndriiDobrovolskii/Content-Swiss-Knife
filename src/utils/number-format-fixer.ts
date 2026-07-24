@@ -25,7 +25,7 @@ function processTag(tag: string): string {
   return tag.replace(/\balt="([^"]*)"/g, (_, val) => `alt="${processTextNode(val)}"`);
 }
 
-function stripThousandsSeparators(text: string): string {
+export function stripThousandsSeparators(text: string): string {
   // Comma groups: 1,000 / 1,234,567 -> 1000 / 1234567. Guard: does NOT start with "0," + a
   // 3-digit group — nobody writes a thousands-separated integer as "0,330" (a leading zero
   // group is meaningless there); in a comma-decimal locale (uk/ru/pl/de/es-ES) that shape is

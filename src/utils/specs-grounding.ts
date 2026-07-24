@@ -49,6 +49,7 @@
 
 import type { ValidationIssue } from './output-validator';
 import { stripCodeFences } from './html-cleaner';
+import { stripThousandsSeparators } from './number-format-fixer';
 
 /** Words too generic to serve as grounding evidence for a label. */
 const LABEL_STOPWORDS = new Set([
@@ -69,7 +70,17 @@ const MASS_FAILURE_MIN_ROWS = 3;
  * Decimal comma → dot so "61,5" and "61.5" compare equal; punctuation → spaces.
  */
 function normalizeText(s: string): string {
-  return s
+  // Thousands separators collapse FIRST, on the raw string, using the very function already
+  // applied to the generated HTML by number-format-fixer.ts. Sharing it — rather than
+  // re-deriving it here — is the point: two drifted copies of this logic are what broke the
+  // numeric anchor in the first place (a source-side "20,000" and an HTML-side "20000" could
+  // never match once the HTML side had its separators stripped and the source side didn't).
+  //
+  // Order matters twice over:
+  //   • before punctuation→space, so "420 × 300" still has its "×" and cannot glue into "420300";
+  //   • before decimal-comma→dot, so "20,000" resolves as a thousands group, while "61,5"
+  //     (1 digit, not a 3-digit group) falls through to the decimal rule untouched.
+  return stripThousandsSeparators(s)
     .toLowerCase()
     .replace(/(\d),(\d)/g, '$1.$2')   // decimal comma → dot (keeps 61,5 == 61.5)
     .replace(/[^\p{L}\p{N}\s.]/gu, ' ')
