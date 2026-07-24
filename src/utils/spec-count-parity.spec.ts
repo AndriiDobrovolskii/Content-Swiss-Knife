@@ -81,12 +81,33 @@ describe('validateSpecCountParity', () => {
     expect(issues).toHaveLength(0);
   });
 
-  it('flags a mismatch as a WARNING (not error — does not trigger repair-gate)', () => {
+  it('flags a shortfall of 5 as an ERROR (data loss, triggers repair-gate) with an anti-invention instruction', () => {
     const issues = validateSpecCountParity(specSection(10), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)');
     expect(issues).toHaveLength(1);
-    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].severity).toBe('error');
     expect(issues[0].rule).toBe('spec-count-mismatch');
     expect(issues[0].detail).toContain('is 10, expected 15');
+    expect(issues[0].detail).toContain('Never invent');
+  });
+
+  it('flags an off-by-one shortfall as a WARNING (imperfect detection is more likely than data loss) with no anti-invention clause', () => {
+    const issues = validateSpecCountParity(specSection(14), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].detail).not.toContain('Never invent');
+  });
+
+  it('flags extra rows (actual > expected) as a WARNING — already independently caught by validateSpecsGrounding', () => {
+    const issues = validateSpecCountParity(specSection(18), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+  });
+
+  it('flags the real Ortur H20 incident shape (7 actual vs 15 expected) as an ERROR', () => {
+    const issues = validateSpecCountParity(specSection(7), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('error');
+    expect(issues[0].detail).toContain('Never invent a parameter');
   });
 
   it('no-ops when canonicalSpecs has no detectable table (cannot verify, not a false positive)', () => {

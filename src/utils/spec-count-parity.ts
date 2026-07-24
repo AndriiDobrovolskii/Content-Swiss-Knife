@@ -1,4 +1,4 @@
-import { ValidationIssue } from './output-validator';
+import type { ValidationIssue, ValidationSeverity } from './output-validator';
 
 /**
  * spec-count-parity.ts
@@ -157,9 +157,15 @@ export function countActualSpecRows(html: string): number {
 
 /**
  * Validate that the §7 spec-table row count matches the canonical source's expected count.
- * Advisory only (severity: 'warning') — a legitimately shorter §7 (empty/N-A source values) and
- * imperfect product-name matching are both real false-positive surfaces, so this doesn't trigger
- * the repair gate yet.
+ * Severity depends on direction and magnitude:
+ * - Extra rows (actual > expected) always stay 'warning' — already independently caught, per
+ *   row, by validateSpecsGrounding.
+ * - A shortfall of 1 row stays 'warning' — imperfect product-name matching and N/A-value
+ *   detection (see module doc) are both real false-positive surfaces for an off-by-one, and the
+ *   repair feedback here states only the counts, never WHICH row is missing, so escalating a
+ *   false positive would force the model to invent a row just to satisfy the number.
+ * - A shortfall of 2+ rows escalates to 'error' (triggers the repair gate) — a gap that large is
+ *   far more likely real data loss than a detection miss.
  *
  * @param html            the master HTML from Task A
  * @param canonicalSpecs  `input.specs` as submitted (NOT groundingSpecs — see module doc)
@@ -182,11 +188,22 @@ export function validateSpecCountParity(
 
   if (actual === expected) return [];
 
+  const detail = `§7 spec-table row count is ${actual}, expected ${expected} (canonical input rows, ` +
+    `excluding empty/"N/A" values and the product-name row).`;
+
+  if (actual > expected) {
+    return [{ severity: 'warning', rule: 'spec-count-mismatch', detail, context }];
+  }
+
+  const shortfall = expected - actual;
+  const severity: ValidationSeverity = shortfall >= 2 ? 'error' : 'warning';
   return [{
-    severity: 'warning',
+    severity,
     rule: 'spec-count-mismatch',
-    detail: `§7 spec-table row count is ${actual}, expected ${expected} (canonical input rows, ` +
-      `excluding empty/"N/A" values and the product-name row).`,
+    detail: severity === 'error'
+      ? `${detail} Restore only parameters that are literally present in the provided source ` +
+        `specifications. Never invent a parameter, value, or unit to satisfy the count.`
+      : detail,
     context,
   }];
 }
