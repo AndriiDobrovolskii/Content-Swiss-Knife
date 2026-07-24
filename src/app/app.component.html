@@ -1297,11 +1297,13 @@
                           </ul>
                         </li>
                       }
-                      @if (report.status === 'clean') {
+                      @if (report.finalIssues.some(i => i.severity === 'warning')) {
                         <li>
                           <ul class="ml-4 list-disc">
                             @for (issue of report.finalIssues; track issue.rule) {
-                              <li class="text-amber-700 dark:text-amber-400">[{{ issue.rule }}] {{ issue.detail }}</li>
+                              @if (issue.severity === 'warning') {
+                                <li class="text-amber-700 dark:text-amber-400">[{{ issue.rule }}] {{ issue.detail }}</li>
+                              }
                             }
                           </ul>
                         </li>

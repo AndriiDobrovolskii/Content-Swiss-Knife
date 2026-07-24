@@ -117,6 +117,11 @@ export interface RepairReportMeta {
 export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta: RepairReportMeta): string {
   const lines: string[] = [];
   const repaired = reports.filter(r => r.status !== 'clean');
+  // Computed once and appended in BOTH branches below. Previously this lived inside the
+  // repaired.length === 0 early return, so any run that needed a repair silently dropped every
+  // warning — exactly the situation a mass-deletion incident produces (Bug E).
+  const warnings = reports.flatMap(r =>
+    r.finalIssues.filter(i => i.severity === 'warning').map(i => ({ ...i, label: r.label })));
 
   lines.push(`# Repair Gate Report — ${meta.product} (${meta.store})`);
   lines.push('');
@@ -131,7 +136,6 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
   lines.push('');
 
   if (repaired.length === 0) {
-    const warnings = reports.flatMap(r => r.finalIssues.filter(i => i.severity === 'warning').map(i => ({ ...i, label: r.label })));
     if (warnings.length === 0) {
       lines.push('No repairs were needed — every artifact passed validation on the first generation.');
       return lines.join('\n');
@@ -203,6 +207,15 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
       }
       lines.push('');
     }
+  }
+
+  if (warnings.length > 0) {
+    lines.push('## Warnings');
+    lines.push('');
+    for (const issue of warnings) {
+      lines.push(`- [${issue.label}] \`${issue.rule}\` — ${issue.detail}`);
+    }
+    lines.push('');
   }
 
   return lines.join('\n');
