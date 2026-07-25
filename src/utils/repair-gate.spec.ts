@@ -359,4 +359,61 @@ describe('formatRepairReportMarkdown', () => {
     expect(md).toContain('detail for decimal-separator');
     expect(md).not.toContain('## Recurring rule failures');
   });
+
+  it('surfaces warnings from a CLEAN artifact even when another artifact needed a repair — the exact bug being fixed', () => {
+    const warning = makeIssue('spec-row-not-grounded-mass-failure', 'warning');
+    const reports: RepairArtifactReport[] = [
+      {
+        label: 'HTML (base)',
+        repairsUsed: 1,
+        finalIssues: [],
+        status: 'repaired',
+        attempts: [{ attempt: 1, issuesBefore: [makeIssue('seo-empty')], issuesAfter: [], resolved: [makeIssue('seo-empty')], persisted: [] }],
+      },
+      { label: 'HTML (uk-UA)', repairsUsed: 0, finalIssues: [warning], status: 'clean', attempts: [] },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+
+    expect(md).toContain('## Warnings');
+    expect(md).toContain('[HTML (uk-UA)]');
+    expect(md).toContain('`spec-row-not-grounded-mass-failure`');
+    // Not the early-return-branch heading — a repair DID happen this run.
+    expect(md).not.toContain('## Warnings (no repairs needed)');
+  });
+
+  it('surfaces a warning that belongs to a REPAIRED artifact itself, not just a sibling clean one', () => {
+    const warning = makeIssue('spec-count-mismatch', 'warning');
+    const reports: RepairArtifactReport[] = [
+      {
+        label: 'HTML (base)',
+        repairsUsed: 1,
+        finalIssues: [warning],
+        status: 'repaired',
+        attempts: [{ attempt: 1, issuesBefore: [makeIssue('seo-empty')], issuesAfter: [warning], resolved: [makeIssue('seo-empty')], persisted: [] }],
+      },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+
+    expect(md).toContain('## Warnings');
+    expect(md).toContain('[HTML (base)]');
+    expect(md).toContain('`spec-count-mismatch`');
+  });
+
+  it('prints no empty "## Warnings" heading when a repair happened but no warnings exist anywhere', () => {
+    const reports: RepairArtifactReport[] = [
+      {
+        label: 'HTML (base)',
+        repairsUsed: 1,
+        finalIssues: [],
+        status: 'repaired',
+        attempts: [{ attempt: 1, issuesBefore: [makeIssue('seo-empty')], issuesAfter: [], resolved: [makeIssue('seo-empty')], persisted: [] }],
+      },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+
+    expect(md).not.toContain('## Warnings');
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSpecsGrounding, isAlreadyCyrillic } from './specs-grounding';
+import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from './specs-grounding';
 
 const SRC = `Build Volume: 330 × 330 × 565 mm (61.5 L)
 Hopper Capacity: 105 L
@@ -9,6 +9,14 @@ Laser: Ytterbium Fibre, 120 W`;
 const SRC_UK = `Робоча зона: 400 × 400 мм
 Тип лазера: Діодний, 10 Вт
 Товщина шару: 100 мкм`;
+
+// Label-anchor-only fixture (Fixture B, generalization requirement): no qualifying numbers, no
+// Latin loanwords — the one anchor type that never fired in the Ortur H20 incident. Reused
+// across the mass-failure circuit breaker and thousands-separator test blocks below, not just
+// the translation-drift hardening suite it originated in.
+const SRC_UK_TECH =
+  `Тип пластини поверхні: текстурована PEI-пластина\n` +
+  `Обсяг сховища: вбудовані 8 ГБ eMMC та USB-порт`;
 
 /** Mirrors the real schema: section.specs → table → thead(Parameter|Value) → tbody rows. */
 function specSection(rows: string): string {
@@ -109,10 +117,6 @@ describe('validateSpecsGrounding — Rule: spec-row-not-grounded', () => {
     // Round 2 (real report): the numeric anchor doesn't cover every legitimate row — a row can
     // have no number at all, or only a trivial single-digit one the numeric anchor deliberately
     // ignores. A Latin material/interface code that survives translation untouched anchors these.
-    const SRC_UK_TECH =
-      `Тип пластини поверхні: текстурована PEI-пластина\n` +
-      `Обсяг сховища: вбудовані 8 ГБ eMMC та USB-порт`;
-
     it('Latin-token anchor grounds a row with no qualifying number at all ("Included Build Plate Type" -> "Тип столу (комплектний)", real P2S false positive)', () => {
       const html = specSection(`<tr><td>Тип столу (комплектний)</td><td>текстурована PEI-пластина</td></tr>`);
       expect(validateSpecsGrounding(html, SRC_UK_TECH, 'HTML (uk-UA)')).toHaveLength(0);
@@ -142,6 +146,236 @@ describe('validateSpecsGrounding — Rule: spec-row-not-grounded', () => {
     it('returns false when Cyrillic is only a small fraction of the text', () => {
       const mixed = 'Printing Technology: Fused Deposition Modeling. Chassis: Aluminum and Steel. Матеріал.';
       expect(isAlreadyCyrillic(mixed)).toBe(false);
+    });
+  });
+});
+
+describe('validateSpecsGrounding — allowedParams (repair guidance)', () => {
+  const ALLOWED = ['Build Volume', 'Hopper Capacity', 'Layer Thickness', 'Laser'];
+
+  it('emits exactly one spec-rows-allowed-parameters issue when >=1 row is ungrounded and allowedParams is non-empty', () => {
+    const html = specSection(`<tr><td>Throughput</td><td>0330 kg/hr</td></tr>`);
+    const issues = validateSpecsGrounding(html, SRC, 'HTML (base)', ALLOWED);
+    const allowedIssues = issues.filter(i => i.rule === 'spec-rows-allowed-parameters');
+    expect(allowedIssues).toHaveLength(1);
+    expect(allowedIssues[0].detail).toContain('ALLOWED PARAMETERS');
+    for (const p of ALLOWED) expect(allowedIssues[0].detail).toContain(p);
+  });
+
+  it('emits no spec-rows-allowed-parameters issue when every row is grounded', () => {
+    const html = specSection(`<tr><td>Hopper Capacity</td><td>105 L</td></tr>`);
+    const issues = validateSpecsGrounding(html, SRC, 'HTML (base)', ALLOWED);
+    expect(issues.filter(i => i.rule === 'spec-rows-allowed-parameters')).toHaveLength(0);
+  });
+
+  it('3-arg back-compat: allowedParams defaults to [], per-row errors unchanged, no ALLOWED PARAMETERS clause anywhere', () => {
+    const html = specSection(`<tr><td>Throughput</td><td>0330 kg/hr</td></tr>`);
+    const issues = validateSpecsGrounding(html, SRC, 'HTML (base)');
+    expect(issues.filter(i => i.rule === 'spec-rows-allowed-parameters')).toHaveLength(0);
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+    expect(issues.map(i => i.detail).join('\n')).not.toContain('ALLOWED PARAMETERS');
+  });
+
+  it('per-row detail instructs reconciliation (KEEP) rather than blind deletion', () => {
+    const html = specSection(`<tr><td>Throughput</td><td>0330 kg/hr</td></tr>`);
+    const issues = validateSpecsGrounding(html, SRC, 'HTML (base)', ALLOWED);
+    const rowIssue = issues.find(i => i.rule === 'spec-row-not-grounded');
+    expect(rowIssue?.detail).toContain('KEEP');
+    expect(rowIssue?.detail).not.toContain('Remove any spec-table row');
+  });
+
+  it('when the mass-failure breaker trips, the allowed-parameters issue is collapsed away too (single warning only)', () => {
+    const source = 'Param0: 1000 units\nParam1: 1007 units\nParam2: 1014 units\nParam3: 1021 units';
+    const html = specSection(
+      `<tr><td>Param0</td><td>1000</td></tr>` +
+      `<tr><td>Param1</td><td>1007</td></tr>` +
+      `<tr><td>Fab0 Property</td><td>9000</td></tr>` +
+      `<tr><td>Fab1 Property</td><td>9001</td></tr>` +
+      `<tr><td>Fab2 Property</td><td>9002</td></tr>`,
+    );
+    const issues = validateSpecsGrounding(html, source, 'HTML (base)', ALLOWED);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].rule).toBe('spec-row-not-grounded-mass-failure');
+  });
+});
+
+describe('mass-failure circuit breaker', () => {
+  // Deterministic fixtures: `count` grounded rows via the numeric anchor (distinct 4-digit
+  // values starting at 1000), and `count` ungrounded rows with fabricated labels/values that
+  // share no number, Latin token, or label stem with the source.
+  function numericSource(count: number): string {
+    return Array.from({ length: count }, (_, i) => `Param${i}: ${1000 + i * 7} units`).join('\n');
+  }
+  function groundedRows(count: number): string {
+    return Array.from({ length: count }, (_, i) => `<tr><td>Param${i}</td><td>${1000 + i * 7}</td></tr>`).join('');
+  }
+  function ungroundedRows(count: number): string {
+    return Array.from({ length: count }, (_, i) => `<tr><td>Fabricated${i} Property</td><td>${9000 + i}</td></tr>`).join('');
+  }
+
+  it('15 graded / 8 ungrounded (real Ortur H20 incident shape) — trips, collapses to one warning listing all 8 labels', () => {
+    const source = numericSource(7);
+    const html = specSection(groundedRows(7) + ungroundedRows(8));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].rule).toBe('spec-row-not-grounded-mass-failure');
+    for (let i = 0; i < 8; i++) {
+      expect(issues[0].detail).toContain(`Fabricated${i} Property`);
+    }
+  });
+
+  it('15 graded / 1 ungrounded — unchanged: one error, breaker does not engage', () => {
+    const source = numericSource(14);
+    const html = specSection(groundedRows(14) + ungroundedRows(1));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('error');
+    expect(issues[0].rule).toBe('spec-row-not-grounded');
+  });
+
+  it('3 graded / 2 ungrounded — stays two individual errors (2 >= 3 is false, absolute-minimum guard)', () => {
+    const source = numericSource(1);
+    const html = specSection(groundedRows(1) + ungroundedRows(2));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(2);
+    expect(issues.every(i => i.severity === 'error' && i.rule === 'spec-row-not-grounded')).toBe(true);
+  });
+
+  it('10 graded / 5 ungrounded — stays five individual errors (5 > 5 is false, strict >)', () => {
+    const source = numericSource(5);
+    const html = specSection(groundedRows(5) + ungroundedRows(5));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(5);
+    expect(issues.every(i => i.severity === 'error')).toBe(true);
+  });
+
+  it('10 graded / 6 ungrounded — trips (6 >= 3 and 6 > 5)', () => {
+    const source = numericSource(4);
+    const html = specSection(groundedRows(4) + ungroundedRows(6));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].rule).toBe('spec-row-not-grounded-mass-failure');
+  });
+
+  it('denominator counts GRADED rows, not scanned rows: 4 skipped short-label rows + 6-of-11 ungrounded must still trip', () => {
+    // Under a scanned-rows denominator this would be 6/15 = 40% (no trip) and 6 real rows would
+    // ship deleted. Excluding the 4 skipped rows makes it 6/11 = 54.5% (trips) — this is the
+    // test that proves the fix (design note D6).
+    const source = numericSource(5);
+    const skipped = ['Тип', 'ПЗ', 'На', 'Рік']
+      .map(label => `<tr><td>${label}</td><td>1</td></tr>`).join('');
+    const html = specSection(skipped + groundedRows(5) + ungroundedRows(6));
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].rule).toBe('spec-row-not-grounded-mass-failure');
+    expect(issues[0].detail).toContain('6 of 11 graded');
+  });
+
+  it('cross-fixture (generalization): a fully-legitimate label-anchor-only table never trips, regardless of anchor type', () => {
+    const html = specSection(
+      `<tr><td>Тип столу (комплектний)</td><td>текстурована PEI-пластина</td></tr>` +
+      `<tr><td>Накопичувач</td><td>вбудовані 8 ГБ eMMC та USB-порт</td></tr>`,
+    );
+    expect(validateSpecsGrounding(html, SRC_UK_TECH, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('propagates context on the collapsed mass-failure warning', () => {
+    const source = numericSource(4);
+    const html = specSection(groundedRows(4) + ungroundedRows(6));
+    const issues = validateSpecsGrounding(html, source, 'HTML (base)');
+    expect(issues[0].context).toBe('HTML (base)');
+  });
+});
+
+describe('numeric grounding — thousands separators', () => {
+  it('20,000 (comma-group) source grounds a 20000 HTML value — the incident\'s own case', () => {
+    const source = 'Maximum Speed: 20,000 mm/min';
+    const html = specSection(`<tr><td>Максимальна швидкість</td><td>20000</td></tr>`);
+    expect(validateSpecsGrounding(html, source, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('20 000 (space and NBSP variants) source grounds a 20000 HTML value', () => {
+    const htmlValue = specSection(`<tr><td>Швидкість переміщення</td><td>20000</td></tr>`);
+    expect(validateSpecsGrounding(htmlValue, 'Speed: 20 000 mm/min', 'HTML (uk-UA)')).toHaveLength(0);
+    expect(validateSpecsGrounding(htmlValue, "Speed: 20 000 mm/min", 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('1,234,567 (multi-group) source grounds a 1234567 HTML value', () => {
+    const source = 'Total Cycles: 1,234,567';
+    const html = specSection(`<tr><td>Кількість циклів</td><td>1234567</td></tr>`);
+    expect(validateSpecsGrounding(html, source, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('regression: 61,5 (decimal comma) source does NOT ground a fabricated 615 HTML value', () => {
+    const source = 'Hopper Capacity: 61,5 L';
+    const html = specSection(`<tr><td>Місткість бункера</td><td>615</td></tr>`);
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('regression: 0,330 кг/год source grounds a matching 0,330 HTML value (decimal-guard path stays consistent end-to-end)', () => {
+    const source = 'Feed Rate: 0,330 кг/год';
+    const html = specSection(`<tr><td>Швидкість подачі</td><td>0,330</td></tr>`);
+    expect(validateSpecsGrounding(html, source, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+
+  it('regression: 305*320*325 mm dimensions do NOT glue into a fabricated 305320325', () => {
+    const source = 'Build Volume (W*D*H): 305*320*325 mm';
+    const html = specSection(`<tr><td>Якийсь параметр</td><td>305320325</td></tr>`);
+    const issues = validateSpecsGrounding(html, source, 'HTML (uk-UA)');
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('end-to-end: real Ortur H20 "Maximum Speed" and "Camera" rows ground cleanly against post-fixNumberFormatting HTML values', () => {
+    const source = `Maximum Speed: 20,000 mm/min\nCamera: 200,000 Pixel`;
+    const html = specSection(
+      `<tr><td>Максимальна швидкість</td><td>20000</td></tr>` +
+      `<tr><td>Камера</td><td>200000</td></tr>`,
+    );
+    expect(validateSpecsGrounding(html, source, 'HTML (uk-UA)')).toHaveLength(0);
+  });
+});
+
+describe('sanitizeGroundedTranslation', () => {
+  describe("script: 'Cyrillic' (default master locale, uk-UA)", () => {
+    it('returns valid Ukrainian translation, cleaned', () => {
+      expect(sanitizeGroundedTranslation(SRC_UK, 'Cyrillic')).toBe(SRC_UK);
+    });
+
+    it('returns "" for an English echo (untranslated fallback) — the Ortur H20 regression', () => {
+      expect(sanitizeGroundedTranslation(SRC, 'Cyrillic')).toBe('');
+    });
+
+    it('returns "" for garbled non-Cyrillic text', () => {
+      expect(sanitizeGroundedTranslation('####!!! 123 ???', 'Cyrillic')).toBe('');
+    });
+
+    it('returns "" for empty/whitespace-only translation', () => {
+      expect(sanitizeGroundedTranslation('   ', 'Cyrillic')).toBe('');
+      expect(sanitizeGroundedTranslation('', 'Cyrillic')).toBe('');
+    });
+
+    it('returns "" for null/undefined', () => {
+      expect(sanitizeGroundedTranslation(null, 'Cyrillic')).toBe('');
+      expect(sanitizeGroundedTranslation(undefined, 'Cyrillic')).toBe('');
+    });
+
+    it('strips code fences before the script check', () => {
+      const fenced = '```html\n' + SRC_UK + '\n```';
+      expect(sanitizeGroundedTranslation(fenced, 'Cyrillic')).toBe(SRC_UK);
+    });
+  });
+
+  describe("script: 'Latin' (forward-compat for a future non-Cyrillic master)", () => {
+    const SRC_ES = 'Volumen de impresión: 330 × 330 × 565 mm (61,5 L)\nCapacidad de la tolva: 105 L';
+
+    it('returns Spanish text, not ""', () => {
+      expect(sanitizeGroundedTranslation(SRC_ES, 'Latin')).toBe(SRC_ES);
+    });
+
+    it('returns "" for Cyrillic text requested under script: Latin', () => {
+      expect(sanitizeGroundedTranslation(SRC_UK, 'Latin')).toBe('');
     });
   });
 });

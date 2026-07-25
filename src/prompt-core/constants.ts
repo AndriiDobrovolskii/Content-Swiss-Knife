@@ -1,4 +1,5 @@
 import type { WebsiteGroup } from '../app/types';
+import type { MasterScript } from '../utils/specs-grounding';
 
 /** Canonical per-store registry. THE single place store facts are defined. */
 export interface StoreProfile {
@@ -27,6 +28,27 @@ export function getStore(name: string): StoreProfile {
     group: 'EU', region: 'Global/EU', currency: 'EUR (€)', currencySymbol: '€',
     languages: ['en-GB'], imageBaseUrl: '', siteSuffix: name,
   };
+}
+
+/**
+ * Script of each store's MASTER artifact. Today every master is uk-UA, so every entry is
+ * 'Cyrillic'. This map exists so that adding a store — or moving one to native per-locale
+ * generation — is a compile-time decision instead of an inherited default. See the
+ * specs-grounding fail-open PR, design note D2.
+ */
+const STORE_MASTER_SCRIPT: Record<string, MasterScript> = {
+  '3DDevice': 'Cyrillic',
+  '3DPrinter': 'Cyrillic',
+  '3DScanner': 'Cyrillic',
+  'Center 3D Print': 'Cyrillic',
+  'Drukarka 3D': 'Cyrillic',
+  'EXPERT3D': 'Cyrillic',
+  'Impresora-3D': 'Cyrillic',
+  'Expert-3DPrinter': 'Cyrillic',
+};
+
+export function masterScriptFor(storeName: string): MasterScript {
+  return STORE_MASTER_SCRIPT[storeName] ?? 'Cyrillic';
 }
 
 /**

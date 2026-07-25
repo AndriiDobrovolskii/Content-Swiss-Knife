@@ -1,4 +1,4 @@
-import { ValidationIssue } from './output-validator';
+import type { ValidationIssue, ValidationSeverity } from './output-validator';
 
 /**
  * spec-count-parity.ts
@@ -48,6 +48,19 @@ function rowCells(line: string): string[] | null {
 
 function isSeparatorRow(cells: string[]): boolean {
   return cells.length > 0 && cells.every(c => /^:?-{2,}:?$/.test(c));
+}
+
+/**
+ * 1-indexed line numbers that look like canonical table rows (start with "|") but fail
+ * MD_ROW_RE's well-formed shape — typically a missing closing "|". Such a line is skipped by
+ * parseCanonicalRows, understating `expected` with no signal (real case:
+ * "| **Laser Head Power** | 20W" in the Ortur H20 source sheet).
+ */
+export function findMalformedTableLines(markdown: string): number[] {
+  return markdown.split('\n')
+    .map((line, i) => ({ line, num: i + 1 }))
+    .filter(({ line }) => /^\s*\|/.test(line) && !MD_ROW_RE.test(line))
+    .map(({ num }) => num);
 }
 
 /**
@@ -114,15 +127,32 @@ function isProductNameRow(item: string, spec: string, productName: string): bool
 }
 
 /**
+ * The canonical source's §7-eligible parameter LABELS, after the same two exclusions
+ * countExpectedSpecRows applies (empty/"N/A" values, and the product-name row — which becomes
+ * the H1 and must never appear as a spec row per master-system-prompt.ts §7 COMPLETENESS).
+ *
+ * Exported because specs-grounding.ts needs the same list for its repair guidance. Deriving both
+ * the count and the list from one function means they cannot disagree — a bug the fix that
+ * introduced this function replaced had them derived independently, and the parser leaked the
+ * Product Name row into the model's "allowed parameters", instructing it to add a row §7
+ * forbids.
+ *
+ * @returns [] when no canonical table is detected (callers treat that as "cannot verify").
+ */
+export function expectedSpecParameterLabels(canonicalSpecs: string, productName: string): string[] {
+  return parseCanonicalRows(canonicalSpecs)
+    .filter(({ item, spec }) => !isEmptyValue(spec) && !isProductNameRow(item, spec, productName))
+    .map(({ item }) => item.replace(/[*_`]/g, '').trim());
+}
+
+/**
  * @param canonicalSpecs  `input.specs` as submitted — expected to already be a canonical
  *                        "| Item | Specification |" table (see module doc).
  * @param productName     `input.name` — used to detect and exclude a Product Name source row.
  * @returns the expected §7 row count, or 0 if no canonical table was detected (caller no-ops).
  */
 export function countExpectedSpecRows(canonicalSpecs: string, productName: string): number {
-  return parseCanonicalRows(canonicalSpecs)
-    .filter(({ item, spec }) => !isEmptyValue(spec) && !isProductNameRow(item, spec, productName))
-    .length;
+  return expectedSpecParameterLabels(canonicalSpecs, productName).length;
 }
 
 /** Sums <tbody><tr> rows across every table inside <section class="specs"> — mirrors the
@@ -140,9 +170,15 @@ export function countActualSpecRows(html: string): number {
 
 /**
  * Validate that the §7 spec-table row count matches the canonical source's expected count.
- * Advisory only (severity: 'warning') — a legitimately shorter §7 (empty/N-A source values) and
- * imperfect product-name matching are both real false-positive surfaces, so this doesn't trigger
- * the repair gate yet.
+ * Severity depends on direction and magnitude:
+ * - Extra rows (actual > expected) always stay 'warning' — already independently caught, per
+ *   row, by validateSpecsGrounding.
+ * - A shortfall of 1 row stays 'warning' — imperfect product-name matching and N/A-value
+ *   detection (see module doc) are both real false-positive surfaces for an off-by-one, and the
+ *   repair feedback here states only the counts, never WHICH row is missing, so escalating a
+ *   false positive would force the model to invent a row just to satisfy the number.
+ * - A shortfall of 2+ rows escalates to 'error' (triggers the repair gate) — a gap that large is
+ *   far more likely real data loss than a detection miss.
  *
  * @param html            the master HTML from Task A
  * @param canonicalSpecs  `input.specs` as submitted (NOT groundingSpecs — see module doc)
@@ -157,19 +193,48 @@ export function validateSpecCountParity(
 ): ValidationIssue[] {
   if (!html?.trim() || !canonicalSpecs?.trim()) return [];
 
+  const issues: ValidationIssue[] = [];
+
+  // Independent of the count check below — a malformed row is a source-data-quality problem
+  // regardless of whether the counts happen to match by coincidence.
+  const malformed = findMalformedTableLines(canonicalSpecs);
+  if (malformed.length > 0) {
+    issues.push({
+      severity: 'warning',
+      rule: 'spec-table-malformed-row',
+      detail: `Source spec table has malformed row(s) at line(s) ${malformed.join(', ')} — likely a ` +
+        `missing closing "|". These rows are silently excluded from row counting, so the ` +
+        `expected count above may be understated.`,
+      context,
+    });
+  }
+
   const expected = countExpectedSpecRows(canonicalSpecs, productName);
-  if (expected === 0) return []; // no canonical table detected — cannot verify
+  if (expected === 0) return issues; // no canonical table detected — cannot verify count parity
 
   const actual = countActualSpecRows(html);
-  if (actual < 0) return []; // DOMParser unavailable
+  if (actual < 0) return issues; // DOMParser unavailable
 
-  if (actual === expected) return [];
+  if (actual === expected) return issues;
 
-  return [{
-    severity: 'warning',
+  const detail = `§7 spec-table row count is ${actual}, expected ${expected} (canonical input rows, ` +
+    `excluding empty/"N/A" values and the product-name row).`;
+
+  if (actual > expected) {
+    issues.push({ severity: 'warning', rule: 'spec-count-mismatch', detail, context });
+    return issues;
+  }
+
+  const shortfall = expected - actual;
+  const severity: ValidationSeverity = shortfall >= 2 ? 'error' : 'warning';
+  issues.push({
+    severity,
     rule: 'spec-count-mismatch',
-    detail: `§7 spec-table row count is ${actual}, expected ${expected} (canonical input rows, ` +
-      `excluding empty/"N/A" values and the product-name row).`,
+    detail: severity === 'error'
+      ? `${detail} Restore only parameters that are literally present in the provided source ` +
+        `specifications. Never invent a parameter, value, or unit to satisfy the count.`
+      : detail,
     context,
-  }];
+  });
+  return issues;
 }

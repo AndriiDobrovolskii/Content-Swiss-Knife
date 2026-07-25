@@ -48,6 +48,8 @@
  */
 
 import type { ValidationIssue } from './output-validator';
+import { stripCodeFences } from './html-cleaner';
+import { stripThousandsSeparators } from './number-format-fixer';
 
 /** Words too generic to serve as grounding evidence for a label. */
 const LABEL_STOPWORDS = new Set([
@@ -59,12 +61,26 @@ const LABEL_STOPWORDS = new Set([
 /** Minimum significant-word length considered evidence. */
 const MIN_LABEL_WORD_LEN = 4;
 
+/** Below this absolute count, a cluster of failures is plausibly real hallucination, so the
+ *  breaker stays out of the way even on a small table where the ratio alone would trip. */
+const MASS_FAILURE_MIN_ROWS = 3;
+
 /**
  * Normalize free text to a lowercase token stream for lexical containment checks.
  * Decimal comma → dot so "61,5" and "61.5" compare equal; punctuation → spaces.
  */
 function normalizeText(s: string): string {
-  return s
+  // Thousands separators collapse FIRST, on the raw string, using the very function already
+  // applied to the generated HTML by number-format-fixer.ts. Sharing it — rather than
+  // re-deriving it here — is the point: two drifted copies of this logic are what broke the
+  // numeric anchor in the first place (a source-side "20,000" and an HTML-side "20000" could
+  // never match once the HTML side had its separators stripped and the source side didn't).
+  //
+  // Order matters twice over:
+  //   • before punctuation→space, so "420 × 300" still has its "×" and cannot glue into "420300";
+  //   • before decimal-comma→dot, so "20,000" resolves as a thousands group, while "61,5"
+  //     (1 digit, not a 3-digit group) falls through to the decimal rule untouched.
+  return stripThousandsSeparators(s)
     .toLowerCase()
     .replace(/(\d),(\d)/g, '$1.$2')   // decimal comma → dot (keeps 61,5 == 61.5)
     .replace(/[^\p{L}\p{N}\s.]/gu, ' ')
@@ -123,6 +139,11 @@ function extractLatinTokens(text: string): string[] {
  * @param sourceSpecs the source specs, already localized into the master's language by the
  *                    caller (NOT necessarily raw `input.specs` verbatim — see DESIGN above)
  * @param context     reporting label, e.g. "HTML (base)"
+ * @param allowedParams the source's §7-eligible parameter labels, from
+ *                      spec-count-parity.ts's expectedSpecParameterLabels(). Used only to give
+ *                      the repair model something to reconcile against; grounding decisions are
+ *                      unaffected. Defaults to [] so existing 3-arg call sites keep working (the
+ *                      guidance clause is then omitted rather than fabricated).
  * @returns one 'spec-row-not-grounded' error per ungrounded row (empty if all grounded
  *          or if no <section class="specs"> table exists)
  */
@@ -130,6 +151,7 @@ export function validateSpecsGrounding(
   html: string,
   sourceSpecs: string,
   context: string,
+  allowedParams: readonly string[] = [],
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!html?.trim() || !sourceSpecs?.trim()) return issues;
@@ -155,6 +177,13 @@ export function validateSpecsGrounding(
   );
   const sourceNumbers = new Set(extractNumberTokens(sourceSpecs));
   const sourceLatinTokens = new Set(extractLatinTokens(sourceSpecs));
+
+  // Denominator = rows actually GRADED, not rows scanned. Rows that exit early (empty label, or
+  // a label of only generic/short words) can never fail, so counting them inflates the
+  // denominator and suppresses the breaker — MIN_LABEL_WORD_LEN filters short Ukrainian labels
+  // ("Тип", "ПЗ") in practice, not just in theory.
+  let evaluatedRows = 0;
+  const failedLabels: string[] = [];
 
   for (const table of specTables) {
     // Iterate <tbody> rows only — the <thead> "Parameter | Value" header row is not a spec.
@@ -187,22 +216,71 @@ export function validateSpecsGrounding(
 
       const labelGrounded = words.some(w => sourceStems.has(stem(w)));
 
+      evaluatedRows++;
       const grounded = numericGrounded || latinTokenGrounded || labelGrounded;
       if (!grounded) {
+        failedLabels.push(label);
         issues.push({
           severity: 'error',
           rule: 'spec-row-not-grounded',
           detail:
-            `Spec row "${label}" has no support in the source specs — likely a hallucinated ` +
-            `row. Remove any spec-table row whose parameter is not present in the provided ` +
-            `source specifications. Do not invent values or units.`,
+            `Spec row "${label}" is not supported by the source specifications. Reconcile before ` +
+            `removing: if it corresponds to one of the allowed parameters under different ` +
+            `wording, KEEP the row and correct only its label to match. Remove the row only if ` +
+            `it corresponds to no allowed parameter. Never invent values or units.`,
           context,
         });
       }
     }
   }
 
+  // Emitted once per artifact, only when at least one row failed — gives the repair model the
+  // reconciliation target the per-row messages refer to, without repeating the whole list N times.
+  if (issues.length > 0 && allowedParams.length > 0) {
+    issues.push({
+      severity: 'error',
+      rule: 'spec-rows-allowed-parameters',
+      detail:
+        `ALLOWED PARAMETERS (the complete set of §7-eligible parameters in the source ` +
+        `specifications): ${allowedParams.join(', ')}. Every §7 row must correspond to exactly ` +
+        `one of these. Do not add a parameter that is not on this list, and do not add a row for ` +
+        `the product's own name.`,
+      context,
+    });
+  }
+
+  // A model that fabricates more than half a spec table is not a realistic failure mode; a
+  // broken or degraded grounding source is. Prefer shipping an unverified table over deleting a
+  // verified one — the gate may only narrow output when it trusts its own input.
+  if (issues.length >= MASS_FAILURE_MIN_ROWS && issues.length > evaluatedRows / 2) {
+    return [{
+      severity: 'warning',
+      rule: 'spec-row-not-grounded-mass-failure',
+      detail:
+        `${issues.length} of ${evaluatedRows} graded spec-table rows failed grounding. Mass ` +
+        `failure across half a table is far more likely a broken/degraded grounding source ` +
+        `(e.g. a failed specs translation) than mass hallucination, so the per-row grounding ` +
+        `guard is disabled for this artifact rather than deleting rows it cannot verify. ` +
+        `Rows: ${failedLabels.join(', ')}.`,
+      context,
+    }];
+  }
+
   return issues;
+}
+
+/** Unicode script names this codebase grounds against. Typed, not `string`, so a typo is a
+ *  compile error rather than a runtime SyntaxError inside `new RegExp`. */
+export type MasterScript = 'Cyrillic' | 'Latin';
+
+const SCRIPT_RATIO_THRESHOLD = 0.3;
+
+/** Ratio of letters in `text` belonging to `script`. 0 when there are no letters at all. */
+function scriptRatio(text: string, script: MasterScript): number {
+  const letters = text.match(/\p{L}/gu) ?? [];
+  if (letters.length === 0) return 0;
+  const matches = text.match(new RegExp(`\\p{Script=${script}}`, 'gu')) ?? [];
+  return matches.length / letters.length;
 }
 
 /**
@@ -212,8 +290,26 @@ export function validateSpecsGrounding(
  * Cyrillic brand name or two doesn't trigger a false skip.
  */
 export function isAlreadyCyrillic(text: string): boolean {
-  const letters = text.match(/\p{L}/gu) ?? [];
-  if (letters.length === 0) return false;
-  const cyrillic = text.match(/\p{Script=Cyrillic}/gu) ?? [];
-  return cyrillic.length / letters.length > 0.3;
+  return scriptRatio(text, 'Cyrillic') > SCRIPT_RATIO_THRESHOLD;
+}
+
+/**
+ * Sanitizes a raw LLM translation before it is used as validateSpecsGrounding's grounding source.
+ *
+ * Never returns text outside the master's script, and never falls back to the untranslated input
+ * — both reintroduce the exact false-positive mode this guard exists to prevent (see the Ortur
+ * H20 incident: an English grounding source made every translated label an unfalsifiable
+ * "hallucination" and the repair gate deleted 8 of 15 real rows).
+ *
+ * '' means "grounding disabled for this run" — the same contract as validateSpecsGrounding's own
+ * empty-source no-op. Callers MUST surface that state (see `specs-grounding-disabled` in
+ * content-orchestrator.service.ts) rather than letting it pass silently.
+ */
+export function sanitizeGroundedTranslation(
+  translated: string | null | undefined,
+  script: MasterScript,
+): string {
+  const cleaned = stripCodeFences(translated ?? '').trim();
+  if (!cleaned) return '';
+  return scriptRatio(cleaned, script) > SCRIPT_RATIO_THRESHOLD ? cleaned : '';
 }

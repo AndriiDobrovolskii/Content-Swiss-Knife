@@ -1,6 +1,7 @@
-import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, Output, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../../../services/content-orchestrator.service';
+import { findMalformedTableLines } from '../../../utils/spec-count-parity';
 
 type Mode = 'text' | 'pdf' | 'url' | 'md';
 
@@ -11,9 +12,19 @@ type Mode = 'text' | 'pdf' | 'url' | 'md';
   templateUrl: './source-input.component.html',
 })
 export class SourceInputComponent {
-  // Two-way value via explicit value/valueChange (works cleanly with parent signals).
-  @Input() value = '';
+  // Two-way value via explicit value/valueChange (works cleanly with parent signals). Backed by
+  // a signal so derived checks can be `computed()` and memoized: this component runs Default
+  // change detection, so a plain getter doing per-line regex work would re-run on every CD pass
+  // across the whole app, on every keystroke.
+  private _value = signal('');
+  @Input() set value(v: string) { this._value.set(v ?? ''); }
+  get value(): string { return this._value(); }
   @Output() valueChange = new EventEmitter<string>();
+
+  /** 1-indexed lines that look like canonical table rows but are malformed (missing a closing
+   *  "|"). Surfaced inline so a broken paste is visible BEFORE Generate is pressed — the
+   *  post-hoc validator warning is only a second line of defense. */
+  malformedTableLines = computed(() => findMalformedTableLines(this._value()));
 
   @Input() label = '';
   @Input() placeholder = '';
@@ -40,7 +51,7 @@ export class SourceInputComponent {
   setMode(mode: Mode) { this.mode.set(mode); }
 
   setText(v: string) {
-    this.value = v;
+    this._value.set(v);
     this.valueChange.emit(v);
   }
 
