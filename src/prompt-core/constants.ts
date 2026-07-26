@@ -61,6 +61,21 @@ export function isExpert3dStore(name: string): boolean {
 }
 
 /**
+ * Center 3D Print — the single storefront running the "Style B" Tone of Voice (verb-led benefit
+ * bullets, functional/question H2s, an operating-tips block, a consultative CTA).
+ * The single predicate gating every C3D-only ToV injection (Task A voice block, Task C
+ * translation overlay, per-locale overlays).
+ *
+ * DELIBERATELY NAME-BASED, NOT GROUP-BASED — do not "simplify" this to `group === 'EU'`.
+ * Unlike isExpert3dStore (where EXPERT3D + Impresora-3D are the ONLY ES-group stores and share
+ * one voice), Center 3D Print shares group 'EU' with Drukarka 3D, which keeps the DEFAULT voice.
+ * A group check would silently leak Style B onto Drukarka 3D's output.
+ */
+export function isCenter3dPrintStore(name: string): boolean {
+  return name === 'Center 3D Print';
+}
+
+/**
  * Standalone Translator tool — its target-language list. Store-independent by design:
  * the Translator only translates text into a target language with correct orthography,
  * with NO store/market coupling (unlike the generation pipeline's Task C).
@@ -721,10 +736,261 @@ ru-UA / pl-PL lowercase the first letter after the colon (it introduces an expla
 bold label, not a new sentence). For de-DE and all English keep the default capital.`;
 
 /**
+ * Center 3D Print Tone of Voice ("Style B") — BASE-GENERATION overlay (Task A, C3D only).
+ * Added as an extra CACHED system block AFTER master + task-a instruction, so the shared
+ * master+task prefix stays byte-stable (cache hit) for every other store and C3D just gets one
+ * additional cached suffix (its own cache slot) — same mechanism as EXPERT3D_TOV_BASE_OVERLAY.
+ *
+ * Encodes ONLY what is store-specific: bullet grammar, heading style, the operating-tips block,
+ * the CTA shape, and the Style-A anti-patterns. Rules that already exist globally are deliberately
+ * NOT restated here — SENTENCE_LENGTH_RULES (whose uk-UA ceiling of 20 is STRICTER than this ToV's
+ * 25 — restating the looser figure would create a conflict), NUMBER_FORMAT_RULES,
+ * UNIT_LOCALIZATION_RULES and PRODUCT_NAME_LOCALIZATION all stay authoritative.
+ * Per-locale verb/imperative lexicons live in C3D_UK_LOCALE_TOV / C3D_PL_LOCALE_TOV instead.
+ */
+export const C3D_TOV_BASE_OVERLAY =
+  `[CENTER 3D PRINT BRAND VOICE — "Style B" — applies to this store's base generation and every
+language version]
+ACTIVATION GATE: these rules apply ONLY when the store is Center 3D Print. They are inert for any
+other storefront and must never be propagated into another store's output.
+
+VOICE IN ONE LINE: a service engineer-consultant who explains, in plain steps, what the machine
+DOES FOR YOU. Competent but never distant, benefit-led, ready to advise on safe operation.
+Archetype: Sage + Caregiver (mentor / guide). Methodical, accessible, benefit-driven,
+service-minded, instructional, calm. The reader should feel: "someone knowledgeable is walking me
+through this and looking out for the result."
+
+SIGNATURE MOVE #1 — VERB-LED BENEFIT BULLETS (the single most important rule).
+Every feature/advantage bullet is a PERSONIFIED ACTION OF THE MACHINE, not a labelled term.
+  <li><b>[3rd-person present verb] + short benefit claim. </b>[1-3 supporting sentences with the
+  hard specs.]</li>
+- The bold opener STARTS WITH A VERB describing what the machine does, and ENDS WITH A PERIOD —
+  never a colon. Note the space before </b>.
+- The machine is the grammatical subject: it holds, delivers, keeps, prints, controls, automates.
+- Then unpack with concrete numbers, and explain WHY the spec matters (EEAT).
+GOOD: <li><b>Fits large parts and dense batches. </b>The 330 × 330 × 565 mm build volume prints
+      large-format items and packs many parts into a single build.</li>
+GOOD: <li><b>Moves to the next job quickly. </b>The removable build unit rolls out and is replaced
+      in under 5 minutes, so the machine barely idles.</li>
+
+ANTI-PATTERN — NEVER WRITE LIKE THIS HERE ("Style A", the old voice — banned):
+  BAD  <li><b>Adaptive thermal control:</b> heated chamber, quartz elements...</li>   noun + colon
+  BAD  "...SLS needs no support structures - which opens up the possibility of..."    dash "reveal"
+Rewrite such content as a verb-led bullet and SPLIT the dash into two sentences.
+
+SIGNATURE MOVE #2 — FUNCTIONAL / QUESTION HEADINGS.
+H2s describe a FUNCTION or answer a user query; they are never bare nominal topics.
+  GOOD: "How selective laser sintering works" - "Where [Product] is used" -
+        "Build module and work between cycles" - "Tips for operating [Product]" -
+        "Materials and compatible equipment"
+  BAD:  "SLS technology and operating principle" - "Areas of application"
+Reusable patterns: "How ... works", "Where ... is used", "How to [action]",
+"[Function] and [function]", "Tips for operating ...". Mirror the pattern in every language.
+
+SIGNATURE MOVE #3 — "TIPS FOR OPERATING [Product]" ADVISORY BLOCK (register shift).
+This is the ONLY place that addresses the operator directly.
+- Emit an H2 "Tips for operating [Product]" IMMEDIATELY BEFORE the final commercial-closing
+  section, WHEN the product is production hardware with real handling/safety considerations
+  (printers, post-processing, powder, resin). Skip it for products with none.
+- 3-5 bullets, each = BOLD IMPERATIVE OPENER ending with a period + supporting instruction.
+  Second person, formal register.
+- Practical and safety-oriented; cite MSDS / PPE / manufacturer limits where the source supports it.
+  Never invent a safety figure the source does not state.
+  <li><b>Maintain the specified room conditions. </b>Keep temperature at 18–28 °C and humidity
+  no higher than 30 %.</li>
+Everywhere OUTSIDE this block (and the CTA), stay impersonal / benefit-3rd-person — do NOT scatter
+second-person address through the body.
+
+SIGNATURE MOVE #4 — CONSULTATIVE CTA WITH A DIRECT ASK.
+The closing paragraph is consultative and ENDS WITH A DIRECT INVITATION, not a passive status line.
+  GOOD ending: "Contact our specialists to discuss lead times, configuration and how [Product]
+               fits your production requirements."
+  BAD ending:  "The printer is available for purchase with delivery across ..." (flat, no ask)
+Keep the mandatory brand-guarantee sentence and the trust points from the master [CONTENT
+STRUCTURE]. Mention where applicable: official representative, fair price, authorized service,
+warranty, pre-purchase consultation, commissioning/integration.
+
+PUNCTUATION LIMITS (store-specific; all other typography rules stay as defined globally):
+- Em/en dash as a RHETORICAL device: avoid; at most 1 per 400 words. Use a period or comma instead.
+  Genuine numeric ranges are exempt.
+- Exclamation marks in the body: ZERO. Emoji in the body: ZERO.
+- Question marks: only in the commercial-closing H2.
+- Rhetorical colon in list items ("term:"): FORBIDDEN — see the OVERRIDES table below.
+- Rhythm: alternate a short claim (5-10 words) with a supporting sentence, within the global
+  per-locale sentence-length budget, which remains authoritative.
+- <b> marks bullet verb/imperative openers and inline technical parameters. Brand/model emphasis
+  follows the global <strong> rule — do not double up.
+
+OVERRIDES — these WIN over the conflicting master [CONTENT STRUCTURE] instructions, for this store
+only. The master rule named on the left is REPLACED by the form on the right:
+1. APPLICATIONS list "<li><b>[Industry / Scenario]:</b> ...": REPLACED by a run-in <p> list —
+   one paragraph naming the fields, separated by SEMICOLONS, each with its concrete value in
+   context. No <ul>, no colon labels. (Keep the same content and the same 4-8 fields.)
+2. APPLICATIONS H2 (the localized "Areas of application" template): REPLACED by the functional
+   form "Where [Product] is used".
+3. COMPATIBILITY list "<li><b>[Aspect label]</b> [values]": REPLACED by a verb-led opener ending
+   in a period, per SIGNATURE MOVE #1.
+4. COMMERCIAL-CLOSING H2: REPLACED by the soft-"worth it" phrasing naming the store, e.g.
+   en "Why it is worth buying [Product] from Center 3D Print?". Use the target language's natural
+   equivalent of "worth" (pl "Dlaczego warto kupić …", uk/ru per the locale overlay).
+5. FIGCAPTION lead-in "<b>LEAD-IN LABEL:</b> description": REPLACED by a verb-led, period-
+   terminated opener ("<b>Prints fine detail. </b>..."). The lead-in must still differ from the
+   alt text and from the preceding lead-in <p>, per the global figure rules.
+6. KEY BENEFITS and FUNCTIONALITY bullets: verb-led per SIGNATURE MOVE #1, never noun+colon.
+
+SCOPE OF THIS ToV: it changes WORDING and BULLET GRAMMAR only. Section order, <hr> placement,
+spec-table structure and row count, figure/video markup, the no-H1 and no-microdata rules, unit
+localization, number formatting, product-name localization, the per-locale sentence-length budget
+and every SEO limit stay EXACTLY as the master defines them.
+
+SELF-CHECK BEFORE OUTPUT:
+- [ ] Every feature bullet starts with a verb (3rd person) and its bold opener ends with a period,
+      not a colon.
+- [ ] No noun-label-plus-colon bullets and no em-dash "reveals" anywhere (no Style A leakage).
+- [ ] H2s are functional/question-style, not bare nominal topics.
+- [ ] Applications is a run-in semicolon paragraph, not a colon-labelled <ul>.
+- [ ] Figcaption lead-ins are verb-led and period-terminated.
+- [ ] Zero "!", zero body emoji, dashes within budget.
+- [ ] The operating-tips block is present (if handling/safety-relevant) with imperative bullets;
+      direct second-person address appears ONLY there and in the CTA.
+- [ ] The closing H2 uses the "worth buying" form, keeps the brand-guarantee sentence, and ends
+      with a direct "contact us"-type ask.`;
+
+/**
+ * Center 3D Print ToV — TRANSLATION overlay (Task C, C3D locales). Appended to whichever task-c
+ * instruction is selected — same mechanism as CONSUMABLES_TRANSLATION_OVERLAY /
+ * EXPERT3D_TOV_TRANSLATION_OVERLAY.
+ *
+ * Its primary job is preventing RE-NOMINALIZATION: translating a verb-led opener into Polish or
+ * German pulls hard toward a noun label ("Вміщує великі деталі." -> "Pojemność komory:" /
+ * "Bauraum:"), which silently restores the banned Style A. Also reused as the FAQ-artifact overlay
+ * via buildNativeLangOverlay().
+ */
+export const C3D_TOV_TRANSLATION_OVERLAY =
+  `[CENTER 3D PRINT ToV — "Style B" — TRANSLATION OVERLAY — these rules WIN over any conflicting
+[STYLE]/[LABELS] or list-format line above]
+The source is written in the Center 3D Print voice: a service engineer-consultant explaining what
+the machine does for the reader. Preserve that voice in the target language.
+
+DO NOT RE-NOMINALIZE (the main failure mode of this translation).
+Every bullet whose bold opener is a VERB + benefit claim ending in a PERIOD must stay a verb +
+benefit claim ending in a PERIOD. Translating it into a noun label plus a colon is WRONG and
+silently restores the banned old voice.
+  BAD  <li><b>Pojemność komory:</b> 330 × 330 × 565 mm…</li>      noun + colon
+  BAD  <li><b>Bauraum:</b> 330 × 330 × 565 mm…</li>               noun + colon
+  GOOD <li><b>Mieści duże detale i gęste partie. </b>Przestrzeń robocza 330 × 330 × 565 mm…</li>
+  GOOD <li><b>Fasst große Bauteile und dichte Chargen. </b>Der Bauraum von 330 × 330 × 565 mm…</li>
+The machine stays the grammatical subject in the target language too. Keep the space before </b>.
+Write every example form with the target language's own diacritics/script — never a stripped
+ASCII approximation.
+
+VERB STARTERS to reuse (3rd-person present):
+  PL: Mieści, Zapewnia, Utrzymuje, Drukuje, Kontroluje, Automatyzuje, Przyspiesza, Obniża, Upraszcza
+  DE: Fasst, Sorgt für, Hält, Druckt, Überwacht, Automatisiert, Beschleunigt, Senkt, Vereinfacht
+  EN: Fits, Delivers, Keeps, Prints, Monitors, Automates, Cuts, Speeds up, Simplifies
+  RU: Вмещает, Обеспечивает, Держит, Печатает, Контролирует, Автоматизирует, Ускоряет, Снижает
+
+FUNCTIONAL HEADINGS: keep H2s functional/question-style; do not flatten them into bare nominal
+topics. Mirror the source pattern: "How … works" (pl "Jak działa …", de "So funktioniert …",
+ru «Как работает …»), "Where … is used" (pl "Gdzie stosuje się …", de "Wo … eingesetzt wird",
+ru «Где применяют …»).
+
+APPLICATIONS: if the source renders applications as a run-in semicolon <p> paragraph, KEEP that
+shape. Do NOT convert it back into a colon-labelled <ul>.
+
+OPERATING-TIPS BLOCK: if the source has a "Tips for operating [Product]" H2, translate its heading
+functionally (pl "Wskazówki dotyczące eksploatacji …", de "Hinweise zum Betrieb von …",
+ru «Советы по эксплуатации …») and keep each bullet's opener as a BOLD IMPERATIVE ending in a
+period, in the target language's FORMAL register (pl the impersonal "Należy …" form, de
+Sie-Imperativ, uk/ru formal «Ви»/«Вы»-form).
+Direct second-person address stays confined to this block and the CTA — do not spread it elsewhere.
+
+FIGCAPTIONS: keep verb-led, period-terminated lead-ins; do not restore "LABEL:" form.
+
+PUNCTUATION: zero exclamation marks, zero body emoji, em-dash as a rhetorical device avoided
+(genuine ranges exempt). Question marks only in the closing H2.
+
+CLOSING CTA: keep the "worth buying" H2 form (pl "Dlaczego warto kupić [Product] w Center 3D Print?",
+de "Warum sich der Kauf von [Product] bei Center 3D Print lohnt?") and END the paragraph with the
+direct invitation to contact the specialists — never a flat availability statement. Keep the
+brand-guarantee sentence.`;
+
+/**
+ * Center 3D Print per-locale ToV — Ukrainian (uk-UA). The uk-UA MASTER is never translated, so
+ * these lexical rules must be injected into Task A via buildMasterUaOverlay() or they are
+ * silently lost — same reasoning as EXPERT3D_UK_LOCALE_TOV.
+ */
+export const C3D_UK_LOCALE_TOV =
+  `[CENTER 3D PRINT ToV — UKRAINIAN (uk-UA) — these rules WIN over any conflicting register line]
+VERB STARTERS for benefit bullets (3rd-person present, machine as subject) — reuse and vary:
+Вміщує, Забезпечує, Тримає, Друкує, Контролює, Потребує, Автоматизує, Пришвидшує, Знижує,
+Підтримує, Спрощує, Дозволяє.
+  Приклад: <li><b>Тримає стабільну температуру по всій камері. </b>Термоізольована камера,
+  кварцово-трубчасті нагрівачі та 13 незалежних зон нагрівання контролюють режим від першого до
+  останнього шару.</li>
+
+IMPERATIVE STARTERS for the operating-tips block (formal «ви»-form):
+Дотримуйтеся, Працюйте, Дочекайтеся, Перевіряйте, Забезпечте, Зберігайте, Уникайте.
+  H2: «Поради щодо експлуатації [Product]»
+  <li><b>Дотримуйтеся умов у приміщенні. </b>Забезпечте температуру 18–28 °C та вологість не
+  вище 30 %.</li>
+
+HEADING PATTERNS (functional/question — replace bare nominal topics):
+«Як працює …», «Де застосовують …», «Як … [дію]», «[Функція] та [функція]»,
+«Поради щодо експлуатації …», «Матеріали та сумісне обладнання».
+Зокрема: «Сфери застосування» → «Де застосовують [Product]»;
+«Технологія SLS та принцип роботи» → «Як працює селективне лазерне спікання».
+
+COMMERCIAL-CLOSING H2 — use the soft «варто» form, which REPLACES the master's
+«Чому купити [Product] в [Store]?» template:
+  «Чому варто купити [Product] у Center 3D Print?»
+The paragraph ends with a direct ask, e.g. «Зв'яжіться з нашими спеціалістами, щоб обговорити
+терміни поставки, конфігурацію та відповідність [Product] вашим виробничим вимогам.»
+
+REGISTER: формальне «ви» з'являється ТІЛЬКИ у блоці порад щодо експлуатації та в CTA. У решті
+тексту — безособово, вигода подається від 3-ї особи (машина як суб'єкт дії).
+Anti-anglicism rules stay as defined globally (друк, не «прінт»; ПЗ, не «софт»).`;
+
+/**
+ * Center 3D Print per-locale ToV — Polish (pl-PL). pl-PL is this store's primary market and its
+ * first-listed language in STORE_REGISTRY, and Polish is where verb-led openers most reliably
+ * collapse back into noun labels. Injected via buildNativeLangOverlay() for the FAQ artifact;
+ * the Task C translation path gets it through C3D_TOV_TRANSLATION_OVERLAY's PL verb list.
+ */
+export const C3D_PL_LOCALE_TOV =
+  `[CENTER 3D PRINT ToV — POLISH (pl-PL) — these rules WIN over any conflicting register line]
+VERB STARTERS for benefit bullets (3rd-person present, machine as subject):
+Mieści, Zapewnia, Utrzymuje, Drukuje, Kontroluje, Automatyzuje, Przyspiesza, Obniża, Podtrzymuje,
+Upraszcza, Pozwala.
+  <li><b>Mieści duże detale i gęste partie. </b>Przestrzeń robocza 330 × 330 × 565 mm pozwala
+  drukować wielkogabarytowe wyroby i rozmieszczać wiele detali w jednej budowie.</li>
+NIGDY: <li><b>Pojemność komory:</b> …</li> — rzeczownik z dwukropkiem to zakazany styl A.
+
+IMPERATIVE STARTERS for the operating-tips block — użyj formy bezosobowej «Należy …» (to jest
+polski odpowiednik formalnego trybu rozkazującego; NIE stosuj bezpośredniego „ty"):
+Należy przestrzegać, Należy zapewnić, Należy odczekać, Należy sprawdzać, Należy przechowywać,
+Należy unikać.
+  H2: «Wskazówki dotyczące eksploatacji [Product]»
+  <li><b>Należy przestrzegać warunków w pomieszczeniu. </b>Temperatura 18–28 °C, wilgotność
+  nie wyższa niż 30 %.</li>
+
+HEADING PATTERNS: «Jak działa …», «Gdzie stosuje się …», «[Funkcja] i [funkcja]»,
+«Wskazówki dotyczące eksploatacji …», «Materiały i kompatybilne urządzenia».
+Zamiast «Zastosowania» → «Gdzie stosuje się [Product]».
+
+COMMERCIAL-CLOSING H2: «Dlaczego warto kupić [Product] w Center 3D Print?» (the master's pl-PL
+template already uses the «warto» form — keep it). Zakończ akapit bezpośrednim zaproszeniem:
+«Prosimy o kontakt z naszymi specjalistami, aby omówić terminy dostawy, konfigurację i zgodność
+[Product] z Państwa wymaganiami produkcyjnymi.»
+
+REGISTER: bezpośredni zwrot do czytelnika wyłącznie w bloku wskazówek i w CTA; w pozostałym
+tekście — bezosobowo, korzyść w 3. osobie.`;
+
+/**
  * Builds the customInstructions suffix for native per-language generation (main pipeline Step 4,
  * ContentOrchestratorService.generate()). Generic image-caption-translation note for every
  * language; EXPERT3D stores additionally get the register/calque ToV overlay, plus PT's or ES's
- * locale-specific overlay.
+ * locale-specific overlay; Center 3D Print gets its Style B overlay, plus PL's locale overlay.
  */
 export function buildNativeLangOverlay(lang: string, humanLang: string, storeName: string): string {
   const parts = [
@@ -739,6 +1005,10 @@ export function buildNativeLangOverlay(lang: string, humanLang: string, storeNam
     if (lang === 'PT') parts.push(EXPERT3D_PT_LOCALE_TOV);
     if (lang === 'ES') parts.push(EXPERT3D_ES_NATIVE_VOCAB_OVERLAY);
   }
+  if (isCenter3dPrintStore(storeName)) {
+    parts.push(C3D_TOV_TRANSLATION_OVERLAY);
+    if (lang === 'PL') parts.push(C3D_PL_LOCALE_TOV);
+  }
   return parts.join('\n\n');
 }
 
@@ -747,8 +1017,9 @@ export function buildNativeLangOverlay(lang: string, humanLang: string, storeNam
  * Two jobs:
  *  1. The image-manifest figcaption/alt text is sourced in English by the Vision pre-pass —
  *     Task A must translate it, not copy it verbatim.
- *  2. EXPERT3D's uk-UA register/anti-anglicism rules live in EXPERT3D_UK_LOCALE_TOV. The master
- *     is NOT translated, so those rules must be injected here or they are silently lost.
+ *  2. EXPERT3D's uk-UA register/anti-anglicism rules live in EXPERT3D_UK_LOCALE_TOV, and Center
+ *     3D Print's Style B uk-UA lexicon in C3D_UK_LOCALE_TOV. The master is NOT translated, so
+ *     those rules must be injected here or they are silently lost.
  */
 export function buildMasterUaOverlay(storeName: string): string {
   const parts = [
@@ -758,6 +1029,7 @@ export function buildMasterUaOverlay(storeName: string): string {
     'natural, idiomatic Ukrainian preserving the same factual meaning before using it.',
   ];
   if (isExpert3dStore(storeName)) parts.push(EXPERT3D_UK_LOCALE_TOV);
+  if (isCenter3dPrintStore(storeName)) parts.push(C3D_UK_LOCALE_TOV);
   return parts.join('\n\n');
 }
 

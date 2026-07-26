@@ -12,6 +12,8 @@ import {
   getLangsForStore, taskLangToIso, isoToHumanLang, buildNativeLangOverlay, buildMasterUaOverlay,
   bcp47ToTaskCLang, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV,
   EXPERT3D_ES_NATIVE_VOCAB_OVERLAY, EXPERT3D_UK_LOCALE_TOV,
+  isCenter3dPrintStore, C3D_TOV_TRANSLATION_OVERLAY, C3D_UK_LOCALE_TOV, C3D_PL_LOCALE_TOV,
+  STORE_REGISTRY,
   resolveLocaleValue,
 } from './constants';
 
@@ -43,6 +45,72 @@ describe('buildNativeLangOverlay', () => {
     expect(overlay).not.toContain(EXPERT3D_TOV_TRANSLATION_OVERLAY);
     expect(overlay).not.toContain(EXPERT3D_PT_LOCALE_TOV);
     expect(overlay).not.toContain(EXPERT3D_ES_NATIVE_VOCAB_OVERLAY);
+  });
+});
+
+/**
+ * Center 3D Print "Style B" ToV — isolation guard.
+ *
+ * The point of these tests is NOT that C3D gets the voice (one test), it is that NOTHING ELSE
+ * does (the rest). Drukarka 3D is the critical case: it shares group 'EU' with Center 3D Print,
+ * so a group-based predicate would silently leak Style B into its output.
+ */
+describe('Center 3D Print ToV — store scoping', () => {
+  const OTHER_STORES = Object.keys(STORE_REGISTRY).filter(n => n !== 'Center 3D Print');
+
+  it('isCenter3dPrintStore matches only the Center 3D Print registry key', () => {
+    expect(isCenter3dPrintStore('Center 3D Print')).toBe(true);
+    for (const store of OTHER_STORES) {
+      expect(isCenter3dPrintStore(store)).toBe(false);
+    }
+  });
+
+  it('Drukarka 3D shares group "EU" with Center 3D Print — the reason the gate is name-based', () => {
+    expect(STORE_REGISTRY['Drukarka 3D'].group).toBe('EU');
+    expect(STORE_REGISTRY['Center 3D Print'].group).toBe('EU');
+    expect(isCenter3dPrintStore('Drukarka 3D')).toBe(false);
+  });
+
+  it('buildMasterUaOverlay for C3D includes the uk-UA Style B lexicon and no EXPERT3D text', () => {
+    const overlay = buildMasterUaOverlay('Center 3D Print');
+    expect(overlay).toContain(C3D_UK_LOCALE_TOV);
+    expect(overlay).not.toContain(EXPERT3D_UK_LOCALE_TOV);
+  });
+
+  it('buildNativeLangOverlay for C3D + PL includes the translation overlay and the PL locale ToV', () => {
+    const overlay = buildNativeLangOverlay('PL', 'Polish', 'Center 3D Print');
+    expect(overlay).toContain(C3D_TOV_TRANSLATION_OVERLAY);
+    expect(overlay).toContain(C3D_PL_LOCALE_TOV);
+  });
+
+  it('buildNativeLangOverlay for C3D + DE includes the translation overlay but not the PL locale ToV', () => {
+    const overlay = buildNativeLangOverlay('DE', 'German', 'Center 3D Print');
+    expect(overlay).toContain(C3D_TOV_TRANSLATION_OVERLAY);
+    expect(overlay).not.toContain(C3D_PL_LOCALE_TOV);
+  });
+
+  it('C3D never receives EXPERT3D overlays (the two ToVs are mutually exclusive)', () => {
+    const overlay = buildNativeLangOverlay('PL', 'Polish', 'Center 3D Print');
+    expect(overlay).not.toContain(EXPERT3D_TOV_TRANSLATION_OVERLAY);
+    expect(overlay).not.toContain(EXPERT3D_PT_LOCALE_TOV);
+  });
+
+  it('EXPERT3D never receives C3D overlays', () => {
+    const overlay = buildNativeLangOverlay('ES', 'Castilian Spanish', 'EXPERT3D');
+    expect(overlay).not.toContain(C3D_TOV_TRANSLATION_OVERLAY);
+    expect(overlay).not.toContain(C3D_PL_LOCALE_TOV);
+    expect(buildMasterUaOverlay('EXPERT3D')).not.toContain(C3D_UK_LOCALE_TOV);
+  });
+
+  it('NO other store receives any C3D overlay — master or native path', () => {
+    for (const store of OTHER_STORES) {
+      expect(buildMasterUaOverlay(store)).not.toContain(C3D_UK_LOCALE_TOV);
+      for (const lang of ['PL', 'DE', 'RU', 'European English']) {
+        const overlay = buildNativeLangOverlay(lang, 'Polish', store);
+        expect(overlay, `${store} / ${lang}`).not.toContain(C3D_TOV_TRANSLATION_OVERLAY);
+        expect(overlay, `${store} / ${lang}`).not.toContain(C3D_PL_LOCALE_TOV);
+      }
+    }
   });
 });
 
