@@ -778,14 +778,22 @@ ANTI-PATTERN — NEVER WRITE LIKE THIS HERE ("Style A", the old voice — banned
   BAD  "...SLS needs no support structures - which opens up the possibility of..."    dash "reveal"
 Rewrite such content as a verb-led bullet and SPLIT the dash into two sentences.
 
-SIGNATURE MOVE #2 — FUNCTIONAL / QUESTION HEADINGS.
-H2s describe a FUNCTION or answer a user query; they are never bare nominal topics.
+SIGNATURE MOVE #2 — FUNCTIONAL / QUESTION HEADINGS (SECTION HEADINGS ONLY).
+MAIN SECTION HEADINGS (<h2> in §1-§6 and §9) describe a FUNCTION or answer a user query — they are
+never bare nouns.
   GOOD: "How selective laser sintering works" - "Where [Product] is used" -
         "Build module and work between cycles" - "Tips for operating [Product]" -
         "Materials and compatible equipment"
   BAD:  "SLS technology and operating principle" - "Areas of application"
 Reusable patterns: "How ... works", "Where ... is used", "How to [action]",
 "[Function] and [function]", "Tips for operating ...". Mirror the pattern in every language.
+HOWEVER, SUB-HEADINGS (<h3>) in the specifications section (§7) and in the functionality section
+(§3) MUST be CONCISE NOMINAL PHRASES — "Лазерний модуль", "Безпека", "Електроніка та підключення".
+The functional-heading rule above does NOT apply to them: a §7 spec category is a label, not a
+statement. Keep emitting <h3> sub-headings exactly where the master schema calls for them; never
+drop or merge spec categories to avoid writing a nominal phrase.
+When the SOURCE spec list is FLAT (no categories given), group it into 3-6 §7 categories of AT
+LEAST 3 rows each, naming every category in the target output language.
 
 SIGNATURE MOVE #3 — "TIPS FOR OPERATING [Product]" ADVISORY BLOCK (register shift).
 This is the ONLY place that addresses the operator directly.
@@ -847,7 +855,9 @@ SELF-CHECK BEFORE OUTPUT:
 - [ ] Every feature bullet starts with a verb (3rd person) and its bold opener ends with a period,
       not a colon.
 - [ ] No noun-label-plus-colon bullets and no em-dash "reveals" anywhere (no Style A leakage).
-- [ ] H2s are functional/question-style, not bare nominal topics.
+- [ ] Section H2s are functional/question-style, not bare nouns — AND §7/§3 <h3> sub-headings are
+      still present, as concise nominal phrases in the output language.
+- [ ] §7 carries 3-6 spec categories of at least 3 rows each, never one catch-all category.
 - [ ] Applications is a run-in semicolon paragraph, not a colon-labelled <ul>.
 - [ ] Figcaption lead-ins are verb-led and period-terminated.
 - [ ] Zero "!", zero body emoji, dashes within budget.
@@ -890,10 +900,15 @@ VERB STARTERS to reuse (3rd-person present):
   EN: Fits, Delivers, Keeps, Prints, Monitors, Automates, Cuts, Speeds up, Simplifies
   RU: Вмещает, Обеспечивает, Держит, Печатает, Контролирует, Автоматизирует, Ускоряет, Снижает
 
-FUNCTIONAL HEADINGS: keep H2s functional/question-style; do not flatten them into bare nominal
-topics. Mirror the source pattern: "How … works" (pl "Jak działa …", de "So funktioniert …",
-ru «Как работает …»), "Where … is used" (pl "Gdzie stosuje się …", de "Wo … eingesetzt wird",
-ru «Где применяют …»).
+FUNCTIONAL HEADINGS (SECTION HEADINGS ONLY): keep the main <h2> section headings functional/
+question-style; do not flatten them into bare nouns. Mirror the source pattern: "How … works"
+(pl "Jak działa …", de "So funktioniert …", ru «Как работает …»), "Where … is used"
+(pl "Gdzie stosuje się …", de "Wo … eingesetzt wird", ru «Где применяют …»).
+SUB-HEADINGS (<h3>) in the specifications section (§7) and the functionality section (§3) are
+EXEMPT: they stay CONCISE NOMINAL PHRASES, translated as labels (pl "Moduł lasera",
+"Bezpieczeństwo"; de "Lasermodul", "Sicherheit"). Reproduce EVERY <h3> present in the source —
+never drop, merge or convert a spec category into a sentence-style heading. The number of §7
+categories in your output must equal the number in the source.
 
 APPLICATIONS: if the source renders applications as a run-in semicolon <p> paragraph, KEEP that
 shape. Do NOT convert it back into a colon-labelled <ul>.

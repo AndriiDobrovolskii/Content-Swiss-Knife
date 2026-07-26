@@ -32,6 +32,7 @@ import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactRe
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
+import { validateSpecCategoryShape } from '../utils/spec-category-shape';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
 import { validateLanguageConsistency } from '../utils/language-consistency';
 // ── Orchestrator ────────────────────────────────────────────────────────────
@@ -182,6 +183,9 @@ export class ContentOrchestratorService {
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
+          // §7 must not collapse into one catch-all category — runs on the master only, since
+          // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
+          ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
@@ -463,6 +467,8 @@ export class ContentOrchestratorService {
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
+          // §7 category-collapse guard — see the identical hook in generate() for rationale.
+          ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',

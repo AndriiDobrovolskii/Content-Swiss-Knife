@@ -64,6 +64,34 @@ describe('buildPromptA — ToV system-block scoping', () => {
     }
   });
 
+  /**
+   * The §7 FLAT SOURCE rule lives in MASTER_SYSTEM_PROMPT, so it reaches all 8 stores. A store ToV
+   * overlay is appended AFTER it and can therefore override it — which is exactly how the Center
+   * 3D Print collapse happened (its heading rule out-specified the schema). This is the standing
+   * cheap guard that no store's voice contradicts §7 again.
+   */
+  it('every store receives the §7 flat-source grouping rule', () => {
+    for (const store of Object.keys(STORE_REGISTRY)) {
+      const joined = buildPromptA(inputFor(store)).systemBlocks.map(b => b.text).join('\n');
+      expect(joined.replace(/\s+/g, ' '), store)
+        .toMatch(/do NOT emit a single catch-all category/i);
+    }
+  });
+
+  it('no store ToV overlay tells the model to avoid nominal sub-headings', () => {
+    for (const store of Object.keys(STORE_REGISTRY)) {
+      // The overlay blocks only — the master's own §7 text legitimately discusses categories.
+      const overlays = buildPromptA(inputFor(store)).systemBlocks.slice(2).map(b => b.text).join('\n');
+      if (!overlays) continue;
+      // A blanket "headings are never nominal" line is the exact regression: it must always be
+      // scoped to section headings and paired with the <h3> exemption.
+      if (/never bare noun/i.test(overlays)) {
+        expect(overlays, `${store}: blanket nominal-heading ban without an <h3> carve-out`)
+          .toMatch(/<h3>[\s\S]*MUST be CONCISE NOMINAL PHRASES/i);
+      }
+    }
+  });
+
   it('the two cached prefix blocks are byte-identical across every store (cache stability)', () => {
     const stores = Object.keys(STORE_REGISTRY);
     const prefixes = stores.map(s => buildPromptA(inputFor(s)).systemBlocks.slice(0, 2));

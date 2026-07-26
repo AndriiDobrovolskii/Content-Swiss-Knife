@@ -13,6 +13,7 @@ import {
   bcp47ToTaskCLang, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV,
   EXPERT3D_ES_NATIVE_VOCAB_OVERLAY, EXPERT3D_UK_LOCALE_TOV,
   isCenter3dPrintStore, C3D_TOV_TRANSLATION_OVERLAY, C3D_UK_LOCALE_TOV, C3D_PL_LOCALE_TOV,
+  C3D_TOV_BASE_OVERLAY,
   STORE_REGISTRY,
   resolveLocaleValue,
 } from './constants';
@@ -100,6 +101,35 @@ describe('Center 3D Print ToV — store scoping', () => {
     expect(overlay).not.toContain(C3D_TOV_TRANSLATION_OVERLAY);
     expect(overlay).not.toContain(C3D_PL_LOCALE_TOV);
     expect(buildMasterUaOverlay('EXPERT3D')).not.toContain(C3D_UK_LOCALE_TOV);
+  });
+
+  /**
+   * Regression: the Ortur H20 §7 collapse (2026-07-26). SIGNATURE MOVE #2 banned nominal headings
+   * without scoping the ban to <h2>, so the model stopped emitting §7/§3 <h3> sub-headings
+   * entirely — 0 <h3> in the C3D artifact vs 13 in EXPERT3D's.
+   */
+  it('the base overlay scopes the nominal-heading ban to section headings only', () => {
+    expect(C3D_TOV_BASE_OVERLAY).toContain('SECTION HEADINGS ONLY');
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/<h3>\) in the specifications section \(§7\)/);
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/MUST be CONCISE NOMINAL PHRASES/);
+  });
+
+  it('the base overlay carries the flat-source grouping instruction', () => {
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/group it into 3-6 §7 categories of AT\s+LEAST 3 rows/);
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/naming every category in the target output language/i);
+  });
+
+  it('the base overlay self-check cannot re-teach the over-generalization', () => {
+    // The old checklist line ("H2s are functional/question-style, not bare nominal topics") stated
+    // the ban a second time, unscoped — enough on its own to reproduce the bug.
+    expect(C3D_TOV_BASE_OVERLAY).not.toMatch(/\[ \] H2s are functional\/question-style/);
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/§7\/§3 <h3> sub-headings are\s+still present/);
+  });
+
+  it('the translation overlay exempts <h3> sub-headings too', () => {
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('SECTION HEADINGS ONLY');
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toMatch(/are\s+EXEMPT/);
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toMatch(/never drop, merge or convert a spec category/i);
   });
 
   it('NO other store receives any C3D overlay — master or native path', () => {
