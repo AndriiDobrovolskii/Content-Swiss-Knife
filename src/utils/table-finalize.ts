@@ -11,9 +11,7 @@
  * Pure functions, no LLM.
  */
 
-import { KILLER_SPECS_HEADERS } from '../prompt-core/constants';
-
-const DEFAULT_HEADERS: [string, string] = KILLER_SPECS_HEADERS['en-gb'];
+import { getKillerSpecsHeaders } from '../prompt-core/constants';
 
 // OpenCart's default theme table CSS doesn't visually separate a colspan category-header row
 // from ordinary rows — a deliberate, isolated inline-style exception (see CLAUDE.md's own
@@ -43,7 +41,7 @@ const WHY_IT_MATTERS_MARKERS = [
  * one of the known "why it matters" marker phrases in its header row. A table matching (a)+(b)
  * but not (c) is left untouched.
  */
-export function collapseKillerSpecsToTwoColumns(html: string, locale = ''): string {
+export function collapseKillerSpecsToTwoColumns(html: string, locale = '', storeName = ''): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const candidate = Array.from(doc.querySelectorAll('table'))
     .find(t => !t.closest('section.specs') && t.querySelectorAll('thead th').length === 3);
@@ -59,13 +57,15 @@ export function collapseKillerSpecsToTwoColumns(html: string, locale = ''): stri
     return html;
   }
 
-  // Locale-agnostic fallback: the Optimizer (unlike Task A/C) never has a known store locale, and
-  // its input can be in ANY language, not just STORE_REGISTRY's set. When `locale` isn't a
+  // Locale-agnostic fallback: the Optimizer (unlike Task A/C) never has a known store OR locale,
+  // and its input can be in ANY language, not just STORE_REGISTRY's set. When `locale` isn't a
   // recognized key, reuse the header text the model already wrote for THIS table instead of
   // defaulting to English — the artifact is its own source of truth for what language it's in.
+  // `storeName` only selects WHICH header map is consulted (see getKillerSpecsHeaders); it never
+  // affects this fallback, so the Optimizer path behaves identically with or without a store.
   const ths = Array.from(table.querySelectorAll('thead th'));
   const [paramHeader, benefitHeader] =
-    KILLER_SPECS_HEADERS[locale.toLowerCase()] ??
+    getKillerSpecsHeaders(locale, storeName) ??
     [ths[0]?.textContent?.trim() || 'Parameter', ths[2]?.textContent?.trim() || 'Why it matters'];
 
   for (const row of Array.from(table.querySelectorAll('tbody tr'))) {
@@ -121,6 +121,6 @@ export function flattenSpecCategoriesToColspanTable(html: string): string {
 }
 
 /** Composed entry point — call once per locale, after validation/repair-gate acceptance. */
-export function finalizeTablesForDisplay(html: string, locale = ''): string {
-  return flattenSpecCategoriesToColspanTable(collapseKillerSpecsToTwoColumns(html, locale));
+export function finalizeTablesForDisplay(html: string, locale = '', storeName = ''): string {
+  return flattenSpecCategoriesToColspanTable(collapseKillerSpecsToTwoColumns(html, locale, storeName));
 }

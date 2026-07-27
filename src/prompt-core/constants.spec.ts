@@ -16,7 +16,38 @@ import {
   C3D_TOV_BASE_OVERLAY,
   STORE_REGISTRY,
   resolveLocaleValue,
+  getKillerSpecsHeaders, KILLER_SPECS_HEADERS,
 } from './constants';
+
+describe('getKillerSpecsHeaders — store-scoped §2 header override', () => {
+  it('returns the impersonal pair only for Center 3D Print', () => {
+    expect(getKillerSpecsHeaders('uk-UA', 'Center 3D Print')).toEqual(['Параметр', 'Практична користь']);
+    expect(getKillerSpecsHeaders('uk-UA', 'Drukarka 3D')).toEqual(KILLER_SPECS_HEADERS['uk-ua']);
+  });
+
+  it('is identical to the base map for all seven other stores, in every locale', () => {
+    for (const store of Object.keys(STORE_REGISTRY).filter(s => s !== 'Center 3D Print')) {
+      for (const locale of Object.keys(KILLER_SPECS_HEADERS)) {
+        expect(getKillerSpecsHeaders(locale, store), `${store}/${locale}`)
+          .toEqual(KILLER_SPECS_HEADERS[locale]);
+      }
+    }
+  });
+
+  it('falls through to the base map for a locale C3D does not publish', () => {
+    expect(getKillerSpecsHeaders('es-ES', 'Center 3D Print')).toEqual(KILLER_SPECS_HEADERS['es-es']);
+  });
+
+  /** table-finalize.ts depends on this undefined to trigger its document-derived fallback. */
+  it('returns undefined for an unknown locale (exact-key, not resolveLocaleValue)', () => {
+    expect(getKillerSpecsHeaders('xx-XX', 'Center 3D Print')).toBeUndefined();
+    expect(getKillerSpecsHeaders('es-AR', '')).toBeUndefined();
+  });
+
+  it('is case-insensitive on the locale', () => {
+    expect(getKillerSpecsHeaders('UK-UA', 'Center 3D Print')).toEqual(['Параметр', 'Практична користь']);
+  });
+});
 
 describe('buildNativeLangOverlay', () => {
   it('EXPERT3D + PT includes the base ToV overlay and the PT locale overlay, not ES', () => {

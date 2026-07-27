@@ -170,6 +170,51 @@ export const KILLER_SPECS_HEADERS: Record<string, [param: string, benefit: strin
   'en-us': ['Parameter', 'Your Advantage'],
 };
 
+/**
+ * §2 killer-specs headers — CENTER 3D PRINT OVERRIDE. Style B confines direct second-person
+ * address to the operating-tips block and the CTA (see C3D_TOV_BASE_OVERLAY SIGNATURE MOVE #3
+ * and C3D_UK_LOCALE_TOV's REGISTER line); everywhere else the benefit is stated impersonally,
+ * from the machine's point of view. The default pair ("Ваша перевага" / "Twoja korzyść" /
+ * "Ihr Vorteil" / "Your Advantage") therefore violates this store's own voice, in §2, on every
+ * product — and it is injected DETERMINISTICALLY by table-finalize.ts, never written by the
+ * model, so no prompt rule can reach it.
+ *
+ * An OVERRIDE LAYER, not a replacement map: any locale absent here resolves through
+ * KILLER_SPECS_HEADERS. Only Center 3D Print's five STORE_REGISTRY languages are listed (plus
+ * the two other English variants, which carry identical text); es-ES/es-MX/pt-PT are omitted
+ * deliberately because this store does not publish them — add a row if that ever changes.
+ */
+const KILLER_SPECS_HEADERS_C3D: Record<string, [param: string, benefit: string]> = {
+  'uk-ua': ['Параметр', 'Практична користь'],
+  'ru-ua': ['Параметр', 'Практическая польза'],
+  'pl-pl': ['Parametr', 'Praktyczna korzyść'],
+  'de-de': ['Parameter', 'Praktischer Nutzen'],
+  'en-gb': ['Parameter', 'Practical benefit'],
+  'en-es': ['Parameter', 'Practical benefit'],
+  'en-us': ['Parameter', 'Practical benefit'],
+};
+
+/**
+ * Resolves the §2 two-column header pair for a locale, honouring per-store ToV overrides.
+ * Keeps the store decision here next to isCenter3dPrintStore, so table-finalize.ts stays a dumb
+ * renderer — the same isolation mechanism every other ToV divergence uses.
+ *
+ * EXACT-KEY LOOKUP ON PURPOSE — returns `undefined` for an unrecognized locale rather than
+ * falling back to English or base-language matching (do NOT switch this to resolveLocaleValue).
+ * table-finalize.ts depends on that `undefined` to trigger its Optimizer fallback, which reuses
+ * the header text the model already wrote for THAT document; the artifact is its own source of
+ * truth for what language it is in. resolveLocaleValue would silently map e.g. 'es-AR' onto
+ * 'es-es' and defeat it.
+ */
+export function getKillerSpecsHeaders(
+  locale: string,
+  storeName = '',
+): [string, string] | undefined {
+  const key = locale.toLowerCase();
+  return (isCenter3dPrintStore(storeName) ? KILLER_SPECS_HEADERS_C3D[key] : undefined)
+    ?? KILLER_SPECS_HEADERS[key];
+}
+
 /** §7 "Parameter/Value" table headers, keyed by lowercase BCP47 — see master-system-prompt.ts's
  *  own §7 localization table. Used by the Optimizer's post-processing (Generator's Task
  *  A/C output already carries LLM-authored localized headers natively). */

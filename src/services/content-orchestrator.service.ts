@@ -389,10 +389,10 @@ export class ContentOrchestratorService {
       // they share the same (merged) category structure, so no cross-locale drift is possible.
       this.content.update(c => ({
         ...c,
-        mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, 'uk-UA'),
+        mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, 'uk-UA', input.website.name),
         translations: Object.fromEntries(
           Object.entries(c.translations).map(([lang, html]) =>
-            [lang, finalizeTablesForDisplay(html, taskLangToIso(lang, input.website.name))]),
+            [lang, finalizeTablesForDisplay(html, taskLangToIso(lang, input.website.name), input.website.name)]),
         ),
       }));
 
@@ -583,7 +583,7 @@ export class ContentOrchestratorService {
 
       // Deterministic table-shape finalization — see the identical hook in generate() for
       // rationale. Master-only here (no translations loop in this native uk-UA path).
-      this.content.update(c => ({ ...c, mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, UA_ISO) }));
+      this.content.update(c => ({ ...c, mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, UA_ISO, input.website.name) }));
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Done!');
@@ -716,6 +716,9 @@ export class ContentOrchestratorService {
           // Small-category consolidation is delegated to the LLM itself (see optimizer.ts
           // PHASE 1) since it requires inventing a new label, which a locale-less deterministic
           // step can't do safely.
+          // No storeName either, deliberately: the Optimizer accepts arbitrary pasted HTML that
+          // may come from any store or none. It would also be inert — with no locale,
+          // getKillerSpecsHeaders returns undefined for every store map alike.
           return finalizeTablesForDisplay(out);
         },
         validate: html => validateLanguageConsistency(html, htmlInput),
