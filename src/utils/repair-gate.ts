@@ -1,5 +1,6 @@
 import { PromptPayload } from '../prompt-core/payload';
 import { ValidationIssue } from './output-validator';
+import { REPAIR_STRATEGIES, RepairTier, getAtPath, resolveLadder, setAtPath } from './repair-strategy';
 
 export interface RepairGateOptions<T> {
   label: string;
@@ -9,6 +10,30 @@ export interface RepairGateOptions<T> {
   validate: (artifact: T) => ValidationIssue[];
   withFeedback: (payload: PromptPayload, errors: ValidationIssue[]) => PromptPayload;
   onAttempt?: (attempt: number, errorCount: number) => void;
+  /**
+   * Tier-1 executor: send one field value plus an instruction, get the corrected value back.
+   *
+   * OPTIONAL. When omitted, the ladder still runs tier 0 (which needs no LLM) but every
+   * 'field-scoped' rung is skipped. When BOTH this and tiered repair are unused the loop is
+   * byte-identical to the pre-ladder gate — that reversibility is asserted in the spec.
+   *
+   * Implementations MUST build a minimal payload that reuses `basePayload.systemBlocks` BY
+   * REFERENCE so the cached prefix still hits; see repairFieldPayload().
+   */
+  repairField?: (payload: PromptPayload) => Promise<string>;
+  /** Tier-1 attempt budget. Each call is ~200 tokens, so this can exceed maxRepairs safely. */
+  maxFieldRepairs?: number;
+}
+
+/**
+ * Minimal payload for a tier-1 field repair.
+ *
+ * Deliberately NOT appendRepairFeedback: appending to the full userContent would ship the entire
+ * product context to correct one string. `systemBlocks` is passed through BY REFERENCE — that is
+ * what preserves the Anthropic cache hit, and a test asserts the identity.
+ */
+export function repairFieldPayload(basePayload: PromptPayload, instruction: string): PromptPayload {
+  return { systemBlocks: basePayload.systemBlocks, userContent: instruction };
 }
 
 export interface RepairAttemptRecord {
@@ -55,9 +80,105 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
 
   const errCount = (is: ValidationIssue[]) => is.filter(i => i.severity === 'error').length;
   const issueKey = (i: ValidationIssue) => `${i.rule}::${i.context}`;
+
+  /**
+   * How many rungs of its own ladder each issue has already burned, keyed by issueKey.
+   *
+   * This is what makes dispatch PER-ISSUE rather than a global tier sweep. meta-title-length's
+   * ladder is ['field-scoped', 'deterministic'] — tier 1 first, because its wording carries SEO
+   * value and truncation destroys it. A global "apply all tier-0 fixes, then all tier-1" pass would
+   * truncate before the model ever saw the title, making tier 1 unreachable and the ladder
+   * decorative. Cursors persist ACROSS iterations so a failed rung escalates rather than repeating.
+   *
+   * issueKey is rule::context, which already distinguishes the same rule failing on two locales
+   * ("SEO meta (en-GB)" vs "SEO meta (pl-PL)"). No second identity function.
+   */
+  const ladderCursor = new Map<string, number>();
+  let cursorMoves = 0;
+  const activeTier = (issue: ValidationIssue): RepairTier => {
+    const ladder = resolveLadder(issue);
+    return ladder[Math.min(ladderCursor.get(issueKey(issue)) ?? 0, ladder.length - 1)];
+  };
+  const advance = (issue: ValidationIssue) => {
+    ladderCursor.set(issueKey(issue), (ladderCursor.get(issueKey(issue)) ?? 0) + 1);
+    cursorMoves++;
+  };
+
+  /**
+   * Runs every issue currently sitting on `tier`, replacing exactly one addressed field per issue.
+   * Returns the possibly-updated artifact. Issues whose repair did not land advance their cursor so
+   * the next iteration tries the next rung.
+   */
+  const applyTier = async (
+    tier: RepairTier,
+    current: T,
+    plan: ReadonlyArray<{ issue: ValidationIssue; tier: RepairTier }>,
+  ): Promise<T> => {
+    let next = current;
+    for (const { issue, tier: planned } of plan) {
+      if (planned !== tier || !issue.path) continue;
+      const strategy = REPAIR_STRATEGIES.get(issue.rule);
+      const value = getAtPath(next, issue.path);
+      if (!strategy || typeof value !== 'string') { advance(issue); continue; }
+
+      let replacement: string | null = null;
+      if (tier === 'deterministic' && strategy.deterministic) {
+        replacement = strategy.deterministic(value, issue);
+      } else if (tier === 'field-scoped' && strategy.fieldInstruction && opts.repairField) {
+        const instruction = strategy.fieldInstruction(value, issue);
+        replacement = (await opts.repairField(repairFieldPayload(opts.basePayload, instruction)))?.trim() || null;
+      }
+
+      // Always advance: a rung is spent whether or not it worked. Repeating it would loop forever
+      // on a strategy that cannot satisfy the constraint.
+      advance(issue);
+      if (replacement !== null && replacement !== value) next = setAtPath(next, issue.path, replacement);
+    }
+    return next;
+  };
   // `attempt` tracks which generation `best` currently holds, so the report can state what actually
   // shipped rather than inferring it from repairsUsed.
   let best = { artifact, issues, errors: errCount(issues), attempt: 0 };
+
+  // ── Tiered ladder, ahead of any full regeneration ───────────────────────────
+  //
+  // Tiers 0 and 1 replace a single addressed field and cannot touch anything else, which makes them
+  // MONOTONIC — and monotonicity, not cost, is the point. Full regeneration carries no preservation
+  // property, so it is free to fix en-GB and break pl-PL. Every error resolved here is one that
+  // never reaches the instrument that can regress its neighbours.
+  const fieldBudget = opts.maxFieldRepairs ?? 3;
+  for (let pass = 0; pass < fieldBudget; pass++) {
+    const errs = issues.filter(i => i.severity === 'error');
+    if (errs.length === 0) break;
+
+    // Snapshot each issue's active tier ONCE per pass. Reading activeTier() inside applyTier would
+    // let a single pass burn two rungs of the same ladder: the deterministic phase runs first in
+    // code order, so any ladder beginning with 'deterministic' would advance the cursor and then
+    // immediately match the field-scoped phase too. One rung per pass has to be structural — that is
+    // what makes "attempt, fail, escalate next iteration" mean anything.
+    const plan = errs.map(issue => ({ issue, tier: activeTier(issue) }));
+
+    // Nothing left that a cheap tier can address — stop and let the full-regen loop decide.
+    if (!plan.some(p => p.tier === 'deterministic' || p.tier === 'field-scoped')) break;
+
+    const before = artifact;
+    const movesBefore = cursorMoves;
+    artifact = await applyTier('deterministic', artifact, plan);
+    artifact = await applyTier('field-scoped', artifact, plan);
+
+    // Advancing a cursor IS progress even when the artifact did not change — the next pass will
+    // reach a different rung. Breaking on "no change" alone would strand meta-title-length on its
+    // field-scoped rung whenever no repairField executor is supplied, and its deterministic
+    // terminator would never run.
+    if (artifact === before && cursorMoves === movesBefore) break;
+    if (artifact === before) continue; // cursors moved but nothing changed — no need to re-validate
+
+    issues = opts.validate(artifact);
+  }
+
+  // The ladder's work counts as the shipped state, not as a spent repair: `repairsUsed` tracks full
+  // regenerations only, so Phase A's "Repairs spent but discarded" stays meaningful.
+  best = { artifact, issues, errors: errCount(issues), attempt: 0 };
 
   while (repairsUsed < opts.maxRepairs) {
     if (best.errors === 0) break;
