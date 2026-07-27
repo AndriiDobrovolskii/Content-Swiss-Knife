@@ -2,7 +2,7 @@ import { Injectable, signal, inject } from '@angular/core';
 import { LlmService } from './llm.service';
 import { RetrievalService } from './retrieval.service';
 import { HistoryService } from '@/src/services/history.service';
-import { ProductInput, GeneratedContent, WebsiteOption } from '../app/types';
+import { ProductInput, GeneratedContent, WebsiteOption, ImageManifestEntry } from '../app/types';
 import { cleanHtmlStructure, stripCodeFences } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
@@ -11,6 +11,7 @@ import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminolo
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from '../utils/specs-grounding';
 import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/spec-count-parity';
+import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -115,6 +116,29 @@ export class ContentOrchestratorService {
     }
   }
 
+  /**
+   * Every sanctioned origin for a number+unit in an alt/figcaption, joined for
+   * validateAltNumericFidelity.
+   *
+   * MUST stay in sync with NUMERIC_SOURCE_FIDELITY_RULES, which permits [Technical Specs], [Raw
+   * Description] and the image's own manifest caption. A gate stricter than the rule the model
+   * was given would fail correct output and burn the repair budget — so the raw description and
+   * the product name are included even though the defect itself was a spec-table figure.
+   *
+   * Uses the RAW input.specs, not groundingSpecs: the validator compares canonicalized numbers
+   * and ignores unit spelling, and digits survive translation unchanged, so the untranslated
+   * source is the better choice here — it is always available, including on the runs where
+   * grounding is disabled.
+   */
+  private numericFidelitySources(input: ProductInput, manifest?: ImageManifestEntry[]): string {
+    return [
+      input.specs,
+      input.description,
+      input.name,
+      ...(manifest ?? []).flatMap(e => [e.visionDescription, e.altText]),
+    ].filter(Boolean).join('\n');
+  }
+
   async generate(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
@@ -183,6 +207,9 @@ export class ContentOrchestratorService {
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
+          // Image text may not carry a figure the source never stated — the prompt-side rule
+          // (NUMERIC_SOURCE_FIDELITY_RULES) reduces the rate; this is the deterministic gate.
+          ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (base)'),
           // §7 must not collapse into one catch-all category — runs on the master only, since
           // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
           ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
@@ -467,6 +494,8 @@ export class ContentOrchestratorService {
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
+          // Image-text numeric gate — see the identical hook in generate() for rationale.
+          ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),
           // §7 category-collapse guard — see the identical hook in generate() for rationale.
           ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
           ...(groundingDisabled ? [{
