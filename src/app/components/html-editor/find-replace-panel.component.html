@@ -1,0 +1,74 @@
+@if (open()) {
+  <div class="absolute right-2 top-2 z-30 w-80 max-w-[calc(100%-1rem)] p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg shadow-lg space-y-1.5 text-xs">
+
+    <!-- Find row -->
+    <div class="flex items-center gap-1">
+      <div class="relative flex-1 min-w-0">
+        <input
+          type="text"
+          [value]="searchText()"
+          (input)="updateSearchText($event)"
+          (keydown)="onSearchKeydown($event)"
+          [placeholder]="t().findPlaceholder"
+          [class.border-red-400]="invalidRegex()"
+          [class.dark:border-red-600]="invalidRegex()"
+          class="w-full p-1.5 pr-20 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-800 dark:text-slate-200">
+        <div class="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5">
+          <button (mousedown)="$event.preventDefault()" (click)="toggleCaseSensitive()"
+            [class.bg-slate-200]="caseSensitive()" [class.dark:bg-slate-600]="caseSensitive()"
+            [title]="t().caseSensitiveTooltip"
+            class="w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">Aa</button>
+          <button (mousedown)="$event.preventDefault()" (click)="toggleWholeWord()"
+            [class.bg-slate-200]="wholeWord()" [class.dark:bg-slate-600]="wholeWord()"
+            [title]="t().wholeWordTooltip"
+            class="w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">ab</button>
+          <button (mousedown)="$event.preventDefault()" (click)="toggleRegex()"
+            [class.bg-slate-200]="regex()" [class.dark:bg-slate-600]="regex()"
+            [title]="t().regexTooltip"
+            class="w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">.*</button>
+        </div>
+      </div>
+      <span class="w-14 shrink-0 text-center text-slate-500 dark:text-slate-400 tabular-nums">
+        @if (invalidRegex()) {
+          !
+        } @else if (matchCount() > 0) {
+          {{ currentMatch() }}/{{ matchCount() }}
+        } @else {
+          {{ t().noResults }}
+        }
+      </span>
+      <button (mousedown)="$event.preventDefault()" (click)="previous.emit()" [disabled]="matchCount() === 0"
+        [title]="t().previousTooltip"
+        class="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300">
+        <i class="fa-solid fa-chevron-up"></i>
+      </button>
+      <button (mousedown)="$event.preventDefault()" (click)="next.emit()" [disabled]="matchCount() === 0"
+        [title]="t().nextTooltip"
+        class="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300">
+        <i class="fa-solid fa-chevron-down"></i>
+      </button>
+      <button (mousedown)="$event.preventDefault()" (click)="close.emit()" [title]="t().closeTooltip"
+        class="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Replace row -->
+    <div class="flex items-center gap-1">
+      <input
+        type="text"
+        [value]="replaceText()"
+        (input)="updateReplaceText($event)"
+        [placeholder]="t().replacePlaceholder"
+        class="flex-1 min-w-0 p-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-slate-800 dark:text-slate-200">
+      <button (mousedown)="$event.preventDefault()" (click)="replaceOne.emit()" [disabled]="matchCount() === 0"
+        class="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 whitespace-nowrap">
+        {{ t().replaceBtn }}
+      </button>
+      <button (mousedown)="$event.preventDefault()" (click)="replaceAll.emit()" [disabled]="matchCount() === 0"
+        class="px-2 py-1 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded whitespace-nowrap">
+        {{ t().replaceAllBtn }}
+      </button>
+    </div>
+  </div>
+}
