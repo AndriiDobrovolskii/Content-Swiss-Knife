@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildPromptA } from './task-a';
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY, STORE_REGISTRY } from '../prompt-core/constants';
+import { EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY, STORE_REGISTRY, NUMERIC_SOURCE_FIDELITY_RULES } from '../prompt-core/constants';
 import type { ProductInput, WebsiteGroup } from '../app/types';
 
 function inputFor(storeName: string): ProductInput {
@@ -46,6 +46,14 @@ describe('buildPromptA — ToV system-block scoping', () => {
   it('Impresora-3D (the other ES-group store) also keeps the EXPERT3D overlay only', () => {
     const { systemBlocks } = buildPromptA(inputFor('Impresora-3D'));
     expect(systemBlocks[2].text).toBe(EXPERT3D_TOV_BASE_OVERLAY);
+  });
+
+  /** Unlike the ToV overlays, the numeric-fidelity rule is store-agnostic — the defect was too. */
+  it('every store receives the numeric-fidelity rule for alt/figcaption', () => {
+    for (const store of Object.keys(STORE_REGISTRY)) {
+      const joined = buildPromptA(inputFor(store)).systemBlocks.map(b => b.text).join('\n');
+      expect(joined, store).toContain(NUMERIC_SOURCE_FIDELITY_RULES);
+    }
   });
 
   it('only Center 3D Print sees the §4 verb-led-<ul> override', () => {

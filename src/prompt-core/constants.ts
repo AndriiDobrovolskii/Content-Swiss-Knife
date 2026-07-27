@@ -282,6 +282,46 @@ export const BRAND_GUARANTEE_EN =
   `As an official representative of [Brand], we guarantee 100% authenticity, fair price, authorized service, and an official warranty.`;
 
 /**
+ * Numeric provenance rule for image text. A LANGUAGE-LEVEL fidelity rule, not a store/ToV
+ * overlay — it applies to every task, every store and every language version, and reaches the
+ * master prompt by riding NUMBER_FORMAT_RULES, which master-system-prompt.ts interpolates. That
+ * makes it systemBlocks[0] for Task A, Task C and the Optimizer alike.
+ *
+ * Real defect it closes: an <img alt> read "лазерна головка 40 Вт" for a product whose source
+ * specs state 20 W — a breach of the CLAUDE.md criterion that spec values are reproduced with
+ * 100% fidelity and never invented. Numbers are the one part of an alt/figcaption where the
+ * distinctness rule ("vary the wording") has no legitimate application, so this is absolute
+ * rather than advisory.
+ *
+ * The upstream half of the fix lives in vision-prepass.ts: a wrong figure is usually COPIED
+ * faithfully from a manifest caption that read it off a promo banner, not invented by Task A.
+ * The deterministic half is alt-numeric-fidelity.ts, which fails the repair gate on any figure
+ * this rule failed to prevent.
+ */
+export const NUMERIC_SOURCE_FIDELITY_RULES = `[NUMERIC FIDELITY IN IMAGE TEXT — alt and figcaption]
+Every number-plus-unit you write inside an alt="" or a <figcaption> MUST appear in the source input
+for THIS product — [Technical Specs], [Raw Description], or that image's own manifest caption.
+Reproduce it; never infer it, never round it, never carry it over from a sibling model, a
+marketing banner, or another product in the same family.
+- Covers wattage, laser/spot size, speed, accuracy, dimensions, build volume, temperature, weight,
+  capacity, runtime, resolution and price alike.
+- WHEN THE SOURCE DOES NOT STATE THE FIGURE: describe the subject QUALITATIVELY instead of
+  numerically ("the laser head assembly", "the enclosed work area"). An alt text with no number is
+  correct; an alt text with a plausible-looking wrong number is a factual error.
+- WHEN THE SOURCE STATES A DIFFERENT FIGURE: the source wins. Never let an on-image label, a
+  filename or a caption override [Technical Specs].
+- PRECEDENCE OVER THE MANIFEST CAPTION — FOR NUMBERS ONLY: this overrides the [IMAGE HANDLING]
+  instruction to reuse a supplied manifest caption VERBATIM. If a manifest caption carries a
+  number+unit that [Technical Specs] does not state, or contradicts, DROP that figure and keep the
+  rest of the caption unchanged. Never substitute a different number in its place. Everything else
+  in the IMAGE GROUNDING LOCK stands: you still add no comparison, direction, metric, cause or
+  result the caption does not carry.
+SELF-CHECK BEFORE OUTPUT:
+- [ ] Re-read every alt="" and every <figcaption>. For each number+unit in them, point to the exact
+      line of [Technical Specs] / [Raw Description] / the manifest caption it came from. Delete any
+      figure you cannot point to, and rewrite that phrase qualitatively.`;
+
+/**
  * Locale-aware decimal/thousands separator rules (Schema v3 Appendix).
  * Applies EVERYWHERE a number is written — body prose, headings, captions, CTA copy, AND
  * spec-table cells alike — for every generated language. Only the separator punctuation
@@ -298,7 +338,9 @@ unit; only the separator punctuation localizes.
 - es-ES:         decimal comma, thousands dot (or space)      → 1.234.567,89
 - en-GB / en-ES: decimal dot, thousands comma                 → 1,234,567.89
 - en-US:         decimal dot, thousands comma                 → 1,234,567.89
-- es-US / es-MX (US market, CLDR): decimal dot, thousands comma → 1,234,567.89`;
+- es-US / es-MX (US market, CLDR): decimal dot, thousands comma → 1,234,567.89
+
+${NUMERIC_SOURCE_FIDELITY_RULES}`;
 
 /**
  * Per-locale sentence-length budget. A LANGUAGE-LEVEL quality rule (like NUMBER_FORMAT_RULES),

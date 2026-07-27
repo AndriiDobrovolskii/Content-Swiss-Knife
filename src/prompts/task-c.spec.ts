@@ -10,9 +10,22 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildPromptC } from './task-c';
-import { UK_SOURCE_ANTICALQUE, EXPERT3D_TOV_TRANSLATION_OVERLAY, C3D_TOV_TRANSLATION_OVERLAY } from '../prompt-core/constants';
+import { UK_SOURCE_ANTICALQUE, EXPERT3D_TOV_TRANSLATION_OVERLAY, C3D_TOV_TRANSLATION_OVERLAY, NUMERIC_SOURCE_FIDELITY_RULES } from '../prompt-core/constants';
 
 const SAMPLE_HTML = '<p>Sample product description.</p>';
+
+describe('buildPromptC — global rules that must survive translation', () => {
+  it('carries the numeric-fidelity rule for alt/figcaption', () => {
+    expect(buildPromptC(SAMPLE_HTML, 'PL', 'Center 3D Print').systemBlocks[0].text)
+      .toContain(NUMERIC_SOURCE_FIDELITY_RULES);
+  });
+
+  it('bans re-nominalizing §4 into "Zastosowanie:" / "Anwendung:"', () => {
+    const taskBlock = buildPromptC(SAMPLE_HTML, 'PL', 'Center 3D Print').systemBlocks[1].text;
+    expect(taskBlock).toContain('Zastosowanie:');
+    expect(taskBlock).not.toMatch(/run-in semicolon <p> paragraph, KEEP/);
+  });
+});
 
 describe('buildPromptC — pt-PT (EXPERT3D)', () => {
   it('selects EXPERT3D_PT_INSTRUCTION via the "PT" task-label branch', () => {

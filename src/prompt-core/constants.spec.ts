@@ -17,7 +17,41 @@ import {
   STORE_REGISTRY,
   resolveLocaleValue,
   getKillerSpecsHeaders, KILLER_SPECS_HEADERS,
+  NUMERIC_SOURCE_FIDELITY_RULES, NUMBER_FORMAT_RULES,
 } from './constants';
+import { MASTER_SYSTEM_PROMPT } from './master-system-prompt';
+
+describe('NUMERIC_SOURCE_FIDELITY_RULES — global injection', () => {
+  /**
+   * The rule has no home of its own: master-system-prompt.ts owns the figure/alt/figcaption
+   * rules but is FROZEN. It reaches the master by riding NUMBER_FORMAT_RULES, which the master
+   * interpolates — so the frozen file stays byte-identical and arch-guard needs no rebaseline.
+   */
+  it('is composed into NUMBER_FORMAT_RULES, its carrier into the master prompt', () => {
+    expect(NUMBER_FORMAT_RULES).toContain(NUMERIC_SOURCE_FIDELITY_RULES);
+  });
+
+  it('actually reaches MASTER_SYSTEM_PROMPT', () => {
+    expect(MASTER_SYSTEM_PROMPT).toContain(NUMERIC_SOURCE_FIDELITY_RULES);
+  });
+
+  it('states the manifest-caption precedence carve-out, scoped to numbers only', () => {
+    expect(NUMERIC_SOURCE_FIDELITY_RULES).toContain('PRECEDENCE OVER THE MANIFEST CAPTION');
+    expect(NUMERIC_SOURCE_FIDELITY_RULES).toContain('FOR NUMBERS ONLY');
+    // Must not overreach into the rest of the IMAGE GROUNDING LOCK.
+    expect(NUMERIC_SOURCE_FIDELITY_RULES).toContain('IMAGE GROUNDING LOCK stands');
+  });
+
+  it('prescribes a qualitative fallback rather than a guessed figure', () => {
+    expect(NUMERIC_SOURCE_FIDELITY_RULES).toContain('QUALITATIVELY');
+    expect(NUMERIC_SOURCE_FIDELITY_RULES).toMatch(/an alt text with a plausible-looking wrong number is a factual error/i);
+  });
+
+  it('carries a self-check line', () => {
+    expect(NUMERIC_SOURCE_FIDELITY_RULES).toContain('SELF-CHECK BEFORE OUTPUT');
+    expect(NUMERIC_SOURCE_FIDELITY_RULES).toContain('[ ] Re-read every alt=');
+  });
+});
 
 describe('Center 3D Print ToV — §4 Applications list grammar', () => {
   /**
