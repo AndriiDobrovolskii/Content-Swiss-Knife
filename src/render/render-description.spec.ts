@@ -113,7 +113,22 @@ function fullDoc(): ProductDescriptionDoc {
       { file: 'capabilities.jpg', alt: 'Схема модульного пристрою', caption: '<b>Модульність:</b> один корпус.' },
       { file: 'combo-pack.jpg', alt: 'Комплект верстата', caption: '<b>Комплект:</b> насадка та модуль.' },
     ],
+    videos: [],
   };
+}
+
+/** fullDoc plus a video embed referenced from §3. */
+function docWithVideo(): ProductDescriptionDoc {
+  const d = fullDoc();
+  d.videos = [
+    {
+      src: 'https://www.youtube.com/embed/s7orBhLydgI',
+      title: 'Ortur H20 20 W Overview',
+      caption: '<b>Відеоогляд:</b> xTool M1 Ultra у роботі.',
+    },
+  ];
+  d.functionality[1].blocks.push({ kind: 'video', ref: 0 });
+  return d;
 }
 
 /** The same document reduced to the mandatory sections only — no §5, no §6, no figures. */
@@ -122,6 +137,7 @@ function minimalDoc(): ProductDescriptionDoc {
   delete d.compatibility;
   delete d.packageContents;
   d.figures = [];
+  d.videos = [];
   d.functionality = [
     { heading: 'Технологія обробки', blocks: [{ kind: 'paragraph', text: 'Один абзац без ілюстрацій.' }] },
   ];
@@ -150,7 +166,6 @@ describe('renderDescription', () => {
       <li><b>Ротаційна насадка RA2 Pro</b> — циліндричні предмети до 99 мм.</li>
       </ul>
 
-      <section>
       <h2>Технологія обробки</h2>
       <p>В основі лежить принцип швидкої заміни робочого модуля.</p>
       <figure style="display: block; width: fit-content; max-width: 100%; margin: 4px auto;">
@@ -164,16 +179,10 @@ describe('renderDescription', () => {
       <img src="https://impresora-3d.es/image/catalog/products/xtool/m1-ultra/capabilities.jpg" alt="Схема модульного пристрою" loading="lazy" decoding="async" style="max-width: 100%; height: auto; display: block;">
       <figcaption style="text-align: left;"><b>Модульність:</b> один корпус.</figcaption>
       </figure>
-      </section>
-      <hr>
 
-      <section>
       <h2>Програмне забезпечення</h2>
       <p>xTool Creative Space керує всіма модулями.</p>
-      </section>
-      <hr>
 
-      <section>
       <h2>Сфери застосування</h2>
       <ul>
       <li><b>Сувенірне виробництво:</b> гравіювання на дереві та акрилі.</li>
@@ -181,10 +190,7 @@ describe('renderDescription', () => {
       <li><b>Прототипування:</b> швидкий розкрій макетів із картону.</li>
       <li><b>Освіта:</b> демонстрація адитивних і субтрактивних методів.</li>
       </ul>
-      </section>
-      <hr>
 
-      <section>
       <h2>Сумісність xTool M1 Ultra</h2>
       <ul>
       <li><b>Матеріали</b> деревина, акрил, шкіра, папір.</li>
@@ -195,18 +201,13 @@ describe('renderDescription', () => {
       <img src="https://impresora-3d.es/image/catalog/products/xtool/m1-ultra/combo-pack.jpg" alt="Комплект верстата" loading="lazy" decoding="async" style="max-width: 100%; height: auto; display: block;">
       <figcaption style="text-align: left;"><b>Комплект:</b> насадка та модуль.</figcaption>
       </figure>
-      </section>
-      <hr>
 
-      <section>
       <h2>Комплект постачання</h2>
       <ul>
       <li>Верстат xTool M1 Ultra</li>
       <li>Ротаційна насадка RA2 Pro</li>
       <li>Очищувач повітря AP2</li>
       </ul>
-      </section>
-      <hr>
 
       <section class="specs">
       <h2>Технічні характеристики xTool M1 Ultra</h2>
@@ -222,10 +223,8 @@ describe('renderDescription', () => {
       </section>
       <hr>
 
-      <section>
       <h2>Чому купити xTool M1 Ultra в EXPERT3D?</h2>
-      <p class="cta">EXPERT3D постачає професійне обладнання з 2012 року.</p>
-      </section>"
+      <p class="cta">EXPERT3D постачає професійне обладнання з 2012 року.</p>"
     `);
   });
 
@@ -337,43 +336,123 @@ describe('renderDescription', () => {
   });
 
   describe('section and <hr> placement', () => {
+    // These encode the PR-2 corpus finding: production emits NO <section> except section.specs,
+    // and exactly one <hr>. Verified against the accepted Center 3D Print / EXPERT3D Ortur exports.
     it('emits §1 and §2 bare, with no wrapping <section> and no <h2>', () => {
       const html = render(fullDoc());
-      const preamble = html.slice(0, html.indexOf('<section>'));
+      const preamble = html.slice(0, html.indexOf('<h2'));
       expect(preamble).toContain('<p>xTool M1 Ultra');
       expect(preamble).toContain('<div class="table-responsive">');
       expect(preamble).not.toContain('<h2');
       expect(preamble).not.toContain('<section');
     });
 
-    it('puts an <hr> between sections but never after the last one', () => {
-      for (const d of [fullDoc(), minimalDoc()]) {
+    it('emits exactly one <section>, and it is section.specs', () => {
+      for (const d of [fullDoc(), minimalDoc(), docWithVideo()]) {
         const html = render(d);
-        const sections = html.match(/<\/section>/g)!.length;
-        const rules = (html.match(/<hr>/g) ?? []).length;
-        expect(rules).toBe(sections - 1);
-        expect(html.trimEnd().endsWith('</section>')).toBe(true);
+        expect(html.match(/<section\b/g)!).toHaveLength(1);
+        expect(html.match(/<\/section>/g)!).toHaveLength(1);
+        expect(html).toContain('<section class="specs">');
       }
+    });
+
+    it('emits exactly one <hr>, immediately after </section>', () => {
+      for (const d of [fullDoc(), minimalDoc(), docWithVideo()]) {
+        const html = render(d);
+        expect(html.match(/<hr>/g)!).toHaveLength(1);
+        expect(html).toContain('</section>\n<hr>');
+      }
+    });
+
+    it('wraps §3–§6 and §9 as bare <h2> groups, never in a <section>', () => {
+      const doc = new DOMParser().parseFromString(render(fullDoc()), 'text/html');
+      const headings = Array.from(doc.querySelectorAll('h2'));
+      // Only §7's <h2> lives inside a section; every other <h2> is top-level.
+      const inSection = headings.filter(h => h.closest('section'));
+      expect(inSection).toHaveLength(1);
+      expect(inSection[0].textContent).toBe('Технічні характеристики xTool M1 Ultra');
+    });
+
+    it('ends on the §9 CTA, not on the specs section', () => {
+      const html = render(fullDoc()).trimEnd();
+      expect(html.endsWith('</p>')).toBe(true);
+      expect(html).toContain('<p class="cta">');
     });
 
     it('omits conditional sections entirely rather than emitting empty ones', () => {
       const html = render(minimalDoc());
       expect(html).not.toContain('Сумісність');
       expect(html).not.toContain('Комплект постачання');
-      expect(html).not.toMatch(/<section>\s*<\/section>/);
+      expect(html).not.toMatch(/<h2><\/h2>/);
+      expect(html).not.toMatch(/<ul>\s*<\/ul>/);
       expect(html).not.toMatch(/<hr>\s*<hr>/);
-      // §3 (1) + §4 + §7 + §9 = 4 sections, so 3 rules.
-      expect(html.match(/<\/section>/g)!).toHaveLength(4);
-      expect(html.match(/<hr>/g)!).toHaveLength(3);
     });
 
-    it('renders nested subsections as <h3> under their parent <h2>', () => {
+    it('renders nested subsections as <h3> after their parent <h2>', () => {
+      // With no <section> wrappers left, heading order is the only structure — assert on the
+      // document-order sequence rather than on containment.
       const doc = new DOMParser().parseFromString(render(fullDoc()), 'text/html');
-      const first = doc.querySelectorAll('section')[0];
-      expect(first.querySelector('h2')!.textContent).toBe('Технологія обробки');
-      expect(Array.from(first.querySelectorAll('h3')).map(h => h.textContent)).toEqual([
-        'Діодний лазер до 20 Вт',
+      const headings = Array.from(doc.querySelectorAll('h2, h3')).map(h => `${h.tagName}:${h.textContent}`);
+      expect(headings.slice(0, 3)).toEqual([
+        'H2:Технологія обробки',
+        'H3:Діодний лазер до 20 Вт',
+        'H2:Програмне забезпечення',
       ]);
+    });
+  });
+
+  describe('video embeds', () => {
+    it('renders the exact figure/iframe/figcaption shape from the real artifact', () => {
+      expect(render(docWithVideo())).toContain(
+        '<figure style="width: 100%; max-width: 1140px; margin: 0 auto 20px; aspect-ratio: 16 / 9;">' +
+          '<iframe src="https://www.youtube.com/embed/s7orBhLydgI?rel=0" ' +
+          'style="width: 100%; height: 100%; border: 0;" title="Ortur H20 20 W Overview" ' +
+          'loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; ' +
+          'gyroscope; picture-in-picture; web-share" ' +
+          'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen=""></iframe>' +
+          '<figcaption style="text-align: center; font-size: 14px; color: #666; margin-top: 10px;">' +
+          '<b>Відеоогляд:</b> xTool M1 Ultra у роботі.</figcaption></figure>',
+      );
+    });
+
+    it('emits allowfullscreen as the exact empty-valued literal', () => {
+      const html = render(docWithVideo());
+      expect(html).toContain('allowfullscreen=""');
+      expect(html).not.toContain('allowfullscreen="undefined"');
+      expect(html).not.toMatch(/allowfullscreen(?!="")/);
+    });
+
+    it('applies ensureRel0 and escapes the resulting & in the src', () => {
+      const d = docWithVideo();
+      d.videos[0].src = 'https://www.youtube.com/embed/abc?start=30';
+      const html = render(d);
+      expect(html).toContain('src="https://www.youtube.com/embed/abc?start=30&amp;rel=0"');
+      expect(html).not.toContain('start=30&rel=0"');
+    });
+
+    it('keeps a video lazy even when it is the first media element on the page', () => {
+      const d = minimalDoc(); // no figures, no §5/§6 — the video is the only media element
+      d.videos = [{ src: 'https://vimeo.com/x', title: 'T', caption: 'C' }];
+      d.functionality[0].blocks = [{ kind: 'video', ref: 0 }];
+      const html = render(d);
+      expect(html.match(/<iframe\b[^>]*>/g)![0]).toContain('loading="lazy"');
+      expect(html).not.toContain('<img');
+    });
+
+    it('escapes a title containing a double quote instead of breaking the attribute', () => {
+      const d = docWithVideo();
+      d.videos[0].title = 'He said "go"';
+      const html = render(d);
+      expect(html).toContain('title="He said &quot;go&quot;"');
+      expect(html).not.toContain('title="He said "go""');
+    });
+
+    it('indexes videos independently of figures', () => {
+      // 3 figures and 1 video coexist; the video ref 0 must not collide with figures[0].
+      const html = render(docWithVideo());
+      expect(html.match(/<img\b/g)!).toHaveLength(3);
+      expect(html.match(/<iframe\b/g)!).toHaveLength(1);
+      expect(html).toContain('craft-machine.jpg');
     });
   });
 
@@ -449,6 +528,41 @@ describe('ProductDescriptionDocSchema', () => {
     // figures[1] is referenced ONLY from a nested subsection. A walker that skipped
     // `subsections` would report it as unreferenced and reject a valid document.
     expect(ProductDescriptionDocSchema.safeParse(fullDoc()).success).toBe(true);
+  });
+
+  it('accepts a doc carrying both figures and videos', () => {
+    expect(ProductDescriptionDocSchema.safeParse(docWithVideo()).success).toBe(true);
+  });
+
+  it('rejects a video that is never referenced', () => {
+    const d = fullDoc();
+    d.videos.push({ src: 'https://youtu.be/x', title: 'T', caption: 'C' });
+    const result = ProductDescriptionDocSchema.safeParse(d);
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error!.issues)).toContain('Every video must be referenced exactly once');
+  });
+
+  it('rejects a video referenced twice', () => {
+    const d = docWithVideo();
+    d.functionality[0].blocks.push({ kind: 'video', ref: 0 });
+    expect(ProductDescriptionDocSchema.safeParse(d).success).toBe(false);
+  });
+
+  it('does not let a video ref satisfy a figure slot', () => {
+    // The guard against a shared ref counter: one figure in the manifest, referenced only by a
+    // {kind:'video'} block. A combined count would see 1 ref for 1 figure and wrongly pass.
+    const d = minimalDoc();
+    d.figures = [{ file: 'a.jpg', alt: 'A', caption: 'A' }];
+    d.videos = [];
+    d.functionality[0].blocks = [
+      { kind: 'paragraph', text: 'Текст.' },
+      { kind: 'video', ref: 0 },
+    ];
+    const result = ProductDescriptionDocSchema.safeParse(d);
+    expect(result.success).toBe(false);
+    const issues = JSON.stringify(result.error!.issues);
+    expect(issues).toContain('Every figure must be referenced exactly once');
+    expect(issues).toContain('Every video must be referenced exactly once');
   });
 
   it('rejects nesting deeper than two levels', () => {

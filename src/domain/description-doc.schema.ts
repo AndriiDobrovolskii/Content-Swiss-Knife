@@ -26,6 +26,7 @@ const BlockSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('paragraph'), text: Prose }),
   z.object({ kind: z.literal('bullets'), items: z.array(z.object({ lead: NonEmpty, text: Prose })).min(3).max(8) }),
   z.object({ kind: z.literal('figure'), ref: z.number().int().nonnegative() }),
+  z.object({ kind: z.literal('video'), ref: z.number().int().nonnegative() }),
 ]);
 
 /**
@@ -70,6 +71,7 @@ export const ProductDescriptionDocSchema = z.object({
   cta: z.object({ heading: NonEmpty, text: Prose }),
 
   figures: z.array(z.object({ file: NonEmpty, alt: NonEmpty, caption: Prose })),
+  videos: z.array(z.object({ src: NonEmpty, title: NonEmpty, caption: Prose })),
 })
 // Cross-field: every figure ref must be in range, and no figure may be referenced twice or zero times.
 //
@@ -77,12 +79,19 @@ export const ProductDescriptionDocSchema = z.object({
 // file. Without the annotation zod hands back an all-optional shape here and the body does not
 // compile.
 .superRefine((doc: ProductDescriptionDoc, ctx) => {
-  const refs: number[] = [];
+  // Figure and video refs are collected into SEPARATE buckets. A shared counter would let a
+  // {kind:'video'} block satisfy a figure slot (and vice versa), which passes every other check
+  // and silently drops media at render time.
+  const figureRefs: number[] = [];
+  const videoRefs: number[] = [];
   const walk = (blocks: Block[]) => {
-    for (const b of blocks) if (b.kind === 'figure') refs.push(b.ref);
+    for (const b of blocks) {
+      if (b.kind === 'figure') figureRefs.push(b.ref);
+      else if (b.kind === 'video') videoRefs.push(b.ref);
+    }
   };
-  // Must mirror the renderer's traversal exactly — a figure nested inside a subsection is still
-  // a referenced figure, and missing it here would fail a perfectly valid document.
+  // Must mirror the renderer's traversal exactly — media nested inside a subsection is still
+  // referenced, and missing it here would fail a perfectly valid document.
   const walkSubsection = (s: Subsection) => {
     walk(s.blocks);
     s.subsections?.forEach(walkSubsection);
@@ -91,17 +100,23 @@ export const ProductDescriptionDocSchema = z.object({
   doc.functionality.forEach(walkSubsection);
   if (doc.compatibility) walkSubsection(doc.compatibility);
 
-  const sorted = [...refs].sort((a, b) => a - b);
-  const expected = doc.figures.map((_, i) => i);
-  if (sorted.length !== expected.length || sorted.some((r, i) => r !== expected[i])) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['figures'],
-      message:
-        `Every figure must be referenced exactly once. figures.length=${doc.figures.length}, ` +
-        `refs=[${sorted.join(', ')}].`,
-    });
-  }
+  /** Each manifest entry referenced exactly once, no gaps, no strays. */
+  const checkRefs = (refs: number[], manifestLength: number, field: 'figures' | 'videos') => {
+    const sorted = [...refs].sort((a, b) => a - b);
+    const expected = Array.from({ length: manifestLength }, (_, i) => i);
+    if (sorted.length !== expected.length || sorted.some((r, i) => r !== expected[i])) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [field],
+        message:
+          `Every ${field === 'figures' ? 'figure' : 'video'} must be referenced exactly once. ` +
+          `${field}.length=${manifestLength}, refs=[${sorted.join(', ')}].`,
+      });
+    }
+  };
+
+  checkRefs(figureRefs, doc.figures.length, 'figures');
+  checkRefs(videoRefs, doc.videos.length, 'videos');
 });
 
 /**

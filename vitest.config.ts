@@ -29,8 +29,11 @@ export default defineConfig({
       },
     },
 
-    // Glob pattern: only *.spec.ts files under src/
-    include: ['src/**/*.spec.ts'],
+    // *.spec.ts under src/, plus the corpus reconciliation harness under test/.
+    // test/ is included deliberately: render-reconciliation.spec.ts compares the renderer against
+    // real accepted artifacts committed in test/fixtures/corpus/. Without this entry that harness
+    // is dead code that reports success by never running. See test/render-reconciliation.report.md.
+    include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
 
     // Detailed output — show each test name, not just pass/fail summary.
     reporter: ['verbose'],

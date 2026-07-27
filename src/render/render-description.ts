@@ -20,8 +20,10 @@ import type {
   ProductDescriptionDoc,
   SpecCategory,
   Subsection,
+  VideoEmbed,
 } from '../domain/description-doc';
 import { KILLER_SPECS_HEADERS, getKillerSpecsHeaders } from '../prompt-core/constants';
+import { ensureRel0 } from '../utils/video-url';
 
 export interface RenderContext {
   /** From STORE_REGISTRY.imageBaseUrl. */
@@ -42,6 +44,14 @@ const CATEGORY_HEADER_STYLE = 'text-align: center; padding: 10px; font-weight: b
 const FIGURE_STYLE = 'display: block; width: fit-content; max-width: 100%; margin: 4px auto;';
 const IMG_STYLE = 'max-width: 100%; height: auto; display: block;';
 const FIGCAPTION_STYLE = 'text-align: left;';
+
+/** [VERBATIM from video-figure.ts] — corroborated against a real artifact's <iframe> markup. */
+const VIDEO_FIGURE_STYLE = 'width: 100%; max-width: 1140px; margin: 0 auto 20px; aspect-ratio: 16 / 9;';
+const IFRAME_STYLE = 'width: 100%; height: 100%; border: 0;';
+const VIDEO_ALLOW_VALUE =
+  'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+const VIDEO_REFERRERPOLICY_VALUE = 'strict-origin-when-cross-origin';
+const VIDEO_FIGCAPTION_STYLE = 'text-align: center; font-size: 14px; color: #666; margin-top: 10px;';
 
 /**
  * Full escape — for attribute values and non-prose text.
@@ -125,6 +135,32 @@ function renderFigure(f: Figure, position: number, ctx: RenderContext): string {
   );
 }
 
+/**
+ * Video embed figure. Attribute order — src, style, title, loading, allow, referrerpolicy,
+ * allowfullscreen — is taken verbatim from a real artifact, which in turn reflects the
+ * setAttribute() order in wrapVideoFigures().
+ *
+ * Unlike images there is no first-eager rule: a video is never the LCP element, and every real
+ * artifact carries loading="lazy" on it unconditionally.
+ *
+ * `allowfullscreen=""` is written as a fixed literal in the template. It must never be built from a
+ * variable, or an undefined value degrades it to allowfullscreen="undefined".
+ *
+ * `src` is escaped AFTER ensureRel0(), which may append to a URL that already has a query string —
+ * the resulting `&` has to serialize as `&amp;`. Production does the same thing via setAttribute +
+ * innerHTML, so this matches rather than diverges.
+ */
+function renderVideo(v: VideoEmbed): string {
+  return (
+    `<figure style="${VIDEO_FIGURE_STYLE}">` +
+    `<iframe src="${esc(ensureRel0(v.src))}" style="${IFRAME_STYLE}" title="${esc(v.title)}"` +
+    ` loading="lazy" allow="${VIDEO_ALLOW_VALUE}"` +
+    ` referrerpolicy="${VIDEO_REFERRERPOLICY_VALUE}" allowfullscreen=""></iframe>` +
+    `<figcaption style="${VIDEO_FIGCAPTION_STYLE}">${prose(v.caption)}</figcaption>` +
+    `</figure>`
+  );
+}
+
 /** `<li><b>{lead}</b> {text}</li>` — exactly one space, no punctuation added. */
 function renderBullets(items: BulletItem[]): string {
   const lis = items.map(i => `<li><b>${esc(i.lead)}</b> ${prose(i.text)}</li>`).join('\n');
@@ -139,12 +175,15 @@ function renderBlock(b: Block, doc: ProductDescriptionDoc, positions: Map<number
       return renderBullets(b.items);
     case 'figure':
       return renderFigure(doc.figures[b.ref], positions.get(b.ref) ?? 0, ctx);
+    case 'video':
+      return renderVideo(doc.videos[b.ref]);
   }
 }
 
 /**
- * One <section> per top-level Subsection, matching production: <h2> for the section itself, <h3>
- * for each nested subsection. Depth beyond 2 is unreachable — the schema has no shape for it.
+ * A bare <h2> group: heading, then blocks, then any nested <h3> subsections. NO <section> wrapper —
+ * see the section-model note on renderDescription(). Depth beyond 2 is unreachable, the schema has
+ * no shape for it.
  */
 function renderSubsection(
   s: Subsection,
@@ -157,7 +196,7 @@ function renderSubsection(
     // Blank line before each <h3> — mirrors the spacing in real generator output.
     parts.push('', `<h3>${esc(sub.heading)}</h3>`, ...sub.blocks.map(b => renderBlock(b, doc, positions, ctx)));
   }
-  return `<section>\n${parts.join('\n')}\n</section>`;
+  return parts.join('\n');
 }
 
 /**
@@ -203,51 +242,51 @@ function renderSpecs(heading: string, categories: SpecCategory[]): string {
 /**
  * Renders the full description body.
  *
- * Layout contract, all locked by tests:
- *   - §1 hook and §2 (table + key benefits) are BARE — no <section>, no <h2>. See task-a.ts's
- *     "CRITICAL: §2 … has NO H2 heading and NO <section> wrapper".
- *   - Everything from §3 on is one <section> per <h2>, in [OUTPUT CONTRACT] order:
- *     §3 → §4 → §5? → §6? → §7 → §9.
- *   - <hr> BETWEEN sections, never after the last one. Real output carries N-1 rules for
- *     N sections; §9 closes the document.
+ * SECTION MODEL — derived from real shipped artifacts, not from the prompt text.
+ *
+ * An earlier revision wrapped every <h2> group in its own <section> and put an <hr> between all of
+ * them, following src/utils/__fixtures__/description_uk-UA.corrected.html. That fixture turned out
+ * to encode a SUPERSEDED convention. Current production output (verified against the accepted
+ * Center 3D Print / EXPERT3D Ortur H20 exports) contains:
+ *
+ *   - 9 <h2> but only ONE </section> — and that one is <section class="specs">;
+ *   - exactly ONE <hr>, immediately after </section> of the specs block.
+ *
+ * So §3/§4/§5/§6/§9 are bare <h2> groups, and task-a.ts's "Add <hr> after each </section>" still
+ * holds — there is simply one section to follow. Order is unchanged:
+ * §1 → §2 → §3 → §4 → §5? → §6? → §7 → §9.
  */
 export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext): string {
   const positions = figurePositions(doc);
   const block = (b: Block) => renderBlock(b, doc, positions, ctx);
 
-  const preamble = [
+  const parts: string[] = [
     `<p>${prose(doc.hook)}</p>`,
     renderKillerSpecs(doc, ctx),
     ...doc.keyBenefits.map(block),
-  ].join('\n\n');
-
-  const sections: string[] = doc.functionality.map(s => renderSubsection(s, doc, positions, ctx));
+    ...doc.functionality.map(s => renderSubsection(s, doc, positions, ctx)),
+  ];
 
   // §4 Applications — same <li><b>lead</b> text</li> shape as key benefits; the model supplies its
   // own punctuation after the scenario label.
   const applicationItems = doc.applications.items
     .map(i => `<li><b>${esc(i.scenario)}</b> ${prose(i.text)}</li>`)
     .join('\n');
-  sections.push(
-    `<section>\n<h2>${esc(doc.applications.heading)}</h2>\n<ul>\n${applicationItems}\n</ul>\n</section>`,
-  );
+  parts.push(`<h2>${esc(doc.applications.heading)}</h2>\n<ul>\n${applicationItems}\n</ul>`);
 
   if (doc.compatibility) {
-    sections.push(renderSubsection(doc.compatibility, doc, positions, ctx));
+    parts.push(renderSubsection(doc.compatibility, doc, positions, ctx));
   }
 
   if (doc.packageContents) {
     const items = doc.packageContents.items.map(i => `<li>${esc(i)}</li>`).join('\n');
-    sections.push(
-      `<section>\n<h2>${esc(doc.packageContents.heading)}</h2>\n<ul>\n${items}\n</ul>\n</section>`,
-    );
+    parts.push(`<h2>${esc(doc.packageContents.heading)}</h2>\n<ul>\n${items}\n</ul>`);
   }
 
-  sections.push(renderSpecs(doc.specs.heading, doc.specs.categories));
+  // §7 is the only <section>, and the only <hr> follows it.
+  parts.push(`${renderSpecs(doc.specs.heading, doc.specs.categories)}\n<hr>`);
 
-  sections.push(
-    `<section>\n<h2>${esc(doc.cta.heading)}</h2>\n<p class="cta">${prose(doc.cta.text)}</p>\n</section>`,
-  );
+  parts.push(`<h2>${esc(doc.cta.heading)}</h2>\n<p class="cta">${prose(doc.cta.text)}</p>`);
 
-  return `${preamble}\n\n${sections.join('\n<hr>\n\n')}`;
+  return parts.join('\n\n');
 }

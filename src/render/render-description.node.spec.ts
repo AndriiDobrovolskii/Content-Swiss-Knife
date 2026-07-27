@@ -29,7 +29,7 @@ const doc: ProductDescriptionDoc = {
   functionality: [
     {
       heading: 'Functionality',
-      blocks: [{ kind: 'paragraph', text: 'Body.' }, { kind: 'figure', ref: 0 }],
+      blocks: [{ kind: 'paragraph', text: 'Body.' }, { kind: 'figure', ref: 0 }, { kind: 'video', ref: 0 }],
       subsections: [{ heading: 'Detail', blocks: [{ kind: 'figure', ref: 1 }] }],
     },
   ],
@@ -48,6 +48,9 @@ const doc: ProductDescriptionDoc = {
     { file: 'a.jpg', alt: 'A', caption: '<b>A:</b> caption.' },
     { file: 'b.jpg', alt: 'B', caption: '<b>B:</b> caption.' },
   ],
+  // Included so the Node run also exercises ensureRel0(), which constructs a URL — the one
+  // non-DOM web API the renderer depends on.
+  videos: [{ src: 'https://www.youtube.com/embed/xyz', title: 'V', caption: 'Caption.' }],
 };
 
 describe('render-description Node safety', () => {
@@ -69,6 +72,8 @@ describe('render-description Node safety', () => {
     expect(html).toContain('<h3>Detail</h3>');
     // First image eager, second lazy — the full contract, exercised outside the browser.
     expect(html.match(/<img\b[^>]*>/g)!.map(t => t.includes('loading="lazy"'))).toEqual([false, true]);
+    // ensureRel0() ran under Node — it builds a URL, the renderer's only non-DOM web API.
+    expect(html).toContain('src="https://www.youtube.com/embed/xyz?rel=0"');
   });
 
   it('contains no reference to a browser global in its source', () => {

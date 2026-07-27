@@ -32,7 +32,9 @@ export type Block =
   | { kind: 'paragraph'; text: Prose }
   | { kind: 'bullets'; items: BulletItem[] }
   /** Index into ProductDescriptionDoc.figures. */
-  | { kind: 'figure'; ref: number };
+  | { kind: 'figure'; ref: number }
+  /** Index into ProductDescriptionDoc.videos — a SEPARATE manifest from figures. */
+  | { kind: 'video'; ref: number };
 
 export interface Subsection {
   /**
@@ -69,6 +71,24 @@ export interface Figure {
   caption: Prose;
 }
 
+/**
+ * A YouTube/Vimeo embed. Deliberately NOT merged into Figure: videos carry a different attribute
+ * set (title/allow/referrerpolicy/allowfullscreen, aspect-ratio wrapper) and a full embed URL rather
+ * than a filename. Merging the two would force the renderer to branch on URL shape — precisely the
+ * heuristic this migration exists to delete.
+ */
+export interface VideoEmbed {
+  /** Full embed URL. The renderer applies ensureRel0(); the model must not pre-normalize it. */
+  src: string;
+  /** <iframe title> — escaped as an attribute value by the renderer. */
+  title: string;
+  /**
+   * Localized caption. Real artifacts carry the target-language form ("Відеоогляд …"), not
+   * video-figure.ts's hardcoded English "Video review of …" template.
+   */
+  caption: Prose;
+}
+
 export interface ProductDescriptionDoc {
   schemaVersion: '3.0';
   /** BCP47, e.g. "uk-UA". */
@@ -97,4 +117,6 @@ export interface ProductDescriptionDoc {
 
   /** Flat manifest. Blocks reference entries by index. Order = manifest order. */
   figures: Figure[];
+  /** Parallel manifest for video embeds, indexed independently of `figures`. */
+  videos: VideoEmbed[];
 }
