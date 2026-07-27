@@ -47,6 +47,12 @@ Grounding rules:
   and keep the named product's class.
 - When the visible subject is unclear or generic, describe it generically (shape, color, controls,
   ports) — the generic description takes the place of any guessed device class.
+- NUMBERS ARE THE HIGHEST-RISK ELEMENT. State a number+unit only if it is legible in THIS image AND
+  consistent with the known specs above. Where an on-image figure contradicts them, or is absent
+  from them (a product-family banner, a different SKU, a promotional headline), OMIT it and
+  describe the subject qualitatively. This caption is reused downstream as published alt text, so a
+  caption with no figure is correct, while a caption carrying a wrong wattage, speed or accuracy
+  becomes a factual error on the storefront.
 
 ALT-TEXT RULES for "caption":
 
@@ -70,6 +76,9 @@ Within that limit, apply these in priority order:
 - BE SPECIFIC AND MEASURABLE: name the visible material, mode, part, or numeric property. Where a
   marketing adjective ("amazing", "beautiful", "innovative", "high-quality") would appear,
   substitute the visible property it implies ("0.06 mm laser spot", "enclosed Class-1 housing").
+  Subject to the numbers rule above: prefer a non-numeric visible property ("enclosed Class-1
+  housing") whenever the figure is not confirmed by the known specs. Specificity never licenses a
+  number the specs do not support.
 - COMPONENT IDENTITY: name a specific internal part or sub-assembly only when its form in the
   image is unambiguous. When the exact part is uncertain, or two component types could be
   confused, use a more general true description ("the head assembly", "an internal module", "the

@@ -135,6 +135,42 @@ describe('normalizeTerminology — uk-UA (2026-07-16 EXPERT3D find/replace audit
       .toBe('друкований плакат у рамці');
   });
 
+  /**
+   * Regression: the root-swap regex had no LEFT word boundary, so `постер` matched inside
+   * `спостерігати` and emitted "сплакатігати" (с + плакат + ігати) — three occurrences shipped
+   * in one real uk-UA artifact. Nothing downstream catches it: the transform runs inside the
+   * repair-gate produce() callback, before validateGeneratedHtml, and the result is a
+   * well-formed Cyrillic nonword no validator has a rule for. It also propagates, since the
+   * corrupted master is the source Task C translates from.
+   */
+  it('does not corrupt a word that merely CONTAINS a swap root (left word boundary)', () => {
+    const untouched = [
+      'дозволяє спостерігати за процесом друку',
+      'візуальне спостереження за камерою',
+      'спостерігач процесу, спостережливий оператор',
+      '<li>спостережний пост і спостереження</li>',
+    ];
+    for (const text of untouched) {
+      expect(normalizeTerminology(text, 'uk-UA'), text).toBe(text);
+    }
+  });
+
+  it('still swaps every declined form when the root DOES start the word', () => {
+    expect(normalizeTerminology('постер, постера, постери, постерів', 'uk-UA'))
+      .toBe('плакат, плаката, плакати, плакатів');
+  });
+
+  it('still matches at a sentence start, after a tag, a bracket and a hyphen', () => {
+    expect(normalizeTerminology('<p>Постер у рамці</p> (постер) фото-постер', 'uk-UA'))
+      .toBe('<p>Плакат у рамці</p> (плакат) фото-плакат');
+  });
+
+  it('applies the left boundary to every root, not just постер', () => {
+    // Guards against a future root whose substring occurs mid-word.
+    expect(normalizeTerminology('Розхідні матеріали та плоттер', 'uk-UA'))
+      .toBe('Витратні матеріали та плотер');
+  });
+
   it('generalizes and preserves capitalization (розхідні -> витратні)', () => {
     expect(normalizeTerminology('Розхідні матеріали — фільтри, леза', 'uk-UA'))
       .toBe('Витратні матеріали — фільтри, леза');

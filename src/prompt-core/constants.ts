@@ -61,6 +61,21 @@ export function isExpert3dStore(name: string): boolean {
 }
 
 /**
+ * Center 3D Print — the single storefront running the "Style B" Tone of Voice (verb-led benefit
+ * bullets, functional/question H2s, an operating-tips block, a consultative CTA).
+ * The single predicate gating every C3D-only ToV injection (Task A voice block, Task C
+ * translation overlay, per-locale overlays).
+ *
+ * DELIBERATELY NAME-BASED, NOT GROUP-BASED — do not "simplify" this to `group === 'EU'`.
+ * Unlike isExpert3dStore (where EXPERT3D + Impresora-3D are the ONLY ES-group stores and share
+ * one voice), Center 3D Print shares group 'EU' with Drukarka 3D, which keeps the DEFAULT voice.
+ * A group check would silently leak Style B onto Drukarka 3D's output.
+ */
+export function isCenter3dPrintStore(name: string): boolean {
+  return name === 'Center 3D Print';
+}
+
+/**
  * Standalone Translator tool — its target-language list. Store-independent by design:
  * the Translator only translates text into a target language with correct orthography,
  * with NO store/market coupling (unlike the generation pipeline's Task C).
@@ -155,6 +170,51 @@ export const KILLER_SPECS_HEADERS: Record<string, [param: string, benefit: strin
   'en-us': ['Parameter', 'Your Advantage'],
 };
 
+/**
+ * §2 killer-specs headers — CENTER 3D PRINT OVERRIDE. Style B confines direct second-person
+ * address to the operating-tips block and the CTA (see C3D_TOV_BASE_OVERLAY SIGNATURE MOVE #3
+ * and C3D_UK_LOCALE_TOV's REGISTER line); everywhere else the benefit is stated impersonally,
+ * from the machine's point of view. The default pair ("Ваша перевага" / "Twoja korzyść" /
+ * "Ihr Vorteil" / "Your Advantage") therefore violates this store's own voice, in §2, on every
+ * product — and it is injected DETERMINISTICALLY by table-finalize.ts, never written by the
+ * model, so no prompt rule can reach it.
+ *
+ * An OVERRIDE LAYER, not a replacement map: any locale absent here resolves through
+ * KILLER_SPECS_HEADERS. Only Center 3D Print's five STORE_REGISTRY languages are listed (plus
+ * the two other English variants, which carry identical text); es-ES/es-MX/pt-PT are omitted
+ * deliberately because this store does not publish them — add a row if that ever changes.
+ */
+const KILLER_SPECS_HEADERS_C3D: Record<string, [param: string, benefit: string]> = {
+  'uk-ua': ['Параметр', 'Практична користь'],
+  'ru-ua': ['Параметр', 'Практическая польза'],
+  'pl-pl': ['Parametr', 'Praktyczna korzyść'],
+  'de-de': ['Parameter', 'Praktischer Nutzen'],
+  'en-gb': ['Parameter', 'Practical benefit'],
+  'en-es': ['Parameter', 'Practical benefit'],
+  'en-us': ['Parameter', 'Practical benefit'],
+};
+
+/**
+ * Resolves the §2 two-column header pair for a locale, honouring per-store ToV overrides.
+ * Keeps the store decision here next to isCenter3dPrintStore, so table-finalize.ts stays a dumb
+ * renderer — the same isolation mechanism every other ToV divergence uses.
+ *
+ * EXACT-KEY LOOKUP ON PURPOSE — returns `undefined` for an unrecognized locale rather than
+ * falling back to English or base-language matching (do NOT switch this to resolveLocaleValue).
+ * table-finalize.ts depends on that `undefined` to trigger its Optimizer fallback, which reuses
+ * the header text the model already wrote for THAT document; the artifact is its own source of
+ * truth for what language it is in. resolveLocaleValue would silently map e.g. 'es-AR' onto
+ * 'es-es' and defeat it.
+ */
+export function getKillerSpecsHeaders(
+  locale: string,
+  storeName = '',
+): [string, string] | undefined {
+  const key = locale.toLowerCase();
+  return (isCenter3dPrintStore(storeName) ? KILLER_SPECS_HEADERS_C3D[key] : undefined)
+    ?? KILLER_SPECS_HEADERS[key];
+}
+
 /** §7 "Parameter/Value" table headers, keyed by lowercase BCP47 — see master-system-prompt.ts's
  *  own §7 localization table. Used by the Optimizer's post-processing (Generator's Task
  *  A/C output already carries LLM-authored localized headers natively). */
@@ -222,6 +282,46 @@ export const BRAND_GUARANTEE_EN =
   `As an official representative of [Brand], we guarantee 100% authenticity, fair price, authorized service, and an official warranty.`;
 
 /**
+ * Numeric provenance rule for image text. A LANGUAGE-LEVEL fidelity rule, not a store/ToV
+ * overlay — it applies to every task, every store and every language version, and reaches the
+ * master prompt by riding NUMBER_FORMAT_RULES, which master-system-prompt.ts interpolates. That
+ * makes it systemBlocks[0] for Task A, Task C and the Optimizer alike.
+ *
+ * Real defect it closes: an <img alt> read "лазерна головка 40 Вт" for a product whose source
+ * specs state 20 W — a breach of the CLAUDE.md criterion that spec values are reproduced with
+ * 100% fidelity and never invented. Numbers are the one part of an alt/figcaption where the
+ * distinctness rule ("vary the wording") has no legitimate application, so this is absolute
+ * rather than advisory.
+ *
+ * The upstream half of the fix lives in vision-prepass.ts: a wrong figure is usually COPIED
+ * faithfully from a manifest caption that read it off a promo banner, not invented by Task A.
+ * The deterministic half is alt-numeric-fidelity.ts, which fails the repair gate on any figure
+ * this rule failed to prevent.
+ */
+export const NUMERIC_SOURCE_FIDELITY_RULES = `[NUMERIC FIDELITY IN IMAGE TEXT — alt and figcaption]
+Every number-plus-unit you write inside an alt="" or a <figcaption> MUST appear in the source input
+for THIS product — [Technical Specs], [Raw Description], or that image's own manifest caption.
+Reproduce it; never infer it, never round it, never carry it over from a sibling model, a
+marketing banner, or another product in the same family.
+- Covers wattage, laser/spot size, speed, accuracy, dimensions, build volume, temperature, weight,
+  capacity, runtime, resolution and price alike.
+- WHEN THE SOURCE DOES NOT STATE THE FIGURE: describe the subject QUALITATIVELY instead of
+  numerically ("the laser head assembly", "the enclosed work area"). An alt text with no number is
+  correct; an alt text with a plausible-looking wrong number is a factual error.
+- WHEN THE SOURCE STATES A DIFFERENT FIGURE: the source wins. Never let an on-image label, a
+  filename or a caption override [Technical Specs].
+- PRECEDENCE OVER THE MANIFEST CAPTION — FOR NUMBERS ONLY: this overrides the [IMAGE HANDLING]
+  instruction to reuse a supplied manifest caption VERBATIM. If a manifest caption carries a
+  number+unit that [Technical Specs] does not state, or contradicts, DROP that figure and keep the
+  rest of the caption unchanged. Never substitute a different number in its place. Everything else
+  in the IMAGE GROUNDING LOCK stands: you still add no comparison, direction, metric, cause or
+  result the caption does not carry.
+SELF-CHECK BEFORE OUTPUT:
+- [ ] Re-read every alt="" and every <figcaption>. For each number+unit in them, point to the exact
+      line of [Technical Specs] / [Raw Description] / the manifest caption it came from. Delete any
+      figure you cannot point to, and rewrite that phrase qualitatively.`;
+
+/**
  * Locale-aware decimal/thousands separator rules (Schema v3 Appendix).
  * Applies EVERYWHERE a number is written — body prose, headings, captions, CTA copy, AND
  * spec-table cells alike — for every generated language. Only the separator punctuation
@@ -238,7 +338,9 @@ unit; only the separator punctuation localizes.
 - es-ES:         decimal comma, thousands dot (or space)      → 1.234.567,89
 - en-GB / en-ES: decimal dot, thousands comma                 → 1,234,567.89
 - en-US:         decimal dot, thousands comma                 → 1,234,567.89
-- es-US / es-MX (US market, CLDR): decimal dot, thousands comma → 1,234,567.89`;
+- es-US / es-MX (US market, CLDR): decimal dot, thousands comma → 1,234,567.89
+
+${NUMERIC_SOURCE_FIDELITY_RULES}`;
 
 /**
  * Per-locale sentence-length budget. A LANGUAGE-LEVEL quality rule (like NUMBER_FORMAT_RULES),
@@ -252,6 +354,40 @@ unit; only the separator punctuation localizes.
  * hard per-sentence ceiling. Also the AEO/GEO sweet spot: answer engines extract the first 1–2
  * sentences of a section, so the opening sentence must be short and self-contained.
  */
+export interface SentenceLengthBand {
+  hero: [number, number];
+  body: [number, number];
+  faq: [number, number];
+  ceiling: number;
+}
+
+/**
+ * Machine-readable mirror of the table printed in SENTENCE_LENGTH_RULES below, keyed by lowercase
+ * BCP47. The prose stays authoritative FOR THE MODEL; this map is authoritative FOR CODE
+ * (sentence-length.ts). A spec test parses the prose table and asserts every ceiling agrees, so
+ * the two cannot drift.
+ *
+ * WHY NOT GENERATE THE PROSE FROM THIS MAP: the table is interpolated into MASTER_SYSTEM_PROMPT,
+ * a `cache: true` system block for every store. Re-emitting it programmatically would change its
+ * bytes and cold-start every prompt-cache slot in the system for a purely cosmetic gain. A test
+ * is the cheaper guarantee.
+ *
+ * uk-UA / ru-UA ceiling is 20, NOT the 25 in the Center 3D Print ToV source document — see the
+ * C3D_TOV_BASE_OVERLAY doc comment: the stricter global figure wins and the store overlay
+ * deliberately does not restate the looser one.
+ */
+export const SENTENCE_LENGTH_BANDS: Record<string, SentenceLengthBand> = {
+  'en-gb': { hero: [9, 14], body: [15, 18], faq: [10, 15], ceiling: 25 },
+  'en-es': { hero: [9, 14], body: [15, 18], faq: [10, 15], ceiling: 25 },
+  'en-us': { hero: [8, 12], body: [14, 17], faq: [9, 14], ceiling: 22 },
+  'de-de': { hero: [8, 12], body: [12, 15], faq: [8, 13], ceiling: 18 },
+  'es-es': { hero: [10, 15], body: [16, 20], faq: [12, 16], ceiling: 27 },
+  'es-mx': { hero: [9, 13], body: [14, 18], faq: [10, 15], ceiling: 24 },
+  'pl-pl': { hero: [8, 13], body: [13, 17], faq: [10, 15], ceiling: 22 },
+  'uk-ua': { hero: [8, 12], body: [12, 16], faq: [9, 14], ceiling: 20 },
+  'ru-ua': { hero: [8, 12], body: [12, 16], faq: [9, 14], ceiling: 20 },
+};
+
 export const SENTENCE_LENGTH_RULES = `[SENTENCE LENGTH — by locale, applies everywhere, every language version]
 Write to a words-per-sentence budget calibrated for the TARGET language. Values are averages across
 the section; never exceed the hard ceiling for any single sentence. Vary length for rhythm (mix
@@ -721,10 +857,444 @@ ru-UA / pl-PL lowercase the first letter after the colon (it introduces an expla
 bold label, not a new sentence). For de-DE and all English keep the default capital.`;
 
 /**
+ * Center 3D Print Tone of Voice ("Style B") — BASE-GENERATION overlay (Task A, C3D only).
+ * Added as an extra CACHED system block AFTER master + task-a instruction, so the shared
+ * master+task prefix stays byte-stable (cache hit) for every other store and C3D just gets one
+ * additional cached suffix (its own cache slot) — same mechanism as EXPERT3D_TOV_BASE_OVERLAY.
+ *
+ * Encodes ONLY what is store-specific: bullet grammar, heading style, the operating-tips block,
+ * the CTA shape, and the Style-A anti-patterns. Rules that already exist globally are deliberately
+ * NOT restated here — SENTENCE_LENGTH_RULES (whose uk-UA ceiling of 20 is STRICTER than this ToV's
+ * 25 — restating the looser figure would create a conflict), NUMBER_FORMAT_RULES,
+ * UNIT_LOCALIZATION_RULES and PRODUCT_NAME_LOCALIZATION all stay authoritative.
+ * Per-locale verb/imperative lexicons live in C3D_UK_LOCALE_TOV / C3D_PL_LOCALE_TOV instead.
+ *
+ * 2026-07-27: OVERRIDE #1 no longer mandates a run-in semicolon <p> for §4. That form conflicted
+ * structurally with SENTENCE_LENGTH_RULES — a run-in list of 4-8 fields reads as one sentence, and
+ * the real Ortur Laser Master 3 generation produced a 68-word span against a uk-UA ceiling of 20 —
+ * and the model half-complied anyway, keeping the banned "Label:" colons inside the paragraph. §4
+ * now follows SIGNATURE MOVE #1 like every other list, which removes the conflict. The bold-opener
+ * word cap was added in the same pass so conciseness is enforced where it does not cost specs.
+ *
+ * 2026-07-27: OVERRIDE #7 added for §3's <h2>s. SIGNATURE MOVE #2 states the functional-heading
+ * rule generally, but the master's §3 "Recommended H2 order" supplies five NOMINAL templates by
+ * name, and specificity beat generality on every run — «Технологія SLS та принцип роботи» is
+ * simultaneously SIGNATURE MOVE #2's BAD example and the master's recommended §3 heading. The two
+ * sections that always came out functional (§4, §9) are exactly the two that already had a named
+ * OVERRIDE entry, so §3 got one in the same substitution-table shape. Written as a table of five
+ * named inputs rather than a general prohibition precisely so it CANNOT generalize to <h3> and
+ * re-trigger the §7 category collapse (see spec-category-shape.ts).
+ */
+export const C3D_TOV_BASE_OVERLAY =
+  `[CENTER 3D PRINT BRAND VOICE — "Style B" — applies to this store's base generation and every
+language version]
+ACTIVATION GATE: these rules apply ONLY when the store is Center 3D Print. They are inert for any
+other storefront and must never be propagated into another store's output.
+
+VOICE IN ONE LINE: a service engineer-consultant who explains, in plain steps, what the machine
+DOES FOR YOU. Competent but never distant, benefit-led, ready to advise on safe operation.
+Archetype: Sage + Caregiver (mentor / guide). Methodical, accessible, benefit-driven,
+service-minded, instructional, calm. The reader should feel: "someone knowledgeable is walking me
+through this and looking out for the result."
+
+SIGNATURE MOVE #1 — VERB-LED BENEFIT BULLETS (the single most important rule).
+Every feature/advantage bullet is a PERSONIFIED ACTION OF THE MACHINE, not a labelled term.
+  <li><b>[3rd-person present verb] + short benefit claim. </b>[1-3 supporting sentences with the
+  hard specs.]</li>
+- The bold opener STARTS WITH A VERB describing what the machine does, and ENDS WITH A PERIOD —
+  never a colon. Note the space before </b>.
+- The machine is the grammatical subject: it holds, delivers, keeps, prints, controls, automates.
+- Then unpack with concrete numbers, and explain WHY the spec matters (EEAT).
+GOOD: <li><b>Fits large parts and dense batches. </b>The 330 × 330 × 565 mm build volume prints
+      large-format items and packs many parts into a single build.</li>
+GOOD: <li><b>Moves to the next job quickly. </b>The removable build unit rolls out and is replaced
+      in under 5 minutes, so the machine barely idles.</li>
+
+ANTI-PATTERN — NEVER WRITE LIKE THIS HERE ("Style A", the old voice — banned):
+  BAD  <li><b>Adaptive thermal control:</b> heated chamber, quartz elements...</li>   noun + colon
+  BAD  "...SLS needs no support structures - which opens up the possibility of..."    dash "reveal"
+Rewrite such content as a verb-led bullet and SPLIT the dash into two sentences.
+
+SIGNATURE MOVE #2 — FUNCTIONAL / QUESTION HEADINGS (SECTION HEADINGS ONLY).
+MAIN SECTION HEADINGS (<h2> in §1-§6 and §9) describe a FUNCTION or answer a user query — they are
+never bare nouns.
+  GOOD: "How selective laser sintering works" - "Where [Product] is used" -
+        "Build module and work between cycles" - "Tips for operating [Product]" -
+        "Materials and compatible equipment"
+  BAD:  "SLS technology and operating principle" - "Areas of application"
+Reusable patterns: "How ... works", "Where ... is used", "How to [action]",
+"[Function] and [function]", "Tips for operating ...". Mirror the pattern in every language.
+HOWEVER, SUB-HEADINGS (<h3>) in the specifications section (§7) and in the functionality section
+(§3) MUST be CONCISE NOMINAL PHRASES — "Лазерний модуль", "Безпека", "Електроніка та підключення".
+The functional-heading rule above does NOT apply to them: a §7 spec category is a label, not a
+statement. Keep emitting <h3> sub-headings exactly where the master schema calls for them; never
+drop or merge spec categories to avoid writing a nominal phrase.
+When the SOURCE spec list is FLAT (no categories given), group it into 3-6 §7 categories of AT
+LEAST 3 rows each, naming every category in the target output language.
+
+SIGNATURE MOVE #3 — "TIPS FOR OPERATING [Product]" ADVISORY BLOCK (register shift).
+This is the ONLY place that addresses the operator directly.
+- Emit an H2 "Tips for operating [Product]" IMMEDIATELY BEFORE the final commercial-closing
+  section, WHEN the product is production hardware with real handling/safety considerations
+  (printers, post-processing, powder, resin). Skip it for products with none.
+- 3-5 bullets, each = BOLD IMPERATIVE OPENER ending with a period + supporting instruction.
+  Second person, formal register.
+- Practical and safety-oriented; cite MSDS / PPE / manufacturer limits where the source supports it.
+  Never invent a safety figure the source does not state.
+  <li><b>Maintain the specified room conditions. </b>Keep temperature at 18–28 °C and humidity
+  no higher than 30 %.</li>
+Everywhere OUTSIDE this block (and the CTA), stay impersonal / benefit-3rd-person — do NOT scatter
+second-person address through the body.
+
+SIGNATURE MOVE #4 — CONSULTATIVE CTA WITH A DIRECT ASK.
+The closing paragraph is consultative and ENDS WITH A DIRECT INVITATION, not a passive status line.
+  GOOD ending: "Contact our specialists to discuss lead times, configuration and how [Product]
+               fits your production requirements."
+  BAD ending:  "The printer is available for purchase with delivery across ..." (flat, no ask)
+Keep the mandatory brand-guarantee sentence and the trust points from the master [CONTENT
+STRUCTURE]. Mention where applicable: official representative, fair price, authorized service,
+warranty, pre-purchase consultation, commissioning/integration.
+
+PUNCTUATION LIMITS (store-specific; all other typography rules stay as defined globally):
+- Em/en dash as a RHETORICAL device: avoid; at most 1 per 400 words. Use a period or comma instead.
+  Genuine numeric ranges are exempt.
+- Exclamation marks in the body: ZERO. Emoji in the body: ZERO.
+- Question marks: only in the commercial-closing H2.
+- Rhetorical colon in list items ("term:"): FORBIDDEN — see the OVERRIDES table below.
+- Rhythm: alternate a short claim (5-10 words) with a supporting sentence, within the global
+  per-locale sentence-length budget, which remains authoritative.
+- BOLD OPENER LENGTH: the bold verb-led opener of any bullet is AT MOST 10 WORDS. It is a claim,
+  not a summary — put the numbers in the supporting sentences that follow, never in the opener.
+  This caps the opener only; the supporting sentences stay governed by the per-locale
+  sentence-length budget above. Do NOT compress a whole <li> to fit — dropping the hard specs to
+  shorten a bullet is a worse error than a long bullet.
+- <b> marks bullet verb/imperative openers and inline technical parameters. Brand/model emphasis
+  follows the global <strong> rule — do not double up.
+
+OVERRIDES — these WIN over the conflicting master [CONTENT STRUCTURE] instructions, for this store
+only. The master rule named on the left is REPLACED by the form on the right:
+1. APPLICATIONS list "<li><b>[Industry / Scenario]:</b> ...": the <ul>, the 4-8 entries and the
+   80-250 word budget all STAY; only the COLON-LABEL form is replaced. Write each entry as a
+   verb-led bullet per SIGNATURE MOVE #1 — the bold opener starts with a 3rd-person present verb,
+   ends with a PERIOD, and is followed by 1-2 sentences naming the concrete field/scenario and the
+   mechanism that makes this product right for it. NEVER a bare industry noun, NEVER a colon
+   label, NEVER a run-in paragraph of fields separated by semicolons.
+   GOOD: <li><b>Cuts acrylic signage without post-sanding. </b>The 20 W diode module leaves a
+         sealed edge on 3 mm cast acrylic, so sign shops skip the finishing step.</li>
+   BAD:  <li><b>Advertising:</b> cuts acrylic signage.</li>                          noun + colon
+   BAD:  <p>Branding and marking: applies logos...; decorative engraving: reproduces
+         patterns...</p>                                    run-in semicolon list — banned here
+2. APPLICATIONS H2 (the localized "Areas of application" template): REPLACED by the functional
+   form "Where [Product] is used".
+3. COMPATIBILITY list "<li><b>[Aspect label]</b> [values]": REPLACED by a verb-led opener ending
+   in a period, per SIGNATURE MOVE #1.
+4. COMMERCIAL-CLOSING H2: REPLACED by the soft-"worth it" phrasing naming the store, e.g.
+   en "Why it is worth buying [Product] from Center 3D Print?". Use the target language's natural
+   equivalent of "worth" (pl "Dlaczego warto kupić …", uk/ru per the locale overlay).
+5. FIGCAPTION lead-in "<b>LEAD-IN LABEL:</b> description": REPLACED by a verb-led, period-
+   terminated opener ("<b>Prints fine detail. </b>..."). The lead-in must still differ from the
+   alt text and from the preceding lead-in <p>, per the global figure rules.
+6. KEY BENEFITS and FUNCTIONALITY bullets: verb-led per SIGNATURE MOVE #1, never noun+colon.
+7. §3 "Recommended H2 order" (the master's five §3 topic templates — "Technology / Operating
+   principle", "Construction & hardware", "Software & automation", "Safety",
+   "Certification & compliance"): those five strings name the TOPIC each §3 <h2> must COVER.
+   They are NOT the heading to emit — emitting them as written produces exactly the bare nominal
+   heading SIGNATURE MOVE #2 forbids. REPLACE each with the functional form:
+     Technology / Operating principle  ->  "How [Product] works"
+     Construction & hardware           ->  "How [named assembly] [raises / holds / delivers X]"
+                                           (name the real assembly, e.g. "How the lift platform
+                                           and the camera raise accuracy")
+     Software & automation             ->  "What software drives [Product]"
+     Safety                            ->  "What safety mechanisms [Product] uses"
+     Certification & compliance        ->  "Which standards [Product] complies with"
+   REWORDING ONLY: same topics, same count, same order (source order still wins per [NARRATIVE
+   FIDELITY]), same §3 depth and word budget. NEVER drop or merge a §3 topic to avoid writing a
+   functional heading — a missing topic is a far worse error than a clumsy heading.
+   THIS OVERRIDE GOVERNS <h2> ONLY. §3's and §7's <h3> sub-headings stay CONCISE NOMINAL PHRASES,
+   exactly as SIGNATURE MOVE #2 already requires ("Лазерний модуль", "Безпека", "Електроніка та
+   підключення"). Emit every <h3> the master schema calls for.
+
+CONSUMABLES MODE (§C1-§C6): when the [CONSUMABLES SIMPLIFIED SCHEMA] is active instead of Schema
+v3.0, this voice still governs its list items. The schema's SECTIONS, ORDER, TABLES, H2 set and
+FORBIDDEN list are untouched — only the item grammar changes:
+- §C2 items "<b>[Feature label.]</b>": the bold opener becomes VERB-LED (it already ends in a
+  period, so only the noun-to-verb shift is needed).
+- §C3 items "<b>[Scenario]:</b>": verb-led, ending in a period. No colon. Same form as OVERRIDE #1.
+- §C5 items "<b>[Label]:</b>": a bold IMPERATIVE opener ending in a period, matching SIGNATURE
+  MOVE #3 — storage and handling instructions are advice, so the imperative is the natural register
+  there. No colon.
+- BUDGET GUARD: §C is capped at 2500 characters. In this mode each item takes the verb/imperative
+  opener plus EXACTLY ONE supporting sentence, not SIGNATURE MOVE #1's 1-3. If the budget is still
+  tight, cut supporting detail — never drop a required §C section or a spec value.
+The COLON CAPITALIZATION rule in the consumables overlay describes the form these items USED to
+take; with no colon left in §C2/§C3/§C5 it simply has nothing to apply to. Do not reintroduce a
+colon in order to satisfy it.
+
+SCOPE OF THIS ToV: it changes WORDING and BULLET GRAMMAR only. Section order, <hr> placement,
+spec-table structure and row count, figure/video markup, the no-H1 and no-microdata rules, unit
+localization, number formatting, product-name localization, the per-locale sentence-length budget
+and every SEO limit stay EXACTLY as the master defines them.
+
+SELF-CHECK BEFORE OUTPUT:
+- [ ] Every feature bullet starts with a verb (3rd person) and its bold opener ends with a period,
+      not a colon.
+- [ ] No noun-label-plus-colon bullets and no em-dash "reveals" anywhere (no Style A leakage).
+- [ ] Section H2s are functional/question-style, not bare nouns — AND §7/§3 <h3> sub-headings are
+      still present, as concise nominal phrases in the output language.
+- [ ] Every §3 <h2> uses the OVERRIDE #7 functional form, and §3/§7 <h3> stay nominal labels.
+- [ ] §7 carries 3-6 spec categories of at least 3 rows each, never one catch-all category.
+- [ ] Applications is a verb-led <ul> of 4-8 bullets — no "Field:" colon labels, no run-in
+      semicolon paragraph, no bare industry nouns.
+- [ ] Every bold bullet opener is at most 10 words, with the numbers in the sentences after it.
+- [ ] Figcaption lead-ins are verb-led and period-terminated.
+- [ ] Zero "!", zero body emoji, dashes within budget.
+- [ ] The operating-tips block is present (if handling/safety-relevant) with imperative bullets;
+      direct second-person address appears ONLY there and in the CTA.
+- [ ] The closing H2 uses the "worth buying" form, keeps the brand-guarantee sentence, and ends
+      with a direct "contact us"-type ask.`;
+
+/**
+ * Center 3D Print ToV — TRANSLATION overlay (Task C, C3D locales). Appended to whichever task-c
+ * instruction is selected — same mechanism as CONSUMABLES_TRANSLATION_OVERLAY /
+ * EXPERT3D_TOV_TRANSLATION_OVERLAY.
+ *
+ * Its primary job is preventing RE-NOMINALIZATION: translating a verb-led opener into Polish or
+ * German pulls hard toward a noun label ("Вміщує великі деталі." -> "Pojemność komory:" /
+ * "Bauraum:"), which silently restores the banned Style A. Also reused as the FAQ-artifact overlay
+ * via buildNativeLangOverlay().
+ */
+export const C3D_TOV_TRANSLATION_OVERLAY =
+  `[CENTER 3D PRINT ToV — "Style B" — TRANSLATION OVERLAY — these rules WIN over any conflicting
+[STYLE]/[LABELS] or list-format line above]
+The source is written in the Center 3D Print voice: a service engineer-consultant explaining what
+the machine does for the reader. Preserve that voice in the target language.
+
+DO NOT RE-NOMINALIZE (the main failure mode of this translation).
+Every bullet whose bold opener is a VERB + benefit claim ending in a PERIOD must stay a verb +
+benefit claim ending in a PERIOD. Translating it into a noun label plus a colon is WRONG and
+silently restores the banned old voice.
+  BAD  <li><b>Pojemność komory:</b> 330 × 330 × 565 mm…</li>      noun + colon
+  BAD  <li><b>Bauraum:</b> 330 × 330 × 565 mm…</li>               noun + colon
+  GOOD <li><b>Mieści duże detale i gęste partie. </b>Przestrzeń robocza 330 × 330 × 565 mm…</li>
+  GOOD <li><b>Fasst große Bauteile und dichte Chargen. </b>Der Bauraum von 330 × 330 × 565 mm…</li>
+The machine stays the grammatical subject in the target language too. Keep the space before </b>.
+Write every example form with the target language's own diacritics/script — never a stripped
+ASCII approximation.
+
+VERB STARTERS to reuse (3rd-person present):
+  PL: Mieści, Zapewnia, Utrzymuje, Drukuje, Kontroluje, Automatyzuje, Przyspiesza, Obniża, Upraszcza
+  DE: Fasst, Sorgt für, Hält, Druckt, Überwacht, Automatisiert, Beschleunigt, Senkt, Vereinfacht
+  EN: Fits, Delivers, Keeps, Prints, Monitors, Automates, Cuts, Speeds up, Simplifies
+  RU: Вмещает, Обеспечивает, Держит, Печатает, Контролирует, Автоматизирует, Ускоряет, Снижает
+
+FUNCTIONAL HEADINGS (SECTION HEADINGS ONLY): keep the main <h2> section headings functional/
+question-style; do not flatten them into bare nouns. Mirror the source pattern: "How … works"
+(pl "Jak działa …", de "So funktioniert …", ru «Как работает …»), "Where … is used"
+(pl "Gdzie stosuje się …", de "Wo … eingesetzt wird", ru «Где применяют …»).
+§3 in particular arrives with question-form headings and must KEEP them — collapsing one back to
+a topic label is the same failure as re-nominalizing a bullet:
+  «Яке ПЗ підтримує …»            pl "Jakie oprogramowanie obsługuje …",
+                                  de "Welche Software … steuert", ru «Какое ПО поддерживает …»
+  «Які механізми безпеки …»       pl "Jakie mechanizmy bezpieczeństwa …",
+                                  de "Welche Sicherheitsmechanismen …", ru «Какие механизмы …»
+  BAD: pl "Oprogramowanie i automatyzacja" · de "Software und Automatisierung" ·
+       ru «ПО и автоматизация» — bare noun topics, the banned form.
+SUB-HEADINGS (<h3>) in the specifications section (§7) and the functionality section (§3) are
+EXEMPT: they stay CONCISE NOMINAL PHRASES, translated as labels (pl "Moduł lasera",
+"Bezpieczeństwo"; de "Lasermodul", "Sicherheit"). Reproduce EVERY <h3> present in the source —
+never drop, merge or convert a spec category into a sentence-style heading. The number of §7
+categories in your output must equal the number in the source.
+
+APPLICATIONS (§4): the source renders applications as a <ul> of VERB-LED bullets — not a
+colon-labelled list, and not a run-in paragraph. Keep that shape. DO NOT RE-NOMINALIZE applies
+here with full force: a field or industry label plus a colon is the single most likely regression
+in this section, because "Zastosowanie:" / "Anwendung:" read as natural section labels.
+  BAD  <li><b>Zastosowanie:</b> reklama, grawerowanie…</li>            noun + colon
+  BAD  <li><b>Anwendung:</b> Werbetechnik, Gravur…</li>                noun + colon
+  BAD  <li><b>Reklama:</b> tnie plexi na szyldy…</li>                  bare field + colon
+  GOOD <li><b>Tnie plexi na szyldy bez doszlifowania. </b>Moduł 20 W…</li>
+  GOOD <li><b>Schneidet Acrylschilder ohne Nachschliff. </b>Das 20-W-Modul…</li>
+Keep the SAME number of <li> as the source — list-item counts are checked deterministically, not
+merely requested.
+
+CONSUMABLES MODE (§C1-§C6): if the consumables translation overlay is also present, its §C2/§C3/§C5
+items arrive VERB-LED (or, in §C5, imperative-led) and period-terminated, because this store's base
+voice already replaced their colon-label form. Translate them as they arrive. Its COLON
+CAPITALIZATION rule describes the form those items USED to take — with no colon left in §C2/§C3/§C5
+it has nothing to apply to, so do not reintroduce a colon in order to satisfy it. Every other
+consumables rule (section set, tables, the 2500-character cap) still applies unchanged.
+
+OPERATING-TIPS BLOCK: if the source has a "Tips for operating [Product]" H2, translate its heading
+functionally (pl "Wskazówki dotyczące eksploatacji …", de "Hinweise zum Betrieb von …",
+ru «Советы по эксплуатации …») and keep each bullet's opener as a BOLD IMPERATIVE ending in a
+period, in the target language's FORMAL register (pl the impersonal "Należy …" form, de
+Sie-Imperativ, uk/ru formal «Ви»/«Вы»-form).
+Direct second-person address stays confined to this block and the CTA — do not spread it elsewhere.
+
+FIGCAPTIONS: keep verb-led, period-terminated lead-ins; do not restore "LABEL:" form.
+
+PUNCTUATION: zero exclamation marks, zero body emoji, em-dash as a rhetorical device avoided
+(genuine ranges exempt). Question marks only in the closing H2.
+
+CLOSING CTA: keep the "worth buying" H2 form (pl "Dlaczego warto kupić [Product] w Center 3D Print?",
+de "Warum sich der Kauf von [Product] bei Center 3D Print lohnt?") and END the paragraph with the
+direct invitation to contact the specialists — never a flat availability statement. Keep the
+brand-guarantee sentence.`;
+
+/**
+ * Localized openers of the Style B operating-tips H2, one per language Center 3D Print publishes.
+ * SINGLE SOURCE OF TRUTH for detecting that block in generated HTML — the same strings appear as
+ * prose instructions inside the C3D overlays above, and tov-second-person.ts matches against this
+ * array so the two can never drift apart.
+ *
+ * Prefix match: the real heading continues with the product name ("Поради щодо експлуатації
+ * Ortur Laser Master 3").
+ */
+export const OPERATING_TIPS_H2_MARKERS = [
+  'Tips for operating',
+  'Поради щодо експлуатації',
+  'Советы по эксплуатации',
+  'Wskazówki dotyczące eksploatacji',
+  'Hinweise zum Betrieb',
+];
+
+/**
+ * Question / functional <h2> openers, per locale. SINGLE SOURCE OF TRUTH — interpolated into
+ * C3D_UK_LOCALE_TOV's HEADING PATTERNS block AND imported by heading-style.ts, so the rule the
+ * model is given and the rule the linter enforces are literally the same array. Same mechanism
+ * as OPERATING_TIPS_H2_MARKERS above.
+ */
+export const FUNCTIONAL_H2_OPENERS: Record<string, string[]> = {
+  'uk-ua': ['Як', 'Що', 'Які', 'Яке', 'Який', 'Яка', 'Яким', 'Яких', 'Де', 'Чому', 'Скільки', 'Коли'],
+  'ru-ua': ['Как', 'Что', 'Какие', 'Какое', 'Какой', 'Какая', 'Каким', 'Каких', 'Где', 'Почему', 'Сколько', 'Когда'],
+};
+
+/**
+ * <h2> forms the MASTER schema mandates in a nominal shape. A nominal heading here is CORRECT,
+ * not a Style A regression, so heading-style.ts prefix-matches against this list before flagging.
+ *
+ * §7's "Технічні характеристики …" is additionally exempt structurally (any <h2> inside
+ * <section class="specs">); it is listed here too so a §7 header emitted outside that wrapper is
+ * still not flagged.
+ *
+ * NOT included, deliberately: umbrella headings that merely contain the product name, e.g.
+ * «Безпечна експлуатація Ortur H20». Exempting on the product name would also exempt most of the
+ * nominal headings the linter exists to catch. If a specific umbrella form proves legitimate and
+ * recurring, add it here explicitly rather than widening the rule.
+ */
+export const MANDATED_NOMINAL_H2: Record<string, string[]> = {
+  'uk-ua': ['Технічні характеристики', 'Матеріали та сумісне обладнання', 'Сумісність', 'Комплект постачання'],
+  'ru-ua': ['Технические характеристики', 'Материалы и совместимое оборудование', 'Совместимость', 'Комплект поставки'],
+};
+
+/**
+ * Center 3D Print per-locale ToV — Ukrainian (uk-UA). The uk-UA MASTER is never translated, so
+ * these lexical rules must be injected into Task A via buildMasterUaOverlay() or they are
+ * silently lost — same reasoning as EXPERT3D_UK_LOCALE_TOV.
+ */
+export const C3D_UK_LOCALE_TOV =
+  `[CENTER 3D PRINT ToV — UKRAINIAN (uk-UA) — these rules WIN over any conflicting register line]
+VERB STARTERS for benefit bullets (3rd-person present, machine as subject) — reuse and vary:
+Вміщує, Забезпечує, Тримає, Друкує, Контролює, Потребує, Автоматизує, Пришвидшує, Знижує,
+Підтримує, Спрощує, Дозволяє.
+  Приклад: <li><b>Тримає стабільну температуру по всій камері. </b>Термоізольована камера,
+  кварцово-трубчасті нагрівачі та 13 незалежних зон нагрівання контролюють режим від першого до
+  останнього шару.</li>
+
+§4 «ДЕ ЗАСТОСОВУЮТЬ» — теж дієслівний <ul>, а не перелік через «;» і не «Ярлик: пояснення».
+Оскільки uk-UA — майстер-версія, форма цього блоку визначає його форму в усіх мовах.
+  Приклад: <li><b>Ріже акрилові вивіски без дошліфовування. </b>Модуль 20 Вт залишає запаяний
+  край на литому акрилі 3 мм, тож рекламні майстерні пропускають етап обробки.</li>
+  ЗАБОРОНЕНО: <p>Брендування та маркування: наносить логотипи…; декоративне гравіювання:
+  відтворює візерунки…</p>
+
+IMPERATIVE STARTERS for the operating-tips block (formal «ви»-form):
+Дотримуйтеся, Працюйте, Дочекайтеся, Перевіряйте, Забезпечте, Зберігайте, Уникайте.
+  H2: «Поради щодо експлуатації [Product]»
+  <li><b>Дотримуйтеся умов у приміщенні. </b>Забезпечте температуру 18–28 °C та вологість не
+  вище 30 %.</li>
+
+HEADING PATTERNS для <h2> РОЗДІЛІВ (функційні/питальні — замінюють голі іменникові теми).
+Дозволені зачини: ${FUNCTIONAL_H2_OPENERS['uk-ua'].map(o => `«${o} …»`).join(', ')} —
+або особова дієслівна форма на початку.
+§3 — конкретні заміни майстер-шаблонів:
+  Технологія / принцип роботи      → «Як працює [Product]»
+  Конструкція та апаратна частина  → «Як платформа підйому та камера підвищують точність»
+                                     (шаблон: «Як [вузол] [робить X]»)
+  ПЗ та автоматизація              → «Яке ПЗ підтримує [Product]»
+  Безпека                          → «Які механізми безпеки застосовує [Product]»
+  Сертифікація та відповідність    → «Яким стандартам відповідає [Product]»
+Інші розділи: «Сфери застосування» → «Де застосовують [Product]»;
+«Технологія SLS та принцип роботи» → «Як працює селективне лазерне спікання».
+ЗАБОРОНЕНО як <h2>: «Лазерний модуль потужністю 20 Вт», «ПЗ та автоматизація», «Безпека під час
+роботи», «Електронне керування та аварійні системи», «Моторизована платформа, камера та візуальне
+позиціонування» — це іменникові теми, а не функційні заголовки.
+Формула «[Функція] та [функція]» БІЛЬШЕ НЕ Є зразком: два іменники, з'єднані «та», — це саме та
+форма, яку заборонено. Використовуйте її, лише якщо хоча б одна частина містить особову дієслівну
+форму.
+ВИНЯТОК 1 (<h3>): підзаголовки <h3> у §3 та §7 залишаються короткими іменниковими ярликами
+(«Лазерний модуль», «Безпека», «Електроніка та підключення»). Це правило їх НЕ стосується —
+жодного <h3> не можна прибрати чи об'єднати заради функційного формулювання.
+ВИНЯТОК 2: заголовки, які майстер-схема задає іменниковими —
+${MANDATED_NOMINAL_H2['uk-ua'].map(h => `«${h} …»`).join(', ')}.
+
+COMMERCIAL-CLOSING H2 — use the soft «варто» form, which REPLACES the master's
+«Чому купити [Product] в [Store]?» template:
+  «Чому варто купити [Product] у Center 3D Print?»
+The paragraph ends with a direct ask, e.g. «Зв'яжіться з нашими спеціалістами, щоб обговорити
+терміни поставки, конфігурацію та відповідність [Product] вашим виробничим вимогам.»
+
+REGISTER: формальне «ви» з'являється ТІЛЬКИ у блоці порад щодо експлуатації та в CTA. У решті
+тексту — безособово, вигода подається від 3-ї особи (машина як суб'єкт дії).
+Anti-anglicism rules stay as defined globally (друк, не «прінт»; ПЗ, не «софт»).`;
+
+/**
+ * Center 3D Print per-locale ToV — Polish (pl-PL). pl-PL is this store's primary market and its
+ * first-listed language in STORE_REGISTRY, and Polish is where verb-led openers most reliably
+ * collapse back into noun labels. Injected via buildNativeLangOverlay() for the FAQ artifact;
+ * the Task C translation path gets it through C3D_TOV_TRANSLATION_OVERLAY's PL verb list.
+ */
+export const C3D_PL_LOCALE_TOV =
+  `[CENTER 3D PRINT ToV — POLISH (pl-PL) — these rules WIN over any conflicting register line]
+VERB STARTERS for benefit bullets (3rd-person present, machine as subject):
+Mieści, Zapewnia, Utrzymuje, Drukuje, Kontroluje, Automatyzuje, Przyspiesza, Obniża, Podtrzymuje,
+Upraszcza, Pozwala.
+  <li><b>Mieści duże detale i gęste partie. </b>Przestrzeń robocza 330 × 330 × 565 mm pozwala
+  drukować wielkogabarytowe wyroby i rozmieszczać wiele detali w jednej budowie.</li>
+NIGDY: <li><b>Pojemność komory:</b> …</li> — rzeczownik z dwukropkiem to zakazany styl A.
+
+IMPERATIVE STARTERS for the operating-tips block — użyj formy bezosobowej «Należy …» (to jest
+polski odpowiednik formalnego trybu rozkazującego; NIE stosuj bezpośredniego „ty"):
+Należy przestrzegać, Należy zapewnić, Należy odczekać, Należy sprawdzać, Należy przechowywać,
+Należy unikać.
+  H2: «Wskazówki dotyczące eksploatacji [Product]»
+  <li><b>Należy przestrzegać warunków w pomieszczeniu. </b>Temperatura 18–28 °C, wilgotność
+  nie wyższa niż 30 %.</li>
+
+HEADING PATTERNS dla <h2> SEKCJI: «Jak działa …», «Jak [zespół] [podnosi / zapewnia X]»,
+«Jakie oprogramowanie obsługuje …», «Jakie mechanizmy bezpieczeństwa stosuje …»,
+«Jakim normom odpowiada …», «Gdzie stosuje się …», «Wskazówki dotyczące eksploatacji …».
+Zamiast «Zastosowania» → «Gdzie stosuje się [Product]».
+Wzorzec «[Funkcja] i [funkcja]» NIE jest już dozwolony — dwa rzeczowniki połączone «i» to
+dokładnie ta zakazana forma nominalna. Użyj go tylko wtedy, gdy co najmniej jedna część zawiera
+osobową formę czasownika.
+WYJĄTEK: <h3> w §3 i §7 pozostają zwięzłymi etykietami rzeczownikowymi («Moduł lasera»,
+«Bezpieczeństwo») — ta reguła ich NIE dotyczy. Nagłówki, które schemat nadrzędny zadaje jako
+rzeczownikowe («Dane techniczne …», «Materiały i kompatybilne urządzenia»), też są dozwolone.
+
+COMMERCIAL-CLOSING H2: «Dlaczego warto kupić [Product] w Center 3D Print?» (the master's pl-PL
+template already uses the «warto» form — keep it). Zakończ akapit bezpośrednim zaproszeniem:
+«Prosimy o kontakt z naszymi specjalistami, aby omówić terminy dostawy, konfigurację i zgodność
+[Product] z Państwa wymaganiami produkcyjnymi.»
+
+REGISTER: bezpośredni zwrot do czytelnika wyłącznie w bloku wskazówek i w CTA; w pozostałym
+tekście — bezosobowo, korzyść w 3. osobie.`;
+
+/**
  * Builds the customInstructions suffix for native per-language generation (main pipeline Step 4,
  * ContentOrchestratorService.generate()). Generic image-caption-translation note for every
  * language; EXPERT3D stores additionally get the register/calque ToV overlay, plus PT's or ES's
- * locale-specific overlay.
+ * locale-specific overlay; Center 3D Print gets its Style B overlay, plus PL's locale overlay.
  */
 export function buildNativeLangOverlay(lang: string, humanLang: string, storeName: string): string {
   const parts = [
@@ -739,6 +1309,10 @@ export function buildNativeLangOverlay(lang: string, humanLang: string, storeNam
     if (lang === 'PT') parts.push(EXPERT3D_PT_LOCALE_TOV);
     if (lang === 'ES') parts.push(EXPERT3D_ES_NATIVE_VOCAB_OVERLAY);
   }
+  if (isCenter3dPrintStore(storeName)) {
+    parts.push(C3D_TOV_TRANSLATION_OVERLAY);
+    if (lang === 'PL') parts.push(C3D_PL_LOCALE_TOV);
+  }
   return parts.join('\n\n');
 }
 
@@ -747,8 +1321,9 @@ export function buildNativeLangOverlay(lang: string, humanLang: string, storeNam
  * Two jobs:
  *  1. The image-manifest figcaption/alt text is sourced in English by the Vision pre-pass —
  *     Task A must translate it, not copy it verbatim.
- *  2. EXPERT3D's uk-UA register/anti-anglicism rules live in EXPERT3D_UK_LOCALE_TOV. The master
- *     is NOT translated, so those rules must be injected here or they are silently lost.
+ *  2. EXPERT3D's uk-UA register/anti-anglicism rules live in EXPERT3D_UK_LOCALE_TOV, and Center
+ *     3D Print's Style B uk-UA lexicon in C3D_UK_LOCALE_TOV. The master is NOT translated, so
+ *     those rules must be injected here or they are silently lost.
  */
 export function buildMasterUaOverlay(storeName: string): string {
   const parts = [
@@ -758,6 +1333,7 @@ export function buildMasterUaOverlay(storeName: string): string {
     'natural, idiomatic Ukrainian preserving the same factual meaning before using it.',
   ];
   if (isExpert3dStore(storeName)) parts.push(EXPERT3D_UK_LOCALE_TOV);
+  if (isCenter3dPrintStore(storeName)) parts.push(C3D_UK_LOCALE_TOV);
   return parts.join('\n\n');
 }
 

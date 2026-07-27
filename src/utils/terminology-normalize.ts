@@ -34,8 +34,19 @@ function preserveInitialCase(original: string, replacement: string): string {
 // Cyrillic letter ranges used for declension-suffix capture and word-boundary lookarounds —
 // mirrors CYR_BOUNDARY in number-format-fixer.ts. JS \b/\w do not recognize Cyrillic letters,
 // so both boundary checks and "capture the rest of this word" groups must use this explicit
-// character class instead.
-const UK_LETTERS = 'а-яіїєґА-ЯІЇЄҐ';
+// character class instead. Deliberately mirrored rather than imported: number-format-fixer's
+// CYR_BOUNDARY is a lookAHEAD that also covers \w (a digit+unit adjacency check), which is a
+// different semantic from "this root must start a word".
+export const UK_LETTERS = 'а-яіїєґА-ЯІЇЄҐ';
+/**
+ * Left word boundary: the match may not continue a preceding Cyrillic word.
+ * Exported as the canonical copy — any other module needing a Cyrillic word boundary must import
+ * these rather than hand-rolling a third variant. Getting this wrong is not theoretical: the
+ * missing left boundary here corrupted `спостерігати` into `сплакатігати` in shipped output.
+ */
+export const UK_LEFT_BOUNDARY = `(?<![${UK_LETTERS}])`;
+/** Right word boundary: the match may not be followed by a Cyrillic case ending. */
+export const UK_RIGHT_BOUNDARY = `(?![${UK_LETTERS}])`;
 
 /**
  * Root-swap pairs where the old and new root are the same part of speech and share the same
@@ -119,14 +130,22 @@ export function normalizeTerminology(html: string, locale?: string): string {
       result = result.replace(find, replace);
     }
     for (const { root, newRoot } of UK_ROOT_SWAPS) {
-      const re = new RegExp(`${root}[${UK_LETTERS}]*`, 'gi');
+      // THE LEFT BOUNDARY IS LOAD-BEARING. Without it, `постер` matched inside `спостерігати`
+      // and produced "сплакатігати" (с + плакат + ігати) — three occurrences shipped in one
+      // real uk-UA artifact. The corruption is invisible to the repair gate: this transform
+      // runs inside produce(), AFTER the model and BEFORE validateGeneratedHtml, and the result
+      // is a well-formed Cyrillic nonword that no validator has a rule for. Applied to EVERY
+      // root, not just `постер`, because the failure mode is structural, not lexical — the
+      // trailing [UK_LETTERS]* deliberately captures the declension suffix, but nothing ever
+      // guarded the left side.
+      const re = new RegExp(`${UK_LEFT_BOUNDARY}${root}[${UK_LETTERS}]*`, 'gi');
       result = result.replace(re, m => preserveInitialCase(m, `${newRoot}${m.slice(root.length)}`));
     }
-    // Standalone "софт" (slang, breaks B2B register) -> "програма". Word-boundary lookaround
-    // uses the explicit Cyrillic class since JS \b does not recognize Cyrillic letters, so this
+    // Standalone "софт" (slang, breaks B2B register) -> "програма". Word-boundary lookarounds
+    // use the explicit Cyrillic class since JS \b does not recognize Cyrillic letters, so this
     // only matches the bare word (not "софту"/"софтом", which carry a case ending).
     result = result.replace(
-      new RegExp(`(?<![${UK_LETTERS}])софт(?![${UK_LETTERS}])`, 'gi'),
+      new RegExp(`${UK_LEFT_BOUNDARY}софт${UK_RIGHT_BOUNDARY}`, 'gi'),
       m => preserveInitialCase(m, 'програма'),
     );
     // Voltage-spec line: English "AC" left untranslated -> Ukrainian, spelled out.

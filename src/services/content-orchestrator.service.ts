@@ -2,7 +2,7 @@ import { Injectable, signal, inject } from '@angular/core';
 import { LlmService } from './llm.service';
 import { RetrievalService } from './retrieval.service';
 import { HistoryService } from '@/src/services/history.service';
-import { ProductInput, GeneratedContent, WebsiteOption } from '../app/types';
+import { ProductInput, GeneratedContent, WebsiteOption, ImageManifestEntry } from '../app/types';
 import { cleanHtmlStructure, stripCodeFences } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
@@ -11,6 +11,13 @@ import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminolo
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from '../utils/specs-grounding';
 import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/spec-count-parity';
+import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
+import { validateSecondPersonScope } from '../utils/tov-second-person';
+import { dedupeIssues } from '../utils/validation-issues';
+import { validateHeadingStyle } from '../utils/heading-style';
+import { validateSentenceLength } from '../utils/sentence-length';
+import { cyrillizeUnits } from '../utils/unit-cyrillize';
+import { validateProductNameConsistency, validateProductNameH1SlugAgreement } from '../utils/product-name-consistency';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -32,6 +39,7 @@ import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactRe
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
+import { validateSpecCategoryShape } from '../utils/spec-category-shape';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
 import { validateLanguageConsistency } from '../utils/language-consistency';
 // ── Orchestrator ────────────────────────────────────────────────────────────
@@ -114,6 +122,29 @@ export class ContentOrchestratorService {
     }
   }
 
+  /**
+   * Every sanctioned origin for a number+unit in an alt/figcaption, joined for
+   * validateAltNumericFidelity.
+   *
+   * MUST stay in sync with NUMERIC_SOURCE_FIDELITY_RULES, which permits [Technical Specs], [Raw
+   * Description] and the image's own manifest caption. A gate stricter than the rule the model
+   * was given would fail correct output and burn the repair budget — so the raw description and
+   * the product name are included even though the defect itself was a spec-table figure.
+   *
+   * Uses the RAW input.specs, not groundingSpecs: the validator compares canonicalized numbers
+   * and ignores unit spelling, and digits survive translation unchanged, so the untranslated
+   * source is the better choice here — it is always available, including on the runs where
+   * grounding is disabled.
+   */
+  private numericFidelitySources(input: ProductInput, manifest?: ImageManifestEntry[]): string {
+    return [
+      input.specs,
+      input.description,
+      input.name,
+      ...(manifest ?? []).flatMap(e => [e.visionDescription, e.altText]),
+    ].filter(Boolean).join('\n');
+  }
+
   async generate(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
@@ -169,6 +200,11 @@ export class ContentOrchestratorService {
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
+        // AFTER fixNumberFormatting so the cyrillizer sees a canonical NUM<NBSP>UNIT shape, and
+        // BEFORE normalizeTerminology so its Cyrillic word-boundary lookarounds see final
+        // orthography. Both neighbours are idempotent and independent, so this is a documented
+        // convention rather than a correctness requirement.
+        html = cyrillizeUnits(html, 'uk-UA');
         html = normalizeTerminology(html, 'uk-UA');
         html = canonicalizeMultiInOne(html, 'uk-UA');
         return html;
@@ -182,6 +218,20 @@ export class ContentOrchestratorService {
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
+          // Image text may not carry a figure the source never stated — the prompt-side rule
+          // (NUMERIC_SOURCE_FIDELITY_RULES) reduces the rate; this is the deterministic gate.
+          ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (base)'),
+          // Style B second-person scope — warning tier while the block-slicing heuristic is
+          // measured on real generations; inert for every store except Center 3D Print.
+          ...validateSecondPersonScope(html, 'uk-UA', input.website.name),
+          // Style B section headings must be functional, not bare nominal topics. Warning tier
+          // while the verb heuristic is measured; inert for every store except Center 3D Print.
+          ...validateHeadingStyle(html, 'uk-UA', input.website.name),
+          // Per-locale sentence ceiling — language-level, so every store, not just C3D.
+          ...validateSentenceLength(html, 'uk-UA', 'HTML (base)'),
+          // §7 must not collapse into one catch-all category — runs on the master only, since
+          // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
+          ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
@@ -299,7 +349,8 @@ export class ContentOrchestratorService {
             if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
               html = this.applySpanishExpert3dReplacements(html);
             }
-            html = normalizeTerminology(fixNumberFormatting(html), locale);
+            // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
+            html = normalizeTerminology(cyrillizeUnits(fixNumberFormatting(html), locale), locale);
             return canonicalizeMultiInOne(html, locale);
           },
           validate: (html) => [
@@ -385,10 +436,10 @@ export class ContentOrchestratorService {
       // they share the same (merged) category structure, so no cross-locale drift is possible.
       this.content.update(c => ({
         ...c,
-        mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, 'uk-UA'),
+        mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, 'uk-UA', input.website.name),
         translations: Object.fromEntries(
           Object.entries(c.translations).map(([lang, html]) =>
-            [lang, finalizeTablesForDisplay(html, taskLangToIso(lang, input.website.name))]),
+            [lang, finalizeTablesForDisplay(html, taskLangToIso(lang, input.website.name), input.website.name)]),
         ),
       }));
 
@@ -450,6 +501,8 @@ export class ContentOrchestratorService {
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
+        // Ordering rationale as in generate()'s master produce.
+        html = cyrillizeUnits(html, UA_ISO);
         html = normalizeTerminology(html, UA_ISO);
         html = canonicalizeMultiInOne(html, UA_ISO);
         return html;
@@ -463,6 +516,15 @@ export class ContentOrchestratorService {
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
+          // Image-text numeric gate — see the identical hook in generate() for rationale.
+          ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),
+          // Style B second-person scope — see the identical hook in generate() for rationale.
+          ...validateSecondPersonScope(html, UA_ISO, input.website.name),
+          // Style B heading check — see the identical hook in generate() for rationale.
+          ...validateHeadingStyle(html, UA_ISO, input.website.name),
+          ...validateSentenceLength(html, UA_ISO, 'HTML (uk-UA)'),
+          // §7 category-collapse guard — see the identical hook in generate() for rationale.
+          ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
@@ -577,7 +639,7 @@ export class ContentOrchestratorService {
 
       // Deterministic table-shape finalization — see the identical hook in generate() for
       // rationale. Master-only here (no translations loop in this native uk-UA path).
-      this.content.update(c => ({ ...c, mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, UA_ISO) }));
+      this.content.update(c => ({ ...c, mainHtmlUa: finalizeTablesForDisplay(c.mainHtmlUa, UA_ISO, input.website.name) }));
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Done!');
@@ -710,6 +772,9 @@ export class ContentOrchestratorService {
           // Small-category consolidation is delegated to the LLM itself (see optimizer.ts
           // PHASE 1) since it requires inventing a new label, which a locale-less deterministic
           // step can't do safely.
+          // No storeName either, deliberately: the Optimizer accepts arbitrary pasted HTML that
+          // may come from any store or none. It would also be inert — with no locale,
+          // getKillerSpecsHeaders returns undefined for every store map alike.
           return finalizeTablesForDisplay(out);
         },
         validate: html => validateLanguageConsistency(html, htmlInput),
@@ -771,21 +836,44 @@ export class ContentOrchestratorService {
 
   /**
    * Runs deterministic acceptance-criteria checks across all generated artifacts and
-   * stores the results in the validationIssues signal. Errors are also logged so they
+   * MERGES the results into the validationIssues signal. Errors are also logged so they
    * are visible during development. Never throws — validation is advisory.
    */
   private runOutputValidation(storeName: string, productName?: string, templateId?: string, mainLocale?: string): void {
     const c = this.content();
+    // The localized product name only exists from step 2 onward, which is why the name-consistency
+    // checks live here and not in the master repair gate — at gate time there is nothing to
+    // compare the body against.
+    const localizedNames = c.slugData?.slugs?.length ? slugsToLocalizedNames(c.slugData.slugs) : undefined;
+    const masterLocale = mainLocale ?? 'uk-UA';
     const issues: ValidationIssue[] = [
       ...validateGeneratedHtml(c.mainHtmlUa, mainLocale ? `HTML (${mainLocale})` : 'HTML (base)', productName, mainLocale, { templateId }),
       ...Object.entries(c.translations).flatMap(([lang, html]) => [
         ...validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId }),
         ...validateStructuralParity(c.mainHtmlUa, html, `HTML (${lang})`),
+        // Language-level, so every target locale gets its own band — the master gate only ever
+        // sees uk-UA. de-DE's ceiling of 18 is the tightest in the table.
+        ...validateSentenceLength(html, taskLangToIso(lang, storeName), `HTML (${lang})`),
+        ...validateProductNameConsistency(
+          html, localizedNames?.[taskLangToIso(lang, storeName)], taskLangToIso(lang, storeName), `HTML (${lang})`,
+        ),
       ]),
+      // Also run in the repair gate, where they reach the downloadable .md report. Repeating
+      // them here puts them in the on-screen panel too; dedupeIssues collapses the overlap.
+      ...validateHeadingStyle(c.mainHtmlUa, masterLocale, storeName),
+      ...validateSentenceLength(c.mainHtmlUa, masterLocale, `HTML (${masterLocale})`),
+      ...validateProductNameConsistency(c.mainHtmlUa, localizedNames?.[masterLocale], masterLocale, `HTML (${masterLocale})`),
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
+      ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
     ];
-    this.validationIssues.set(issues);
+    // MERGE, never set. This runs LAST in the pipeline, after the signal already holds the
+    // repair gate's final issues, the per-language final issues and any slug-generation
+    // warning. Overwriting silently discarded all of them — which made every WARNING-severity
+    // check invisible, since warnings have no effect other than being displayed. The download
+    // button that would have surfaced them in the .md report is itself gated on
+    // validationWarningCount() > 0, so the report became unreachable too.
+    this.validationIssues.update(prev => dedupeIssues([...prev, ...issues]));
     const errors = issues.filter(i => i.severity === 'error');
     if (errors.length > 0) {
       console.warn(`[output-validator] ${errors.length} acceptance-criteria error(s):`, errors);

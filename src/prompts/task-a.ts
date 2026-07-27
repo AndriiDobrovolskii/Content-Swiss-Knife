@@ -1,6 +1,6 @@
 import { ProductInput, ImageManifestEntry, CONTENT_TEMPLATES } from '../app/types';
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { getStore, isExpert3dStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY } from '../prompt-core/constants';
+import { getStore, isExpert3dStore, isCenter3dPrintStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 // ── Standard full-schema instruction (Schema v3.0 §1–§9) ──────────────────
@@ -88,6 +88,7 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
   const store = getStore(input.website.name);
   const isUs = store.group === 'US';
   const isExpert3d = isExpert3dStore(input.website.name);
+  const isC3d = isCenter3dPrintStore(input.website.name);
   const baseLanguage = baseLanguageOverride ?? (isUs ? 'American English (en-US)' : 'European English (en-GB)');
   const isConsumables = input.templateId === 'consumables-resin';
 
@@ -129,6 +130,9 @@ Generate the description in ${baseLanguage}. Primary keyword "${input.name}" use
       // EXPERT3D-only ToV voice block. Appended as a cached suffix so the shared
       // master+task prefix stays byte-stable (cache hit) for all other stores.
       ...(isExpert3d ? [{ text: EXPERT3D_TOV_BASE_OVERLAY, cache: true }] : []),
+      // Center 3D Print-only "Style B" ToV voice block. Same append-only mechanism, and
+      // mutually exclusive with the EXPERT3D block above (C3D is group EU, EXPERT3D is ES).
+      ...(isC3d ? [{ text: C3D_TOV_BASE_OVERLAY, cache: true }] : []),
     ],
     userContent,
   };

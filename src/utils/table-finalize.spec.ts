@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { collapseKillerSpecsToTwoColumns, flattenSpecCategoriesToColspanTable, finalizeTablesForDisplay } from './table-finalize';
+import { STORE_REGISTRY, KILLER_SPECS_HEADERS } from '../prompt-core/constants';
 
 function killerSpecsTable(whyHeader = 'Чому це важливо'): string {
   return (
@@ -36,6 +37,56 @@ describe('collapseKillerSpecsToTwoColumns', () => {
     const firstRow = table.querySelectorAll('tbody tr')[0];
     const cells = Array.from(firstRow.querySelectorAll('td')).map(td => td.textContent);
     expect(cells).toEqual(["Об'єм друку: 250x250x260 мм", 'Досить місця для великих моделей.']);
+  });
+
+  /**
+   * Style B confines direct second-person address to the operating-tips block and the CTA, but
+   * the default §2 benefit header ("Ваша перевага") is injected here deterministically, never
+   * written by the model — so it violated that rule on every C3D product and no prompt rule
+   * could reach it. Store-scoped override; the other seven stores are untouched.
+   */
+  describe('Center 3D Print impersonal §2 headers', () => {
+    const headersOf = (html: string) =>
+      Array.from(new DOMParser().parseFromString(html, 'text/html')
+        .querySelectorAll('thead th')).map(th => th.textContent);
+
+    const C3D_EXPECTED: Record<string, [string, string]> = {
+      'uk-UA': ['Параметр', 'Практична користь'],
+      'ru-UA': ['Параметр', 'Практическая польза'],
+      'pl-PL': ['Parametr', 'Praktyczna korzyść'],
+      'de-DE': ['Parameter', 'Praktischer Nutzen'],
+      'en-GB': ['Parameter', 'Practical benefit'],
+    };
+
+    it('uses the impersonal pair in all five Center 3D Print languages', () => {
+      for (const [locale, pair] of Object.entries(C3D_EXPECTED)) {
+        expect(headersOf(collapseKillerSpecsToTwoColumns(killerSpecsTable(), locale, 'Center 3D Print')), locale)
+          .toEqual(pair);
+      }
+    });
+
+    it('covers exactly the languages STORE_REGISTRY declares for the store', () => {
+      expect(Object.keys(C3D_EXPECTED).sort())
+        .toEqual([...STORE_REGISTRY['Center 3D Print'].languages].sort());
+    });
+
+    /** The isolation half: Drukarka 3D shares group 'EU', so a group-based gate would leak here. */
+    it('every other store keeps the current second-person header, byte-identical', () => {
+      for (const store of Object.keys(STORE_REGISTRY).filter(s => s !== 'Center 3D Print')) {
+        expect(headersOf(collapseKillerSpecsToTwoColumns(killerSpecsTable(), 'uk-UA', store)), store)
+          .toEqual(KILLER_SPECS_HEADERS['uk-ua']);
+      }
+    });
+
+    it('an unmapped locale still falls back to the document header, C3D included', () => {
+      expect(headersOf(collapseKillerSpecsToTwoColumns(killerSpecsTable('Why it matters'), 'xx-XX', 'Center 3D Print')))
+        .toEqual(['Характеристика', 'Why it matters']);
+    });
+
+    it('omitting storeName behaves exactly as before (Optimizer path)', () => {
+      expect(headersOf(collapseKillerSpecsToTwoColumns(killerSpecsTable(), 'uk-UA')))
+        .toEqual(KILLER_SPECS_HEADERS['uk-ua']);
+    });
   });
 
   it("derives the fallback pair from the document's own header text for an unmapped locale", () => {
@@ -117,5 +168,14 @@ describe('finalizeTablesForDisplay', () => {
     expect(Array.from(doc.querySelectorAll('table')[0].querySelectorAll('thead th')).map(th => th.textContent)).toEqual(['Параметр', 'Ваша перевага']);
     expect(doc.querySelectorAll('section.specs table').length).toBe(1);
     expect(doc.querySelector('section.specs table th[colspan="2"]')?.textContent).toBe('A');
+  });
+
+  it('threads storeName through to the killer-specs collapse', () => {
+    const html = killerSpecsTable() + `<section class="specs"><h2>Specs</h2>${category('A', 2)}</section>`;
+    const result = finalizeTablesForDisplay(html, 'uk-UA', 'Center 3D Print');
+    const doc = new DOMParser().parseFromString(result, 'text/html');
+
+    expect(Array.from(doc.querySelectorAll('table')[0].querySelectorAll('thead th')).map(th => th.textContent))
+      .toEqual(['Параметр', 'Практична користь']);
   });
 });

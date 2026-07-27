@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE } from '../prompt-core/constants';
+import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 const IMAGE_PRESERVATION_MANIFEST = `[IMAGE MANIFEST]
@@ -109,6 +109,13 @@ export function buildPromptC(
   // appending the overlay on top would duplicate them for the same language version.
   if (!expert3dEsSelected && !expert3dPtSelected && (isExpert3dStore(storeName) || targetLang.includes('(EXPERT3D)'))) {
     instruction += `\n\n${EXPERT3D_TOV_TRANSLATION_OVERLAY}`;
+  }
+
+  // Center 3D Print "Style B" Tone of Voice: verb-led benefit bullets must survive translation.
+  // Placed after the consumables overlay so the simplified §C1–§C6 structure still wins where
+  // both apply — this ToV then governs bullet grammar inside that structure.
+  if (isCenter3dPrintStore(storeName)) {
+    instruction += `\n\n${C3D_TOV_TRANSLATION_OVERLAY}`;
   }
 
   // Source-language interference guard. Only fires when translating FROM the uk-UA master —

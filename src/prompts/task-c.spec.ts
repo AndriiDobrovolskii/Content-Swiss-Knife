@@ -10,9 +10,22 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildPromptC } from './task-c';
-import { UK_SOURCE_ANTICALQUE, EXPERT3D_TOV_TRANSLATION_OVERLAY } from '../prompt-core/constants';
+import { UK_SOURCE_ANTICALQUE, EXPERT3D_TOV_TRANSLATION_OVERLAY, C3D_TOV_TRANSLATION_OVERLAY, NUMERIC_SOURCE_FIDELITY_RULES } from '../prompt-core/constants';
 
 const SAMPLE_HTML = '<p>Sample product description.</p>';
+
+describe('buildPromptC — global rules that must survive translation', () => {
+  it('carries the numeric-fidelity rule for alt/figcaption', () => {
+    expect(buildPromptC(SAMPLE_HTML, 'PL', 'Center 3D Print').systemBlocks[0].text)
+      .toContain(NUMERIC_SOURCE_FIDELITY_RULES);
+  });
+
+  it('bans re-nominalizing §4 into "Zastosowanie:" / "Anwendung:"', () => {
+    const taskBlock = buildPromptC(SAMPLE_HTML, 'PL', 'Center 3D Print').systemBlocks[1].text;
+    expect(taskBlock).toContain('Zastosowanie:');
+    expect(taskBlock).not.toMatch(/run-in semicolon <p> paragraph, KEEP/);
+  });
+});
 
 describe('buildPromptC — pt-PT (EXPERT3D)', () => {
   it('selects EXPERT3D_PT_INSTRUCTION via the "PT" task-label branch', () => {
@@ -43,6 +56,47 @@ describe('buildPromptC — pt-PT (EXPERT3D)', () => {
     const payload = buildPromptC(SAMPLE_HTML, 'PT', 'SomeOtherStore');
     const taskBlock = payload.systemBlocks[1].text;
     expect(taskBlock).not.toContain('EUROPEAN PORTUGUESE LOCALIZATION FOR EXPERT3D');
+  });
+});
+
+/**
+ * Center 3D Print "Style B" ToV — translation-path scoping. The overlay's job is stopping the
+ * translator from re-nominalizing verb-led openers back into noun+colon labels, so it must reach
+ * every C3D target language — and no other store's.
+ */
+describe('buildPromptC — Center 3D Print ToV', () => {
+  const langsFor = (store: string) => ({ store, langs: ['PL', 'DE', 'RU', 'European English'] });
+
+  it('appends the C3D overlay for every Center 3D Print target language', () => {
+    for (const lang of langsFor('Center 3D Print').langs) {
+      const payload = buildPromptC(SAMPLE_HTML, lang, 'Center 3D Print');
+      expect(payload.systemBlocks[1].text, lang).toContain(C3D_TOV_TRANSLATION_OVERLAY);
+    }
+  });
+
+  it('does not append the C3D overlay for Drukarka 3D — same EU group, different voice', () => {
+    const payload = buildPromptC(SAMPLE_HTML, 'PL', 'Drukarka 3D');
+    expect(payload.systemBlocks[1].text).not.toContain(C3D_TOV_TRANSLATION_OVERLAY);
+  });
+
+  it('does not append the C3D overlay for any other store', () => {
+    for (const store of ['3DDevice', '3DPrinter', '3DScanner', 'EXPERT3D', 'Expert-3DPrinter']) {
+      const payload = buildPromptC(SAMPLE_HTML, 'PL', store);
+      expect(payload.systemBlocks[1].text, store).not.toContain(C3D_TOV_TRANSLATION_OVERLAY);
+    }
+  });
+
+  it('C3D never receives the EXPERT3D overlay (the two ToVs are mutually exclusive)', () => {
+    const payload = buildPromptC(SAMPLE_HTML, 'PL', 'Center 3D Print');
+    expect(payload.systemBlocks[1].text).not.toContain(EXPERT3D_TOV_TRANSLATION_OVERLAY);
+  });
+
+  it('consumables mode keeps the simplified schema and layers the ToV on top of it', () => {
+    const payload = buildPromptC(SAMPLE_HTML, 'PL', 'Center 3D Print', undefined, 'consumables-resin');
+    const taskBlock = payload.systemBlocks[1].text;
+    expect(taskBlock).toContain('CONSUMABLES MODE');
+    expect(taskBlock).toContain(C3D_TOV_TRANSLATION_OVERLAY);
+    expect(taskBlock.indexOf('CONSUMABLES MODE')).toBeLessThan(taskBlock.indexOf(C3D_TOV_TRANSLATION_OVERLAY));
   });
 });
 

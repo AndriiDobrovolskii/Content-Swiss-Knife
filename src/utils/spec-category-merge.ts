@@ -16,15 +16,20 @@ import { BASE_CATEGORY_LABELS, SPEC_TABLE_HEADERS, resolveLocaleValue } from '..
 export const DEFAULT_MIN_ROWS = 3;
 const DEFAULT_LOCALE = 'uk-ua';
 
-interface SpecCategory {
+export interface SpecCategory {
   label: string;
   rows: string[]; // each a full "<tr>...</tr>" string, tbody rows only
 }
 
 /** Parses <section class="specs"> into its <h2> and ordered {label, rows[]} category blocks.
  *  Returns null if the section is absent. Everything outside the section is preserved verbatim
- *  in `before`/`after` — this function never touches HTML outside its own section. */
-function parseSpecCategories(html: string): { before: string; h2: string; categories: SpecCategory[]; after: string } | null {
+ *  in `before`/`after` — this function never touches HTML outside its own section.
+ *
+ *  Exported so validateSpecCategoryShape (spec-category-shape.ts) inspects categories through
+ *  the SAME parser that will later merge them. A second, independently-written parser could
+ *  disagree with this one about what counts as a category, letting the guard pass HTML the merge
+ *  then reshapes (or vice versa). */
+export function parseSpecCategories(html: string): { before: string; h2: string; categories: SpecCategory[]; after: string } | null {
   const sectionMatch = html.match(/<section\s+class="specs">([\s\S]*?)<\/section>/i);
   if (!sectionMatch) return null;
   const before = html.slice(0, sectionMatch.index!);

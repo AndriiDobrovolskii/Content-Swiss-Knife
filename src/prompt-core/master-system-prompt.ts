@@ -251,6 +251,16 @@ heading level anywhere in the body.
      Model-identifier row from this count and from the output when the input lists one as
      its own row — that row belongs to the H1, never to §7. When the input has no such row,
      nothing changes: every remaining row counts and reproduces exactly as stated above.
+   - FLAT SOURCE (no categories given): when the input spec list arrives as one undivided list,
+     do NOT emit a single catch-all category — distribute the rows into logical semantic groups.
+     Emit 3–6 categories, each its own <h3> + table, each holding at least 3 rows. Group by
+     function, e.g. optics / laser or print engine, safety, electronics & connectivity,
+     dimensions & mechanics, software. Write each category name in the TARGET OUTPUT LANGUAGE
+     (uk-UA "Лазерний модуль", "Безпека", "Електроніка та підключення") — the English words above
+     name the CONCEPT, they are never the literal label to emit. This applies ONLY when the input
+     supplies no categories of its own; when it DOES supply them, reproduce them as given per the
+     COMPLETENESS rule above. Grouping is a rearrangement only: it never changes a row's label,
+     value, unit, or the total row count.
    - Place units in the Value column and keep the Parameter name unit-free
      ("Weight, kg | 12" → "Weight | 12 kg").
    - Keep every digit and unit byte-identical to the input; normalize spacing only
