@@ -18,6 +18,7 @@ import {
   resolveLocaleValue,
   getKillerSpecsHeaders, KILLER_SPECS_HEADERS,
   NUMERIC_SOURCE_FIDELITY_RULES, NUMBER_FORMAT_RULES,
+  FUNCTIONAL_H2_OPENERS, MANDATED_NOMINAL_H2,
 } from './constants';
 import { MASTER_SYSTEM_PROMPT } from './master-system-prompt';
 
@@ -50,6 +51,84 @@ describe('NUMERIC_SOURCE_FIDELITY_RULES — global injection', () => {
   it('carries a self-check line', () => {
     expect(NUMERIC_SOURCE_FIDELITY_RULES).toContain('SELF-CHECK BEFORE OUTPUT');
     expect(NUMERIC_SOURCE_FIDELITY_RULES).toContain('[ ] Re-read every alt=');
+  });
+});
+
+describe('Center 3D Print ToV — §3 functional H2s (OVERRIDE #7)', () => {
+  const MASTER_S3_TEMPLATES = [
+    'Technology / Operating principle', 'Construction & hardware',
+    'Software & automation', 'Safety', 'Certification & compliance',
+  ];
+
+  it('names all five master §3 templates, so the override can bind to them', () => {
+    for (const t of MASTER_S3_TEMPLATES) {
+      expect(C3D_TOV_BASE_OVERLAY, t).toContain(t);
+    }
+  });
+
+  /**
+   * Anti-drift against the FROZEN master: if its §3 "Recommended H2 order" ever changes, this
+   * fails loudly instead of leaving OVERRIDE #7 silently bound to strings that no longer exist.
+   */
+  it('the five templates it names are the five the master actually emits', () => {
+    // The master wraps its §3 list across lines ("Technology / Operating\n   principle").
+    const flatMaster = MASTER_SYSTEM_PROMPT.replace(/\s+/g, ' ');
+    for (const t of MASTER_S3_TEMPLATES) {
+      expect(flatMaster, t).toContain(t);
+    }
+  });
+
+  it('scopes the override to <h2> and re-affirms nominal <h3>', () => {
+    expect(C3D_TOV_BASE_OVERLAY).toContain('THIS OVERRIDE GOVERNS <h2> ONLY');
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/§3's and §7's <h3> sub-headings stay CONCISE NOMINAL/);
+  });
+
+  it('forbids dropping a §3 topic to dodge a functional heading', () => {
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/NEVER drop or merge a §3 topic/);
+  });
+
+  /**
+   * The §7-collapse guard. An earlier UNSCOPED restatement of the heading ban made the model
+   * generalize from <h2> to every heading level and stop emitting <h3> spec categories. The new
+   * self-check line is scoped in the same sentence, and the old ban must stay banned.
+   */
+  it('the new self-check line cannot re-teach the over-generalization', () => {
+    expect(C3D_TOV_BASE_OVERLAY).not.toMatch(/\[ \] H2s are functional\/question-style/);
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/\[ \] Every §3 <h2> uses the OVERRIDE #7 functional form/);
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/§3\/§7 <h3> stay nominal labels/);
+  });
+
+  it('the uk block drops the ambiguous noun-and-noun pattern and names the observed regressions', () => {
+    expect(C3D_UK_LOCALE_TOV).toMatch(/«\[Функція\] та \[функція\]» БІЛЬШЕ НЕ Є зразком/);
+    expect(C3D_UK_LOCALE_TOV).toContain('«Як працює [Product]»');
+    expect(C3D_UK_LOCALE_TOV).toContain('«Яке ПЗ підтримує [Product]»');
+    for (const bad of ['Лазерний модуль потужністю 20 Вт', 'ПЗ та автоматизація', 'Безпека під час\nроботи']) {
+      expect(C3D_UK_LOCALE_TOV, bad).toContain(bad);
+    }
+  });
+
+  it('the uk block keeps both carve-outs so §7 cannot collapse', () => {
+    expect(C3D_UK_LOCALE_TOV).toContain('ВИНЯТОК 1 (<h3>)');
+    expect(C3D_UK_LOCALE_TOV).toContain('ВИНЯТОК 2');
+  });
+
+  it('the pl block drops its equivalent ambiguous pattern', () => {
+    expect(C3D_PL_LOCALE_TOV).toMatch(/«\[Funkcja\] i \[funkcja\]» NIE jest już dozwolony/);
+    expect(C3D_PL_LOCALE_TOV).toContain('Jakie oprogramowanie obsługuje');
+  });
+
+  it('the translation overlay keeps §3 question headings from re-nominalizing', () => {
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('Oprogramowanie i automatyzacja');
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('Software und Automatisierung');
+  });
+
+  it('the heading constants are wired into the uk overlay, not duplicated as literals', () => {
+    for (const opener of FUNCTIONAL_H2_OPENERS['uk-ua']) {
+      expect(C3D_UK_LOCALE_TOV, opener).toContain(`«${opener} …»`);
+    }
+    for (const nominal of MANDATED_NOMINAL_H2['uk-ua']) {
+      expect(C3D_UK_LOCALE_TOV, nominal).toContain(nominal);
+    }
   });
 });
 

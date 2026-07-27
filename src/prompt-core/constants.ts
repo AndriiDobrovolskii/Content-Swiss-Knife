@@ -841,6 +841,15 @@ bold label, not a new sentence). For de-DE and all English keep the default capi
  * and the model half-complied anyway, keeping the banned "Label:" colons inside the paragraph. §4
  * now follows SIGNATURE MOVE #1 like every other list, which removes the conflict. The bold-opener
  * word cap was added in the same pass so conciseness is enforced where it does not cost specs.
+ *
+ * 2026-07-27: OVERRIDE #7 added for §3's <h2>s. SIGNATURE MOVE #2 states the functional-heading
+ * rule generally, but the master's §3 "Recommended H2 order" supplies five NOMINAL templates by
+ * name, and specificity beat generality on every run — «Технологія SLS та принцип роботи» is
+ * simultaneously SIGNATURE MOVE #2's BAD example and the master's recommended §3 heading. The two
+ * sections that always came out functional (§4, §9) are exactly the two that already had a named
+ * OVERRIDE entry, so §3 got one in the same substitution-table shape. Written as a table of five
+ * named inputs rather than a general prohibition precisely so it CANNOT generalize to <h3> and
+ * re-trigger the §7 category collapse (see spec-category-shape.ts).
  */
 export const C3D_TOV_BASE_OVERLAY =
   `[CENTER 3D PRINT BRAND VOICE — "Style B" — applies to this store's base generation and every
@@ -952,6 +961,24 @@ only. The master rule named on the left is REPLACED by the form on the right:
    terminated opener ("<b>Prints fine detail. </b>..."). The lead-in must still differ from the
    alt text and from the preceding lead-in <p>, per the global figure rules.
 6. KEY BENEFITS and FUNCTIONALITY bullets: verb-led per SIGNATURE MOVE #1, never noun+colon.
+7. §3 "Recommended H2 order" (the master's five §3 topic templates — "Technology / Operating
+   principle", "Construction & hardware", "Software & automation", "Safety",
+   "Certification & compliance"): those five strings name the TOPIC each §3 <h2> must COVER.
+   They are NOT the heading to emit — emitting them as written produces exactly the bare nominal
+   heading SIGNATURE MOVE #2 forbids. REPLACE each with the functional form:
+     Technology / Operating principle  ->  "How [Product] works"
+     Construction & hardware           ->  "How [named assembly] [raises / holds / delivers X]"
+                                           (name the real assembly, e.g. "How the lift platform
+                                           and the camera raise accuracy")
+     Software & automation             ->  "What software drives [Product]"
+     Safety                            ->  "What safety mechanisms [Product] uses"
+     Certification & compliance        ->  "Which standards [Product] complies with"
+   REWORDING ONLY: same topics, same count, same order (source order still wins per [NARRATIVE
+   FIDELITY]), same §3 depth and word budget. NEVER drop or merge a §3 topic to avoid writing a
+   functional heading — a missing topic is a far worse error than a clumsy heading.
+   THIS OVERRIDE GOVERNS <h2> ONLY. §3's and §7's <h3> sub-headings stay CONCISE NOMINAL PHRASES,
+   exactly as SIGNATURE MOVE #2 already requires ("Лазерний модуль", "Безпека", "Електроніка та
+   підключення"). Emit every <h3> the master schema calls for.
 
 CONSUMABLES MODE (§C1-§C6): when the [CONSUMABLES SIMPLIFIED SCHEMA] is active instead of Schema
 v3.0, this voice still governs its list items. The schema's SECTIONS, ORDER, TABLES, H2 set and
@@ -980,6 +1007,7 @@ SELF-CHECK BEFORE OUTPUT:
 - [ ] No noun-label-plus-colon bullets and no em-dash "reveals" anywhere (no Style A leakage).
 - [ ] Section H2s are functional/question-style, not bare nouns — AND §7/§3 <h3> sub-headings are
       still present, as concise nominal phrases in the output language.
+- [ ] Every §3 <h2> uses the OVERRIDE #7 functional form, and §3/§7 <h3> stay nominal labels.
 - [ ] §7 carries 3-6 spec categories of at least 3 rows each, never one catch-all category.
 - [ ] Applications is a verb-led <ul> of 4-8 bullets — no "Field:" colon labels, no run-in
       semicolon paragraph, no bare industry nouns.
@@ -1029,6 +1057,14 @@ FUNCTIONAL HEADINGS (SECTION HEADINGS ONLY): keep the main <h2> section headings
 question-style; do not flatten them into bare nouns. Mirror the source pattern: "How … works"
 (pl "Jak działa …", de "So funktioniert …", ru «Как работает …»), "Where … is used"
 (pl "Gdzie stosuje się …", de "Wo … eingesetzt wird", ru «Где применяют …»).
+§3 in particular arrives with question-form headings and must KEEP them — collapsing one back to
+a topic label is the same failure as re-nominalizing a bullet:
+  «Яке ПЗ підтримує …»            pl "Jakie oprogramowanie obsługuje …",
+                                  de "Welche Software … steuert", ru «Какое ПО поддерживает …»
+  «Які механізми безпеки …»       pl "Jakie mechanizmy bezpieczeństwa …",
+                                  de "Welche Sicherheitsmechanismen …", ru «Какие механизмы …»
+  BAD: pl "Oprogramowanie i automatyzacja" · de "Software und Automatisierung" ·
+       ru «ПО и автоматизация» — bare noun topics, the banned form.
 SUB-HEADINGS (<h3>) in the specifications section (§7) and the functionality section (§3) are
 EXEMPT: they stay CONCISE NOMINAL PHRASES, translated as labels (pl "Moduł lasera",
 "Bezpieczeństwo"; de "Lasermodul", "Sicherheit"). Reproduce EVERY <h3> present in the source —
@@ -1089,6 +1125,35 @@ export const OPERATING_TIPS_H2_MARKERS = [
 ];
 
 /**
+ * Question / functional <h2> openers, per locale. SINGLE SOURCE OF TRUTH — interpolated into
+ * C3D_UK_LOCALE_TOV's HEADING PATTERNS block AND imported by heading-style.ts, so the rule the
+ * model is given and the rule the linter enforces are literally the same array. Same mechanism
+ * as OPERATING_TIPS_H2_MARKERS above.
+ */
+export const FUNCTIONAL_H2_OPENERS: Record<string, string[]> = {
+  'uk-ua': ['Як', 'Що', 'Які', 'Яке', 'Який', 'Яка', 'Яким', 'Яких', 'Де', 'Чому', 'Скільки', 'Коли'],
+  'ru-ua': ['Как', 'Что', 'Какие', 'Какое', 'Какой', 'Какая', 'Каким', 'Каких', 'Где', 'Почему', 'Сколько', 'Когда'],
+};
+
+/**
+ * <h2> forms the MASTER schema mandates in a nominal shape. A nominal heading here is CORRECT,
+ * not a Style A regression, so heading-style.ts prefix-matches against this list before flagging.
+ *
+ * §7's "Технічні характеристики …" is additionally exempt structurally (any <h2> inside
+ * <section class="specs">); it is listed here too so a §7 header emitted outside that wrapper is
+ * still not flagged.
+ *
+ * NOT included, deliberately: umbrella headings that merely contain the product name, e.g.
+ * «Безпечна експлуатація Ortur H20». Exempting on the product name would also exempt most of the
+ * nominal headings the linter exists to catch. If a specific umbrella form proves legitimate and
+ * recurring, add it here explicitly rather than widening the rule.
+ */
+export const MANDATED_NOMINAL_H2: Record<string, string[]> = {
+  'uk-ua': ['Технічні характеристики', 'Матеріали та сумісне обладнання', 'Сумісність', 'Комплект постачання'],
+  'ru-ua': ['Технические характеристики', 'Материалы и совместимое оборудование', 'Совместимость', 'Комплект поставки'],
+};
+
+/**
  * Center 3D Print per-locale ToV — Ukrainian (uk-UA). The uk-UA MASTER is never translated, so
  * these lexical rules must be injected into Task A via buildMasterUaOverlay() or they are
  * silently lost — same reasoning as EXPERT3D_UK_LOCALE_TOV.
@@ -1115,11 +1180,29 @@ IMPERATIVE STARTERS for the operating-tips block (formal «ви»-form):
   <li><b>Дотримуйтеся умов у приміщенні. </b>Забезпечте температуру 18–28 °C та вологість не
   вище 30 %.</li>
 
-HEADING PATTERNS (functional/question — replace bare nominal topics):
-«Як працює …», «Де застосовують …», «Як … [дію]», «[Функція] та [функція]»,
-«Поради щодо експлуатації …», «Матеріали та сумісне обладнання».
-Зокрема: «Сфери застосування» → «Де застосовують [Product]»;
+HEADING PATTERNS для <h2> РОЗДІЛІВ (функційні/питальні — замінюють голі іменникові теми).
+Дозволені зачини: ${FUNCTIONAL_H2_OPENERS['uk-ua'].map(o => `«${o} …»`).join(', ')} —
+або особова дієслівна форма на початку.
+§3 — конкретні заміни майстер-шаблонів:
+  Технологія / принцип роботи      → «Як працює [Product]»
+  Конструкція та апаратна частина  → «Як платформа підйому та камера підвищують точність»
+                                     (шаблон: «Як [вузол] [робить X]»)
+  ПЗ та автоматизація              → «Яке ПЗ підтримує [Product]»
+  Безпека                          → «Які механізми безпеки застосовує [Product]»
+  Сертифікація та відповідність    → «Яким стандартам відповідає [Product]»
+Інші розділи: «Сфери застосування» → «Де застосовують [Product]»;
 «Технологія SLS та принцип роботи» → «Як працює селективне лазерне спікання».
+ЗАБОРОНЕНО як <h2>: «Лазерний модуль потужністю 20 Вт», «ПЗ та автоматизація», «Безпека під час
+роботи», «Електронне керування та аварійні системи», «Моторизована платформа, камера та візуальне
+позиціонування» — це іменникові теми, а не функційні заголовки.
+Формула «[Функція] та [функція]» БІЛЬШЕ НЕ Є зразком: два іменники, з'єднані «та», — це саме та
+форма, яку заборонено. Використовуйте її, лише якщо хоча б одна частина містить особову дієслівну
+форму.
+ВИНЯТОК 1 (<h3>): підзаголовки <h3> у §3 та §7 залишаються короткими іменниковими ярликами
+(«Лазерний модуль», «Безпека», «Електроніка та підключення»). Це правило їх НЕ стосується —
+жодного <h3> не можна прибрати чи об'єднати заради функційного формулювання.
+ВИНЯТОК 2: заголовки, які майстер-схема задає іменниковими —
+${MANDATED_NOMINAL_H2['uk-ua'].map(h => `«${h} …»`).join(', ')}.
 
 COMMERCIAL-CLOSING H2 — use the soft «варто» form, which REPLACES the master's
 «Чому купити [Product] в [Store]?» template:
@@ -1154,9 +1237,16 @@ Należy unikać.
   <li><b>Należy przestrzegać warunków w pomieszczeniu. </b>Temperatura 18–28 °C, wilgotność
   nie wyższa niż 30 %.</li>
 
-HEADING PATTERNS: «Jak działa …», «Gdzie stosuje się …», «[Funkcja] i [funkcja]»,
-«Wskazówki dotyczące eksploatacji …», «Materiały i kompatybilne urządzenia».
+HEADING PATTERNS dla <h2> SEKCJI: «Jak działa …», «Jak [zespół] [podnosi / zapewnia X]»,
+«Jakie oprogramowanie obsługuje …», «Jakie mechanizmy bezpieczeństwa stosuje …»,
+«Jakim normom odpowiada …», «Gdzie stosuje się …», «Wskazówki dotyczące eksploatacji …».
 Zamiast «Zastosowania» → «Gdzie stosuje się [Product]».
+Wzorzec «[Funkcja] i [funkcja]» NIE jest już dozwolony — dwa rzeczowniki połączone «i» to
+dokładnie ta zakazana forma nominalna. Użyj go tylko wtedy, gdy co najmniej jedna część zawiera
+osobową formę czasownika.
+WYJĄTEK: <h3> w §3 i §7 pozostają zwięzłymi etykietami rzeczownikowymi («Moduł lasera»,
+«Bezpieczeństwo») — ta reguła ich NIE dotyczy. Nagłówki, które schemat nadrzędny zadaje jako
+rzeczownikowe («Dane techniczne …», «Materiały i kompatybilne urządzenia»), też są dozwolone.
 
 COMMERCIAL-CLOSING H2: «Dlaczego warto kupić [Product] w Center 3D Print?» (the master's pl-PL
 template already uses the «warto» form — keep it). Zakończ akapit bezpośrednim zaproszeniem:
