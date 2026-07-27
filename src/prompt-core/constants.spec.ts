@@ -41,6 +41,39 @@ describe('SENTENCE_LENGTH_BANDS mirrors SENTENCE_LENGTH_RULES', () => {
     }
   });
 
+  /**
+   * The regex has always captured hero/body/faq, but only `ceiling` was ever asserted — so those
+   * three could silently drift from the prose table the model actually reads. Any change that edits
+   * the bands (they must be edited in BOTH places) is exactly when that drift happens.
+   */
+  it('every hero/body/faq band in the prose equals the band in the map', () => {
+    const parseRange = (s: string): [number, number] => {
+      const [lo, hi] = s.split(/[–-]/).map(Number); // en-dash in the table, hyphen tolerated
+      return [lo, hi];
+    };
+    for (const [, locales, hero, body, faq] of rows) {
+      for (const loc of locales.split(' / ')) {
+        const band = SENTENCE_LENGTH_BANDS[loc.toLowerCase()];
+        expect(band, loc).toBeDefined();
+        expect(band.hero, `${loc} hero`).toEqual(parseRange(hero));
+        expect(band.body, `${loc} body`).toEqual(parseRange(body));
+        expect(band.faq, `${loc} faq`).toEqual(parseRange(faq));
+      }
+    }
+  });
+
+  /**
+   * The headroom rule this table exists to encode. The model cannot count its own words, so a BODY
+   * target too close to the ceiling guarantees overshoot — uk-UA sat at 0.80 and produced 21/22/22-word
+   * sentences against a ceiling of 20. Locking the ratio stops a future edit from quietly
+   * reintroducing that.
+   */
+  it('keeps every BODY upper bound at or below 0.75 x ceiling', () => {
+    for (const [locale, band] of Object.entries(SENTENCE_LENGTH_BANDS)) {
+      expect(band.body[1] / band.ceiling, `${locale} body-upper/ceiling`).toBeLessThanOrEqual(0.75);
+    }
+  });
+
   it('every map key appears in the prose table', () => {
     const inProse = new Set(rows.flatMap(r => r[1].split(' / ').map(l => l.toLowerCase())));
     for (const key of Object.keys(SENTENCE_LENGTH_BANDS)) {
