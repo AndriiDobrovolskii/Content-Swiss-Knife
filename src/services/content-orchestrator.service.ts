@@ -16,6 +16,7 @@ import { validateSecondPersonScope } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
 import { validateHeadingStyle } from '../utils/heading-style';
 import { validateSentenceLength } from '../utils/sentence-length';
+import { cyrillizeUnits } from '../utils/unit-cyrillize';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -198,6 +199,11 @@ export class ContentOrchestratorService {
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
+        // AFTER fixNumberFormatting so the cyrillizer sees a canonical NUM<NBSP>UNIT shape, and
+        // BEFORE normalizeTerminology so its Cyrillic word-boundary lookarounds see final
+        // orthography. Both neighbours are idempotent and independent, so this is a documented
+        // convention rather than a correctness requirement.
+        html = cyrillizeUnits(html, 'uk-UA');
         html = normalizeTerminology(html, 'uk-UA');
         html = canonicalizeMultiInOne(html, 'uk-UA');
         return html;
@@ -342,7 +348,8 @@ export class ContentOrchestratorService {
             if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
               html = this.applySpanishExpert3dReplacements(html);
             }
-            html = normalizeTerminology(fixNumberFormatting(html), locale);
+            // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
+            html = normalizeTerminology(cyrillizeUnits(fixNumberFormatting(html), locale), locale);
             return canonicalizeMultiInOne(html, locale);
           },
           validate: (html) => [
@@ -493,6 +500,8 @@ export class ContentOrchestratorService {
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
+        // Ordering rationale as in generate()'s master produce.
+        html = cyrillizeUnits(html, UA_ISO);
         html = normalizeTerminology(html, UA_ISO);
         html = canonicalizeMultiInOne(html, UA_ISO);
         return html;
