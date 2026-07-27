@@ -37,11 +37,16 @@ function preserveInitialCase(original: string, replacement: string): string {
 // character class instead. Deliberately mirrored rather than imported: number-format-fixer's
 // CYR_BOUNDARY is a lookAHEAD that also covers \w (a digit+unit adjacency check), which is a
 // different semantic from "this root must start a word".
-const UK_LETTERS = 'а-яіїєґА-ЯІЇЄҐ';
-/** Left word boundary: the match may not continue a preceding Cyrillic word. */
-const UK_LEFT_BOUNDARY = `(?<![${UK_LETTERS}])`;
+export const UK_LETTERS = 'а-яіїєґА-ЯІЇЄҐ';
+/**
+ * Left word boundary: the match may not continue a preceding Cyrillic word.
+ * Exported as the canonical copy — any other module needing a Cyrillic word boundary must import
+ * these rather than hand-rolling a third variant. Getting this wrong is not theoretical: the
+ * missing left boundary here corrupted `спостерігати` into `сплакатігати` in shipped output.
+ */
+export const UK_LEFT_BOUNDARY = `(?<![${UK_LETTERS}])`;
 /** Right word boundary: the match may not be followed by a Cyrillic case ending. */
-const UK_RIGHT_BOUNDARY = `(?![${UK_LETTERS}])`;
+export const UK_RIGHT_BOUNDARY = `(?![${UK_LETTERS}])`;
 
 /**
  * Root-swap pairs where the old and new root are the same part of speech and share the same

@@ -12,6 +12,7 @@ import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../
 import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from '../utils/specs-grounding';
 import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
+import { validateSecondPersonScope } from '../utils/tov-second-person';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -210,6 +211,9 @@ export class ContentOrchestratorService {
           // Image text may not carry a figure the source never stated — the prompt-side rule
           // (NUMERIC_SOURCE_FIDELITY_RULES) reduces the rate; this is the deterministic gate.
           ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (base)'),
+          // Style B second-person scope — warning tier while the block-slicing heuristic is
+          // measured on real generations; inert for every store except Center 3D Print.
+          ...validateSecondPersonScope(html, 'uk-UA', input.website.name),
           // §7 must not collapse into one catch-all category — runs on the master only, since
           // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
           ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
@@ -496,6 +500,8 @@ export class ContentOrchestratorService {
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
           // Image-text numeric gate — see the identical hook in generate() for rationale.
           ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),
+          // Style B second-person scope — see the identical hook in generate() for rationale.
+          ...validateSecondPersonScope(html, UA_ISO, input.website.name),
           // §7 category-collapse guard — see the identical hook in generate() for rationale.
           ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
           ...(groundingDisabled ? [{

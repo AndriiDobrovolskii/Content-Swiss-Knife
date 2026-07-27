@@ -1072,6 +1072,23 @@ direct invitation to contact the specialists — never a flat availability state
 brand-guarantee sentence.`;
 
 /**
+ * Localized openers of the Style B operating-tips H2, one per language Center 3D Print publishes.
+ * SINGLE SOURCE OF TRUTH for detecting that block in generated HTML — the same strings appear as
+ * prose instructions inside the C3D overlays above, and tov-second-person.ts matches against this
+ * array so the two can never drift apart.
+ *
+ * Prefix match: the real heading continues with the product name ("Поради щодо експлуатації
+ * Ortur Laser Master 3").
+ */
+export const OPERATING_TIPS_H2_MARKERS = [
+  'Tips for operating',
+  'Поради щодо експлуатації',
+  'Советы по эксплуатации',
+  'Wskazówki dotyczące eksploatacji',
+  'Hinweise zum Betrieb',
+];
+
+/**
  * Center 3D Print per-locale ToV — Ukrainian (uk-UA). The uk-UA MASTER is never translated, so
  * these lexical rules must be injected into Task A via buildMasterUaOverlay() or they are
  * silently lost — same reasoning as EXPERT3D_UK_LOCALE_TOV.
