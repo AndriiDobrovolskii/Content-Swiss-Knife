@@ -15,7 +15,8 @@ export function validateSlugs(slug: SlugResponse | null): ValidationIssue[] {
   }
 
   const seen = new Map<string, string>(); // slug → first language that used it
-  for (const item of slug.slugs) {
+  // Indexed so slug-charset can emit a machine-addressable `path` for tier-0 repair.
+  for (const [i, item] of slug.slugs.entries()) {
     const ctx = `Slug (${item.language})`;
     if (!item.slug?.trim()) {
       issues.push({ rule: 'slug-blank', severity: 'error', context: ctx, detail: 'Slug is empty.' });
@@ -27,6 +28,7 @@ export function validateSlugs(slug: SlugResponse | null): ValidationIssue[] {
         severity: 'error',
         context: ctx,
         detail: `Slug "${item.slug}" contains characters outside [a-z0-9-] or has stray hyphens.`,
+        path: `slugs[${i}].slug`,
       });
     }
     const prior = seen.get(item.slug);
