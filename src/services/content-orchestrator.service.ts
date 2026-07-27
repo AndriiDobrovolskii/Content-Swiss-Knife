@@ -14,6 +14,7 @@ import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/s
 import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
 import { validateSecondPersonScope } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
+import { validateHeadingStyle } from '../utils/heading-style';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -215,6 +216,9 @@ export class ContentOrchestratorService {
           // Style B second-person scope — warning tier while the block-slicing heuristic is
           // measured on real generations; inert for every store except Center 3D Print.
           ...validateSecondPersonScope(html, 'uk-UA', input.website.name),
+          // Style B section headings must be functional, not bare nominal topics. Warning tier
+          // while the verb heuristic is measured; inert for every store except Center 3D Print.
+          ...validateHeadingStyle(html, 'uk-UA', input.website.name),
           // §7 must not collapse into one catch-all category — runs on the master only, since
           // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
           ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
@@ -503,6 +507,8 @@ export class ContentOrchestratorService {
           ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),
           // Style B second-person scope — see the identical hook in generate() for rationale.
           ...validateSecondPersonScope(html, UA_ISO, input.website.name),
+          // Style B heading check — see the identical hook in generate() for rationale.
+          ...validateHeadingStyle(html, UA_ISO, input.website.name),
           // §7 category-collapse guard — see the identical hook in generate() for rationale.
           ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
           ...(groundingDisabled ? [{
@@ -827,6 +833,9 @@ export class ContentOrchestratorService {
         ...validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId }),
         ...validateStructuralParity(c.mainHtmlUa, html, `HTML (${lang})`),
       ]),
+      // Also run in the repair gate, where they reach the downloadable .md report. Repeating
+      // them here puts them in the on-screen panel too; dedupeIssues collapses the overlap.
+      ...validateHeadingStyle(c.mainHtmlUa, mainLocale ?? 'uk-UA', storeName),
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
     ];
