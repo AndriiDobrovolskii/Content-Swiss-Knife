@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runRepairGate, appendRepairFeedback, formatRepairReportMarkdown, RepairArtifactReport } from './repair-gate';
+import { runRepairGate, appendRepairFeedback, formatRepairReportMarkdown, toArtifactReport, RepairArtifactReport } from './repair-gate';
 import { PromptPayload } from '../prompt-core/payload';
 import { ValidationIssue } from './output-validator';
 
@@ -256,6 +256,100 @@ describe('runRepairGate', () => {
     expect(result.repairsUsed).toBe(0);
   });
 
+  it('reports shippedAttempt=0 when the initial generation is already clean', async () => {
+    const result = await runRepairGate({
+      label: 'test',
+      maxRepairs: 2,
+      basePayload: BASE_PAYLOAD,
+      produce: vi.fn().mockResolvedValue({ v: 0 }),
+      validate: vi.fn().mockReturnValue([]),
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.shippedAttempt).toBe(0);
+    expect(result.repairsUsed).toBe(0);
+  });
+
+  it('reports shippedAttempt=1 when attempt 1 strictly improves', async () => {
+    const result = await runRepairGate({
+      label: 'test',
+      maxRepairs: 1,
+      basePayload: BASE_PAYLOAD,
+      produce: vi.fn().mockResolvedValueOnce({ v: 0 }).mockResolvedValueOnce({ v: 1 }),
+      validate: vi.fn()
+        .mockReturnValueOnce([makeIssue('rule-a'), makeIssue('rule-b')])
+        .mockReturnValueOnce([makeIssue('rule-a')]),
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.shippedAttempt).toBe(1);
+    expect(result.finalIssues).toHaveLength(1);
+  });
+
+  it('records a repair that fixed one locale but broke another as introduced, and ships attempt 0', async () => {
+    // The exact shape of repair-report_Center 3D Print_Ortur-H20-20-W_1785166974266.md: attempt 1
+    // resolved the en-GB error and introduced a pl-PL one, tying on total error count. The
+    // strictly-better tie-break therefore kept attempt 0 — and the old report credited the repair.
+    const enGb: ValidationIssue = { severity: 'error', rule: 'meta-title-length', detail: 'meta_title is 57 chars (max 55).', context: 'SEO meta (en-GB)' };
+    const plPl: ValidationIssue = { severity: 'error', rule: 'meta-title-length', detail: 'meta_title is 58 chars (max 55).', context: 'SEO meta (pl-PL)' };
+
+    const result = await runRepairGate({
+      label: 'SEO metadata',
+      maxRepairs: 1,
+      basePayload: BASE_PAYLOAD,
+      produce: vi.fn().mockResolvedValueOnce({ v: 'attempt0' }).mockResolvedValueOnce({ v: 'attempt1' }),
+      validate: vi.fn().mockReturnValueOnce([enGb]).mockReturnValueOnce([plPl]),
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.shippedAttempt).toBe(0);
+    expect(result.artifact).toEqual({ v: 'attempt0' });
+    expect(result.attempts[0].resolved).toHaveLength(1);
+    expect(result.attempts[0].persisted).toHaveLength(0);
+    expect(result.attempts[0].introduced).toHaveLength(1);
+    expect(result.attempts[0].introduced[0].context).toBe('SEO meta (pl-PL)');
+
+    const md = formatRepairReportMarkdown(
+      [toArtifactReport('SEO metadata', result)],
+      { product: 'Ortur H20 20 W', store: 'Center 3D Print', generatedAt: '2026-07-27T15:35:00.829Z' },
+    );
+    const row = md.split('\n').find(l => l.includes('`meta-title-length`') && l.startsWith('|'))!;
+    expect(row).toContain('⚠️ fixed then discarded');
+    expect(row).not.toContain('✅ yes');
+    // The two statements that used to contradict each other must now agree.
+    expect(md).toContain('**Shipped with unresolved errors:**');
+    expect(md).toContain('- Shipped attempt: 0 of 1');
+  });
+
+  it('records no introduced entries when the repair resolves everything', async () => {
+    const result = await runRepairGate({
+      label: 'test',
+      maxRepairs: 2,
+      basePayload: BASE_PAYLOAD,
+      produce: vi.fn().mockResolvedValueOnce({ v: 0 }).mockResolvedValueOnce({ v: 1 }),
+      validate: vi.fn().mockReturnValueOnce([makeIssue('rule-a')]).mockReturnValueOnce([]),
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.attempts[0].introduced).toHaveLength(0);
+    expect(result.shippedAttempt).toBe(1);
+  });
+
+  it('counts only error severity as introduced, never warnings', async () => {
+    const result = await runRepairGate({
+      label: 'test',
+      maxRepairs: 1,
+      basePayload: BASE_PAYLOAD,
+      produce: vi.fn().mockResolvedValueOnce({ v: 0 }).mockResolvedValueOnce({ v: 1 }),
+      validate: vi.fn()
+        .mockReturnValueOnce([makeIssue('rule-a')])
+        .mockReturnValueOnce([makeIssue('new-warning', 'warning'), makeIssue('new-error')]),
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.attempts[0].introduced.map(i => i.rule)).toEqual(['new-error']);
+  });
+
   it('propagates exceptions thrown by produce without catching them', async () => {
     const produce = vi.fn().mockRejectedValue(new Error('LLM error'));
 
@@ -286,6 +380,7 @@ describe('formatRepairReportMarkdown', () => {
         repairsUsed: 1,
         finalIssues: [],
         status: 'repaired',
+        shippedAttempt: 1,
         attempts: [
           {
             attempt: 1,
@@ -293,6 +388,7 @@ describe('formatRepairReportMarkdown', () => {
             issuesAfter: [],
             resolved: [recurringIssueA],
             persisted: [],
+            introduced: [],
           },
         ],
       },
@@ -301,6 +397,7 @@ describe('formatRepairReportMarkdown', () => {
         repairsUsed: 1,
         finalIssues: [persistingIssue],
         status: 'unresolved',
+        shippedAttempt: 1,
         attempts: [
           {
             attempt: 1,
@@ -308,6 +405,7 @@ describe('formatRepairReportMarkdown', () => {
             issuesAfter: [persistingIssue],
             resolved: [recurringIssueB],
             persisted: [persistingIssue],
+            introduced: [],
           },
         ],
       },
@@ -327,15 +425,106 @@ describe('formatRepairReportMarkdown', () => {
     const specCountRow = md.split('\n').find(l => l.includes('`spec-count-mismatch`'))!;
     expect(figcaptionRow).toContain('2'); // occurrences
     expect(figcaptionRow).toContain('✅ yes');
-    expect(specCountRow).toContain('⚠️ no');
+    expect(specCountRow).toContain('❌ no'); // A3: unresolved-and-shipped is now ❌, ⚠️ is reserved for fixed-then-discarded
 
     // Recurring-failures table appears before the per-artifact detail section.
     expect(md.indexOf('## Recurring rule failures')).toBeLessThan(md.indexOf('## Per-artifact detail'));
   });
 
+  it('gives a rule that only ever appeared as introduced a row reading "no"', () => {
+    // Without `introduced` in the row set this rule has no row at all, and a regression that
+    // shipped stays invisible in the prioritization table — Defect B surviving the fix.
+    const shipped = makeIssue('meta-description-length');
+    const reports: RepairArtifactReport[] = [
+      {
+        label: 'SEO metadata',
+        repairsUsed: 1,
+        finalIssues: [shipped],
+        status: 'unresolved',
+        shippedAttempt: 1,
+        attempts: [{
+          attempt: 1,
+          issuesBefore: [makeIssue('meta-title-length')],
+          issuesAfter: [shipped],
+          resolved: [makeIssue('meta-title-length')],
+          persisted: [],
+          introduced: [shipped],
+        }],
+      },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    const row = md.split('\n').find(l => l.includes('`meta-description-length`') && l.startsWith('|'))!;
+    expect(row).toBeDefined();
+    expect(row).toContain('❌ no (1 still failing)');
+    expect(md).toContain('- ⚠️ introduced: `meta-description-length`');
+    expect(md).toContain('- Total repair regressions introduced: 1');
+  });
+
+  it('scopes "fixed then discarded" per artifact, never across artifacts', () => {
+    // Artifact A: resolved the rule but shipped it anyway (gate problem).
+    // Artifact B: never resolved it and shipped it (prompt problem).
+    // A global pairing would collapse both into one label; the Contexts column must still show both.
+    const ruleA: ValidationIssue = { severity: 'error', rule: 'meta-title-length', detail: '57 chars', context: 'SEO meta (en-GB)' };
+    const ruleB: ValidationIssue = { severity: 'error', rule: 'meta-title-length', detail: '58 chars', context: 'SEO meta (pl-PL)' };
+
+    const reports: RepairArtifactReport[] = [
+      {
+        label: 'SEO metadata (en-GB)',
+        repairsUsed: 1,
+        finalIssues: [ruleA],
+        status: 'unresolved',
+        shippedAttempt: 0,
+        attempts: [{ attempt: 1, issuesBefore: [ruleA], issuesAfter: [ruleB], resolved: [ruleA], persisted: [], introduced: [ruleB] }],
+      },
+      {
+        label: 'SEO metadata (pl-PL)',
+        repairsUsed: 1,
+        finalIssues: [ruleB],
+        status: 'unresolved',
+        shippedAttempt: 1,
+        attempts: [{ attempt: 1, issuesBefore: [ruleB], issuesAfter: [ruleB], resolved: [], persisted: [ruleB], introduced: [] }],
+      },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    const row = md.split('\n').find(l => l.includes('`meta-title-length`') && l.startsWith('|'))!;
+    expect(row).toContain('⚠️ fixed then discarded');
+    expect(row).toContain('SEO meta (en-GB)');
+    expect(row).toContain('SEO meta (pl-PL)');
+  });
+
+  it('does not read "yes" when one artifact resolved a rule that a DIFFERENT artifact shipped broken', () => {
+    // The inverse of the scoping guard: resolution on artifact A must not clear artifact B's failure.
+    const rule: ValidationIssue = { severity: 'error', rule: 'spec-count-mismatch', detail: 'd', context: 'HTML (uk-UA)' };
+    const reports: RepairArtifactReport[] = [
+      {
+        label: 'HTML (uk-UA)',
+        repairsUsed: 1,
+        finalIssues: [],
+        status: 'repaired',
+        shippedAttempt: 1,
+        attempts: [{ attempt: 1, issuesBefore: [rule], issuesAfter: [], resolved: [rule], persisted: [], introduced: [] }],
+      },
+      {
+        label: 'HTML (pl-PL)',
+        repairsUsed: 0,
+        finalIssues: [rule],
+        status: 'unresolved',
+        shippedAttempt: 0,
+        attempts: [],
+      },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    const row = md.split('\n').find(l => l.includes('`spec-count-mismatch`') && l.startsWith('|'))!;
+    expect(row).not.toContain('✅ yes');
+    expect(row).toContain('❌ no (1 still failing)');
+  });
+
   it('returns a short "no repairs needed" message when every report is clean', () => {
     const reports: RepairArtifactReport[] = [
-      { label: 'HTML (base)', repairsUsed: 0, finalIssues: [], status: 'clean', attempts: [] },
+      { label: 'HTML (base)', repairsUsed: 0, finalIssues: [], status: 'clean', attempts: [], shippedAttempt: 0 },
     ];
 
     const md = formatRepairReportMarkdown(reports, META);
@@ -347,7 +536,7 @@ describe('formatRepairReportMarkdown', () => {
   it('lists warning-severity finalIssues under a dedicated section when every report is clean but warnings exist', () => {
     const warning = makeIssue('decimal-separator', 'warning');
     const reports: RepairArtifactReport[] = [
-      { label: 'HTML (uk-UA)', repairsUsed: 0, finalIssues: [warning], status: 'clean', attempts: [] },
+      { label: 'HTML (uk-UA)', repairsUsed: 0, finalIssues: [warning], status: 'clean', attempts: [], shippedAttempt: 0 },
     ];
 
     const md = formatRepairReportMarkdown(reports, META);
@@ -368,9 +557,10 @@ describe('formatRepairReportMarkdown', () => {
         repairsUsed: 1,
         finalIssues: [],
         status: 'repaired',
-        attempts: [{ attempt: 1, issuesBefore: [makeIssue('seo-empty')], issuesAfter: [], resolved: [makeIssue('seo-empty')], persisted: [] }],
+        shippedAttempt: 1,
+        attempts: [{ attempt: 1, issuesBefore: [makeIssue('seo-empty')], issuesAfter: [], resolved: [makeIssue('seo-empty')], persisted: [], introduced: [] }],
       },
-      { label: 'HTML (uk-UA)', repairsUsed: 0, finalIssues: [warning], status: 'clean', attempts: [] },
+      { label: 'HTML (uk-UA)', repairsUsed: 0, finalIssues: [warning], status: 'clean', attempts: [], shippedAttempt: 0 },
     ];
 
     const md = formatRepairReportMarkdown(reports, META);
@@ -390,7 +580,8 @@ describe('formatRepairReportMarkdown', () => {
         repairsUsed: 1,
         finalIssues: [warning],
         status: 'repaired',
-        attempts: [{ attempt: 1, issuesBefore: [makeIssue('seo-empty')], issuesAfter: [warning], resolved: [makeIssue('seo-empty')], persisted: [] }],
+        shippedAttempt: 1,
+        attempts: [{ attempt: 1, issuesBefore: [makeIssue('seo-empty')], issuesAfter: [warning], resolved: [makeIssue('seo-empty')], persisted: [], introduced: [] }],
       },
     ];
 
@@ -408,7 +599,8 @@ describe('formatRepairReportMarkdown', () => {
         repairsUsed: 1,
         finalIssues: [],
         status: 'repaired',
-        attempts: [{ attempt: 1, issuesBefore: [makeIssue('seo-empty')], issuesAfter: [], resolved: [makeIssue('seo-empty')], persisted: [] }],
+        shippedAttempt: 1,
+        attempts: [{ attempt: 1, issuesBefore: [makeIssue('seo-empty')], issuesAfter: [], resolved: [makeIssue('seo-empty')], persisted: [], introduced: [] }],
       },
     ];
 

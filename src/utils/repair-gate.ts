@@ -21,6 +21,15 @@ export interface RepairAttemptRecord {
   resolved: ValidationIssue[];
   /** issuesBefore entries that still appear in issuesAfter — the repair did not fix these. */
   persisted: ValidationIssue[];
+  /**
+   * issuesAfter entries that were NOT in issuesBefore — errors this repair INTRODUCED.
+   *
+   * A repair with introduced.length > 0 is a net regression even when resolved.length > 0, and is
+   * the usual reason a strictly-better comparison ties and discards an otherwise good attempt.
+   * Without this field `resolved` and `persisted` are both subsets of issuesBefore, so whether a
+   * repair made the artifact WORSE is unmeasurable.
+   */
+  introduced: ValidationIssue[];
 }
 
 export interface RepairGateResult<T> {
@@ -28,6 +37,14 @@ export interface RepairGateResult<T> {
   finalIssues: ValidationIssue[];
   repairsUsed: number;
   attempts: RepairAttemptRecord[];
+  /**
+   * Which attempt produced the shipped artifact. 0 = the initial generation (no repair applied).
+   *
+   * Because ties keep the earliest attempt, this is NOT always equal to repairsUsed — a repair can
+   * be spent, recorded in attempts[], and then discarded. Without this field the report cannot
+   * distinguish "repair worked" from "repair worked and was thrown away".
+   */
+  shippedAttempt: number;
 }
 
 export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<RepairGateResult<T>> {
@@ -38,7 +55,9 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
 
   const errCount = (is: ValidationIssue[]) => is.filter(i => i.severity === 'error').length;
   const issueKey = (i: ValidationIssue) => `${i.rule}::${i.context}`;
-  let best = { artifact, issues, errors: errCount(issues) };
+  // `attempt` tracks which generation `best` currently holds, so the report can state what actually
+  // shipped rather than inferring it from repairsUsed.
+  let best = { artifact, issues, errors: errCount(issues), attempt: 0 };
 
   while (repairsUsed < opts.maxRepairs) {
     if (best.errors === 0) break;
@@ -49,19 +68,31 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     repairsUsed++;
 
     const afterKeys = new Set(issues.map(issueKey));
+    const beforeKeys = new Set(issuesBefore.map(issueKey));
     attempts.push({
       attempt: repairsUsed,
       issuesBefore,
       issuesAfter: issues,
       resolved: issuesBefore.filter(i => !afterKeys.has(issueKey(i))),
       persisted: issuesBefore.filter(i => afterKeys.has(issueKey(i))),
+      // Errors only: a warning appearing after a repair is not a regression worth spending a
+      // repair attempt on, and counting it would inflate the run-level regression metric.
+      introduced: issues.filter(i => i.severity === 'error' && !beforeKeys.has(issueKey(i))),
     });
 
     const e = errCount(issues);
-    if (e < best.errors) best = { artifact, issues, errors: e }; // strictly-better wins; ties keep earliest
+    // Strictly-better wins; ties keep earliest. Deliberately conservative — do not relax this
+    // without a separate argument, but DO record which attempt won so the report can say so.
+    if (e < best.errors) best = { artifact, issues, errors: e, attempt: repairsUsed };
   }
 
-  return { artifact: best.artifact, finalIssues: best.issues, repairsUsed, attempts };
+  return {
+    artifact: best.artifact,
+    finalIssues: best.issues,
+    repairsUsed,
+    attempts,
+    shippedAttempt: best.attempt,
+  };
 }
 
 export function appendRepairFeedback(
@@ -93,13 +124,23 @@ export interface RepairArtifactReport {
   finalIssues: ValidationIssue[];
   /** 'clean' = no repair needed. 'repaired' = repair fixed all errors. 'unresolved' = errors remain after maxRepairs. */
   status: 'clean' | 'repaired' | 'unresolved';
+  /** Which attempt shipped. Required, not optional — see RepairGateResult.shippedAttempt. Making it
+   *  optional would let a caller silently drop the signal, which is the bug this field exists to fix. */
+  shippedAttempt: number;
 }
 
 export function toArtifactReport(label: string, result: RepairGateResult<unknown>): RepairArtifactReport {
   const finalErrors = result.finalIssues.filter(i => i.severity === 'error').length;
   const status: RepairArtifactReport['status'] =
     result.repairsUsed === 0 ? 'clean' : finalErrors === 0 ? 'repaired' : 'unresolved';
-  return { label, repairsUsed: result.repairsUsed, attempts: result.attempts, finalIssues: result.finalIssues, status };
+  return {
+    label,
+    repairsUsed: result.repairsUsed,
+    attempts: result.attempts,
+    finalIssues: result.finalIssues,
+    status,
+    shippedAttempt: result.shippedAttempt,
+  };
 }
 
 export interface RepairReportMeta {
@@ -133,6 +174,12 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
   lines.push(`- Artifacts that needed a repair: ${repaired.length}`);
   lines.push(`- Artifacts still failing after maxRepairs: ${reports.filter(r => r.status === 'unresolved').length}`);
   lines.push(`- Total repair attempts spent: ${reports.reduce((sum, r) => sum + r.repairsUsed, 0)}`);
+  // Repairs that were paid for and then thrown away by the tie-break. A non-zero value here next to
+  // a non-zero regression count means repair instructions are broad enough to damage neighbouring
+  // fields — a prompt problem. A non-zero value with zero regressions means the tie-break itself is
+  // discarding equal-scoring improvements.
+  lines.push(`- Repairs spent but discarded: ${reports.reduce((sum, r) => sum + Math.max(0, r.repairsUsed - r.shippedAttempt), 0)}`);
+  lines.push(`- Total repair regressions introduced: ${reports.reduce((sum, r) => sum + r.attempts.reduce((n, a) => n + a.introduced.length, 0), 0)}`);
   lines.push('');
 
   if (repaired.length === 0) {
@@ -151,34 +198,92 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
   }
 
   // ── Recurring rule failures — the prompt-engineering signal ──
-  interface RuleAgg { rule: string; occurrences: number; contexts: Set<string>; resolved: number; persisted: number; sampleDetail: string; }
+  //
+  // The "Fixed by repair?" column is computed against what SHIPPED (finalIssues), not against
+  // per-attempt bookkeeping. The old version read `agg.persisted > 0 ? no : yes`, which reported
+  // ✅ yes for a rule whose fix was recorded in attempts[] and then discarded by the
+  // strictly-better tie-break — crediting a repair that never shipped.
+  interface RuleAgg {
+    rule: string;
+    /** How often this rule BLOCKED acceptance (resolved + persisted). Introduced is counted
+     *  separately so ranking keeps meaning "how often did this rule stand in the way". */
+    occurrences: number;
+    introduced: number;
+    contexts: Set<string>;
+    resolved: number;
+    persisted: number;
+    sampleDetail: string;
+  }
   const byRule = new Map<string, RuleAgg>();
+  const agg = (issue: ValidationIssue): RuleAgg => {
+    const existing = byRule.get(issue.rule)
+      ?? { rule: issue.rule, occurrences: 0, introduced: 0, contexts: new Set<string>(), resolved: 0, persisted: 0, sampleDetail: issue.detail };
+    existing.contexts.add(issue.context);
+    byRule.set(issue.rule, existing);
+    return existing;
+  };
+
+  // Rules whose fix was resolved on THIS artifact, keyed per report label. The pairing below must
+  // stay per-artifact: a run covers several artifacts (SEO meta for uk-UA/en-GB/pl-PL), and a global
+  // "somebody resolved it somewhere" would label a rule 'fixed then discarded' when one locale was
+  // fixed-then-discarded while another was never fixed at all — merging a gate problem with a prompt
+  // problem and hiding the harder one.
+  const resolvedByLabel = new Map<string, Set<string>>();
+  const shippedByLabel = new Map<string, Set<string>>();
+
   for (const report of reports) {
+    const resolvedHere = new Set<string>();
     for (const attempt of report.attempts) {
       for (const issue of attempt.resolved) {
-        const agg = byRule.get(issue.rule) ?? { rule: issue.rule, occurrences: 0, contexts: new Set(), resolved: 0, persisted: 0, sampleDetail: issue.detail };
-        agg.occurrences++; agg.resolved++; agg.contexts.add(issue.context);
-        byRule.set(issue.rule, agg);
+        const a = agg(issue); a.occurrences++; a.resolved++;
+        resolvedHere.add(issue.rule);
       }
       for (const issue of attempt.persisted) {
-        const agg = byRule.get(issue.rule) ?? { rule: issue.rule, occurrences: 0, contexts: new Set(), resolved: 0, persisted: 0, sampleDetail: issue.detail };
-        agg.occurrences++; agg.persisted++; agg.contexts.add(issue.context); agg.sampleDetail = issue.detail;
-        byRule.set(issue.rule, agg);
+        const a = agg(issue); a.occurrences++; a.persisted++; a.sampleDetail = issue.detail;
+      }
+      // Included in the row set so a regression that ships is rankable at all. Without this a rule
+      // that only ever appeared as `introduced` has no row, and Defect B survives in the table.
+      for (const issue of attempt.introduced) {
+        const a = agg(issue); a.introduced++; a.sampleDetail = issue.detail;
       }
     }
+    resolvedByLabel.set(report.label, resolvedHere);
+    shippedByLabel.set(
+      report.label,
+      new Set(report.finalIssues.filter(i => i.severity === 'error').map(i => i.rule)),
+    );
   }
   const ranked = [...byRule.values()].sort((a, b) => b.occurrences - a.occurrences);
 
+  /** Number of artifacts that shipped this rule as an unresolved error. */
+  const shippedCount = (rule: string) =>
+    [...shippedByLabel.values()].filter(s => s.has(rule)).length;
+
+  /** True when SOME single artifact both resolved the rule and still shipped it broken. */
+  const fixedThenDiscarded = (rule: string) =>
+    reports.some(r => shippedByLabel.get(r.label)?.has(rule) && resolvedByLabel.get(r.label)?.has(rule));
+
   lines.push('## Recurring rule failures (fix candidates for prompts/system blocks)');
   lines.push('');
-  lines.push('| Rule | Occurrences | Contexts | Fixed by repair? |');
-  lines.push('|---|---|---|---|');
-  for (const agg of ranked) {
-    const fixedCol = agg.persisted > 0 ? `⚠️ no (${agg.persisted} still failing)` : '✅ yes';
-    lines.push(`| \`${agg.rule}\` | ${agg.occurrences} | ${[...agg.contexts].join(', ')} | ${fixedCol} |`);
+  lines.push('| Rule | Occurrences | Introduced | Contexts | Fixed by repair? |');
+  lines.push('|---|---|---|---|---|');
+  for (const a of ranked) {
+    const shipped = shippedCount(a.rule);
+    // Precedence when both patterns occur across artifacts: 'fixed then discarded' wins. It is the
+    // rarer and more actionable signal, and Contexts still lists every affected artifact.
+    const fixedCol = shipped === 0
+      ? '✅ yes'
+      : fixedThenDiscarded(a.rule)
+        ? '⚠️ fixed then discarded'
+        : `❌ no (${shipped} still failing)`;
+    lines.push(`| \`${a.rule}\` | ${a.occurrences} | ${a.introduced} | ${[...a.contexts].join(', ')} | ${fixedCol} |`);
   }
   lines.push('');
-  lines.push('Rules with "no" above cost repair-gate attempts AND still shipped broken — highest priority.');
+  lines.push('Rules marked "❌ no" cost repair-gate attempts AND still shipped broken — highest priority.');
+  lines.push('Rules marked "⚠️ fixed then discarded" point at the GATE, not the prompt: the repair worked,');
+  lines.push('but the whole-artifact strictly-better comparison threw it away — usually because the same');
+  lines.push('attempt introduced a regression elsewhere (see the Introduced column). Fixing the prompt');
+  lines.push('will not help these; narrowing what a repair is allowed to rewrite will.');
   lines.push('Rules with "yes" but occurrences > 1 are the best ROI for prompt fixes: the model reliably');
   lines.push('gets it wrong on attempt 1 but reliably fixes it when told — meaning a clearer instruction');
   lines.push('up front should get it right the first time, at zero extra API cost.');
@@ -190,6 +295,10 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
   for (const report of repaired) {
     lines.push(`### ${report.label} — ${report.status} (${report.repairsUsed} attempt${report.repairsUsed === 1 ? '' : 's'})`);
     lines.push('');
+    // 0 = the initial generation. When this is less than repairsUsed, every attempt above it was
+    // paid for and discarded.
+    lines.push(`- Shipped attempt: ${report.shippedAttempt} of ${report.repairsUsed}`);
+    lines.push('');
     for (const attempt of report.attempts) {
       lines.push(`**Attempt ${attempt.attempt}**`);
       for (const issue of attempt.resolved) {
@@ -197,6 +306,11 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
       }
       for (const issue of attempt.persisted) {
         lines.push(`- ❌ still failing: \`${issue.rule}\` — ${issue.detail}`);
+      }
+      // Rendered inside this attempt's block, not as a flat list at the end of the artifact, so the
+      // causal story reads at a glance: "attempt 1 fixed the title but broke the description".
+      for (const issue of attempt.introduced) {
+        lines.push(`- ⚠️ introduced: \`${issue.rule}\` — ${issue.detail}`);
       }
       lines.push('');
     }
