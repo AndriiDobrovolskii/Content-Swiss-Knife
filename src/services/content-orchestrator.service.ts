@@ -15,6 +15,7 @@ import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
 import { validateSecondPersonScope } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
 import { validateHeadingStyle } from '../utils/heading-style';
+import { validateSentenceLength } from '../utils/sentence-length';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -219,6 +220,8 @@ export class ContentOrchestratorService {
           // Style B section headings must be functional, not bare nominal topics. Warning tier
           // while the verb heuristic is measured; inert for every store except Center 3D Print.
           ...validateHeadingStyle(html, 'uk-UA', input.website.name),
+          // Per-locale sentence ceiling — language-level, so every store, not just C3D.
+          ...validateSentenceLength(html, 'uk-UA', 'HTML (base)'),
           // §7 must not collapse into one catch-all category — runs on the master only, since
           // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
           ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
@@ -509,6 +512,7 @@ export class ContentOrchestratorService {
           ...validateSecondPersonScope(html, UA_ISO, input.website.name),
           // Style B heading check — see the identical hook in generate() for rationale.
           ...validateHeadingStyle(html, UA_ISO, input.website.name),
+          ...validateSentenceLength(html, UA_ISO, 'HTML (uk-UA)'),
           // §7 category-collapse guard — see the identical hook in generate() for rationale.
           ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
           ...(groundingDisabled ? [{
@@ -832,10 +836,14 @@ export class ContentOrchestratorService {
       ...Object.entries(c.translations).flatMap(([lang, html]) => [
         ...validateGeneratedHtml(html, `HTML (${lang})`, productName, taskLangToIso(lang, storeName), { templateId }),
         ...validateStructuralParity(c.mainHtmlUa, html, `HTML (${lang})`),
+        // Language-level, so every target locale gets its own band — the master gate only ever
+        // sees uk-UA. de-DE's ceiling of 18 is the tightest in the table.
+        ...validateSentenceLength(html, taskLangToIso(lang, storeName), `HTML (${lang})`),
       ]),
       // Also run in the repair gate, where they reach the downloadable .md report. Repeating
       // them here puts them in the on-screen panel too; dedupeIssues collapses the overlap.
       ...validateHeadingStyle(c.mainHtmlUa, mainLocale ?? 'uk-UA', storeName),
+      ...validateSentenceLength(c.mainHtmlUa, mainLocale ?? 'uk-UA', `HTML (${mainLocale ?? 'uk-UA'})`),
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
     ];

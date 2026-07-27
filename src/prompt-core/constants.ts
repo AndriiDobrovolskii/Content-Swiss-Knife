@@ -354,6 +354,40 @@ ${NUMERIC_SOURCE_FIDELITY_RULES}`;
  * hard per-sentence ceiling. Also the AEO/GEO sweet spot: answer engines extract the first 1–2
  * sentences of a section, so the opening sentence must be short and self-contained.
  */
+export interface SentenceLengthBand {
+  hero: [number, number];
+  body: [number, number];
+  faq: [number, number];
+  ceiling: number;
+}
+
+/**
+ * Machine-readable mirror of the table printed in SENTENCE_LENGTH_RULES below, keyed by lowercase
+ * BCP47. The prose stays authoritative FOR THE MODEL; this map is authoritative FOR CODE
+ * (sentence-length.ts). A spec test parses the prose table and asserts every ceiling agrees, so
+ * the two cannot drift.
+ *
+ * WHY NOT GENERATE THE PROSE FROM THIS MAP: the table is interpolated into MASTER_SYSTEM_PROMPT,
+ * a `cache: true` system block for every store. Re-emitting it programmatically would change its
+ * bytes and cold-start every prompt-cache slot in the system for a purely cosmetic gain. A test
+ * is the cheaper guarantee.
+ *
+ * uk-UA / ru-UA ceiling is 20, NOT the 25 in the Center 3D Print ToV source document — see the
+ * C3D_TOV_BASE_OVERLAY doc comment: the stricter global figure wins and the store overlay
+ * deliberately does not restate the looser one.
+ */
+export const SENTENCE_LENGTH_BANDS: Record<string, SentenceLengthBand> = {
+  'en-gb': { hero: [9, 14], body: [15, 18], faq: [10, 15], ceiling: 25 },
+  'en-es': { hero: [9, 14], body: [15, 18], faq: [10, 15], ceiling: 25 },
+  'en-us': { hero: [8, 12], body: [14, 17], faq: [9, 14], ceiling: 22 },
+  'de-de': { hero: [8, 12], body: [12, 15], faq: [8, 13], ceiling: 18 },
+  'es-es': { hero: [10, 15], body: [16, 20], faq: [12, 16], ceiling: 27 },
+  'es-mx': { hero: [9, 13], body: [14, 18], faq: [10, 15], ceiling: 24 },
+  'pl-pl': { hero: [8, 13], body: [13, 17], faq: [10, 15], ceiling: 22 },
+  'uk-ua': { hero: [8, 12], body: [12, 16], faq: [9, 14], ceiling: 20 },
+  'ru-ua': { hero: [8, 12], body: [12, 16], faq: [9, 14], ceiling: 20 },
+};
+
 export const SENTENCE_LENGTH_RULES = `[SENTENCE LENGTH — by locale, applies everywhere, every language version]
 Write to a words-per-sentence budget calibrated for the TARGET language. Values are averages across
 the section; never exceed the hard ceiling for any single sentence. Vary length for rhythm (mix

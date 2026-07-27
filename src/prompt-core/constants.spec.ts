@@ -19,8 +19,41 @@ import {
   getKillerSpecsHeaders, KILLER_SPECS_HEADERS,
   NUMERIC_SOURCE_FIDELITY_RULES, NUMBER_FORMAT_RULES,
   FUNCTIONAL_H2_OPENERS, MANDATED_NOMINAL_H2,
+  SENTENCE_LENGTH_BANDS, SENTENCE_LENGTH_RULES,
 } from './constants';
 import { MASTER_SYSTEM_PROMPT } from './master-system-prompt';
+
+describe('SENTENCE_LENGTH_BANDS mirrors SENTENCE_LENGTH_RULES', () => {
+  // Rows read "- uk-UA / ru-UA:    8–12     12–16    9–14      20   (comment)".
+  const rows = [...SENTENCE_LENGTH_RULES.matchAll(
+    /^- ([a-z]{2}-[A-Z]{2}(?: \/ [a-z]{2}-[A-Z]{2})*):\s+(\S+)\s+(\S+)\s+(\S+)\s+(\d+)/gm,
+  )];
+
+  it('parses every locale row from the prose table', () => {
+    expect(rows.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it('every ceiling in the prose equals the ceiling in the map', () => {
+    for (const [, locales, , , , ceiling] of rows) {
+      for (const loc of locales.split(' / ')) {
+        expect(SENTENCE_LENGTH_BANDS[loc.toLowerCase()]?.ceiling, loc).toBe(Number(ceiling));
+      }
+    }
+  });
+
+  it('every map key appears in the prose table', () => {
+    const inProse = new Set(rows.flatMap(r => r[1].split(' / ').map(l => l.toLowerCase())));
+    for (const key of Object.keys(SENTENCE_LENGTH_BANDS)) {
+      expect(inProse, key).toContain(key);
+    }
+  });
+
+  /** The C3D ToV document says 25; the stricter global figure is authoritative. */
+  it('keeps uk-UA at the stricter 20, not the ToV document 25', () => {
+    expect(SENTENCE_LENGTH_BANDS['uk-ua'].ceiling).toBe(20);
+    expect(C3D_TOV_BASE_OVERLAY).not.toMatch(/ceiling of 25|стеля 25/);
+  });
+});
 
 describe('NUMERIC_SOURCE_FIDELITY_RULES — global injection', () => {
   /**
