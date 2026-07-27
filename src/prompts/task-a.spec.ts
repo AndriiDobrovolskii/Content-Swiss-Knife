@@ -48,6 +48,14 @@ describe('buildPromptA — ToV system-block scoping', () => {
     expect(systemBlocks[2].text).toBe(EXPERT3D_TOV_BASE_OVERLAY);
   });
 
+  it('only Center 3D Print sees the §4 verb-led-<ul> override', () => {
+    for (const store of Object.keys(STORE_REGISTRY)) {
+      const joined = buildPromptA(inputFor(store)).systemBlocks.map(b => b.text).join('\n');
+      expect(joined.includes('[ ] Applications is a verb-led <ul>'), store)
+        .toBe(store === 'Center 3D Print');
+    }
+  });
+
   it('Drukarka 3D shares group EU with C3D but gets NO ToV block — the leak this guards against', () => {
     const { systemBlocks } = buildPromptA(inputFor('Drukarka 3D'));
     expect(systemBlocks).toHaveLength(2);

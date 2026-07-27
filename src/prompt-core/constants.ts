@@ -792,6 +792,13 @@ bold label, not a new sentence). For de-DE and all English keep the default capi
  * 25 — restating the looser figure would create a conflict), NUMBER_FORMAT_RULES,
  * UNIT_LOCALIZATION_RULES and PRODUCT_NAME_LOCALIZATION all stay authoritative.
  * Per-locale verb/imperative lexicons live in C3D_UK_LOCALE_TOV / C3D_PL_LOCALE_TOV instead.
+ *
+ * 2026-07-27: OVERRIDE #1 no longer mandates a run-in semicolon <p> for §4. That form conflicted
+ * structurally with SENTENCE_LENGTH_RULES — a run-in list of 4-8 fields reads as one sentence, and
+ * the real Ortur Laser Master 3 generation produced a 68-word span against a uk-UA ceiling of 20 —
+ * and the model half-complied anyway, keeping the banned "Label:" colons inside the paragraph. §4
+ * now follows SIGNATURE MOVE #1 like every other list, which removes the conflict. The bold-opener
+ * word cap was added in the same pass so conciseness is enforced where it does not cost specs.
  */
 export const C3D_TOV_BASE_OVERLAY =
   `[CENTER 3D PRINT BRAND VOICE — "Style B" — applies to this store's base generation and every
@@ -871,14 +878,27 @@ PUNCTUATION LIMITS (store-specific; all other typography rules stay as defined g
 - Rhetorical colon in list items ("term:"): FORBIDDEN — see the OVERRIDES table below.
 - Rhythm: alternate a short claim (5-10 words) with a supporting sentence, within the global
   per-locale sentence-length budget, which remains authoritative.
+- BOLD OPENER LENGTH: the bold verb-led opener of any bullet is AT MOST 10 WORDS. It is a claim,
+  not a summary — put the numbers in the supporting sentences that follow, never in the opener.
+  This caps the opener only; the supporting sentences stay governed by the per-locale
+  sentence-length budget above. Do NOT compress a whole <li> to fit — dropping the hard specs to
+  shorten a bullet is a worse error than a long bullet.
 - <b> marks bullet verb/imperative openers and inline technical parameters. Brand/model emphasis
   follows the global <strong> rule — do not double up.
 
 OVERRIDES — these WIN over the conflicting master [CONTENT STRUCTURE] instructions, for this store
 only. The master rule named on the left is REPLACED by the form on the right:
-1. APPLICATIONS list "<li><b>[Industry / Scenario]:</b> ...": REPLACED by a run-in <p> list —
-   one paragraph naming the fields, separated by SEMICOLONS, each with its concrete value in
-   context. No <ul>, no colon labels. (Keep the same content and the same 4-8 fields.)
+1. APPLICATIONS list "<li><b>[Industry / Scenario]:</b> ...": the <ul>, the 4-8 entries and the
+   80-250 word budget all STAY; only the COLON-LABEL form is replaced. Write each entry as a
+   verb-led bullet per SIGNATURE MOVE #1 — the bold opener starts with a 3rd-person present verb,
+   ends with a PERIOD, and is followed by 1-2 sentences naming the concrete field/scenario and the
+   mechanism that makes this product right for it. NEVER a bare industry noun, NEVER a colon
+   label, NEVER a run-in paragraph of fields separated by semicolons.
+   GOOD: <li><b>Cuts acrylic signage without post-sanding. </b>The 20 W diode module leaves a
+         sealed edge on 3 mm cast acrylic, so sign shops skip the finishing step.</li>
+   BAD:  <li><b>Advertising:</b> cuts acrylic signage.</li>                          noun + colon
+   BAD:  <p>Branding and marking: applies logos...; decorative engraving: reproduces
+         patterns...</p>                                    run-in semicolon list — banned here
 2. APPLICATIONS H2 (the localized "Areas of application" template): REPLACED by the functional
    form "Where [Product] is used".
 3. COMPATIBILITY list "<li><b>[Aspect label]</b> [values]": REPLACED by a verb-led opener ending
@@ -890,6 +910,22 @@ only. The master rule named on the left is REPLACED by the form on the right:
    terminated opener ("<b>Prints fine detail. </b>..."). The lead-in must still differ from the
    alt text and from the preceding lead-in <p>, per the global figure rules.
 6. KEY BENEFITS and FUNCTIONALITY bullets: verb-led per SIGNATURE MOVE #1, never noun+colon.
+
+CONSUMABLES MODE (§C1-§C6): when the [CONSUMABLES SIMPLIFIED SCHEMA] is active instead of Schema
+v3.0, this voice still governs its list items. The schema's SECTIONS, ORDER, TABLES, H2 set and
+FORBIDDEN list are untouched — only the item grammar changes:
+- §C2 items "<b>[Feature label.]</b>": the bold opener becomes VERB-LED (it already ends in a
+  period, so only the noun-to-verb shift is needed).
+- §C3 items "<b>[Scenario]:</b>": verb-led, ending in a period. No colon. Same form as OVERRIDE #1.
+- §C5 items "<b>[Label]:</b>": a bold IMPERATIVE opener ending in a period, matching SIGNATURE
+  MOVE #3 — storage and handling instructions are advice, so the imperative is the natural register
+  there. No colon.
+- BUDGET GUARD: §C is capped at 2500 characters. In this mode each item takes the verb/imperative
+  opener plus EXACTLY ONE supporting sentence, not SIGNATURE MOVE #1's 1-3. If the budget is still
+  tight, cut supporting detail — never drop a required §C section or a spec value.
+The COLON CAPITALIZATION rule in the consumables overlay describes the form these items USED to
+take; with no colon left in §C2/§C3/§C5 it simply has nothing to apply to. Do not reintroduce a
+colon in order to satisfy it.
 
 SCOPE OF THIS ToV: it changes WORDING and BULLET GRAMMAR only. Section order, <hr> placement,
 spec-table structure and row count, figure/video markup, the no-H1 and no-microdata rules, unit
@@ -903,7 +939,9 @@ SELF-CHECK BEFORE OUTPUT:
 - [ ] Section H2s are functional/question-style, not bare nouns — AND §7/§3 <h3> sub-headings are
       still present, as concise nominal phrases in the output language.
 - [ ] §7 carries 3-6 spec categories of at least 3 rows each, never one catch-all category.
-- [ ] Applications is a run-in semicolon paragraph, not a colon-labelled <ul>.
+- [ ] Applications is a verb-led <ul> of 4-8 bullets — no "Field:" colon labels, no run-in
+      semicolon paragraph, no bare industry nouns.
+- [ ] Every bold bullet opener is at most 10 words, with the numbers in the sentences after it.
 - [ ] Figcaption lead-ins are verb-led and period-terminated.
 - [ ] Zero "!", zero body emoji, dashes within budget.
 - [ ] The operating-tips block is present (if handling/safety-relevant) with imperative bullets;
@@ -955,8 +993,24 @@ EXEMPT: they stay CONCISE NOMINAL PHRASES, translated as labels (pl "Moduł lase
 never drop, merge or convert a spec category into a sentence-style heading. The number of §7
 categories in your output must equal the number in the source.
 
-APPLICATIONS: if the source renders applications as a run-in semicolon <p> paragraph, KEEP that
-shape. Do NOT convert it back into a colon-labelled <ul>.
+APPLICATIONS (§4): the source renders applications as a <ul> of VERB-LED bullets — not a
+colon-labelled list, and not a run-in paragraph. Keep that shape. DO NOT RE-NOMINALIZE applies
+here with full force: a field or industry label plus a colon is the single most likely regression
+in this section, because "Zastosowanie:" / "Anwendung:" read as natural section labels.
+  BAD  <li><b>Zastosowanie:</b> reklama, grawerowanie…</li>            noun + colon
+  BAD  <li><b>Anwendung:</b> Werbetechnik, Gravur…</li>                noun + colon
+  BAD  <li><b>Reklama:</b> tnie plexi na szyldy…</li>                  bare field + colon
+  GOOD <li><b>Tnie plexi na szyldy bez doszlifowania. </b>Moduł 20 W…</li>
+  GOOD <li><b>Schneidet Acrylschilder ohne Nachschliff. </b>Das 20-W-Modul…</li>
+Keep the SAME number of <li> as the source — list-item counts are checked deterministically, not
+merely requested.
+
+CONSUMABLES MODE (§C1-§C6): if the consumables translation overlay is also present, its §C2/§C3/§C5
+items arrive VERB-LED (or, in §C5, imperative-led) and period-terminated, because this store's base
+voice already replaced their colon-label form. Translate them as they arrive. Its COLON
+CAPITALIZATION rule describes the form those items USED to take — with no colon left in §C2/§C3/§C5
+it has nothing to apply to, so do not reintroduce a colon in order to satisfy it. Every other
+consumables rule (section set, tables, the 2500-character cap) still applies unchanged.
 
 OPERATING-TIPS BLOCK: if the source has a "Tips for operating [Product]" H2, translate its heading
 functionally (pl "Wskazówki dotyczące eksploatacji …", de "Hinweise zum Betrieb von …",
@@ -988,6 +1042,13 @@ VERB STARTERS for benefit bullets (3rd-person present, machine as subject) — r
   Приклад: <li><b>Тримає стабільну температуру по всій камері. </b>Термоізольована камера,
   кварцово-трубчасті нагрівачі та 13 незалежних зон нагрівання контролюють режим від першого до
   останнього шару.</li>
+
+§4 «ДЕ ЗАСТОСОВУЮТЬ» — теж дієслівний <ul>, а не перелік через «;» і не «Ярлик: пояснення».
+Оскільки uk-UA — майстер-версія, форма цього блоку визначає його форму в усіх мовах.
+  Приклад: <li><b>Ріже акрилові вивіски без дошліфовування. </b>Модуль 20 Вт залишає запаяний
+  край на литому акрилі 3 мм, тож рекламні майстерні пропускають етап обробки.</li>
+  ЗАБОРОНЕНО: <p>Брендування та маркування: наносить логотипи…; декоративне гравіювання:
+  відтворює візерунки…</p>
 
 IMPERATIVE STARTERS for the operating-tips block (formal «ви»-form):
 Дотримуйтеся, Працюйте, Дочекайтеся, Перевіряйте, Забезпечте, Зберігайте, Уникайте.

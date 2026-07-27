@@ -19,6 +19,67 @@ import {
   getKillerSpecsHeaders, KILLER_SPECS_HEADERS,
 } from './constants';
 
+describe('Center 3D Print ToV — §4 Applications list grammar', () => {
+  /**
+   * Regression: the §4 run-in-semicolon override produced a single 68-word <p> in the real Ortur
+   * Laser Master 3 uk-UA artifact, against a uk-UA sentence ceiling of 20 — and the model kept
+   * the banned colon labels inside it anyway. §4 now follows SIGNATURE MOVE #1 like every other
+   * list, which removes the conflict entirely.
+   */
+  it('§4 is a verb-led <ul>, with the run-in semicolon form gone', () => {
+    expect(C3D_TOV_BASE_OVERLAY).not.toMatch(/REPLACED by a run-in <p> list/);
+    expect(C3D_TOV_BASE_OVERLAY).not.toMatch(/separated by SEMICOLONS/);
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/1\. APPLICATIONS[\s\S]{0,600}SIGNATURE MOVE #1/);
+    expect(C3D_TOV_BASE_OVERLAY).toContain('[ ] Applications is a verb-led <ul>');
+  });
+
+  it('keeps OVERRIDE #2 (the functional Applications H2) unchanged', () => {
+    expect(C3D_TOV_BASE_OVERLAY).toContain('Where [Product] is used');
+  });
+
+  it('caps the bold opener rather than the whole <li>, so specs are not dropped', () => {
+    expect(C3D_TOV_BASE_OVERLAY).toContain('BOLD OPENER LENGTH');
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/AT MOST 10 WORDS/);
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/Do NOT compress a whole <li> to fit/);
+  });
+
+  it('the uk-UA master overlay carries a §4 example, since uk fixes the shape for every locale', () => {
+    expect(C3D_UK_LOCALE_TOV).toContain('ДЕ ЗАСТОСОВУЮТЬ');
+    expect(C3D_UK_LOCALE_TOV).toContain('ЗАБОРОНЕНО');
+  });
+
+  it('the translation overlay names the re-nominalized §4 forms as BAD', () => {
+    expect(C3D_TOV_TRANSLATION_OVERLAY).not.toMatch(/run-in semicolon <p> paragraph, KEEP/);
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('Zastosowanie:');
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('Anwendung:');
+  });
+});
+
+describe('Center 3D Print ToV — consumables mode (§C)', () => {
+  it('both overlays extend the voice into §C2/§C3/§C5', () => {
+    expect(C3D_TOV_BASE_OVERLAY).toContain('CONSUMABLES MODE (§C1-§C6)');
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('CONSUMABLES MODE (§C1-§C6)');
+  });
+
+  it('carries the 2500-character budget guard that caps supporting sentences at one', () => {
+    expect(C3D_TOV_BASE_OVERLAY).toContain('BUDGET GUARD');
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/EXACTLY ONE supporting sentence/);
+  });
+
+  /**
+   * CONSUMABLES_SIMPLIFIED_SCHEMA and CONSUMABLES_TRANSLATION_OVERLAY are shared by all eight
+   * stores, so the colon rule there must NOT be edited — the C3D overlays neutralize it for this
+   * store only. Both overlays are wrapped prose, so compare on collapsed whitespace.
+   */
+  it('neutralizes the shared colon-capitalization rule without editing it', () => {
+    // Sentence-initial in the base overlay, mid-sentence in the translation one — hence toLowerCase.
+    const flat = (s: string) => s.replace(/\s+/g, ' ').toLowerCase();
+    for (const overlay of [C3D_TOV_BASE_OVERLAY, C3D_TOV_TRANSLATION_OVERLAY]) {
+      expect(flat(overlay)).toContain('do not reintroduce a colon in order to satisfy it');
+    }
+  });
+});
+
 describe('getKillerSpecsHeaders — store-scoped §2 header override', () => {
   it('returns the impersonal pair only for Center 3D Print', () => {
     expect(getKillerSpecsHeaders('uk-UA', 'Center 3D Print')).toEqual(['Параметр', 'Практична користь']);
