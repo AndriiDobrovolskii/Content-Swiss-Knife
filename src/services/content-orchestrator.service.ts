@@ -17,6 +17,7 @@ import { dedupeIssues } from '../utils/validation-issues';
 import { validateHeadingStyle } from '../utils/heading-style';
 import { validateSentenceLength } from '../utils/sentence-length';
 import { cyrillizeUnits } from '../utils/unit-cyrillize';
+import { validateProductNameConsistency, validateProductNameH1SlugAgreement } from '../utils/product-name-consistency';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -840,6 +841,11 @@ export class ContentOrchestratorService {
    */
   private runOutputValidation(storeName: string, productName?: string, templateId?: string, mainLocale?: string): void {
     const c = this.content();
+    // The localized product name only exists from step 2 onward, which is why the name-consistency
+    // checks live here and not in the master repair gate — at gate time there is nothing to
+    // compare the body against.
+    const localizedNames = c.slugData?.slugs?.length ? slugsToLocalizedNames(c.slugData.slugs) : undefined;
+    const masterLocale = mainLocale ?? 'uk-UA';
     const issues: ValidationIssue[] = [
       ...validateGeneratedHtml(c.mainHtmlUa, mainLocale ? `HTML (${mainLocale})` : 'HTML (base)', productName, mainLocale, { templateId }),
       ...Object.entries(c.translations).flatMap(([lang, html]) => [
@@ -848,13 +854,18 @@ export class ContentOrchestratorService {
         // Language-level, so every target locale gets its own band — the master gate only ever
         // sees uk-UA. de-DE's ceiling of 18 is the tightest in the table.
         ...validateSentenceLength(html, taskLangToIso(lang, storeName), `HTML (${lang})`),
+        ...validateProductNameConsistency(
+          html, localizedNames?.[taskLangToIso(lang, storeName)], taskLangToIso(lang, storeName), `HTML (${lang})`,
+        ),
       ]),
       // Also run in the repair gate, where they reach the downloadable .md report. Repeating
       // them here puts them in the on-screen panel too; dedupeIssues collapses the overlap.
-      ...validateHeadingStyle(c.mainHtmlUa, mainLocale ?? 'uk-UA', storeName),
-      ...validateSentenceLength(c.mainHtmlUa, mainLocale ?? 'uk-UA', `HTML (${mainLocale ?? 'uk-UA'})`),
+      ...validateHeadingStyle(c.mainHtmlUa, masterLocale, storeName),
+      ...validateSentenceLength(c.mainHtmlUa, masterLocale, `HTML (${masterLocale})`),
+      ...validateProductNameConsistency(c.mainHtmlUa, localizedNames?.[masterLocale], masterLocale, `HTML (${masterLocale})`),
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
+      ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
     ];
     // MERGE, never set. This runs LAST in the pipeline, after the signal already holds the
     // repair gate's final issues, the per-language final issues and any slug-generation

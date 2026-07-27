@@ -77,7 +77,8 @@ drives word order, number format and transliteration.
    (SLA, FDM, FFF, UV, CMYK, PLA, PETG). German common nouns stay capitalized.
 7. NUMBERS — decimal separator follows the locale:
         dot   → en-GB, en-ES, en-US, es-MX            (e.g. "1.75 mm")
-        comma → pl-PL, de-DE, es-ES, uk-UA, ru-UA      (e.g. "1,75 mm")
+        comma → pl-PL, de-DE, es-ES                    (e.g. "1,75 mm")
+        comma + CYRILLIC unit → uk-UA, ru-UA           (e.g. "1,75 мм", "20 Вт" — never "20 W")
    Units inside Cyrillic names (uk-UA / ru-UA): see the same rule used everywhere else in the
    pipeline —
    ${UNIT_LOCALIZATION_RULES}
