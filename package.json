@@ -48,7 +48,8 @@
     "openai": "^4.103.0",
     "pdf-parse": "^1.1.1",
     "rxjs": "^7.8.2",
-    "tailwindcss": "latest"
+    "tailwindcss": "latest",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
