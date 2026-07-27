@@ -13,6 +13,7 @@ import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation 
 import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
 import { validateSecondPersonScope } from '../utils/tov-second-person';
+import { dedupeIssues } from '../utils/validation-issues';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptB } from '../prompts/task-b';
@@ -815,7 +816,7 @@ export class ContentOrchestratorService {
 
   /**
    * Runs deterministic acceptance-criteria checks across all generated artifacts and
-   * stores the results in the validationIssues signal. Errors are also logged so they
+   * MERGES the results into the validationIssues signal. Errors are also logged so they
    * are visible during development. Never throws — validation is advisory.
    */
   private runOutputValidation(storeName: string, productName?: string, templateId?: string, mainLocale?: string): void {
@@ -829,7 +830,13 @@ export class ContentOrchestratorService {
       ...validateSeoMetadata(c.seoData, ''),
       ...validateSlugs(c.slugData ?? null),
     ];
-    this.validationIssues.set(issues);
+    // MERGE, never set. This runs LAST in the pipeline, after the signal already holds the
+    // repair gate's final issues, the per-language final issues and any slug-generation
+    // warning. Overwriting silently discarded all of them — which made every WARNING-severity
+    // check invisible, since warnings have no effect other than being displayed. The download
+    // button that would have surfaced them in the .md report is itself gated on
+    // validationWarningCount() > 0, so the report became unreachable too.
+    this.validationIssues.update(prev => dedupeIssues([...prev, ...issues]));
     const errors = issues.filter(i => i.severity === 'error');
     if (errors.length > 0) {
       console.warn(`[output-validator] ${errors.length} acceptance-criteria error(s):`, errors);
