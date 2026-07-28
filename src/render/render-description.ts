@@ -13,6 +13,7 @@
  * order, wrapper strings) is copied from the code that produces that shape today: table-finalize.ts,
  * image-figure.ts, and real generator output in src/utils/__fixtures__/.
  */
+import { forEachBlockInOrder } from '../domain/description-doc';
 import type {
   Block,
   BulletItem,
@@ -104,18 +105,11 @@ function figureSrc(f: Figure, ctx: RenderContext): string {
  */
 function figurePositions(doc: ProductDescriptionDoc): Map<number, number> {
   const order: number[] = [];
-  const walkBlocks = (blocks: Block[]): void => {
-    for (const b of blocks) if (b.kind === 'figure') order.push(b.ref);
-  };
-  const walkSubsection = (s: Subsection): void => {
-    walkBlocks(s.blocks);
-    s.subsections?.forEach(walkSubsection);
-  };
-
-  walkBlocks(doc.keyBenefits);
-  doc.functionality.forEach(walkSubsection);
-  if (doc.compatibility) walkSubsection(doc.compatibility);
-
+  // Shared traversal — see forEachBlockInOrder. Writing the section order out here a second time
+  // is how §4 came to be missed, which put an applications figure in the LCP slot.
+  forEachBlockInOrder(doc, b => {
+    if (b.kind === 'figure') order.push(b.ref);
+  });
   return new Map(order.map((ref, position) => [ref, position]));
 }
 
@@ -267,12 +261,18 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
     ...doc.functionality.map(s => renderSubsection(s, doc, positions, ctx)),
   ];
 
-  // §4 Applications — same <li><b>lead</b> text</li> shape as key benefits; the model supplies its
-  // own punctuation after the scenario label.
+  // §4 Applications — heading, then any lead-in blocks, then the item list. Real artifacts put a
+  // paragraph and a figure between the <h2> and the <ul>; the list itself keeps the same
+  // <li><b>lead</b> text</li> shape as key benefits, with the model supplying its own punctuation
+  // after the scenario label.
   const applicationItems = doc.applications.items
     .map(i => `<li><b>${esc(i.scenario)}</b> ${prose(i.text)}</li>`)
     .join('\n');
-  parts.push(`<h2>${esc(doc.applications.heading)}</h2>\n<ul>\n${applicationItems}\n</ul>`);
+  parts.push([
+    `<h2>${esc(doc.applications.heading)}</h2>`,
+    ...(doc.applications.blocks ?? []).map(block),
+    `<ul>\n${applicationItems}\n</ul>`,
+  ].join('\n'));
 
   if (doc.compatibility) {
     parts.push(renderSubsection(doc.compatibility, doc, positions, ctx));

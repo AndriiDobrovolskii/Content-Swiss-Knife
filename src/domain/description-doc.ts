@@ -36,6 +36,17 @@ export type Block =
   /** Index into ProductDescriptionDoc.videos — a SEPARATE manifest from figures. */
   | { kind: 'video'; ref: number };
 
+/**
+ * What §4 admits: prose and figures, nothing else.
+ *
+ * Narrower than Block on purpose, and narrowed in the TYPE as well as the schema. `bullets` would
+ * give §4 a second <ul> beside `items`, which is already its list; `video` appears in no artifact
+ * there. The subsection-depth cap keeps its type deliberately wide because recursion reads better
+ * that way — there is no such reason here, and a type wider than the schema would just be a lie
+ * the compile-time guard at the bottom of description-doc.schema.ts would catch anyway.
+ */
+export type ApplicationsBlock = Extract<Block, { kind: 'paragraph' } | { kind: 'figure' }>;
+
 export interface Subsection {
   /**
    * Rendered as <h2> at the top level and <h3> when nested one level deep. Localized by the model.
@@ -104,8 +115,18 @@ export interface ProductDescriptionDoc {
   keyBenefits: Block[];
   /** §3 — one Subsection per H2. */
   functionality: Subsection[];
-  /** §4 */
-  applications: { heading: string; items: { scenario: string; text: Prose }[] };
+  /**
+   * §4.
+   *
+   * `blocks` renders BETWEEN the heading and the item list — a lead-in paragraph and, in every
+   * real artifact seen so far, one figure. `items` remains §4's own list mechanism; the schema
+   * keeps `bullets` out of `blocks` so the section can never grow a second, competing <ul>.
+   */
+  applications: {
+    heading: string;
+    blocks?: ApplicationsBlock[];
+    items: { scenario: string; text: Prose }[];
+  };
   /** §5 — conditional. */
   compatibility?: Subsection;
   /** §6 — conditional. */
@@ -119,4 +140,32 @@ export interface ProductDescriptionDoc {
   figures: Figure[];
   /** Parallel manifest for video embeds, indexed independently of `figures`. */
   videos: VideoEmbed[];
+}
+
+/**
+ * Visits every Block in DOCUMENT order — the order renderDescription() emits them.
+ *
+ * Exists because three places need this traversal and two of them got it wrong the same way. The
+ * schema's ref check and the renderer's first-eager/rest-lazy positioning both walked keyBenefits,
+ * functionality and compatibility while skipping §4; the moment a corpus artifact put a figure in
+ * §4, one rejected a valid document and the other shipped an image without loading="lazy". Adding
+ * a section to the model now means adding it here, once.
+ *
+ * Pure and dependency-free, so it can live beside the types and be shared by the schema (which
+ * must not import the renderer) and the renderer alike.
+ */
+export function forEachBlockInOrder(
+  doc: ProductDescriptionDoc,
+  visit: (block: Block) => void,
+): void {
+  const walkBlocks = (blocks: Block[]): void => blocks.forEach(visit);
+  const walkSubsection = (s: Subsection): void => {
+    walkBlocks(s.blocks);
+    s.subsections?.forEach(walkSubsection);
+  };
+
+  walkBlocks(doc.keyBenefits);
+  doc.functionality.forEach(walkSubsection);
+  walkBlocks(doc.applications.blocks ?? []);
+  if (doc.compatibility) walkSubsection(doc.compatibility);
 }

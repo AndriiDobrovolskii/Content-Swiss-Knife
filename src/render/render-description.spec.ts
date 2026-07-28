@@ -580,3 +580,81 @@ describe('ProductDescriptionDocSchema', () => {
     expect(JSON.stringify(result.error!.issues)).toContain('only <b> tags');
   });
 });
+
+describe('§4 applications — blocks between the heading and the list', () => {
+  // Both committed corpus artifacts carry a lead-in paragraph and a figure between <h2> and <ul>
+  // in §4. The model had no slot for them, so reconciliation could not pass on either item — gap
+  // §5.5 of render-reconciliation.report.md, deferred there until a corpus item confirmed the
+  // shape. Two now do, from two different stores.
+  function docWithApplicationFigure(): ProductDescriptionDoc {
+    const doc = fullDoc();
+    doc.figures.push({ file: 'use-cases.jpg', alt: 'Приклади виробів', caption: '<b>Приклади:</b> дерево, акрил.' });
+    doc.applications.blocks = [
+      { kind: 'paragraph', text: 'Верстат охоплює творчі та комерційні сценарії.' },
+      { kind: 'figure', ref: doc.figures.length - 1 },
+    ];
+    return doc;
+  }
+
+  it('places the blocks after <h2> and before <ul>', () => {
+    const html = renderDescription(docWithApplicationFigure(), CTX);
+    const section = html.slice(html.indexOf('<h2>Сфери застосування</h2>'));
+    const heading = section.indexOf('<h2>');
+    const paragraph = section.indexOf('<p>Верстат охоплює');
+    const figure = section.indexOf('<figure');
+    const list = section.indexOf('<ul>');
+    expect(heading).toBeLessThan(paragraph);
+    expect(paragraph).toBeLessThan(figure);
+    expect(figure).toBeLessThan(list);
+  });
+
+  it('counts an applications figure in DOCUMENT order, so it is lazy', () => {
+    // figurePositions() walked keyBenefits, functionality and compatibility only. A figure it
+    // never saw resolves to position 0 — the LCP slot — and ships without loading="lazy", which
+    // output-validator flags as lcp-image-lazy. Silent until a §4 figure exists; both corpus
+    // items have one.
+    const html = renderDescription(docWithApplicationFigure(), CTX);
+    const applicationFigure = html.slice(html.indexOf('<h2>Сфери застосування</h2>'));
+    expect(applicationFigure).toContain('use-cases.jpg');
+    expect(applicationFigure.slice(applicationFigure.indexOf('use-cases.jpg') - 200)).toContain('loading="lazy"');
+  });
+
+  it('still renders exactly one <ul> in §4', () => {
+    // The items list is §4's own mechanism; blocks must not add a competing one.
+    const html = renderDescription(docWithApplicationFigure(), CTX);
+    // Bounded by the NEXT <h2>, not by the specs section — §5 and §6 sit in between and carry
+    // their own lists, which would make this assertion pass or fail for the wrong reason.
+    const start = html.indexOf('<h2>Сфери застосування</h2>');
+    const nextHeading = html.indexOf('<h2>', start + 1);
+    const section = html.slice(start, nextHeading === -1 ? undefined : nextHeading);
+    expect((section.match(/<ul>/g) ?? []).length).toBe(1);
+  });
+
+  it('renders exactly as before when blocks are absent', () => {
+    expect(renderDescription(fullDoc(), CTX)).toBe(renderDescription({ ...fullDoc(), applications: { ...fullDoc().applications } }, CTX));
+  });
+
+  describe('schema', () => {
+    it('accepts a paragraph and a figure', () => {
+      expect(ProductDescriptionDocSchema.safeParse(docWithApplicationFigure()).success).toBe(true);
+    });
+
+    it('rejects bullets, which would be a second competing list', () => {
+      const doc = docWithApplicationFigure();
+      // Cast deliberately: the TYPE already rejects this, which is the stronger guarantee. The
+      // runtime gate still has to hold, because a Doc arrives from the model as JSON that no
+      // compiler ever saw.
+      doc.applications.blocks = [{ kind: 'bullets', items: [
+        { lead: 'a', text: 'x' }, { lead: 'b', text: 'y' }, { lead: 'c', text: 'z' },
+      ] }] as unknown as ProductDescriptionDoc['applications']['blocks'];
+      expect(ProductDescriptionDocSchema.safeParse(doc).success).toBe(false);
+    });
+
+    it('rejects video, which no artifact shows in §4', () => {
+      const doc = docWithApplicationFigure();
+      doc.applications.blocks =
+        [{ kind: 'video', ref: 0 }] as unknown as ProductDescriptionDoc['applications']['blocks'];
+      expect(ProductDescriptionDocSchema.safeParse(doc).success).toBe(false);
+    });
+  });
+});

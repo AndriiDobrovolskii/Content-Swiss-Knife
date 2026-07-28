@@ -6,7 +6,8 @@
  * that module dependency-free and portable to the BFF.
  */
 import { z } from 'zod';
-import type { Block, ProductDescriptionDoc, Subsection } from './description-doc';
+import { forEachBlockInOrder } from './description-doc';
+import type { ProductDescriptionDoc } from './description-doc';
 
 /** Prose allows only <b>…</b>. Any other tag is a schema error, not something to sanitize away. */
 const PROSE_FORBIDDEN = /<(?!\/?b\s*>)[^>]+>/;
@@ -27,6 +28,12 @@ const BlockSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bullets'), items: z.array(z.object({ lead: NonEmpty, text: Prose })).min(3).max(8) }),
   z.object({ kind: z.literal('figure'), ref: z.number().int().nonnegative() }),
   z.object({ kind: z.literal('video'), ref: z.number().int().nonnegative() }),
+]);
+
+/** §4 admits prose and figures only — see the note on `applications.blocks`. */
+const ApplicationsBlockSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('paragraph'), text: Prose }),
+  z.object({ kind: z.literal('figure'), ref: z.number().int().nonnegative() }),
 ]);
 
 /**
@@ -60,6 +67,14 @@ export const ProductDescriptionDocSchema = z.object({
   functionality: z.array(SubsectionSchema).min(1),
   applications: z.object({
     heading: NonEmpty,
+    // Narrower than BlockSchema on purpose. `bullets` would give §4 a second <ul> alongside
+    // `items`, which already is its list — two competing mechanisms in one section, and no
+    // artifact shows it. `video` is excluded on the same evidence rule: the renderer supports it,
+    // but nothing in the corpus puts one here, and this schema describes what is proven.
+    //
+    // Same technique the subsection depth cap uses: the TS type stays the wider shape so the
+    // renderer needs no special case, and the schema is the gate.
+    blocks: z.array(ApplicationsBlockSchema).optional(),
     items: z.array(z.object({ scenario: NonEmpty, text: Prose })).min(4).max(8),
   }),
   compatibility: SubsectionSchema.optional(),
@@ -84,21 +99,12 @@ export const ProductDescriptionDocSchema = z.object({
   // and silently drops media at render time.
   const figureRefs: number[] = [];
   const videoRefs: number[] = [];
-  const walk = (blocks: Block[]) => {
-    for (const b of blocks) {
-      if (b.kind === 'figure') figureRefs.push(b.ref);
-      else if (b.kind === 'video') videoRefs.push(b.ref);
-    }
-  };
-  // Must mirror the renderer's traversal exactly — media nested inside a subsection is still
-  // referenced, and missing it here would fail a perfectly valid document.
-  const walkSubsection = (s: Subsection) => {
-    walk(s.blocks);
-    s.subsections?.forEach(walkSubsection);
-  };
-  walk(doc.keyBenefits);
-  doc.functionality.forEach(walkSubsection);
-  if (doc.compatibility) walkSubsection(doc.compatibility);
+  // Traversal is shared with the renderer via forEachBlockInOrder — see its doc comment for why
+  // this is not written out a second time here.
+  forEachBlockInOrder(doc, b => {
+    if (b.kind === 'figure') figureRefs.push(b.ref);
+    else if (b.kind === 'video') videoRefs.push(b.ref);
+  });
 
   /** Each manifest entry referenced exactly once, no gaps, no strays. */
   const checkRefs = (refs: number[], manifestLength: number, field: 'figures' | 'videos') => {
