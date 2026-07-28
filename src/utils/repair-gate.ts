@@ -90,17 +90,26 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
    * truncate before the model ever saw the title, making tier 1 unreachable and the ladder
    * decorative. Cursors persist ACROSS iterations so a failed rung escalates rather than repeating.
    *
-   * issueKey is rule::context, which already distinguishes the same rule failing on two locales
-   * ("SEO meta (en-GB)" vs "SEO meta (pl-PL)"). No second identity function.
+   * Keyed by `path`, NOT by issueKey. rule::context separates en-GB from pl-PL but not two findings
+   * inside one artifact, and validation-issues.ts:17-22 says so outright: for sentence-too-long,
+   * h2-nominal-heading and alt-numeric-not-grounded, "keying on rule+context alone would collapse
+   * genuinely distinct findings into one". Collapsed here it does more than merge a report line —
+   * with a shared cursor, one pass over two findings advances the ladder twice, so the next pass
+   * reads a rung neither of them ever attempted and their terminator never runs. `path` is unique
+   * by construction, which is the whole reason it exists.
+   *
+   * Issues with no `path` resolve to ['full-regen'] and never consult a rung, so the issueKey
+   * fallback below only has to be stable, not precise.
    */
+  const cursorKey = (i: ValidationIssue) => i.path ?? issueKey(i);
   const ladderCursor = new Map<string, number>();
   let cursorMoves = 0;
   const activeTier = (issue: ValidationIssue): RepairTier => {
     const ladder = resolveLadder(issue);
-    return ladder[Math.min(ladderCursor.get(issueKey(issue)) ?? 0, ladder.length - 1)];
+    return ladder[Math.min(ladderCursor.get(cursorKey(issue)) ?? 0, ladder.length - 1)];
   };
   const advance = (issue: ValidationIssue) => {
-    ladderCursor.set(issueKey(issue), (ladderCursor.get(issueKey(issue)) ?? 0) + 1);
+    ladderCursor.set(cursorKey(issue), (ladderCursor.get(cursorKey(issue)) ?? 0) + 1);
     cursorMoves++;
   };
 

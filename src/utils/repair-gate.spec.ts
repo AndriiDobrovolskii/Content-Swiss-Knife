@@ -554,6 +554,35 @@ describe('runRepairGate — tiered repair ladder', () => {
     expect(produce).toHaveBeenCalledTimes(1); // no regeneration was needed or spent
   });
 
+  it('gives two issues in the SAME context but different paths independent ladders', async () => {
+    // issueKey is rule::context, which separates en-GB from pl-PL but NOT two findings inside one
+    // artifact. validation-issues.ts:17-22 already says so: for sentence-too-long and friends,
+    // "keying on rule+context alone would collapse genuinely distinct findings into one".
+    //
+    // Shared cursor, two issues, a 3-rung ladder: pass 0 advances it twice, so pass 1 reads rung 2
+    // — 'full-regen' — and the deterministic terminator never runs for EITHER title. Twelve
+    // sentence-too-long findings in one HTML (base) is the case this has to survive.
+    const sameContext = (index: number, actual: number): ValidationIssue => ({
+      ...titleIssue(index, actual),
+      context: 'SEO meta (uk-UA)', // deliberately identical for both
+    });
+    const produce = vi.fn().mockResolvedValue(seoArtifact(['W'.repeat(80), 'Z'.repeat(80)]));
+    const repairField = vi.fn().mockResolvedValue('B'.repeat(70)); // still over the limit
+    const validate = vi.fn()
+      .mockReturnValueOnce([sameContext(0, 80), sameContext(1, 80)])
+      .mockReturnValueOnce([sameContext(0, 70), sameContext(1, 70)])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    const shipped = result.artifact as ReturnType<typeof seoArtifact>;
+    expect(Array.from(shipped.seo_data[0].meta_title).length).toBeLessThanOrEqual(55);
+    expect(Array.from(shipped.seo_data[1].meta_title).length).toBeLessThanOrEqual(55);
+  });
+
   // ── The ladder must not be allowed to make things worse ──────────────────────
   //
   // The full-regen loop below has always had this discipline (strictly better wins, ties keep the
