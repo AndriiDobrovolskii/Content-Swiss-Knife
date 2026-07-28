@@ -171,6 +171,96 @@ export function applyBlockPatches(html: string, patches: ReadonlyMap<number, str
   return out;
 }
 
+// ── Request planning ──────────────────────────────────────────────────────────
+
+export interface BlockPatchRequest {
+  index: number;
+  outerHTML: string;
+  /** Validator `detail` strings, verbatim. They are already written as instructions to a model. */
+  instructions: string[];
+  /** Visible text of the preceding block, or '' at the start of the document. Read-only context. */
+  before: string;
+  /** Visible text of the following block, or '' at the end of the document. Read-only context. */
+  after: string;
+}
+
+/**
+ * Turns per-block instructions into one request per block.
+ *
+ * Input is keyed BY BLOCK, not by issue, and that is the point: two issues in the same paragraph
+ * must produce one combined rewrite. Two separate patches would splice against offsets the first
+ * one already invalidated, or overwrite each other.
+ *
+ * Neighbouring blocks ride along as read-only context. Without them a model handed an isolated
+ * "<p>Він має швидкість 50 мм/с…</p>" resolves the pronoun by substituting the product name,
+ * because it cannot see that the name was already given in the previous paragraph — the local fix
+ * lands, and the prose around it reads worse.
+ *
+ * Takes a Map rather than ValidationIssue[] deliberately: grouping by `ValidationIssue.path`
+ * belongs to the caller, and `path` does not exist on the type until the tiered-ladder work lands.
+ * This keeps the module independent of that change.
+ */
+export function planBlockPatches(
+  html: string,
+  instructionsByIndex: ReadonlyMap<number, readonly string[]>,
+): BlockPatchRequest[] {
+  const blocks = extractBlocks(html);
+  return [...instructionsByIndex.entries()]
+    .sort(([a], [b]) => a - b)
+    .flatMap(([index, instructions]) => {
+      const block = blocks[index];
+      if (!block || instructions.length === 0) return [];
+      return [{
+        index,
+        outerHTML: block.outerHTML,
+        instructions: [...instructions],
+        before: blocks[index - 1]?.text ?? '',
+        after: blocks[index + 1]?.text ?? '',
+      }];
+    });
+}
+
+// ── Response parsing ──────────────────────────────────────────────────────────
+
+/**
+ * Reads `<patch block="i">…</patch>` elements out of a model response.
+ *
+ * XML rather than JSON because the payload IS HTML: asking a model to escape double quotes inside
+ * a JSON string buys a SyntaxError and a wasted attempt for nothing. Here there is no escaping
+ * contract at all — the inner bytes are lifted verbatim by offset.
+ *
+ * Everything outside a <patch> element is ignored, so commentary and code fences cost nothing.
+ * A block the model chose not to return is simply left alone; that is a valid answer, not an error.
+ */
+export function parsePatchResponse(response: string): Map<number, string> {
+  const patches = new Map<number, string>();
+  if (!response) return patches;
+
+  const doc = parseDocument(response, { withStartIndices: true, withEndIndices: true });
+
+  const walk = (node: ParsedNode): void => {
+    if (node.type === 'tag' && node.name === 'patch') {
+      const raw = node.attribs?.['block'];
+      const index = raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : null;
+      const children = node.children ?? [];
+      const first = children[0];
+      const last = children[children.length - 1];
+      if (index !== null && !patches.has(index)
+        && typeof first?.startIndex === 'number' && typeof last?.endIndex === 'number') {
+        const inner = response.slice(first.startIndex, last.endIndex + 1).trim();
+        // First occurrence wins, matching dedupeIssues in validation-issues.ts. An empty patch is
+        // dropped rather than applied — blanking a paragraph is never the intended repair.
+        if (inner) patches.set(index, inner);
+      }
+      return; // never look for a <patch> inside a <patch>
+    }
+    for (const child of node.children ?? []) walk(child);
+  };
+
+  for (const child of (doc as unknown as ParsedNode).children ?? []) walk(child);
+  return patches;
+}
+
 // ── Patch verification ────────────────────────────────────────────────────────
 //
 // Deterministic, per block, before anything is spliced. These checks are the reason a block-scoped

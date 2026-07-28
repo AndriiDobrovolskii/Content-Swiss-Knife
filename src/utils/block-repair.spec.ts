@@ -5,7 +5,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { applyBlockPatches, extractBlocks, getBlock, rejectPatch, setBlock } from './block-repair';
+import {
+  applyBlockPatches, extractBlocks, getBlock, parsePatchResponse, planBlockPatches, rejectPatch,
+  setBlock,
+} from './block-repair';
 
 /** U+00A0 by code point — a literal NBSP is invisible in review and in diffs. */
 const NBSP = String.fromCharCode(0xa0);
@@ -209,5 +212,91 @@ describe('rejectPatch', () => {
   it('rejects a dropped image', () => {
     const withImg = '<figcaption><img src="https://cdn/a.jpg" alt="20 Вт"> Підпис</figcaption>';
     expect(rejectPatch(withImg, '<figcaption>Підпис 20 Вт</figcaption>')).toMatch(/href|src/);
+  });
+});
+
+describe('parsePatchResponse', () => {
+  it('keys each patch by its block index', () => {
+    const response = '<patch block="0"><p>Перше.</p></patch><patch block="3"><li>Третє.</li></patch>';
+    expect([...parsePatchResponse(response)]).toEqual([
+      [0, '<p>Перше.</p>'],
+      [3, '<li>Третє.</li>'],
+    ]);
+  });
+
+  it('carries double quotes and nested tags through untouched', () => {
+    // The whole reason for XML over JSON: no escaping contract to get wrong.
+    const inner = '<p class="lead">Текст із <b>жирним</b> та <a href="/x?a=1&amp;b=2">лінком</a>.</p>';
+    expect(parsePatchResponse(`<patch block="2">${inner}</patch>`).get(2)).toBe(inner);
+  });
+
+  it('ignores commentary and code fences around the patches', () => {
+    const response = 'Ось виправлення:\n```html\n<patch block="1"><p>Ок.</p></patch>\n```\nГотово.';
+    expect([...parsePatchResponse(response)]).toEqual([[1, '<p>Ок.</p>']]);
+  });
+
+  it('tolerates whitespace between the patch tag and its content', () => {
+    expect(parsePatchResponse('<patch block="1">\n  <p>Ок.</p>\n</patch>').get(1)).toBe('<p>Ок.</p>');
+  });
+
+  it('skips a patch whose block attribute is missing or not a number', () => {
+    const response = '<patch><p>a</p></patch><patch block="x"><p>b</p></patch><patch block="1"><p>c</p></patch>';
+    expect([...parsePatchResponse(response)]).toEqual([[1, '<p>c</p>']]);
+  });
+
+  it('keeps the first patch when a block is addressed twice', () => {
+    // First occurrence wins, matching dedupeIssues in validation-issues.ts.
+    const response = '<patch block="1"><p>first</p></patch><patch block="1"><p>second</p></patch>';
+    expect(parsePatchResponse(response).get(1)).toBe('<p>first</p>');
+  });
+
+  it('returns an empty map when the model returned no patches', () => {
+    expect(parsePatchResponse('Нічого виправляти не треба.').size).toBe(0);
+    expect(parsePatchResponse('').size).toBe(0);
+  });
+
+  it('skips an empty patch rather than emitting a blank replacement', () => {
+    expect(parsePatchResponse('<patch block="1"></patch>').size).toBe(0);
+  });
+});
+
+describe('planBlockPatches', () => {
+  const HTML = '<p>Перший.</p><p>Другий задовгий.</p><p>Третій.</p>';
+
+  it('carries every instruction for a block in ONE request', () => {
+    // Two issues in one block must not become two patches — the second would splice against
+    // offsets the first already invalidated.
+    const plan = planBlockPatches(HTML, new Map([[1, ['Split the sentence.', 'Replace the calque.']]]));
+    expect(plan).toHaveLength(1);
+    expect(plan[0].index).toBe(1);
+    expect(plan[0].outerHTML).toBe('<p>Другий задовгий.</p>');
+    expect(plan[0].instructions).toEqual(['Split the sentence.', 'Replace the calque.']);
+  });
+
+  it('attaches the neighbouring blocks as read-only context', () => {
+    // Without this the model resolves "Він" to the product name because it cannot see that the
+    // name was already given in the previous paragraph.
+    const [request] = planBlockPatches(HTML, new Map([[1, ['Split it.']]]));
+    expect(request.before).toBe('Перший.');
+    expect(request.after).toBe('Третій.');
+  });
+
+  it('leaves the missing neighbour empty at the edges of the document', () => {
+    const plan = planBlockPatches(HTML, new Map([[0, ['x']], [2, ['y']]]));
+    expect(plan[0].before).toBe('');
+    expect(plan[1].after).toBe('');
+  });
+
+  it('drops an index that addresses no block', () => {
+    expect(planBlockPatches(HTML, new Map([[9, ['x']]]))).toEqual([]);
+  });
+
+  it('drops a block with no instructions', () => {
+    expect(planBlockPatches(HTML, new Map([[1, []]]))).toEqual([]);
+  });
+
+  it('orders requests by block index regardless of map insertion order', () => {
+    const plan = planBlockPatches(HTML, new Map([[2, ['b']], [0, ['a']]]));
+    expect(plan.map(r => r.index)).toEqual([0, 2]);
   });
 });
