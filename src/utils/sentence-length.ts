@@ -21,6 +21,17 @@
 import type { ValidationIssue } from './output-validator';
 import { SENTENCE_LENGTH_BANDS } from '../prompt-core/constants';
 import { LATIN_TO_CYRILLIC_UNITS } from './unit-tables';
+import { extractBlocks, type HtmlBlockAncestor } from './block-repair';
+
+/**
+ * The old `el.closest('table, figcaption, section.specs')`, expressed against the ancestor chain
+ * extractBlocks reports. A <p> is never itself one of these, so testing ancestors only is
+ * equivalent to closest(), which also matches the element itself.
+ */
+function isExcludedScope(a: HtmlBlockAncestor): boolean {
+  return a.tag === 'table' || a.tag === 'figcaption'
+    || (a.tag === 'section' && a.classes.includes('specs'));
+}
 
 /**
  * A terminator ends a sentence only when whitespace and then an opening quote or an uppercase
@@ -113,20 +124,14 @@ export function validateSentenceLength(
   const band = SENTENCE_LENGTH_BANDS[locale.toLowerCase()];
   if (!band) return issues;
 
-  let doc: Document;
-  try {
-    doc = new DOMParser().parseFromString(html, 'text/html');
-  } catch {
-    return issues; // DOMParser unavailable — skip, same guard style as specs-grounding.ts
-  }
-
   const seen = new Set<string>();
   // Body prose only. Spec-table cells are not sentences; figcaptions are governed by the figure
   // rules and no rule asks to shorten them; headings are not prose either.
-  for (const el of Array.from(doc.querySelectorAll('p, li'))) {
-    if (el.closest('table, figcaption, section.specs')) continue;
+  for (const block of extractBlocks(html)) {
+    if (block.tag !== 'p' && block.tag !== 'li') continue;
+    if (block.ancestors.some(isExcludedScope)) continue;
 
-    for (const sentence of splitSentences((el.textContent ?? '').replace(/\s+/g, ' '))) {
+    for (const sentence of splitSentences(block.text)) {
       const words = countWords(sentence);
       if (words <= band.ceiling) continue;
       const key = sentence.slice(0, 80);
@@ -139,6 +144,13 @@ export function validateSentenceLength(
           `Sentence of ${words} words exceeds the ${locale} hard ceiling of ${band.ceiling} ` +
           `([SENTENCE LENGTH]). Split it into two shorter sentences: "${sentence}"`,
         context,
+        // Addressed the way the block patcher resolves it. Numbering MUST come from extractBlocks:
+        // a validator counting only <p> and a patcher counting <h2> too would disagree about which
+        // block is number 1, and the repair would rewrite the wrong paragraph while reporting
+        // success — a silent corruption, not a visible failure.
+        path: `block[${block.index}]`,
+        // Structured operands, never re-parsed out of `detail`.
+        measured: { actual: words, limit: band.ceiling, unit: 'words' },
       });
     }
   }

@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { validateSentenceLength, countWords } from './sentence-length';
+import { extractBlocks, getBlock } from './block-repair';
 
 const p = (t: string) => `<p>${t}</p>`;
 const run = (html: string, locale = 'uk-UA') => validateSentenceLength(html, locale, 'HTML (base)');
@@ -109,5 +110,40 @@ describe('validateSentenceLength', () => {
 
   it('returns nothing for empty html', () => {
     expect(run('')).toEqual([]);
+  });
+});
+
+describe('validateSentenceLength — machine-addressable output', () => {
+  it('addresses the offending block with a path the block patcher resolves', () => {
+    const html = `<h2>Заголовок</h2>${p('Коротке речення.')}${p(TOO_LONG)}`;
+    const [issue] = run(html);
+    expect(issue.path).toBeDefined();
+    // The index must be extractBlocks' index, not "the Nth <p>" — the patcher resolves it there.
+    expect(getBlock(html, issue.path!)).toBe(p(TOO_LONG));
+  });
+
+  it('agrees with extractBlocks on numbering when non-prose blocks sit in between', () => {
+    // The failure this prevents is silent: a validator counting only <p> and a patcher counting
+    // <h2> too would disagree about which block is number 1, and the repair would rewrite the
+    // wrong paragraph while reporting success.
+    const html = `${p('Перше.')}<h2>Заголовок</h2><figcaption>Підпис</figcaption>${p(TOO_LONG)}`;
+    const [issue] = run(html);
+    const blocks = extractBlocks(html);
+    const index = Number(/^block\[(\d+)\]$/.exec(issue.path!)![1]);
+    expect(blocks[index].outerHTML).toBe(p(TOO_LONG));
+  });
+
+  it('reports the measured word count and the ceiling as structured operands', () => {
+    // Never re-parsed out of `detail` — that is what `measured` exists to prevent. Tied to
+    // countWords rather than a copied literal, so the two cannot drift apart: "20 Вт" counts as
+    // one token, which is why the figure is not the naive word count.
+    const [issue] = run(p(TOO_LONG));
+    expect(issue.measured).toEqual({ actual: countWords(TOO_LONG), limit: 20, unit: 'words' });
+  });
+
+  it('gives each offending block its own path', () => {
+    const html = `${p(TOO_LONG)}${p('Коротке.')}${p(TOO_LONG.replace('20 Вт', '30 Вт'))}`;
+    const paths = run(html).map(i => i.path);
+    expect(new Set(paths).size).toBe(paths.length);
   });
 });
