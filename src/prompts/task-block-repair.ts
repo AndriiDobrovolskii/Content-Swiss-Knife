@@ -43,7 +43,17 @@ For each block you fix, emit exactly one element:
 [HOW TO WRITE]
 - Keep the surrounding prose readable: the block sits between other paragraphs you are shown but
   must not touch. Pronouns and references that resolve against those neighbours must keep working.
-- Fix every listed problem for a block in a single rewrite of that block.`;
+- Fix every listed problem for a block in a single rewrite of that block.
+
+[SENTENCE LENGTH — THIS ONE IS ALWAYS FIXABLE]
+A word-count limit can always be satisfied by splitting, because splitting adds no facts and
+removes none. Skipping such a block is NOT one of the valid answers above; that escape is for a
+fix that would require changing a number or a claim.
+- Split the sentence the problem names. Check that the part still carrying the subject is itself
+  under the limit — moving a short clause out of a long sentence leaves the long sentence long.
+- When the length comes from a list of three or more items, break up THE LIST: give the items
+  their own sentence, or split the list across two sentences. Detaching an unrelated closing
+  clause instead is the common mistake and it does not bring the count down.`;
 
 function renderRequest(request: BlockPatchRequest): string {
   const lines: string[] = [];

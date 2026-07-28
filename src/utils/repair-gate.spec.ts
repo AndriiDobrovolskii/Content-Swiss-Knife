@@ -625,7 +625,10 @@ describe('runRepairGate — tiered repair ladder', () => {
     });
 
     expect(produce).toHaveBeenCalledTimes(1);
-    expect(repairBlocks).toHaveBeenCalledTimes(1); // one rung, spent once, then the ladder ends
+    // Two rungs, both spent, then the ladder ends — it never reaches full-regen. The count is 2
+    // rather than 1 because sentence-too-long now gets a retry; the property under test is that
+    // the escalation stops here, not how many cheap attempts it makes.
+    expect(repairBlocks).toHaveBeenCalledTimes(2);
     expect(result.repairsUsed).toBe(0);
     expect(result.finalIssues).toEqual([sentenceWarning()]); // still reported, honestly
   });
@@ -659,6 +662,88 @@ describe('runRepairGate — tiered repair ladder', () => {
 
     expect(result.artifact).toBe('<p>коротке</p>');
     expect(result.finalIssues).toEqual([]);
+  });
+
+  it('counts how many block findings actually went away, not just how many patches landed', async () => {
+    // A patch can be applied, pass every structural check, and still leave the sentence too long —
+    // exactly what the first real run did, and `applied: 10` said nothing about it. Two findings
+    // here; only one of them ever clears.
+    const produce = vi.fn().mockResolvedValue('<p>довге</p><p>довге</p>');
+    const repairBlocks = vi.fn()
+      .mockResolvedValueOnce('<p>коротке</p><p>трохи коротше</p>')
+      .mockResolvedValueOnce('<p>коротке</p><p>усе ще задовге</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([sentenceWarning('block[0]'), sentenceWarning('block[1]')])
+      .mockReturnValue([sentenceWarning('block[1]')]);
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(result.blockScopedResolved).toBe(1);
+  });
+
+  it('re-runs the block tier on the artifact that actually shipped after a regeneration won', async () => {
+    // The ladder runs BEFORE the regeneration loop, on an artifact that loop may then replace.
+    // When a regeneration wins on errors, `best` becomes an artifact the block tier has never
+    // seen, and every patch made earlier is discarded along with the artifact it was applied to.
+    // The first real run only kept its 10 patches because the regeneration happened to lose.
+    const produce = vi.fn()
+      .mockResolvedValueOnce('<p>перший, задовгий</p>')
+      .mockResolvedValueOnce('<p>регенерований, задовгий</p>');
+    const repairBlocks = vi.fn()
+      .mockResolvedValueOnce('<p>перший, виправлений</p>')
+      .mockResolvedValueOnce('<p>регенерований, виправлений</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([makeIssue('spec-count-mismatch'), sentenceWarning()]) // initial: 1 error + 1 warning
+      .mockReturnValueOnce([makeIssue('spec-count-mismatch')])                    // after ladder: warning fixed
+      .mockReturnValueOnce([sentenceWarning()])                                   // regeneration: error gone, warning back
+      .mockReturnValue([]);                                                       // after the final block pass
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(produce).toHaveBeenCalledTimes(2);
+    expect(repairBlocks).toHaveBeenCalledTimes(2); // once on the ladder, once on what shipped
+    expect(result.artifact).toBe('<p>регенерований, виправлений</p>');
+    expect(result.finalIssues).toEqual([]);
+  });
+
+  it('rolls the final block pass back if it increased the error count', async () => {
+    const produce = vi.fn()
+      .mockResolvedValueOnce('<p>перший</p>')
+      .mockResolvedValueOnce('<p>регенерований</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>зіпсований</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([makeIssue('spec-count-mismatch')])   // initial: 1 error, no block work
+      .mockReturnValueOnce([sentenceWarning()])                  // regeneration wins: 0 errors
+      .mockReturnValue([makeIssue('seo-empty')]);                // final pass made it worse
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(result.artifact).toBe('<p>регенерований</p>');
+    expect(result.finalIssues).toEqual([sentenceWarning()]);
+  });
+
+  it('does not spend a final pass when the ladder already handled this artifact', async () => {
+    // No regeneration won, so `best` is the artifact the ladder worked on and its cursors still
+    // mean something. A further pass here would be a third attempt, past the two-rung cap.
+    const produce = vi.fn().mockResolvedValue('<p>задовге</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>задовге</p>');
+    const validate = vi.fn().mockReturnValue([sentenceWarning()]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).toHaveBeenCalledTimes(2); // the two ladder rungs, and no more
   });
 
   // ── The ladder must not be allowed to make things worse ──────────────────────
@@ -980,10 +1065,21 @@ describe('formatRepairReportMarkdown — local block patches', () => {
     label, repairsUsed: 0, attempts: [], finalIssues: [], status: 'clean', shippedAttempt: 0, blockPatches,
   });
 
+  it('reports resolved separately from applied, so an ineffective patch is visible', () => {
+    // The gap between the two is the signal the first real run hid: 10 patches applied, and no way
+    // to tell from the report that one of them left the sentence over its ceiling.
+    const md = formatRepairReportMarkdown([
+      clean('HTML (uk-UA)', { applied: 10, resolved: 9, rejected: 0, rejections: [] }),
+    ], META);
+    expect(md).toContain('- Local block patches applied: 10');
+    expect(md).toContain('- Local block findings resolved: 9');
+    expect(md).toMatch(/10 applied.*9 resolved/);
+  });
+
   it('does NOT claim nothing was needed when block patches were applied', () => {
     // The exact untruthfulness class PR #50 fixed: a report that reads "no repairs were needed"
     // while the artifact was in fact rewritten. A block patch IS a repair — a cheaper one.
-    const md = formatRepairReportMarkdown([clean('HTML (uk-UA)', { applied: 3, rejected: 0, rejections: [] })], META);
+    const md = formatRepairReportMarkdown([clean('HTML (uk-UA)', { applied: 3, resolved: 3, rejected: 0, rejections: [] })], META);
     expect(md).not.toContain('No repairs were needed');
   });
 
@@ -993,8 +1089,8 @@ describe('formatRepairReportMarkdown — local block patches', () => {
 
   it('counts applied and rejected block patches in the summary', () => {
     const md = formatRepairReportMarkdown([
-      clean('HTML (uk-UA)', { applied: 3, rejected: 1, rejections: ['block[4]: changed the numbers'] }),
-      clean('HTML (PL)', { applied: 2, rejected: 0, rejections: [] }),
+      clean('HTML (uk-UA)', { applied: 3, resolved: 3, rejected: 1, rejections: ['block[4]: changed the numbers'] }),
+      clean('HTML (PL)', { applied: 2, resolved: 2, rejected: 0, rejections: [] }),
     ], META);
     expect(md).toContain('- Local block patches applied: 5');
     expect(md).toContain('- Local block patches rejected: 1');
@@ -1004,7 +1100,7 @@ describe('formatRepairReportMarkdown — local block patches', () => {
     // A silent rejection is indistinguishable from "the model had nothing to fix" — and the
     // difference is the whole signal about whether the repair prompt is working.
     const md = formatRepairReportMarkdown([
-      clean('HTML (uk-UA)', { applied: 1, rejected: 1, rejections: ['block[4]: the replacement changed the numbers in the block'] }),
+      clean('HTML (uk-UA)', { applied: 1, resolved: 1, rejected: 1, rejections: ['block[4]: the replacement changed the numbers in the block'] }),
     ], META);
     expect(md).toContain('## Local patches');
     expect(md).toContain('HTML (uk-UA)');

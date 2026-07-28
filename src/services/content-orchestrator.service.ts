@@ -120,8 +120,17 @@ export class ContentOrchestratorService {
     });
   }
 
-  /** Per-artifact block-patch tallies for the current run, keyed by the gate's label. */
-  private blockPatchTally = new Map<string, RepairArtifactReport['blockPatches'] & object>();
+  /**
+   * Per-artifact block-patch tallies for the current run, keyed by the gate's label.
+   *
+   * `resolved` is deliberately absent: the executor can only count what it spliced. Whether a
+   * finding actually went away is decided by re-validation, which only the gate sees, so
+   * toArtifactReport fills that field in.
+   */
+  private blockPatchTally = new Map<
+    string,
+    Omit<NonNullable<RepairArtifactReport['blockPatches']>, 'resolved'>
+  >();
 
   /**
    * `input.specs` is usually pasted verbatim from a manufacturer sheet (typically English), but

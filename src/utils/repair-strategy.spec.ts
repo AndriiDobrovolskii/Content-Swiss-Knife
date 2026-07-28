@@ -150,8 +150,18 @@ describe('warnings on the ladder', () => {
     ...overrides,
   });
 
-  it('gives sentence-too-long a block-scoped ladder', () => {
-    expect(resolveLadder(sentenceIssue())).toEqual(['block-scoped']);
+  it('gives sentence-too-long TWO block-scoped rungs', () => {
+    // One attempt is not enough in practice. The first real run split off an independent tail and
+    // left a three-item enumeration intact, so the sentence was still 26 words against a ceiling
+    // of 20 — patched, accepted, unresolved. The second attempt sees the already-improved text and
+    // a request narrowed to one block instead of eleven; both favour it.
+    expect(resolveLadder(sentenceIssue())).toEqual(['block-scoped', 'block-scoped']);
+  });
+
+  it('stops at two rungs rather than retrying indefinitely', () => {
+    // A third attempt on the same sentence means the instruction cannot break it, and it should
+    // reach the report honestly instead of burning calls.
+    expect(resolveLadder(sentenceIssue()).filter(t => t === 'block-scoped')).toHaveLength(2);
   });
 
   it('NEVER terminates a warning ladder with full-regen', () => {
@@ -163,7 +173,8 @@ describe('warnings on the ladder', () => {
   });
 
   it('still terminates an ERROR ladder with full-regen', () => {
-    expect(resolveLadder(sentenceIssue({ severity: 'error' }))).toEqual(['block-scoped', 'full-regen']);
+    expect(resolveLadder(sentenceIssue({ severity: 'error' })))
+      .toEqual(['block-scoped', 'block-scoped', 'full-regen']);
   });
 
   it('admits an error to the ladder unconditionally', () => {

@@ -76,6 +76,15 @@ export interface RepairGateResult<T> {
   repairsUsed: number;
   attempts: RepairAttemptRecord[];
   /**
+   * Distinct block-scoped findings that existed at some point during the run and are absent from
+   * `finalIssues`.
+   *
+   * NOT the number of patches applied. A patch can splice cleanly, pass every structural check,
+   * and still leave the sentence over its ceiling — the model splits off an unrelated tail and
+   * leaves the enumeration intact. Reporting only "applied" would call that a success.
+   */
+  blockScopedResolved: number;
+  /**
    * Which attempt produced the shipped artifact. 0 = the initial generation (no repair applied).
    *
    * Because ties keep the earliest attempt, this is NOT always equal to repairsUsed — a repair can
@@ -86,8 +95,22 @@ export interface RepairGateResult<T> {
 }
 
 export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<RepairGateResult<T>> {
+  // Every block-scoped finding seen at any point in the run, so "did the repair work" can be
+  // answered against what shipped rather than against how many patches were spliced.
+  const blockScopedKey = (i: ValidationIssue) => `${i.rule}::${i.path}`;
+  const blockScopedSeen = new Set<string>();
+  const validate = (candidate: T): ValidationIssue[] => {
+    const found = opts.validate(candidate);
+    for (const issue of found) {
+      if (issue.path && resolveLadder(issue).includes('block-scoped')) {
+        blockScopedSeen.add(blockScopedKey(issue));
+      }
+    }
+    return found;
+  };
+
   let artifact = await opts.produce(opts.basePayload);
-  let issues = opts.validate(artifact);
+  let issues = validate(artifact);
   let repairsUsed = 0;
   const attempts: RepairAttemptRecord[] = [];
 
@@ -226,7 +249,7 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     if (artifact === before && cursorMoves === movesBefore) break;
     if (artifact === before) continue; // cursors moved but nothing changed — no need to re-validate
 
-    issues = opts.validate(artifact);
+    issues = validate(artifact);
   }
 
   // ── Reject the ladder's work if it did not improve the artifact ─────────────
@@ -260,7 +283,7 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     const issuesBefore = issues.filter(i => i.severity === 'error');
     opts.onAttempt?.(repairsUsed + 1, errCount(issues));
     artifact = await opts.produce(opts.withFeedback(opts.basePayload, issuesBefore));
-    issues = opts.validate(artifact);
+    issues = validate(artifact);
     repairsUsed++;
 
     const afterKeys = new Set(issues.map(issueKey));
@@ -282,11 +305,39 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     if (e < best.errors) best = { artifact, issues, errors: e, attempt: repairsUsed };
   }
 
+  // ── Final block pass, on whatever actually shipped ──────────────────────────
+  //
+  // The ladder runs BEFORE the loop above, on an artifact that loop may then replace. When a
+  // regeneration wins on errors, `best` becomes an artifact the block tier has never seen, and
+  // every patch made earlier is discarded along with the artifact it was applied to. Without this
+  // pass the whole feature is reliable only when regeneration FAILS — which is how the first real
+  // run happened to keep its ten patches.
+  //
+  // Gated on `best.attempt > 0`: when no regeneration won, `best` IS the artifact the ladder
+  // worked on and its cursors still mean something, so a pass here would be a third attempt past
+  // the two-rung cap. Ladder cursors are deliberately not consulted otherwise — they were spent on
+  // a different artifact.
+  if (opts.repairBlocks && best.attempt > 0) {
+    const repairable = best.issues.filter(i => i.path && resolveLadder(i).includes('block-scoped'));
+    if (repairable.length > 0) {
+      const patched = await opts.repairBlocks(best.artifact, repairable);
+      const patchedIssues = validate(patched);
+      const patchedErrors = errCount(patchedIssues);
+      // Same discipline as everywhere else: a repair may not increase the error count.
+      if (patchedErrors <= best.errors) {
+        best = { ...best, artifact: patched, issues: patchedIssues, errors: patchedErrors };
+      }
+    }
+  }
+
+  const shippedBlockScoped = new Set(best.issues.filter(i => i.path).map(blockScopedKey));
+
   return {
     artifact: best.artifact,
     finalIssues: best.issues,
     repairsUsed,
     attempts,
+    blockScopedResolved: [...blockScopedSeen].filter(k => !shippedBlockScoped.has(k)).length,
     shippedAttempt: best.attempt,
   };
 }
@@ -330,13 +381,20 @@ export interface RepairArtifactReport {
    * model had nothing to fix", and the difference is the whole signal about whether the repair
    * prompt is working.
    */
-  blockPatches?: { applied: number; rejected: number; rejections: string[] };
+  blockPatches?: {
+    /** Patches spliced in — says the rewrite was structurally sound, NOT that it worked. */
+    applied: number;
+    /** Findings actually gone from the shipped artifact. The gap against `applied` is the signal. */
+    resolved: number;
+    rejected: number;
+    rejections: string[];
+  };
 }
 
 export function toArtifactReport(
   label: string,
   result: RepairGateResult<unknown>,
-  blockPatches?: RepairArtifactReport['blockPatches'],
+  blockPatches?: Omit<NonNullable<RepairArtifactReport['blockPatches']>, 'resolved'>,
 ): RepairArtifactReport {
   const finalErrors = result.finalIssues.filter(i => i.severity === 'error').length;
   const status: RepairArtifactReport['status'] =
@@ -348,7 +406,9 @@ export function toArtifactReport(
     finalIssues: result.finalIssues,
     status,
     shippedAttempt: result.shippedAttempt,
-    blockPatches,
+    // `resolved` comes from the gate, which is the only place that can compare findings before and
+    // after; the executor can only count what it spliced.
+    blockPatches: blockPatches ? { ...blockPatches, resolved: result.blockScopedResolved } : undefined,
   };
 }
 
@@ -376,7 +436,7 @@ function renderLocalPatches(lines: string[], blockWork: RepairArtifactReport[]):
   lines.push('');
   for (const report of blockWork) {
     const patches = report.blockPatches!;
-    lines.push(`- **${report.label}** — ${patches.applied} applied, ${patches.rejected} rejected`);
+    lines.push(`- **${report.label}** — ${patches.applied} applied, ${patches.resolved} resolved, ${patches.rejected} rejected`);
     // The reason is the signal: a rejected patch means the model tried and produced something the
     // deterministic checks refused, which is a prompt problem. A silent count cannot say that.
     for (const reason of patches.rejections) lines.push(`  - ✗ ${reason}`);
@@ -414,6 +474,9 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
     // Counted separately from repairsUsed: a block patch is not a full regeneration, and folding
     // the two together would make "Repairs spent but discarded" unreadable.
     lines.push(`- Local block patches applied: ${blockWork.reduce((n, r) => n + r.blockPatches!.applied, 0)}`);
+    // Reported next to `applied` on purpose: a patch can splice cleanly and still leave the
+    // sentence over its ceiling, and only this number says so.
+    lines.push(`- Local block findings resolved: ${blockWork.reduce((n, r) => n + r.blockPatches!.resolved, 0)}`);
     lines.push(`- Local block patches rejected: ${blockWork.reduce((n, r) => n + r.blockPatches!.rejected, 0)}`);
   }
   lines.push('');

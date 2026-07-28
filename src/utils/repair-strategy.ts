@@ -196,7 +196,15 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
       // split at the midpoint produces two ungrammatical halves. No fieldInstruction either — the
       // block executor groups every finding in a block into ONE rewrite, which a per-issue rung
       // cannot express. The instruction is the validator's own `detail`, verbatim.
-      ladder: ['block-scoped'],
+      // TWO rungs of the same instrument, because one is demonstrably not enough. On the first
+      // real run the model split an independent tail off the paragraph and left a three-item
+      // enumeration intact: the sentence was still 26 words against a ceiling of 20 — patched,
+      // accepted, unresolved, no retry. The second attempt starts from the already-improved text
+      // and from a request narrowed to one block instead of eleven.
+      //
+      // Not three: a sentence that survives two explicit instructions is one the instruction
+      // cannot break, and it should reach the report honestly rather than burn a third call.
+      ladder: ['block-scoped', 'block-scoped'],
     },
   ],
 ]);

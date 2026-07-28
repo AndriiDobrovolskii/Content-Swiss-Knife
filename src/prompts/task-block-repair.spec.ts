@@ -33,6 +33,21 @@ describe('buildBlockRepairPrompt', () => {
     expect(contract.text).toMatch(/exactly one element/i);
   });
 
+  it('says a length ceiling is always satisfiable, so skipping one is not a valid answer', () => {
+    // The escape hatch ("a block you cannot improve gets no <patch>") is needed for safety, but on
+    // the first real run it let the model give up on a sentence it could have split.
+    const [contract] = buildBlockRepairPrompt([request()], 'Ukrainian (uk-UA)').systemBlocks;
+    expect(contract.text).toMatch(/always.*split|split.*always/i);
+  });
+
+  it('tells the model to break the enumeration itself, not an unrelated tail', () => {
+    // The observed failure: given a 26-word sentence listing three programs, the model split off a
+    // short independent clause and left the enumeration whole, so the sentence stayed over the
+    // ceiling — patched, accepted, unresolved.
+    const [contract] = buildBlockRepairPrompt([request()], 'Ukrainian (uk-UA)').systemBlocks;
+    expect(contract.text).toMatch(/list|enumerat/i);
+  });
+
   it('addresses each block by the index the response must echo back', () => {
     const { userContent } = buildBlockRepairPrompt([request({ index: 3 })], 'Ukrainian (uk-UA)');
     expect(userContent).toContain('block="3"');
