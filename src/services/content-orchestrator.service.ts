@@ -104,6 +104,14 @@ export class ContentOrchestratorService {
       languageLabel: `${isoToHumanLang(locale)} (${locale})`,
       onResult: summary => {
         if (summary.applied === 0 && summary.rejected === 0) return;
+        // Accumulated, not replaced: the rung can run on more than one ladder pass, and a report
+        // showing only the last pass would understate what was rewritten.
+        const running = this.blockPatchTally.get(taskLabel) ?? { applied: 0, rejected: 0, rejections: [] };
+        this.blockPatchTally.set(taskLabel, {
+          applied: running.applied + summary.applied,
+          rejected: running.rejected + summary.rejected,
+          rejections: [...running.rejections, ...summary.rejections],
+        });
         console.info(
           `[block-repair] ${taskLabel}: ${summary.applied} applied, ${summary.rejected} rejected`,
           summary.rejections,
@@ -111,6 +119,9 @@ export class ContentOrchestratorService {
       },
     });
   }
+
+  /** Per-artifact block-patch tallies for the current run, keyed by the gate's label. */
+  private blockPatchTally = new Map<string, RepairArtifactReport['blockPatches'] & object>();
 
   /**
    * `input.specs` is usually pasted verbatim from a manufacturer sheet (typically English), but
@@ -179,6 +190,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {}, mainHtmlLocale: 'uk-UA' });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -278,7 +290,7 @@ export class ContentOrchestratorService {
       });
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlAResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
-      this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult)]);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult, this.blockPatchTally.get('HTML (base)'))]);
       // Deterministic §7 category merge (dissolve <3-row categories into "Загальні відомості",
       // placed first) — runs once here, before this HTML is used for Slug/SEO grounding or
       // handed to Task C, so every downstream consumer sees the same, already-merged master.
@@ -397,7 +409,7 @@ export class ContentOrchestratorService {
         });
         const { artifact: htmlLang, finalIssues: langFinalIssues, repairsUsed: langRepairs } = htmlLangResult;
         if (langRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${langRepairs} repair(s) applied`);
-        this.repairReport.update(r => [...r, toArtifactReport(`HTML (${lang})`, htmlLangResult)]);
+        this.repairReport.update(r => [...r, toArtifactReport(`HTML (${lang})`, htmlLangResult, this.blockPatchTally.get(`HTML (${lang})`))]);
         if (langFinalIssues.length > 0) {
           this.validationIssues.update(issues => [...issues, ...langFinalIssues]);
         }
@@ -492,6 +504,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -579,7 +592,7 @@ export class ContentOrchestratorService {
       });
       const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlUaResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
-      this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult)]);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult, this.blockPatchTally.get('HTML (uk-UA)'))]);
       // Deterministic §7 category merge — see the identical hook in generate() for rationale.
       const mergedHtmlUa = mergeSmallSpecCategories(htmlUa);
       const finalHtmlUa = isConsumables ? trimConsumablesToLimit(mergedHtmlUa) : mergedHtmlUa;
@@ -692,6 +705,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: existingSlug, website: input.website });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
@@ -728,6 +742,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
@@ -922,6 +937,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, faqArtifacts: {} });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set(null);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');

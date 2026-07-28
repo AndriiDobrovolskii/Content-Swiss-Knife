@@ -323,9 +323,21 @@ export interface RepairArtifactReport {
   /** Which attempt shipped. Required, not optional — see RepairGateResult.shippedAttempt. Making it
    *  optional would let a caller silently drop the signal, which is the bug this field exists to fix. */
   shippedAttempt: number;
+  /**
+   * What the block-scoped rung did to this artifact, when it ran.
+   *
+   * `rejections` matters as much as the counts: a silent rejection is indistinguishable from "the
+   * model had nothing to fix", and the difference is the whole signal about whether the repair
+   * prompt is working.
+   */
+  blockPatches?: { applied: number; rejected: number; rejections: string[] };
 }
 
-export function toArtifactReport(label: string, result: RepairGateResult<unknown>): RepairArtifactReport {
+export function toArtifactReport(
+  label: string,
+  result: RepairGateResult<unknown>,
+  blockPatches?: RepairArtifactReport['blockPatches'],
+): RepairArtifactReport {
   const finalErrors = result.finalIssues.filter(i => i.severity === 'error').length;
   const status: RepairArtifactReport['status'] =
     result.repairsUsed === 0 ? 'clean' : finalErrors === 0 ? 'repaired' : 'unresolved';
@@ -336,6 +348,7 @@ export function toArtifactReport(label: string, result: RepairGateResult<unknown
     finalIssues: result.finalIssues,
     status,
     shippedAttempt: result.shippedAttempt,
+    blockPatches,
   };
 }
 
@@ -351,9 +364,30 @@ export interface RepairReportMeta {
  * fixing in a system block instead of paying for repeated repair-gate retries) is visible
  * without reading the full per-artifact log.
  */
+/**
+ * Renders what the block-scoped rung did. Nothing at all when it never ran, so a report from a run
+ * without the tier is unchanged.
+ */
+function renderLocalPatches(lines: string[], blockWork: RepairArtifactReport[]): void {
+  if (blockWork.length === 0) return;
+  lines.push('## Local patches');
+  lines.push('');
+  lines.push('Repairs that rewrote a single block instead of regenerating the artifact.');
+  lines.push('');
+  for (const report of blockWork) {
+    const patches = report.blockPatches!;
+    lines.push(`- **${report.label}** — ${patches.applied} applied, ${patches.rejected} rejected`);
+    // The reason is the signal: a rejected patch means the model tried and produced something the
+    // deterministic checks refused, which is a prompt problem. A silent count cannot say that.
+    for (const reason of patches.rejections) lines.push(`  - ✗ ${reason}`);
+  }
+  lines.push('');
+}
+
 export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta: RepairReportMeta): string {
   const lines: string[] = [];
   const repaired = reports.filter(r => r.status !== 'clean');
+  const blockWork = reports.filter(r => r.blockPatches && (r.blockPatches.applied > 0 || r.blockPatches.rejected > 0));
   // Computed once and appended in BOTH branches below. Previously this lived inside the
   // repaired.length === 0 early return, so any run that needed a repair silently dropped every
   // warning — exactly the situation a mass-deletion incident produces (Bug E).
@@ -376,21 +410,32 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
   // discarding equal-scoring improvements.
   lines.push(`- Repairs spent but discarded: ${reports.reduce((sum, r) => sum + Math.max(0, r.repairsUsed - r.shippedAttempt), 0)}`);
   lines.push(`- Total repair regressions introduced: ${reports.reduce((sum, r) => sum + r.attempts.reduce((n, a) => n + a.introduced.length, 0), 0)}`);
+  if (blockWork.length > 0) {
+    // Counted separately from repairsUsed: a block patch is not a full regeneration, and folding
+    // the two together would make "Repairs spent but discarded" unreadable.
+    lines.push(`- Local block patches applied: ${blockWork.reduce((n, r) => n + r.blockPatches!.applied, 0)}`);
+    lines.push(`- Local block patches rejected: ${blockWork.reduce((n, r) => n + r.blockPatches!.rejected, 0)}`);
+  }
   lines.push('');
 
   if (repaired.length === 0) {
-    if (warnings.length === 0) {
-      lines.push('No repairs were needed — every artifact passed validation on the first generation.');
-      return lines.join('\n');
-    }
-    lines.push('No repairs were needed — every artifact passed validation on the first generation.');
+    // "No repairs were needed" must not be printed once a block patch has rewritten something.
+    // A block patch IS a repair — a cheaper one — and claiming otherwise is the same untruthfulness
+    // class the shipped-attempt work fixed: a report that reads clean about an artifact that was
+    // in fact rewritten.
+    lines.push(blockWork.length === 0
+      ? 'No repairs were needed — every artifact passed validation on the first generation.'
+      : 'No full regeneration was needed — every artifact either passed on the first generation or was repaired in place.');
     lines.push('');
-    lines.push('## Warnings (no repairs needed)');
-    lines.push('');
-    for (const issue of warnings) {
-      lines.push(`- [${issue.label}] \`${issue.rule}\` — ${issue.detail}`);
+    renderLocalPatches(lines, blockWork);
+    if (warnings.length > 0) {
+      lines.push('## Warnings (not repaired)');
+      lines.push('');
+      for (const issue of warnings) {
+        lines.push(`- [${issue.label}] \`${issue.rule}\` — ${issue.detail}`);
+      }
     }
-    return lines.join('\n');
+    return lines.join('\n').trimEnd();
   }
 
   // ── Recurring rule failures — the prompt-engineering signal ──

@@ -903,7 +903,9 @@ describe('formatRepairReportMarkdown', () => {
     const md = formatRepairReportMarkdown(reports, META);
 
     expect(md).toContain('No repairs were needed');
-    expect(md).toContain('## Warnings (no repairs needed)');
+    // Renamed from "(no repairs needed)": with warnings now repairable, one appearing here means a
+    // repair did not happen or did not work — the old heading would assert the opposite.
+    expect(md).toContain('## Warnings (not repaired)');
     expect(md).toContain('[HTML (uk-UA)]');
     expect(md).toContain('`decimal-separator`');
     expect(md).toContain('detail for decimal-separator');
@@ -930,7 +932,7 @@ describe('formatRepairReportMarkdown', () => {
     expect(md).toContain('[HTML (uk-UA)]');
     expect(md).toContain('`spec-row-not-grounded-mass-failure`');
     // Not the early-return-branch heading — a repair DID happen this run.
-    expect(md).not.toContain('## Warnings (no repairs needed)');
+    expect(md).not.toContain('## Warnings (not repaired)');
   });
 
   it('surfaces a warning that belongs to a REPAIRED artifact itself, not just a sibling clean one', () => {
@@ -968,5 +970,48 @@ describe('formatRepairReportMarkdown', () => {
     const md = formatRepairReportMarkdown(reports, META);
 
     expect(md).not.toContain('## Warnings');
+  });
+});
+
+describe('formatRepairReportMarkdown — local block patches', () => {
+  const META = { product: 'Ortur H20 20 W', store: 'EXPERT3D', generatedAt: '2026-07-28T10:00:00.000Z' };
+
+  const clean = (label: string, blockPatches?: RepairArtifactReport['blockPatches']): RepairArtifactReport => ({
+    label, repairsUsed: 0, attempts: [], finalIssues: [], status: 'clean', shippedAttempt: 0, blockPatches,
+  });
+
+  it('does NOT claim nothing was needed when block patches were applied', () => {
+    // The exact untruthfulness class PR #50 fixed: a report that reads "no repairs were needed"
+    // while the artifact was in fact rewritten. A block patch IS a repair — a cheaper one.
+    const md = formatRepairReportMarkdown([clean('HTML (uk-UA)', { applied: 3, rejected: 0, rejections: [] })], META);
+    expect(md).not.toContain('No repairs were needed');
+  });
+
+  it('still says nothing was needed when truly nothing happened', () => {
+    expect(formatRepairReportMarkdown([clean('HTML (uk-UA)')], META)).toContain('No repairs were needed');
+  });
+
+  it('counts applied and rejected block patches in the summary', () => {
+    const md = formatRepairReportMarkdown([
+      clean('HTML (uk-UA)', { applied: 3, rejected: 1, rejections: ['block[4]: changed the numbers'] }),
+      clean('HTML (PL)', { applied: 2, rejected: 0, rejections: [] }),
+    ], META);
+    expect(md).toContain('- Local block patches applied: 5');
+    expect(md).toContain('- Local block patches rejected: 1');
+  });
+
+  it('says why a patch was rejected, per artifact', () => {
+    // A silent rejection is indistinguishable from "the model had nothing to fix" — and the
+    // difference is the whole signal about whether the repair prompt is working.
+    const md = formatRepairReportMarkdown([
+      clean('HTML (uk-UA)', { applied: 1, rejected: 1, rejections: ['block[4]: the replacement changed the numbers in the block'] }),
+    ], META);
+    expect(md).toContain('## Local patches');
+    expect(md).toContain('HTML (uk-UA)');
+    expect(md).toContain('the replacement changed the numbers in the block');
+  });
+
+  it('omits the section entirely when the block tier never ran', () => {
+    expect(formatRepairReportMarkdown([clean('HTML (uk-UA)')], META)).not.toContain('## Local patches');
   });
 });
