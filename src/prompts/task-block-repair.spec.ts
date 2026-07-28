@@ -48,6 +48,24 @@ describe('buildBlockRepairPrompt', () => {
     expect(contract.text).toMatch(/list|enumerat/i);
   });
 
+  it('forbids inventing a spec label and demands the document language', () => {
+    // The allowed-parameter list is ENGLISH ("Child Lock") while the table is Ukrainian. Told to
+    // "pick one from the list" without this, the model copies the English wording into the cell
+    // and trades one defect for another.
+    const [contract] = buildBlockRepairPrompt([request()], 'Ukrainian (uk-UA)').systemBlocks;
+    expect(contract.text).toMatch(/exactly one/i);
+    expect(contract.text).toMatch(/language\s+of\s+the\s+document/i);
+    expect(contract.text).toMatch(/quote/i); // no quotes wrapped around the label
+  });
+
+  it('gives a concrete cutting operation, not another exhortation to be brief', () => {
+    // Two runs proved "split the list itself" does not land. This states the target as a number
+    // and names where to cut.
+    const [contract] = buildBlockRepairPrompt([request()], 'Ukrainian (uk-UA)').systemBlocks;
+    expect(contract.text).toMatch(/semicolon/i);
+    expect(contract.text).toMatch(/every\s+sentence[\s\S]{0,40}under the limit/i);
+  });
+
   it('addresses each block by the index the response must echo back', () => {
     const { userContent } = buildBlockRepairPrompt([request({ index: 3 })], 'Ukrainian (uk-UA)');
     expect(userContent).toContain('block="3"');

@@ -195,7 +195,16 @@ describe('warnings on the ladder', () => {
 describe('registry strategies', () => {
   it('registers exactly the intended rules and nothing by analogy', () => {
     expect([...REPAIR_STRATEGIES.keys()].sort())
-      .toEqual(['meta-title-length', 'sentence-too-long', 'slug-charset']);
+      .toEqual(['meta-title-length', 'sentence-too-long', 'slug-charset', 'spec-row-not-grounded']);
+  });
+
+  it('gives spec-row-not-grounded a block rung that still ends in full-regen', () => {
+    // An ERROR, unlike sentence-too-long: renaming a spec label is a cheap first attempt, but if
+    // it fails the row genuinely has to be reconciled, so the expensive terminator stays.
+    expect(resolveLadder({
+      severity: 'error', rule: 'spec-row-not-grounded', detail: 'd',
+      context: 'HTML (uk-UA)', path: 'block[12]',
+    })).toEqual(['block-scoped', 'full-regen']);
   });
 
   it('meta-title tier-1 instruction states the arithmetic from `measured`, not from `detail`', () => {

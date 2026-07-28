@@ -49,11 +49,27 @@ For each block you fix, emit exactly one element:
 A word-count limit can always be satisfied by splitting, because splitting adds no facts and
 removes none. Skipping such a block is NOT one of the valid answers above; that escape is for a
 fix that would require changing a number or a claim.
-- Split the sentence the problem names. Check that the part still carrying the subject is itself
-  under the limit — moving a short clause out of a long sentence leaves the long sentence long.
-- When the length comes from a list of three or more items, break up THE LIST: give the items
-  their own sentence, or split the list across two sentences. Detaching an unrelated closing
-  clause instead is the common mistake and it does not bring the count down.`;
+
+The target is arithmetic, not stylistic: EVERY sentence you leave behind must be under the limit
+the problem states. Cutting a long sentence into one long and one short one fails.
+
+Cut in this order:
+1. If the sentence contains a semicolon, replace it with a full stop. That is the split.
+2. If the length comes from a list of three or more items, put the run-up in its own sentence and
+   start the list in the next one ("The machine runs three programs. These are X, Y and Z.").
+3. Otherwise cut at the comma nearest the middle of the sentence and repair both halves into
+   complete sentences.
+Detaching a short closing clause is the common mistake: it reads like a fix and leaves the count
+almost unchanged.
+
+[SPEC-TABLE LABELS — CHOOSE, DO NOT INVENT]
+When the problem lists ALLOWED PARAMETERS, the corrected label must correspond to EXACTLY ONE
+entry on that list. Do not invent a parameter, do not merge two, do not keep the old wording.
+- The list is written in English; the table is not. Write the parameter's name in the language of
+  the document, not the English wording from the list.
+- Put the label text straight into the cell: no surrounding quotes, no brackets, no note about
+  which parameter you chose.
+- Never touch the value cell.`;
 
 function renderRequest(request: BlockPatchRequest): string {
   const lines: string[] = [];

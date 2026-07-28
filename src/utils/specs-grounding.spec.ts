@@ -3,6 +3,7 @@ import {
   validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation,
   inspectGroundedTranslation, describeGroundingFailure,
 } from './specs-grounding';
+import { getBlock, extractBlocks } from './block-repair';
 
 const SRC = `Build Volume: 330 × 330 × 565 mm (61.5 L)
 Hopper Capacity: 105 L
@@ -435,5 +436,42 @@ describe('describeGroundingFailure', () => {
     expect(text).toContain('0.04');
     expect(text).toContain('0.3');
     expect(text).toContain('Laser Head Power');
+  });
+});
+
+describe('validateSpecsGrounding — addressable rows', () => {
+  // A label that drifted between two independent translations of the same English parameter is
+  // the real case: "Child Lock" became "Дитячий замок" in the grounding source and "Блокування
+  // від дітей" in the table. The validator is right that they do not match; what was wrong is
+  // that correcting one label cost a full regeneration — the instrument that once deleted 8 of
+  // 15 live rows. The label lives in a <td>, which the block tier can rewrite in place.
+  const html = specSection(
+    `<tr><td>Тип лазера</td><td>Діодний, 10 Вт</td></tr>`
+    + `<tr><td>Блокування від дітей</td><td>Так</td></tr>`,
+  );
+  const rowIssue = () =>
+    validateSpecsGrounding(html, SRC_UK, 'HTML (uk-UA)').find(i => i.rule === 'spec-row-not-grounded')!;
+
+  it('addresses the offending LABEL cell, not the row or the value', () => {
+    expect(getBlock(html, rowIssue().path!)).toBe('<td>Блокування від дітей</td>');
+  });
+
+  it('numbers the cell the way extractBlocks does', () => {
+    // Same discipline as sentence-length: a validator and a patcher that disagree about which
+    // block is number N would rename somebody else's cell and report success.
+    const index = Number(/^block\[(\d+)\]$/.exec(rowIssue().path!)![1]);
+    expect(extractBlocks(html)[index].outerHTML).toBe('<td>Блокування від дітей</td>');
+  });
+
+  it('carries the allowed parameters in the row issue itself, not only in the companion message', () => {
+    // The block prompt passes each issue's `detail` verbatim. Without the list in THIS detail the
+    // model is told to correct a label with no idea what to correct it to.
+    const issue = validateSpecsGrounding(html, SRC_UK, 'HTML (uk-UA)', ['Laser Type', 'Child Lock'])
+      .find(i => i.rule === 'spec-row-not-grounded')!;
+    expect(issue.detail).toContain('Child Lock');
+  });
+
+  it('omits the list when no allowed parameters were supplied', () => {
+    expect(rowIssue().detail).not.toMatch(/ALLOWED PARAMETERS/);
   });
 });

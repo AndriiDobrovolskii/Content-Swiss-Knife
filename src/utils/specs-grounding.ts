@@ -48,6 +48,7 @@
  */
 
 import type { ValidationIssue } from './output-validator';
+import { extractBlocks } from './block-repair';
 import { stripCodeFences } from './html-cleaner';
 import { stripThousandsSeparators } from './number-format-fixer';
 
@@ -185,6 +186,26 @@ export function validateSpecsGrounding(
   let evaluatedRows = 0;
   const failedLabels: string[] = [];
 
+  // Addressing for block-scoped repair. A label that drifted between two independent translations
+  // of the same English parameter ("Child Lock" -> "Дитячий замок" in the grounding source,
+  // "Блокування від дітей" in the table) is a real and recurring case. The claim is correct — the
+  // wordings do differ — but the remedy this rule's own text asks for is "correct only its label",
+  // and that used to cost a full regeneration: the instrument that once deleted 8 of 15 live rows.
+  //
+  // Scoped to section.specs so a §2 Killer-Specs cell holding the same text cannot be addressed by
+  // mistake, and each cell is claimed at most once so two rows sharing a label stay distinct.
+  const specLabelCells = extractBlocks(html).filter(
+    b => b.tag === 'td' && b.ancestors.some(a => a.tag === 'section' && a.classes.includes('specs')),
+  );
+  const claimedCells = new Set<number>();
+  const addressLabelCell = (label: string): string | undefined => {
+    const wanted = label.replace(/\s+/g, ' ');
+    const cell = specLabelCells.find(b => !claimedCells.has(b.index) && b.text === wanted);
+    if (!cell) return undefined;
+    claimedCells.add(cell.index);
+    return `block[${cell.index}]`;
+  };
+
   for (const table of specTables) {
     // Iterate <tbody> rows only — the <thead> "Parameter | Value" header row is not a spec.
     for (const row of Array.from(table.querySelectorAll('tbody tr'))) {
@@ -227,8 +248,16 @@ export function validateSpecsGrounding(
             `Spec row "${label}" is not supported by the source specifications. Reconcile before ` +
             `removing: if it corresponds to one of the allowed parameters under different ` +
             `wording, KEEP the row and correct only its label to match. Remove the row only if ` +
-            `it corresponds to no allowed parameter. Never invent values or units.`,
+            `it corresponds to no allowed parameter. Never invent values or units.` +
+            // Repeated HERE, not only in the companion spec-rows-allowed-parameters issue: the
+            // block-repair prompt hands over each issue's `detail` verbatim, so without the list
+            // in this one the model is told to correct a label with nothing to correct it to.
+            (allowedParams.length > 0
+              ? ` ALLOWED PARAMETERS (pick exactly one, and write its name in the language of the `
+                + `table — do not copy the English wording): ${allowedParams.join(', ')}.`
+              : ''),
           context,
+          path: addressLabelCell(label),
         });
       }
     }

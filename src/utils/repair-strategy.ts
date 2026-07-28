@@ -207,6 +207,25 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
       ladder: ['block-scoped', 'block-scoped'],
     },
   ],
+  [
+    'spec-row-not-grounded',
+    {
+      // The rule's own text asks for "KEEP the row and correct only its label to match" — a
+      // rename, which is exactly a block rewrite of one <td>. It used to cost a full
+      // regeneration: the instrument that once deleted 8 of 15 live rows on this very check.
+      //
+      // The recurring case is a label that drifted between two independent translations of the
+      // same English parameter ("Child Lock" -> "Дитячий замок" in the grounding source,
+      // "Блокування від дітей" in the table). The validator is right that they differ; only the
+      // remedy was wrong.
+      //
+      // One rung, not two: unlike a sentence, a label either corresponds to an allowed parameter
+      // or it does not, and a second guess at the same wording adds nothing. Being an ERROR, the
+      // full-regen terminator is appended automatically, so behaviour degrades to exactly what it
+      // is today when the rename does not land.
+      ladder: ['block-scoped'],
+    },
+  ],
 ]);
 
 /**
