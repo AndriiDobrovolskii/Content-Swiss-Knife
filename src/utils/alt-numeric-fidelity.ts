@@ -84,8 +84,14 @@ function canonicalNumber(raw: string): string {
   return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s;
 }
 
-/** Every number in a source text, canonicalized — units deliberately ignored (see below). */
-function sourceNumbers(text: string): Set<string> {
+/**
+ * Every number in a source text, canonicalized — units deliberately ignored (see below).
+ *
+ * Exported for block-repair.ts, which compares the numbers in a block before and after a local
+ * rewrite. A second canonicalizer would drift from this one and eventually disagree about whether
+ * "1 234,5" and "1234.5" are the same figure.
+ */
+export function sourceNumbers(text: string): Set<string> {
   const found = (text.match(/\d[\d\s  .,]*\d|\d/g) ?? []).map(canonicalNumber);
   return new Set(found.filter(Boolean));
 }

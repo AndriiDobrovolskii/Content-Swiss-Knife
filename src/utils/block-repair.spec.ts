@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { applyBlockPatches, extractBlocks, getBlock, setBlock } from './block-repair';
+import { applyBlockPatches, extractBlocks, getBlock, rejectPatch, setBlock } from './block-repair';
 
 /** U+00A0 by code point — a literal NBSP is invisible in review and in diffs. */
 const NBSP = String.fromCharCode(0xa0);
@@ -149,5 +149,65 @@ describe('applyBlockPatches', () => {
   it('is a no-op for an empty patch set', () => {
     const html = '<p>alpha</p><p>beta</p>';
     expect(applyBlockPatches(html, new Map())).toBe(html);
+  });
+});
+
+describe('rejectPatch', () => {
+  const ORIGINAL =
+    '<p class="lead">Триярусна структура Ortur H20 20 Вт поєднує кришку та основу в секції.</p>';
+
+  it('accepts a split that preserves tag, attributes and figures', () => {
+    const patched =
+      '<p class="lead">Триярусна структура Ortur H20 20 Вт поєднує кришку та основу. ' +
+      'Вони фіксуються в окремі секції.</p>';
+    expect(rejectPatch(ORIGINAL, patched)).toBeNull();
+  });
+
+  it('rejects a changed root tag', () => {
+    expect(rejectPatch(ORIGINAL, '<div class="lead">Текст.</div>')).toMatch(/root tag/);
+  });
+
+  it('rejects added, dropped or changed root attributes', () => {
+    expect(rejectPatch(ORIGINAL, '<p>Текст.</p>')).toMatch(/attribute/);
+    expect(rejectPatch(ORIGINAL, '<p class="lead" id="x">Текст.</p>')).toMatch(/attribute/);
+    expect(rejectPatch(ORIGINAL, '<p class="hook">Текст.</p>')).toMatch(/attribute/);
+  });
+
+  it('rejects a fragment that is not exactly one element', () => {
+    // Splitting a sentence must stay INSIDE the block. Emitting two <p> changes the document
+    // structure, which is the caller's problem to never have to think about.
+    expect(rejectPatch(ORIGINAL, '<p class="lead">Перше.</p><p class="lead">Друге.</p>'))
+      .toMatch(/exactly one element/);
+    expect(rejectPatch(ORIGINAL, 'просто текст')).toMatch(/exactly one element/);
+    expect(rejectPatch(ORIGINAL, '')).toMatch(/exactly one element/);
+  });
+
+  it('rejects an invented number', () => {
+    expect(rejectPatch(ORIGINAL, '<p class="lead">Структура Ortur H20 40 Вт поєднує секції.</p>'))
+      .toMatch(/number/);
+  });
+
+  it('rejects a dropped number', () => {
+    expect(rejectPatch(ORIGINAL, '<p class="lead">Триярусна структура Ortur поєднує секції.</p>'))
+      .toMatch(/number/);
+  });
+
+  it('allows a number to REPEAT, which a legitimate sentence split does', () => {
+    // Set comparison, not multiset: "…швидкість 50 мм/с, що дає…" splits into two sentences that
+    // both name 50. Nothing was invented or lost, so nothing is wrong.
+    const original = '<p>Він друкує зі швидкістю 50 мм/с, що дає виграш у часі.</p>';
+    const patched = '<p>Він друкує зі швидкістю 50 мм/с. Швидкість 50 мм/с дає виграш у часі.</p>';
+    expect(rejectPatch(original, patched)).toBeNull();
+  });
+
+  it('rejects a changed src or href', () => {
+    const withMedia = '<figcaption><a href="/catalog/ortur">Ortur H20 20 Вт</a></figcaption>';
+    expect(rejectPatch(withMedia, '<figcaption><a href="/catalog/other">Ortur H20 20 Вт</a></figcaption>'))
+      .toMatch(/href|src/);
+  });
+
+  it('rejects a dropped image', () => {
+    const withImg = '<figcaption><img src="https://cdn/a.jpg" alt="20 Вт"> Підпис</figcaption>';
+    expect(rejectPatch(withImg, '<figcaption>Підпис 20 Вт</figcaption>')).toMatch(/href|src/);
   });
 });

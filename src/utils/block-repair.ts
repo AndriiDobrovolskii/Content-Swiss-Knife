@@ -15,6 +15,7 @@
  */
 
 import { parseDocument } from 'htmlparser2';
+import { sourceNumbers as numbersIn } from './alt-numeric-fidelity';
 
 /**
  * Prose containers only. Deliberately excludes <section>/<div> (wrappers, not prose) and inline
@@ -48,6 +49,7 @@ interface ParsedNode {
   type: string;
   name?: string;
   data?: string;
+  attribs?: Record<string, string>;
   children?: ParsedNode[];
   startIndex?: number | null;
   endIndex?: number | null;
@@ -167,4 +169,96 @@ export function applyBlockPatches(html: string, patches: ReadonlyMap<number, str
     out = out.slice(0, block.start) + replacement + out.slice(block.end);
   }
   return out;
+}
+
+// ── Patch verification ────────────────────────────────────────────────────────
+//
+// Deterministic, per block, before anything is spliced. These checks are the reason a block-scoped
+// repair is safe to spend on a mere warning: the worst outcome of a bad model response is that the
+// block stays exactly as it was.
+//
+// Scope is what can be decided from the two fragments alone. Whether the ORIGINATING RULE is now
+// satisfied, and whether the artifact as a whole got worse, are the caller's checks — it owns the
+// validators; this module owns structure.
+
+/** The single root element of a fragment, or null when the fragment is not exactly one element. */
+function singleRoot(fragment: string): ParsedNode | null {
+  const doc = parseDocument(fragment, { withStartIndices: true, withEndIndices: true });
+  const significant = ((doc as unknown as ParsedNode).children ?? []).filter(
+    n => n.type !== 'text' || (n.data ?? '').trim() !== '',
+  );
+  if (significant.length !== 1) return null;
+  return significant[0].type === 'tag' ? significant[0] : null;
+}
+
+/**
+ * Ordered identity of every link and embed inside a block.
+ *
+ * Ordered, not a set: two images swapping places is a real change even though the multiset is
+ * equal, and IMAGE MANIFEST placement rules care about which paragraph an image sits in.
+ */
+function mediaSignature(node: ParsedNode): string[] {
+  const out: string[] = [];
+  const walk = (n: ParsedNode): void => {
+    if (n.type === 'tag' && n.name) {
+      const attribs = n.attribs ?? {};
+      if (n.name === 'img' || n.name === 'iframe') out.push(`${n.name}:${attribs['src'] ?? ''}`);
+      if (n.name === 'a') out.push(`a:${attribs['href'] ?? ''}`);
+    }
+    for (const child of n.children ?? []) walk(child);
+  };
+  walk(node);
+  return out;
+}
+
+function attributeSignature(node: ParsedNode): string {
+  const attribs = node.attribs ?? {};
+  return Object.keys(attribs).sort().map(k => `${k}=${attribs[k]}`).join('|');
+}
+
+/**
+ * Why this patch must be thrown away, or null when it may be applied.
+ *
+ * @param original    the block's current outerHTML
+ * @param replacement what the model returned for it
+ */
+export function rejectPatch(original: string, replacement: string): string | null {
+  const before = singleRoot(original);
+  const after = singleRoot(replacement);
+
+  if (!before) return 'the original block did not parse as exactly one element';
+  if (!after) {
+    // Covers the common failure: splitting a long sentence into two <p> instead of two sentences
+    // inside one <p>. That changes document structure, which a local repair must never do.
+    return 'the replacement is not exactly one element — keep the fix inside the original block';
+  }
+
+  if (before.name !== after.name) {
+    return `the replacement changed the root tag from <${before.name}> to <${after.name}>`;
+  }
+
+  if (attributeSignature(before) !== attributeSignature(after)) {
+    return 'the replacement changed a root attribute';
+  }
+
+  const mediaBefore = mediaSignature(before);
+  const mediaAfter = mediaSignature(after);
+  if (mediaBefore.length !== mediaAfter.length || mediaBefore.some((m, i) => m !== mediaAfter[i])) {
+    return 'the replacement changed an img/iframe src or an a href';
+  }
+
+  // Set, not multiset: a legitimate sentence split can legitimately repeat a figure
+  // ("…швидкість 50 мм/с. Швидкість 50 мм/с дає…"). What must not happen is a number appearing
+  // that was not there, or one disappearing — the "don't change spec values" rule.
+  const numbersBefore = numbersIn(visibleText(before));
+  const numbersAfter = numbersIn(visibleText(after));
+  const invented = [...numbersAfter].filter(n => !numbersBefore.has(n));
+  const dropped = [...numbersBefore].filter(n => !numbersAfter.has(n));
+  if (invented.length > 0 || dropped.length > 0) {
+    return `the replacement changed the numbers in the block`
+      + (invented.length ? ` (invented: ${invented.join(', ')})` : '')
+      + (dropped.length ? ` (dropped: ${dropped.join(', ')})` : '');
+  }
+
+  return null;
 }
