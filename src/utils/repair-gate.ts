@@ -1,6 +1,6 @@
 import { PromptPayload } from '../prompt-core/payload';
 import { ValidationIssue } from './output-validator';
-import { REPAIR_STRATEGIES, RepairTier, getAtPath, resolveLadder, setAtPath } from './repair-strategy';
+import { REPAIR_STRATEGIES, RepairTier, getAtPath, isLadderCandidate, resolveLadder, setAtPath } from './repair-strategy';
 
 export interface RepairGateOptions<T> {
   label: string;
@@ -23,6 +23,19 @@ export interface RepairGateOptions<T> {
   repairField?: (payload: PromptPayload) => Promise<string>;
   /** Tier-1 attempt budget. Each call is ~200 tokens, so this can exceed maxRepairs safely. */
   maxFieldRepairs?: number;
+  /**
+   * Block-scoped executor: given the artifact and the issues sitting on that rung, return a
+   * repaired artifact.
+   *
+   * The whole tier is a callback rather than logic inside the gate, because a block rewrite is
+   * HTML-shaped — grouping issues per block, one call, deterministic accept/reject per block — and
+   * this gate is generic over T. Keeping it out here is what stops HTML knowledge leaking into a
+   * function that also repairs JSON. utils/block-repair.ts supplies the pieces.
+   *
+   * OPTIONAL. Without it the rung is still SPENT (the cursor advances) so a ladder always
+   * terminates; it simply cannot act.
+   */
+  repairBlocks?: (artifact: T, issues: ValidationIssue[]) => Promise<T>;
 }
 
 /**
@@ -82,7 +95,7 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
   const issueKey = (i: ValidationIssue) => `${i.rule}::${i.context}`;
 
   /**
-   * How many rungs of its own ladder each issue has already burned, keyed by issueKey.
+   * How many rungs of its own ladder each issue has already burned, keyed by cursorKey.
    *
    * This is what makes dispatch PER-ISSUE rather than a global tier sweep. meta-title-length's
    * ladder is ['field-scoped', 'deterministic'] — tier 1 first, because its wording carries SEO
@@ -106,7 +119,10 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
   let cursorMoves = 0;
   const activeTier = (issue: ValidationIssue): RepairTier => {
     const ladder = resolveLadder(issue);
-    return ladder[Math.min(ladderCursor.get(cursorKey(issue)) ?? 0, ladder.length - 1)];
+    // Past the end means exhausted, and 'full-regen' is the sentinel for that. An error ladder ends
+    // with it anyway, so this is identical to clamping there. A WARNING ladder does not end with it
+    // — clamping would pin a one-rung warning on its only rung and re-attempt it every pass.
+    return ladder[ladderCursor.get(cursorKey(issue)) ?? 0] ?? 'full-regen';
   };
   const advance = (issue: ValidationIssue) => {
     ladderCursor.set(cursorKey(issue), (ladderCursor.get(cursorKey(issue)) ?? 0) + 1);
@@ -145,6 +161,24 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     }
     return next;
   };
+
+  /**
+   * The block-scoped rung. Unlike the per-issue tiers above, every issue on this rung is handed to
+   * ONE executor call: several findings in the same paragraph must become a single rewrite of that
+   * paragraph, not one patch each — the second patch would splice against offsets the first had
+   * already invalidated.
+   */
+  const applyBlockTier = async (
+    current: T,
+    plan: ReadonlyArray<{ issue: ValidationIssue; tier: RepairTier }>,
+  ): Promise<T> => {
+    const onRung = plan.filter(p => p.tier === 'block-scoped' && p.issue.path).map(p => p.issue);
+    if (onRung.length === 0) return current;
+    // Spent whether or not an executor exists, so the ladder always terminates.
+    for (const issue of onRung) advance(issue);
+    return opts.repairBlocks ? opts.repairBlocks(current, onRung) : current;
+  };
+
   // `attempt` tracks which generation `best` currently holds, so the report can state what actually
   // shipped rather than inferring it from repairsUsed.
   let best = { artifact, issues, errors: errCount(issues), attempt: 0 };
@@ -164,7 +198,9 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
 
   const fieldBudget = opts.maxFieldRepairs ?? 3;
   for (let pass = 0; pass < fieldBudget; pass++) {
-    const errs = issues.filter(i => i.severity === 'error');
+    // Warnings enter here too, narrowly — see isLadderCandidate. They never reach the full-regen
+    // loop below, which still filters on severity === 'error'.
+    const errs = issues.filter(isLadderCandidate);
     if (errs.length === 0) break;
 
     // Snapshot each issue's active tier ONCE per pass. Reading activeTier() inside applyTier would
@@ -175,12 +211,13 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     const plan = errs.map(issue => ({ issue, tier: activeTier(issue) }));
 
     // Nothing left that a cheap tier can address — stop and let the full-regen loop decide.
-    if (!plan.some(p => p.tier === 'deterministic' || p.tier === 'field-scoped')) break;
+    if (!plan.some(p => p.tier === 'deterministic' || p.tier === 'field-scoped' || p.tier === 'block-scoped')) break;
 
     const before = artifact;
     const movesBefore = cursorMoves;
     artifact = await applyTier('deterministic', artifact, plan);
     artifact = await applyTier('field-scoped', artifact, plan);
+    artifact = await applyBlockTier(artifact, plan);
 
     // Advancing a cursor IS progress even when the artifact did not change — the next pass will
     // reach a different rung. Breaking on "no change" alone would strand meta-title-length on its

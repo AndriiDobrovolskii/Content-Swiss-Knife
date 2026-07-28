@@ -20,7 +20,7 @@
 import type { ValidationIssue } from './output-validator';
 import { SLUG_PATTERN } from '../prompt-core/slug-utils';
 
-export type RepairTier = 'deterministic' | 'field-scoped' | 'full-regen';
+export type RepairTier = 'deterministic' | 'field-scoped' | 'block-scoped' | 'full-regen';
 
 export interface RepairStrategy {
   /** Ordered rungs. 'full-regen' is implicit after the last one and never listed. */
@@ -180,7 +180,39 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
       deterministic: current => slugify(current),
     },
   ],
+  [
+    'sentence-too-long',
+    {
+      // The exclusion note above said prose rules each need their own argument. Here it is.
+      //
+      // What made a prose rule dangerous was never the judgement — it was the instrument. Fixing a
+      // 21-word sentence used to mean regenerating the whole description, and full regeneration is
+      // free to break the paragraphs it was not asked about. A block rewrite cannot: it replaces
+      // one addressed block, and utils/block-repair.ts's rejectPatch throws the rewrite away unless
+      // the tag, attributes, media and numbers all survive it. The worst outcome is that the block
+      // is left exactly as it was.
+      //
+      // No deterministic rung: where to split a sentence is a genuine judgement, and a mechanical
+      // split at the midpoint produces two ungrammatical halves. No fieldInstruction either — the
+      // block executor groups every finding in a block into ONE rewrite, which a per-issue rung
+      // cannot express. The instruction is the validator's own `detail`, verbatim.
+      ladder: ['block-scoped'],
+    },
+  ],
 ]);
+
+/**
+ * May this issue enter the ladder at all?
+ *
+ * Errors always could. Warnings are new, and admitted narrowly: a warning must be ADDRESSABLE
+ * (it carries a `path`) and REGISTERED (its rule has a strategy). A warning failing either test
+ * behaves exactly as it did before the ladder existed — reported, never repaired — which keeps the
+ * un-migrated rules in output-validator.ts unaffected.
+ */
+export function isLadderCandidate(issue: ValidationIssue): boolean {
+  if (issue.severity === 'error') return true;
+  return !!issue.path && REPAIR_STRATEGIES.has(issue.rule);
+}
 
 /**
  * The ladder for one issue, always terminated by 'full-regen'.
@@ -192,5 +224,10 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
 export function resolveLadder(issue: ValidationIssue): RepairTier[] {
   const strategy = REPAIR_STRATEGIES.get(issue.rule);
   if (!strategy || !issue.path) return ['full-regen'];
+  // A warning never reaches full regeneration. That instrument rewrites the whole artifact and is
+  // free to break fields it was not asked about; spending it on a stylistic finding trades a
+  // cosmetic problem for a correctness risk. A warning that its cheap rungs cannot fix stays
+  // reported, exactly as before — which is also what keeps it honest when the fix genuinely fails.
+  if (issue.severity === 'warning') return [...strategy.ladder];
   return [...strategy.ladder, 'full-regen'];
 }

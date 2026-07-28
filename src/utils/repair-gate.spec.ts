@@ -583,6 +583,84 @@ describe('runRepairGate — tiered repair ladder', () => {
     expect(Array.from(shipped.seo_data[1].meta_title).length).toBeLessThanOrEqual(55);
   });
 
+  // ── Warnings on the ladder, via the block-scoped tier ────────────────────────
+
+  const sentenceWarning = (path = 'block[0]'): ValidationIssue => ({
+    severity: 'warning',
+    rule: 'sentence-too-long',
+    detail: 'Sentence of 21 words exceeds the uk-UA hard ceiling of 20. Split it into two.',
+    context: 'HTML (base)',
+    path,
+    measured: { actual: 21, limit: 20, unit: 'words' },
+  });
+
+  it('sends a repairable warning to the block tier and ships the rewrite', async () => {
+    // The whole point of the feature: 14 sentence-too-long warnings used to be printed and
+    // ignored, because the loop never started while the error count was zero.
+    const produce = vi.fn().mockResolvedValue('<p>Одне дуже довге речення.</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>Одне дуже. Довге речення.</p>');
+    const validate = vi.fn().mockReturnValueOnce([sentenceWarning()]).mockReturnValue([]);
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).toHaveBeenCalledTimes(1);
+    expect(repairBlocks.mock.calls[0][1]).toEqual([sentenceWarning()]); // the issues on that rung
+    expect(result.artifact).toBe('<p>Одне дуже. Довге речення.</p>');
+    expect(produce).toHaveBeenCalledTimes(1); // no regeneration was spent on a warning
+  });
+
+  it('never escalates a warning to full regeneration, even when the fix does not take', async () => {
+    // A warning the cheap rungs cannot fix stays reported. Spending a whole-artifact rewrite on a
+    // stylistic finding would trade a cosmetic problem for a correctness risk.
+    const produce = vi.fn().mockResolvedValue('<p>Одне дуже довге речення.</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>Одне дуже довге речення.</p>');
+    const validate = vi.fn().mockReturnValue([sentenceWarning()]);
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 2, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(produce).toHaveBeenCalledTimes(1);
+    expect(repairBlocks).toHaveBeenCalledTimes(1); // one rung, spent once, then the ladder ends
+    expect(result.repairsUsed).toBe(0);
+    expect(result.finalIssues).toEqual([sentenceWarning()]); // still reported, honestly
+  });
+
+  it('leaves an unaddressable warning alone', async () => {
+    // No path — nothing for a tier to rewrite. It must behave exactly as it did before the ladder.
+    const produce = vi.fn().mockResolvedValue('<p>Текст.</p>');
+    const repairBlocks = vi.fn();
+    const validate = vi.fn().mockReturnValue([{ ...sentenceWarning(), path: undefined }]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).not.toHaveBeenCalled();
+    expect(produce).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a warning-only fix, which leaves the error count unchanged at zero', async () => {
+    // The regression guard compares errors. A pass that only cleared warnings moves that count by
+    // nothing, so a "strictly fewer errors" rule would discard every warning fix ever made.
+    const produce = vi.fn().mockResolvedValue('<p>довге</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>коротке</p>');
+    const validate = vi.fn().mockReturnValueOnce([sentenceWarning()]).mockReturnValue([]);
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(result.artifact).toBe('<p>коротке</p>');
+    expect(result.finalIssues).toEqual([]);
+  });
+
   // ── The ladder must not be allowed to make things worse ──────────────────────
   //
   // The full-regen loop below has always had this discipline (strictly better wins, ties keep the
