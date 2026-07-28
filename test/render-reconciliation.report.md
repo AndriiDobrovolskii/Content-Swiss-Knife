@@ -1,9 +1,9 @@
 # Render reconciliation report
 
-**Status:** partial — corrections landed, per-item reconciliation **not yet performed**.
-**PR-3 gate:** ❌ **CLOSED.** See §5.
+**Status:** 1 of 2 artifacts reconciled.
+**PR-3 gate:** ❌ **STILL CLOSED** — one artifact short, and it needs a model change. See §5 and §7.
 
-Generated for PR-2. Read this before reviewing PR-3.
+Generated for PR-2, updated during the reconciliation pass. Read this before reviewing PR-3.
 
 ---
 
@@ -107,21 +107,55 @@ rendering". That relocation is PR-3's work, not PR-2's.
 
 | Item | Store | Doc authored | Normalized HTML | Tag parity | Visible text | Validator errors |
 |---|---|---|---|---|---|---|
-| `center-3d-print-ortur-h20-20w` | Center 3D Print | ❌ pending | — | — | — | — |
-| `expert3d-ortur-h20-20w` | EXPERT3D | ❌ pending | — | — | — | — |
+| `center-3d-print-ortur-h20-20w` | Center 3D Print | ✅ | ✅ | ✅ | ✅ | ✅ 0 |
+| `expert3d-ortur-h20-20w` | EXPERT3D | ❌ blocked | — | — | — | — |
 
 Both artifacts are committed under `test/fixtures/corpus/`. `render-reconciliation.spec.ts`
 discovers them and **reports them as pending** on every run rather than passing vacuously.
 
 To author a Doc, add `<slug>.doc.json` and `<slug>.ctx.json` alongside the HTML; the harness picks
-them up automatically and runs all five checks.
+them up automatically and runs all five checks. `.ctx.json` is produced by
+`node test/tools/derive-ctx.mjs <artifact.html> <imageBaseUrl> <storeName>`.
+
+### 4.1 What the first item cost the renderer
+
+Three defects, all found by hand-authoring rather than by reasoning, all fixed in the renderer
+rather than worked around in the Doc:
+
+1. **§4 had no slot for a lead-in paragraph or figure** — gap §5.5 below, now closed. Adding it
+   meant teaching THREE places about the section (renderer part order, figure positioning, schema
+   ref check); two of them were hand-written copies of the same traversal and both had the same
+   omission. The traversal now lives once, in `forEachBlockInOrder`.
+2. **`renderBullets` injected a space after `</b>`.** It cannot: Center 3D Print writes
+   `<b>… . </b>Текст` with the space inside the bold, EXPERT3D writes `<b>…:</b> текст` with it
+   outside. Whitespace there is authored content, and a renderer that guesses is wrong for half
+   its stores. The existing inline snapshot did not shift by a byte after the fix — only the
+   fixtures moved the space into the data.
+3. **A subsection was required to have ≥1 block.** "Безпечна експлуатація Ortur H20 20 W" is a
+   bare `<h2>` whose whole content is two `<h3>`; the rule rejected a real accepted document.
+
+### 4.2 Deviations — where the renderer does NOT reproduce production byte-for-byte
+
+| Deviation | Artifact | Why it stands |
+|---|---|---|
+| `&nbsp;` vs U+00A0 | center-3d-print | Production carries exactly one HTML entity. It is not authored: `fixNumberFormatting` inserts the character, and the entity appears only because the pipeline round-trips its HTML through the DOM, where `innerHTML` serializes it that way. A pure string renderer has no DOM. The harness decodes the entity to the character — deliberately not deleting it, so a renderer that DROPPED the space still fails. |
+
+This narrows what the gate proves: the renderer reproduces production **up to NBSP
+serialization**, not including it.
+
+### 4.3 A modelling stretch worth knowing about
+
+Center 3D Print's "Поради щодо експлуатації" block is mapped onto `compatibility` (§5). It is not
+compatibility information — it is C3D's Style-B operating-tips section — but the Doc has no slot
+for it and §5 is the one that renders in the right position with the right shape. It reconciles,
+and it is the wrong name for what it holds.
 
 ---
 
 ## 5. Open gaps — PR-3 stays blocked
 
-1. **No hand-authored Docs.** 0 of 2 committed artifacts reconciled. This is the gate; nothing in
-   this PR claims the renderer reproduces production.
+1. **One artifact short.** 1 of 2 reconciled. `expert3d-ortur-h20-20w` is blocked on a model
+   change, not on transcription effort — see §7.
 2. **Corpus is 2 items, not 6**, and both are the same product (Ortur H20 20 W) across two stores.
 3. **No `ProductInput`** for any artifact — `RenderContext` must be reconstructed by hand, or
    recovered from `localStorage` once fresh generations exist.
@@ -148,3 +182,28 @@ one with ≥ 3 spec categories. `ProductInput` then comes from `localStorage` ex
 change outside PR-2's stated diff scope and is deliberate: without it the reconciliation harness
 never executes, and a suite that never runs reports success. `coverage.include` stays
 `src/utils/**`, so the 80% thresholds are unaffected.
+
+---
+
+## 7. New blocker found while reconciling the second artifact
+
+`expert3d-ortur-h20-20w` puts a LIST inside a §7 spec value:
+
+```html
+<tr><td>Програмне забезпечення</td><td><ul><li>ORTUR (власний застосунок)</li><li>Lightburn</li><li>LaserGRBL</li></ul></td></tr>
+```
+
+`renderSpecs` emits `<td>${esc(r.value)}</td>`, so that content escapes to `&lt;ul&gt;`. Tag parity
+fails too — three `<li>` the renderer cannot produce.
+
+The two stores disagree about how a multi-valued parameter is written. Center 3D Print renders the
+same information as one string, `ORTUR (власний застосунок) / Lightburn / LaserGRBL`; EXPERT3D
+renders it as a list. `SpecRow.value` is `string` and models only the first.
+
+**This is a model change, and it was not in the plan this pass was authorized against.** The shape
+is now confirmed by an artifact — `value: string | string[]`, with the array rendering as a nested
+`<ul>` — but widening the model is a decision to take deliberately rather than as a side effect of
+finishing a fixture. It is the same class of change as §5.5 above, and it deserves the same
+treatment: confirm the shape, then extend once.
+
+Until it lands, the gate stays closed at 1 of 2.
