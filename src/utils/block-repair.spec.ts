@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractBlocks } from './block-repair';
+import { applyBlockPatches, extractBlocks, getBlock, setBlock } from './block-repair';
 
 /** U+00A0 by code point — a literal NBSP is invisible in review and in diffs. */
 const NBSP = String.fromCharCode(0xa0);
@@ -79,5 +79,75 @@ describe('extractBlocks', () => {
   it('returns nothing for empty or block-free input', () => {
     expect(extractBlocks('')).toEqual([]);
     expect(extractBlocks('<div><span>plain</span></div>')).toEqual([]);
+  });
+});
+
+describe('getBlock / setBlock', () => {
+  const HTML = '<section><p>Перший абзац.</p><hr><p>Другий абзац.</p></section>';
+
+  it('reads the outerHTML the path addresses', () => {
+    expect(getBlock(HTML, 'block[1]')).toBe('<p>Другий абзац.</p>');
+  });
+
+  it('returns undefined for an out-of-range index rather than throwing', () => {
+    // Mirrors getAtPath in repair-strategy.ts: a missing target is "nothing to fix", not a crash.
+    expect(getBlock(HTML, 'block[9]')).toBeUndefined();
+  });
+
+  it('throws on a malformed path instead of silently doing nothing', () => {
+    // A silent no-op would let a failed repair look like a successful one.
+    expect(() => getBlock(HTML, 'seo_data[0].meta_title')).toThrow(/unsupported block path/);
+    expect(() => setBlock(HTML, 'block', 'x')).toThrow(/unsupported block path/);
+  });
+
+  it('replaces exactly the addressed block and leaves every other byte identical', () => {
+    const out = setBlock(HTML, 'block[0]', '<p>Коротко.</p>');
+    expect(out).toBe('<section><p>Коротко.</p><hr><p>Другий абзац.</p></section>');
+  });
+
+  it('throws when the addressed block does not exist', () => {
+    expect(() => setBlock(HTML, 'block[9]', '<p>x</p>')).toThrow(/out of range/);
+  });
+});
+
+describe('applyBlockPatches', () => {
+  it('applies several patches at once without corrupting offsets', () => {
+    // THE regression guard for offset conflict. Replacements of different lengths applied
+    // left-to-right would shift every later range; this must not depend on patch order.
+    const html = '<p>alpha</p><p>beta</p><p>gamma</p>';
+    const out = applyBlockPatches(html, new Map([
+      [0, '<p>a much longer first paragraph</p>'],
+      [2, '<p>g</p>'],
+    ]));
+    expect(out).toBe('<p>a much longer first paragraph</p><p>beta</p><p>g</p>');
+  });
+
+  it('is insensitive to the order patches are supplied in', () => {
+    const html = '<p>alpha</p><p>beta</p>';
+    const forward = applyBlockPatches(html, new Map([[0, '<p>AAAA</p>'], [1, '<p>B</p>']]));
+    const reverse = applyBlockPatches(html, new Map([[1, '<p>B</p>'], [0, '<p>AAAA</p>']]));
+    expect(forward).toBe(reverse);
+    expect(forward).toBe('<p>AAAA</p><p>B</p>');
+  });
+
+  it('keeps the innermost block and drops an overlapping outer one', () => {
+    // Two ranges that enclose one another cannot both be spliced — the outer patch would swallow
+    // the inner replacement. The innermost is the more specific fix, so it wins.
+    const html = '<ul><li>Зовнішній<ul><li>Внутрішній</li></ul></li></ul>';
+    const out = applyBlockPatches(html, new Map([
+      [0, '<li>ПЕРЕПИСАНИЙ ЗОВНІШНІЙ</li>'],
+      [1, '<li>Внутрішній, виправлений</li>'],
+    ]));
+    expect(out).toBe('<ul><li>Зовнішній<ul><li>Внутрішній, виправлений</li></ul></li></ul>');
+  });
+
+  it('ignores an index that addresses no block', () => {
+    const html = '<p>alpha</p>';
+    expect(applyBlockPatches(html, new Map([[7, '<p>x</p>']]))).toBe(html);
+  });
+
+  it('is a no-op for an empty patch set', () => {
+    const html = '<p>alpha</p><p>beta</p>';
+    expect(applyBlockPatches(html, new Map())).toBe(html);
   });
 });

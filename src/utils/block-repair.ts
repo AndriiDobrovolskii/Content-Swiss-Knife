@@ -94,3 +94,77 @@ export function extractBlocks(html: string): HtmlBlock[] {
 
   return blocks;
 }
+
+// ── Path addressing ───────────────────────────────────────────────────────────
+//
+// One form: `block[i]`, indexing extractBlocks() output. Deliberately NOT the arrayProp[i].leafProp
+// grammar of repair-strategy.ts — that one addresses a JSON artifact, this one a string, and
+// conflating them would let a JSON path resolve against HTML and silently rewrite the wrong thing.
+
+const BLOCK_PATH_RE = /^block\[(\d+)\]$/;
+
+function parseBlockPath(path: string): number {
+  const m = BLOCK_PATH_RE.exec(path);
+  if (!m) throw new Error(`block-repair: unsupported block path "${path}" (expected block[i])`);
+  return Number(m[1]);
+}
+
+/** The outerHTML a path addresses, or undefined when the index is out of range. */
+export function getBlock(html: string, path: string): string | undefined {
+  return extractBlocks(html)[parseBlockPath(path)]?.outerHTML;
+}
+
+/**
+ * Replaces one addressed block, byte-for-byte everywhere else.
+ *
+ * Throws when the path does not resolve — same reasoning as setAtPath in repair-strategy.ts: a
+ * silent no-op would let a failed repair look like a successful one.
+ */
+export function setBlock(html: string, path: string, value: string): string {
+  const index = parseBlockPath(path);
+  const block = extractBlocks(html)[index];
+  if (!block) throw new Error(`block-repair: index ${index} is out of range — the HTML has fewer blocks`);
+  return html.slice(0, block.start) + value + html.slice(block.end);
+}
+
+/**
+ * Applies several block replacements in one pass, keyed by block index.
+ *
+ * Two properties this exists to guarantee, neither of which survives naive per-patch application:
+ *
+ *   1. Offsets stay valid. Replacements change length, so splicing left-to-right shifts every
+ *      later range. Applying in DESCENDING start order means every range still to be written lies
+ *      entirely before the bytes already rewritten. The result does not depend on the order the
+ *      caller supplied patches in.
+ *   2. Overlapping ranges are never both written. A nested <li> is contained in its enclosing
+ *      <li>; writing both would have the outer replacement swallow the inner one. The innermost
+ *      wins — it is the more specific fix, and it is what issue-to-block assignment picked.
+ *
+ * An index addressing no block is ignored rather than throwing: patches come from a model, and one
+ * hallucinated index should not discard the rest of a good response.
+ */
+export function applyBlockPatches(html: string, patches: ReadonlyMap<number, string>): string {
+  if (patches.size === 0) return html;
+
+  const blocks = extractBlocks(html);
+  const targets = [...patches.entries()]
+    .map(([index, replacement]) => ({ block: blocks[index], replacement }))
+    .filter((t): t is { block: HtmlBlock; replacement: string } => !!t.block)
+    // Descending start: deeper blocks start later, so the innermost of an enclosing pair is seen
+    // first and claims the range. This same order is what makes the splice below safe.
+    .sort((a, b) => b.block.start - a.block.start);
+
+  const accepted: { block: HtmlBlock; replacement: string }[] = [];
+  for (const target of targets) {
+    const overlaps = accepted.some(
+      a => a.block.start < target.block.end && target.block.start < a.block.end,
+    );
+    if (!overlaps) accepted.push(target);
+  }
+
+  let out = html;
+  for (const { block, replacement } of accepted) {
+    out = out.slice(0, block.start) + replacement + out.slice(block.end);
+  }
+  return out;
+}
