@@ -146,6 +146,13 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
   // MONOTONIC — and monotonicity, not cost, is the point. Full regeneration carries no preservation
   // property, so it is free to fix en-GB and break pl-PL. Every error resolved here is one that
   // never reaches the instrument that can regress its neighbours.
+  //
+  // The ladder is monotonic PER FIELD, but that is not the same as monotonic per artifact: a
+  // strategy can resolve the error it was given and, through the value it wrote, create a different
+  // one. So the whole ladder pass is snapshotted and can be rejected wholesale — the same discipline
+  // the full-regen loop below has always had, which the ladder was missing.
+  const preLadder = { artifact, issues, errors: errCount(issues) };
+
   const fieldBudget = opts.maxFieldRepairs ?? 3;
   for (let pass = 0; pass < fieldBudget; pass++) {
     const errs = issues.filter(i => i.severity === 'error');
@@ -174,6 +181,28 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     if (artifact === before) continue; // cursors moved but nothing changed — no need to re-validate
 
     issues = opts.validate(artifact);
+  }
+
+  // ── Reject the ladder's work if it did not improve the artifact ─────────────
+  //
+  // Two ways a pass fails, and the second is invisible to a count:
+  //
+  //   1. More errors than it started with. Straightforward regression.
+  //   2. The same number of errors, but one of the new ones can ONLY be fixed by full
+  //      regeneration. slugify is the concrete path: coercing "Ortur H20!" and "ortur-h20" to the
+  //      same string turns a tier-0-repairable slug-charset into slug-duplicate, which has no
+  //      registered strategy. The count is unchanged and the artifact is strictly worse off — the
+  //      ladder manufactured work for the one instrument it exists to avoid.
+  //
+  // Rejection is wholesale, not per field. A pass is a unit: the fields it wrote are what produced
+  // the new issue set, and unpicking one of them would leave a state that was never validated.
+  const preLadderKeys = new Set(preLadder.issues.map(issueKey));
+  const manufacturedFullRegenWork = issues.some(
+    i => i.severity === 'error' && !preLadderKeys.has(issueKey(i)) && resolveLadder(i)[0] === 'full-regen',
+  );
+  if (errCount(issues) > preLadder.errors || manufacturedFullRegenWork) {
+    artifact = preLadder.artifact;
+    issues = preLadder.issues;
   }
 
   // The ladder's work counts as the shipped state, not as a spent repair: `repairsUsed` tracks full

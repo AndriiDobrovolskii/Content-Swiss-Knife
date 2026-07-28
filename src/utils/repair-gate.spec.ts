@@ -553,6 +553,71 @@ describe('runRepairGate — tiered repair ladder', () => {
     expect(Array.from(shipped.seo_data[0].meta_title).length).toBeLessThanOrEqual(55);
     expect(produce).toHaveBeenCalledTimes(1); // no regeneration was needed or spent
   });
+
+  // ── The ladder must not be allowed to make things worse ──────────────────────
+  //
+  // The full-regen loop below has always had this discipline (strictly better wins, ties keep the
+  // earliest). The ladder had none: whatever it produced became the shipped state unconditionally.
+  // That was survivable while only errors entered the ladder; it is not once warnings do, because
+  // then a purely stylistic pass can ship a worse artifact.
+
+  it('ships the PRE-ladder artifact when the ladder increased the error count', async () => {
+    const original = seoArtifact([], ['Bad Slug!']);
+    const produce = vi.fn().mockResolvedValue(original);
+    const validate = vi.fn()
+      .mockReturnValueOnce([slugIssue(0)])                                   // 1 error going in
+      .mockReturnValueOnce([makeIssue('spec-count-mismatch'), makeIssue('seo-empty')]) // 2 coming out
+      .mockReturnValue([]);
+
+    // maxRepairs 0 so the full-regen loop cannot mask the result — this isolates the ladder.
+    const result = await runRepairGate({
+      label: 'Slugs', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.artifact).toBe(original);            // same reference — the ladder's work was dropped
+    expect(result.finalIssues).toEqual([slugIssue(0)]); // and so were its issues
+  });
+
+  it('ships the PRE-ladder artifact when the ladder traded a repairable error for an unrepairable one', async () => {
+    // The concrete path: slugify coerces "Ortur H20!" and "ortur-h20" to the same string, so a
+    // slug-charset error (ladder-repairable, tier 0) becomes slug-duplicate — which has no
+    // registered strategy and therefore costs a full regeneration. The COUNT is unchanged, so a
+    // plain count guard misses it. What must not happen is the ladder manufacturing work that only
+    // the instrument it exists to avoid can do.
+    const original = seoArtifact([], ['Bad Slug!', 'bad-slug']);
+    const produce = vi.fn().mockResolvedValue(original);
+    const duplicate: ValidationIssue = {
+      severity: 'error', rule: 'slug-duplicate', detail: 'duplicate', context: 'Slug (L1)',
+    };
+    const validate = vi.fn()
+      .mockReturnValueOnce([slugIssue(0)])
+      .mockReturnValueOnce([duplicate])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'Slugs', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.artifact).toBe(original);
+    expect(result.finalIssues).toEqual([slugIssue(0)]);
+  });
+
+  it('keeps the ladder result when it strictly reduced the error count', async () => {
+    // The guard must not fire on the happy path — this is the behaviour every other ladder test
+    // depends on, asserted here directly so a too-eager guard fails loudly.
+    const produce = vi.fn().mockResolvedValue(seoArtifact([], ['Bad Slug!']));
+    const validate = vi.fn().mockReturnValueOnce([slugIssue(0)]).mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'Slugs', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+    });
+
+    expect((result.artifact as ReturnType<typeof seoArtifact>).slugs[0].slug).toBe('bad-slug');
+    expect(result.finalIssues).toEqual([]);
+  });
 });
 
 describe('formatRepairReportMarkdown', () => {
