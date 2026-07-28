@@ -1,7 +1,7 @@
 # Render reconciliation report
 
-**Status:** 1 of 2 artifacts reconciled.
-**PR-3 gate:** ❌ **STILL CLOSED** — one artifact short, and it needs a model change. See §5 and §7.
+**Status:** 2 of 2 artifacts reconciled.
+**PR-3 gate:** ✅ **OPEN** — for the two products it covers. Read §4.2 and §5 before trusting it further.
 
 Generated for PR-2, updated during the reconciliation pass. Read this before reviewing PR-3.
 
@@ -108,7 +108,7 @@ rendering". That relocation is PR-3's work, not PR-2's.
 | Item | Store | Doc authored | Normalized HTML | Tag parity | Visible text | Validator errors |
 |---|---|---|---|---|---|---|
 | `center-3d-print-ortur-h20-20w` | Center 3D Print | ✅ | ✅ | ✅ | ✅ | ✅ 0 |
-| `expert3d-ortur-h20-20w` | EXPERT3D | ❌ blocked | — | — | — | — |
+| `expert3d-ortur-h20-20w` | EXPERT3D | ✅ | ✅ | ✅ | ✅ | ✅ 0 |
 
 Both artifacts are committed under `test/fixtures/corpus/`. `render-reconciliation.spec.ts`
 discovers them and **reports them as pending** on every run rather than passing vacuously.
@@ -154,8 +154,9 @@ and it is the wrong name for what it holds.
 
 ## 5. Open gaps — PR-3 stays blocked
 
-1. **One artifact short.** 1 of 2 reconciled. `expert3d-ortur-h20-20w` is blocked on a model
-   change, not on transcription effort — see §7.
+1. ~~**No hand-authored Docs.**~~ **CLOSED.** 2 of 2 reconciled, all five checks each.
+   What the gate does NOT yet prove is in the remaining items: two artifacts, one product, one
+   locale.
 2. **Corpus is 2 items, not 6**, and both are the same product (Ortur H20 20 W) across two stores.
 3. **No `ProductInput`** for any artifact — `RenderContext` must be reconstructed by hand, or
    recovered from `localStorage` once fresh generations exist.
@@ -206,4 +207,12 @@ is now confirmed by an artifact — `value: string | string[]`, with the array r
 finishing a fixture. It is the same class of change as §5.5 above, and it deserves the same
 treatment: confirm the shape, then extend once.
 
-Until it lands, the gate stays closed at 1 of 2.
+**RESOLVED.** `SpecRow.value` is now `string | string[]`; an array renders as a nested `<ul>`
+inside the cell, exactly as the artifact ships it, and an empty array is rejected rather than
+rendered as a bare `<ul></ul>`. Both stores' conventions are now expressible, and the EXPERT3D
+artifact reconciles.
+
+This is the fourth renderer/model correction the corpus produced — after the §4 slot, the injected
+bullet space, and the ≥1-block rule. All four were invisible to code reading and all four surfaced
+within two artifacts, which is the strongest available argument for growing the corpus before
+PR-3 rather than after.

@@ -66,7 +66,15 @@ export interface Subsection {
 
 export interface SpecRow {
   label: string;
-  value: string;
+  /**
+   * A single value, or several.
+   *
+   * The two shapes are both real accepted output, not a convenience: EXPERT3D writes a
+   * multi-valued parameter as a nested list inside the cell — `<td><ul><li>ORTUR…</li>…</ul></td>`
+   * — while Center 3D Print writes the same information as one slash-separated string. Modelling
+   * only the string form made the EXPERT3D artifact unrenderable.
+   */
+  value: string | string[];
 }
 
 export interface SpecCategory {

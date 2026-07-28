@@ -92,7 +92,16 @@ export const ProductDescriptionDocSchema = z.object({
   packageContents: z.object({ heading: NonEmpty, items: z.array(NonEmpty).min(1) }).optional(),
   specs: z.object({
     heading: NonEmpty,
-    categories: z.array(z.object({ title: NonEmpty, rows: z.array(z.object({ label: NonEmpty, value: NonEmpty })).min(1) })).min(1),
+    categories: z.array(z.object({
+      title: NonEmpty,
+      // A value is one string or a non-empty list of them — see SpecRow. An EMPTY list is rejected
+      // rather than rendered as a bare <ul></ul>: a parameter with no value is a defect, and the
+      // string branch already covers "one value".
+      rows: z.array(z.object({
+        label: NonEmpty,
+        value: z.union([NonEmpty, z.array(NonEmpty).min(1)]),
+      })).min(1),
+    })).min(1),
   }),
   cta: z.object({ heading: NonEmpty, text: Prose }),
 

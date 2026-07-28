@@ -232,7 +232,13 @@ function renderSpecs(heading: string, categories: SpecCategory[]): string {
   for (const c of categories) {
     rowsHtml.push(`<tr><th colspan="2" style="${CATEGORY_HEADER_STYLE}">${esc(c.title)}</th></tr>`);
     for (const r of c.rows) {
-      rowsHtml.push(`<tr><td>${esc(r.label)}</td><td>${esc(r.value)}</td></tr>`);
+      // A multi-valued parameter renders as a nested list inside the cell, exactly as EXPERT3D
+      // ships it — no whitespace between the tags, since that is how the artifact reads and the
+      // renderer has no reason to add any.
+      const value = Array.isArray(r.value)
+        ? `<ul>${r.value.map(v => `<li>${esc(v)}</li>`).join('')}</ul>`
+        : esc(r.value);
+      rowsHtml.push(`<tr><td>${esc(r.label)}</td><td>${value}</td></tr>`);
     }
   }
   return (

@@ -658,3 +658,42 @@ describe('§4 applications — blocks between the heading and the list', () => {
     });
   });
 });
+
+describe('§7 spec values — a parameter may hold several values', () => {
+  // EXPERT3D writes a multi-valued parameter as a nested list inside the cell:
+  //   <td><ul><li>ORTUR (власний застосунок)</li><li>Lightburn</li><li>LaserGRBL</li></ul></td>
+  // Center 3D Print writes the same information as one slash-separated string. Both are real
+  // accepted output; a `value: string` models only the second.
+  function docWithListValue(): ProductDescriptionDoc {
+    const doc = fullDoc();
+    doc.specs.categories[0].rows.push({
+      label: 'Програмне забезпечення',
+      value: ['ORTUR (власний застосунок)', 'Lightburn', 'LaserGRBL'],
+    });
+    return doc;
+  }
+
+  it('renders an array value as a nested list in the cell', () => {
+    expect(render(docWithListValue())).toContain(
+      '<td>Програмне забезпечення</td><td><ul><li>ORTUR (власний застосунок)</li>'
+      + '<li>Lightburn</li><li>LaserGRBL</li></ul></td>',
+    );
+  });
+
+  it('still renders a plain string value as plain text', () => {
+    expect(render(fullDoc())).toContain('<td>Потужність</td><td>20 Вт</td>');
+  });
+
+  it('escapes list entries like any other cell text', () => {
+    const doc = fullDoc();
+    doc.specs.categories[0].rows.push({ label: 'Формат', value: ['<b>A</b> & B'] });
+    expect(render(doc)).toContain('<li>&lt;b&gt;A&lt;/b&gt; &amp; B</li>');
+  });
+
+  it('accepts both shapes in the schema, and rejects an empty list', () => {
+    expect(ProductDescriptionDocSchema.safeParse(docWithListValue()).success).toBe(true);
+    const empty = fullDoc();
+    empty.specs.categories[0].rows.push({ label: 'Порожньо', value: [] });
+    expect(ProductDescriptionDocSchema.safeParse(empty).success).toBe(false);
+  });
+});
