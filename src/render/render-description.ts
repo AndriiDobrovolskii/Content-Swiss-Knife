@@ -155,9 +155,18 @@ function renderVideo(v: VideoEmbed): string {
   );
 }
 
-/** `<li><b>{lead}</b> {text}</li>` — exactly one space, no punctuation added. */
+/**
+ * `<li><b>{lead}</b>{text}</li>` — NO whitespace of the renderer's own between them.
+ *
+ * An earlier revision inserted a single space there. Two corpus artifacts show it cannot: Center
+ * 3D Print writes `<b>Складається за лічені хвилини. </b>Тришарова…`, with the space INSIDE the
+ * bold, while EXPERT3D writes `<b>Гравіювання деревини:</b> гравер…`, with it outside. One
+ * injected space reproduces neither. Whitespace between the label and the sentence is authored
+ * content — it belongs in `lead` or at the head of `text`, wherever the artifact puts it — and a
+ * renderer that guesses is wrong for half its stores.
+ */
 function renderBullets(items: BulletItem[]): string {
-  const lis = items.map(i => `<li><b>${esc(i.lead)}</b> ${prose(i.text)}</li>`).join('\n');
+  const lis = items.map(i => `<li><b>${esc(i.lead)}</b>${prose(i.text)}</li>`).join('\n');
   return `<ul>\n${lis}\n</ul>`;
 }
 
@@ -266,7 +275,8 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
   // <li><b>lead</b> text</li> shape as key benefits, with the model supplying its own punctuation
   // after the scenario label.
   const applicationItems = doc.applications.items
-    .map(i => `<li><b>${esc(i.scenario)}</b> ${prose(i.text)}</li>`)
+    // Same rule as renderBullets: no injected whitespace — see its comment.
+    .map(i => `<li><b>${esc(i.scenario)}</b>${prose(i.text)}</li>`)
     .join('\n');
   parts.push([
     `<h2>${esc(doc.applications.heading)}</h2>`,

@@ -48,13 +48,24 @@ const ApplicationsBlockSchema = z.discriminatedUnion('kind', [
  */
 const LeafSubsectionSchema = z.object({
   heading: NonEmpty,
-  blocks: z.array(BlockSchema).min(1),
+  blocks: z.array(BlockSchema),
 }).strict();
 
-/** Depth 1 — rendered as <h2>; its children render as <h3>. */
+/**
+ * Depth 1 — rendered as <h2>; its children render as <h3>.
+ *
+ * `blocks` may be EMPTY when the section exists only to introduce its <h3> children. A corpus
+ * artifact does exactly that: "Безпечна експлуатація Ortur H20 20 W" carries no prose of its own,
+ * just two subsections. The old `.min(1)` on blocks would have rejected a real, accepted document.
+ * What must never be empty is BOTH at once — a heading with no content under it is a defect, and
+ * the refinement below says so.
+ */
 const SubsectionSchema = LeafSubsectionSchema.extend({
   subsections: z.array(LeafSubsectionSchema).optional(),
-});
+}).refine(
+  s => s.blocks.length > 0 || (s.subsections?.length ?? 0) > 0,
+  { message: 'A subsection needs at least one block or at least one nested subsection.' },
+);
 
 export const ProductDescriptionDocSchema = z.object({
   schemaVersion: z.literal('3.0'),
