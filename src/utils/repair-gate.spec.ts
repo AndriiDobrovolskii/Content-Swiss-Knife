@@ -366,6 +366,195 @@ describe('runRepairGate', () => {
   });
 });
 
+describe('runRepairGate — tiered repair ladder', () => {
+  const seoArtifact = (titles: string[], slugs: string[] = []) => ({
+    site_name: 'Store',
+    seo_data: titles.map((meta_title, i) => ({ language: `L${i}`, meta_title })),
+    slugs: slugs.map((slug, i) => ({ language: `L${i}`, slug })),
+  });
+
+  const titleIssue = (index: number, actual: number): ValidationIssue => ({
+    severity: 'error',
+    rule: 'meta-title-length',
+    detail: `meta_title is ${actual} chars (max 55).`,
+    context: `SEO meta (L${index})`,
+    path: `seo_data[${index}].meta_title`,
+    measured: { actual, limit: 55, unit: 'chars' },
+  });
+
+  const slugIssue = (index: number): ValidationIssue => ({
+    severity: 'error',
+    rule: 'slug-charset',
+    detail: 'bad charset',
+    context: `Slug (L${index})`,
+    path: `slugs[${index}].slug`,
+  });
+
+  it('attempts field-scoped BEFORE deterministic for meta-title-length', async () => {
+    // THE regression guard for the B3/B4 contradiction. A global "all tier 0 first" sweep would
+    // truncate the title before the model ever saw it, making tier 1 unreachable and the ladder
+    // decorative. This test fails against such an implementation.
+    const long = 'Ortur H20 20 W Laser Engraver for Wood Acrylic and Steel | C3D';
+    const repairField = vi.fn().mockResolvedValue('Ortur H20 20 W Laser Engraver | C3D');
+    const produce = vi.fn().mockResolvedValue(seoArtifact([long]));
+    const validate = vi.fn()
+      .mockReturnValueOnce([titleIssue(0, 62)])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata',
+      maxRepairs: 1,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+      repairField,
+    });
+
+    expect(repairField).toHaveBeenCalledTimes(1);
+    const shipped = result.artifact as ReturnType<typeof seoArtifact>;
+    // The LLM's wording survived — NOT a blunt truncation of the original.
+    expect(shipped.seo_data[0].meta_title).toBe('Ortur H20 20 W Laser Engraver | C3D');
+    expect(result.repairsUsed).toBe(0); // no full regeneration was spent
+    expect(produce).toHaveBeenCalledTimes(1);
+  });
+
+  it('escalates to deterministic when the tier-1 result is still too long', async () => {
+    const long = 'A'.repeat(80);
+    // The model returns something still over the limit; the ladder must fall through to truncation.
+    const repairField = vi.fn().mockResolvedValue('B'.repeat(70));
+    const produce = vi.fn().mockResolvedValue(seoArtifact([long]));
+    const validate = vi.fn()
+      .mockReturnValueOnce([titleIssue(0, 80)])
+      .mockReturnValueOnce([titleIssue(0, 70)])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata',
+      maxRepairs: 1,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+      repairField,
+    });
+
+    const shipped = result.artifact as ReturnType<typeof seoArtifact>;
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect(Array.from(shipped.seo_data[0].meta_title).length).toBeLessThanOrEqual(55);
+    expect(shipped.seo_data[0].meta_title.startsWith('B')).toBe(true); // truncated the TIER-1 output
+  });
+
+  it('resolves a tier-0-only rule with zero LLM calls', async () => {
+    const produce = vi.fn().mockResolvedValue(seoArtifact([], ['Bad Slug!']));
+    const repairField = vi.fn();
+    const validate = vi.fn().mockReturnValueOnce([slugIssue(0)]).mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'Slugs', maxRepairs: 2, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    expect(produce).toHaveBeenCalledTimes(1); // no regeneration
+    expect(repairField).not.toHaveBeenCalled(); // no field-scoped call either
+    expect(result.repairsUsed).toBe(0);
+    expect((result.artifact as ReturnType<typeof seoArtifact>).slugs[0].slug).toBe('bad-slug');
+  });
+
+  it('dispatches mixed ladders in one pass by ACTIVE tier, not by tier order', async () => {
+    const repairField = vi.fn().mockResolvedValue('Short title | C3D');
+    const produce = vi.fn().mockResolvedValue(seoArtifact(['X'.repeat(80)], ['Bad Slug!']));
+    const validate = vi.fn()
+      .mockReturnValueOnce([titleIssue(0, 80), slugIssue(0)])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'mixed', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    const shipped = result.artifact as ReturnType<typeof seoArtifact>;
+    expect(shipped.slugs[0].slug).toBe('bad-slug');           // tier 0
+    expect(shipped.seo_data[0].meta_title).toBe('Short title | C3D'); // tier 1
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect(produce).toHaveBeenCalledTimes(1);
+  });
+
+  it('changes exactly one addressed field and leaves every sibling identical', async () => {
+    // Monotonicity — the primary justification for the ladder. Full regeneration has no such
+    // property, which is how it fixes en-GB and breaks pl-PL.
+    const original = seoArtifact(['Y'.repeat(80), 'fine title']);
+    const produce = vi.fn().mockResolvedValue(original);
+    const validate = vi.fn().mockReturnValueOnce([titleIssue(0, 80)]).mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+      repairField: vi.fn().mockResolvedValue('Fixed title'),
+    });
+
+    const shipped = result.artifact as ReturnType<typeof seoArtifact>;
+    expect(shipped.seo_data[0].meta_title).toBe('Fixed title');
+    expect(shipped.seo_data[1]).toBe(original.seo_data[1]); // same reference
+    expect(shipped.site_name).toBe(original.site_name);
+  });
+
+  it('sends a minimal tier-1 payload that shares systemBlocks by reference', async () => {
+    // Cache stability: the shared prefix must be byte-identical, and the full product context must
+    // NOT ride along to correct one string.
+    let seen: PromptPayload | undefined;
+    const repairField = vi.fn().mockImplementation(async (p: PromptPayload) => {
+      seen = p;
+      return 'Short';
+    });
+    const validate = vi.fn().mockReturnValueOnce([titleIssue(0, 80)]).mockReturnValue([]);
+
+    await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce: vi.fn().mockResolvedValue(seoArtifact(['Z'.repeat(80)])),
+      validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    expect(seen!.systemBlocks).toBe(BASE_PAYLOAD.systemBlocks);
+    expect(seen!.userContent).not.toContain(BASE_PAYLOAD.userContent);
+    expect(seen!.userContent).toContain('Limit: 55');
+  });
+
+  it('still spends a full regeneration for an issue with no ladder above full-regen', async () => {
+    const produce = vi.fn()
+      .mockResolvedValueOnce(seoArtifact(['ok']))
+      .mockResolvedValueOnce(seoArtifact(['ok']));
+    const unaddressable = makeIssue('spec-count-mismatch');
+    const validate = vi.fn().mockReturnValueOnce([unaddressable]).mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+      repairField: vi.fn(),
+    });
+
+    expect(produce).toHaveBeenCalledTimes(2); // ladder could not help; tier 2 ran
+    expect(result.repairsUsed).toBe(1);
+  });
+
+  it('falls through to the deterministic rung when no repairField executor is supplied', async () => {
+    // Without an executor the field-scoped rung is unusable, but the ladder must still ADVANCE past
+    // it to its deterministic terminator rather than stalling. maxRepairs is 0 so no full
+    // regeneration can mask the result — this isolates the ladder.
+    const produce = vi.fn().mockResolvedValue(seoArtifact(['W'.repeat(80)]));
+    const validate = vi.fn().mockReturnValueOnce([titleIssue(0, 80)]).mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+    });
+
+    const shipped = result.artifact as ReturnType<typeof seoArtifact>;
+    expect(Array.from(shipped.seo_data[0].meta_title).length).toBeLessThanOrEqual(55);
+    expect(produce).toHaveBeenCalledTimes(1); // no regeneration was needed or spent
+  });
+});
+
 describe('formatRepairReportMarkdown', () => {
   const META = { product: 'Test Product', store: 'Test Store', generatedAt: '2026-07-19T12:00:00.000Z' };
 

@@ -17,6 +17,23 @@ export interface ValidationIssue {
   detail: string;
   /** Which artifact the issue belongs to, e.g. "HTML (UA)" or "SEO meta (uk-UA)". */
   context: string;
+  /**
+   * Machine-addressable location of the offending value, e.g. 'seo_data[2].meta_title'.
+   *
+   * `context` is a HUMAN display string and must never be parsed as an address. This field is what
+   * lets the tiered repair ladder (utils/repair-strategy.ts) replace one field instead of
+   * regenerating a whole artifact. OPTIONAL by design: an issue without `path` resolves to
+   * ['full-regen'], i.e. exactly the behaviour that existed before the ladder — so rules migrate
+   * one at a time and nothing breaks by omission.
+   */
+  path?: string;
+  /**
+   * Structured operands for deterministic repair. NEVER parse these back out of `detail`.
+   *
+   * A tier-0 strategy computes the fix from these numbers; a tier-1 instruction states the exact
+   * surplus to the model, which cannot count for itself.
+   */
+  measured?: { actual: number; limit: number; unit: 'chars' | 'words' | 'items' };
 }
 
 const MAX_META_TITLE = 55;
@@ -588,12 +605,21 @@ export function validateSeoMetadata(seo: SeoResponse | null, currencySymbol: str
     return issues;
   }
 
-  for (const entry of seo.seo_data) {
+  // Indexed so meta-title-length can emit a machine-addressable `path`. The index is the ONLY way
+  // to address the failing entry: `context` carries a language label, which is a display string.
+  for (const [i, entry] of seo.seo_data.entries()) {
     const ctx = `SEO meta (${entry.language || '?'})`;
 
     const titleLen = charLength(entry.meta_title ?? '');
     if (titleLen > MAX_META_TITLE) {
-      issues.push({ severity: 'error', rule: 'meta-title-length', detail: `meta_title is ${titleLen} chars (max ${MAX_META_TITLE}).`, context: ctx });
+      issues.push({
+        severity: 'error',
+        rule: 'meta-title-length',
+        detail: `meta_title is ${titleLen} chars (max ${MAX_META_TITLE}).`,
+        context: ctx,
+        path: `seo_data[${i}].meta_title`,
+        measured: { actual: titleLen, limit: MAX_META_TITLE, unit: 'chars' },
+      });
     }
 
     const desc = entry.meta_description ?? '';
