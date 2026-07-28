@@ -117,3 +117,36 @@ describe('buildPromptA — ToV system-block scoping', () => {
     }
   });
 });
+
+describe('buildPromptA — lists instead of run-on sentences', () => {
+  // Generation-side fix for the one warning class the repair tier could not close. Two runs
+  // showed the model will not split a three-item enumeration on instruction, and a block patch
+  // cannot turn a <p> into a <ul>: rejectPatch requires one element with the same root tag, and
+  // validateStructuralParity counts <li> between the master and its translations. At generation
+  // time neither constraint applies and a list is the natural shape for an enumeration.
+  const taskBlock = (input: ProductInput) => buildPromptA(input).systemBlocks[1].text;
+
+  it('tells the standard schema to list three or more parallel items', () => {
+    const text = taskBlock(inputFor('3DPrinter'));
+    expect(text).toMatch(/three or more parallel items/i);
+    expect(text).toMatch(/<ul>/);
+  });
+
+  it('confines the rule to body prose, away from the hook, the tables and the closing', () => {
+    // Left unbounded this turns a description into bullet soup, and §2/§7 are tables already.
+    const text = taskBlock(inputFor('3DPrinter'));
+    expect(text).toMatch(/§3 and §5/);
+    expect(text).toMatch(/never to the §1 hook/i);
+  });
+
+  it('keeps a figure from losing its lead-in paragraph', () => {
+    // Acceptance criteria require a <p> lead-in directly above every <figure>; without this the
+    // list could take that position.
+    expect(taskBlock(inputFor('3DPrinter'))).toMatch(/<figure>\s*directly after/i);
+  });
+
+  it('does NOT add the rule to consumables, which has no §3 or §5', () => {
+    const consumables = { ...inputFor('3DPrinter'), templateId: 'consumables-resin' };
+    expect(taskBlock(consumables)).not.toMatch(/three or more parallel items/i);
+  });
+});
