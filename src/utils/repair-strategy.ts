@@ -140,10 +140,17 @@ export function slugify(text: string): string | null {
 
 // ── Registry ───────────────────────────────────────────────────────────────────
 //
-// Exactly two rules, chosen as the two ends of the design space. Deliberately EXCLUDED:
-// sentence-too-long, terminology rules, tone rules, specs-grounding — all genuine prose-quality
-// judgements. Tier 1 may suit them later, but each needs its own argument and none should be added
-// by analogy to these two.
+// Nothing is added here by analogy. Each rule needs its own argument for why a cheap instrument
+// can satisfy its constraint, and sentence-too-long earned its block rung by that route.
+//
+// spec-row-not-grounded is DELIBERATELY ABSENT, and it was registered once and removed. Repair is
+// only worth attaching to a finding that is TRUE, and this one is not reliably true: it grounds a
+// §7 label by stem-matching against a SECOND, independent translation of the same English
+// parameter, so "Alarm Method" rendered as "Спосіб сповіщення" in the table and something else in
+// the grounding source counts as unsupported. A real run shipped a §7 table with 15 correct rows
+// and one flagged, and WHICH one changed between runs. Repairing on that means instructing the
+// model to rename a correctly named row — worse than leaving it alone. Terminology and tone rules
+// stay out for the older reason: they are genuine prose-quality judgements.
 
 export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<string, RepairStrategy>([
   [
@@ -205,25 +212,6 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
       // Not three: a sentence that survives two explicit instructions is one the instruction
       // cannot break, and it should reach the report honestly rather than burn a third call.
       ladder: ['block-scoped', 'block-scoped'],
-    },
-  ],
-  [
-    'spec-row-not-grounded',
-    {
-      // The rule's own text asks for "KEEP the row and correct only its label to match" — a
-      // rename, which is exactly a block rewrite of one <td>. It used to cost a full
-      // regeneration: the instrument that once deleted 8 of 15 live rows on this very check.
-      //
-      // The recurring case is a label that drifted between two independent translations of the
-      // same English parameter ("Child Lock" -> "Дитячий замок" in the grounding source,
-      // "Блокування від дітей" in the table). The validator is right that they differ; only the
-      // remedy was wrong.
-      //
-      // One rung, not two: unlike a sentence, a label either corresponds to an allowed parameter
-      // or it does not, and a second guess at the same wording adds nothing. Being an ERROR, the
-      // full-regen terminator is appended automatically, so behaviour degrades to exactly what it
-      // is today when the rename does not land.
-      ladder: ['block-scoped'],
     },
   ],
 ]);
