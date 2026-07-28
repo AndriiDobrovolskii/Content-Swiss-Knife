@@ -377,35 +377,50 @@ export interface SentenceLengthBand {
  * deliberately does not restate the looser one.
  */
 export const SENTENCE_LENGTH_BANDS: Record<string, SentenceLengthBand> = {
+  // BODY upper bounds are held at ~0.72 x ceiling. That ratio is not arbitrary: en-GB/en-ES already
+  // sat there and never produced a sentence-too-long warning, while uk-UA (0.80) and de-DE (0.83)
+  // were the tightest and were exactly where real generations overshot — 21/22/22 words against the
+  // uk-UA ceiling of 20 (Ortur H20 20 W, Center 3D Print, 2026-07-27). The model cannot count its
+  // own words, so the target must sit far enough below the ceiling that a normal overshoot still
+  // lands under it. Same doctrine as task-a.ts's consumables rule ("AIM LOW (~2100) to leave
+  // headroom; budget words, do not measure").
+  //
+  // Ceilings are acceptance criteria and deliberately NOT moved — lowering one would hide the
+  // problem rather than fix it. hero/faq are untouched: both already carry far more headroom and
+  // neither produced a violation.
   'en-gb': { hero: [9, 14], body: [15, 18], faq: [10, 15], ceiling: 25 },
   'en-es': { hero: [9, 14], body: [15, 18], faq: [10, 15], ceiling: 25 },
-  'en-us': { hero: [8, 12], body: [14, 17], faq: [9, 14], ceiling: 22 },
-  'de-de': { hero: [8, 12], body: [12, 15], faq: [8, 13], ceiling: 18 },
-  'es-es': { hero: [10, 15], body: [16, 20], faq: [12, 16], ceiling: 27 },
-  'es-mx': { hero: [9, 13], body: [14, 18], faq: [10, 15], ceiling: 24 },
-  'pl-pl': { hero: [8, 13], body: [13, 17], faq: [10, 15], ceiling: 22 },
-  'uk-ua': { hero: [8, 12], body: [12, 16], faq: [9, 14], ceiling: 20 },
-  'ru-ua': { hero: [8, 12], body: [12, 16], faq: [9, 14], ceiling: 20 },
+  'en-us': { hero: [8, 12], body: [14, 16], faq: [9, 14], ceiling: 22 },
+  'de-de': { hero: [8, 12], body: [11, 13], faq: [8, 13], ceiling: 18 },
+  'es-es': { hero: [10, 15], body: [15, 19], faq: [12, 16], ceiling: 27 },
+  'es-mx': { hero: [9, 13], body: [14, 17], faq: [10, 15], ceiling: 24 },
+  'pl-pl': { hero: [8, 13], body: [13, 16], faq: [10, 15], ceiling: 22 },
+  'uk-ua': { hero: [8, 12], body: [12, 14], faq: [9, 14], ceiling: 20 },
+  'ru-ua': { hero: [8, 12], body: [12, 14], faq: [9, 14], ceiling: 20 },
 };
 
 export const SENTENCE_LENGTH_RULES = `[SENTENCE LENGTH — by locale, applies everywhere, every language version]
-Write to a words-per-sentence budget calibrated for the TARGET language. Values are averages across
-the section; never exceed the hard ceiling for any single sentence. Vary length for rhythm (mix
-short and medium) — do NOT make every sentence the same length.
+Write to a words-per-sentence budget calibrated for the TARGET language. The range is a PER-SENTENCE
+target, not a section average: you cannot count your own words, so aim at the MIDDLE of the band and
+treat the ceiling as a hard failure threshold you never approach. Vary length for rhythm (mix short
+and medium) — do NOT make every sentence the same length.
 Sections: HERO = opening/intro paragraph · BODY = feature→benefit + technical-explanation prose ·
 FAQ = the FIRST sentence of every answer (supporting sentences may sit at the BODY band).
                     HERO     BODY      FAQ-1st   ceiling
 - en-GB / en-ES:    9–14     15–18     10–15     25
-- en-US:            8–12     14–17     9–14      22
-- de-DE:            8–12     12–15     8–13      18   (compounds + Satzklammer — keep shortest)
-- es-ES:            10–15    16–20     12–16     27   (Romance expansion — highest budget)
-- es-MX:            9–13     14–18     10–15     24
-- pl-PL:            8–13     13–17     10–15     22
-- uk-UA / ru-UA:    8–12     12–16     9–14      20   (no articles, long words — split long clauses)
+- en-US:            8–12     14–16     9–14      22
+- de-DE:            8–12     11–13     8–13      18   (compounds + Satzklammer — keep shortest)
+- es-ES:            10–15    15–19     12–16     27   (Romance expansion — highest budget)
+- es-MX:            9–13     14–17     10–15     24
+- pl-PL:            8–13     13–16     10–15     22
+- uk-UA / ru-UA:    8–12     12–14     9–14      20   (no articles, long words — split long clauses)
 UNIVERSAL (all locales): one idea per sentence; open each section AND each FAQ answer with a
 complete, self-contained statement (answer-first); front-load subject + key attribute (product +
 spec) at the sentence start; anchor technical sentences on a concrete figure. Avoid nested/
 subordinate pile-ups (uk/ru дієприслівникові звороти; de Schachtelsätze).
+NEVER run an enumeration of 3+ items into a single sentence — split it across sentences, or emit it
+as <ul><li>. This governs the §9 trust points specifically: state them as separate sentences, never
+as one comma chain. A run-in list is the most common way a sentence silently passes the ceiling.
 [ON TRANSLATION] "Preserve structure" governs HTML only (sections, classes, <hr>) — NOT sentence
 boundaries. If a source English sentence would exceed the TARGET band, SPLIT it; if the target
 language is terser, you may MERGE. Re-fit to the target band instead of mirroring English sentence
