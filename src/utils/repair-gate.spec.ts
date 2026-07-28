@@ -746,6 +746,43 @@ describe('runRepairGate — tiered repair ladder', () => {
     expect(repairBlocks).toHaveBeenCalledTimes(2); // the two ladder rungs, and no more
   });
 
+  it('does not destroy a paid-for artifact when a registered rule carries a malformed path', async () => {
+    // parsePath throws by design, and the intent — fail loudly rather than look like "nothing to
+    // fix" — is right. What was wrong is the price: the exception went through runRepairGate and
+    // out of generate(), taking an artifact that had already been generated and paid for. Loud
+    // must mean "this issue is not patchable", not "lose the work".
+    const artifact = seoArtifact(['W'.repeat(80)]);
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const malformed: ValidationIssue = { ...titleIssue(0, 80), path: 'seo_data.meta_title' };
+    const validate = vi.fn().mockReturnValue([malformed]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+      repairField: vi.fn().mockResolvedValue('Short'),
+    });
+
+    expect(result.artifact).toBe(artifact);
+    expect(result.finalIssues).toEqual([malformed]);
+  });
+
+  it('escalates a malformed path to full-regen instead of retrying it', async () => {
+    const produce = vi.fn()
+      .mockResolvedValueOnce(seoArtifact(['W'.repeat(80)]))
+      .mockResolvedValueOnce(seoArtifact(['ok']));
+    const malformed: ValidationIssue = { ...titleIssue(0, 80), path: 'seo_data.meta_title' };
+    const validate = vi.fn().mockReturnValueOnce([malformed]).mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+      repairField: vi.fn(),
+    });
+
+    expect(produce).toHaveBeenCalledTimes(2); // the ladder gave up, tier 2 ran
+    expect(result.repairsUsed).toBe(1);
+  });
+
   // ── The ladder must not be allowed to make things worse ──────────────────────
   //
   // The full-regen loop below has always had this discipline (strictly better wins, ties keep the

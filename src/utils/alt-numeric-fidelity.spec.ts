@@ -147,3 +147,38 @@ describe('sourceNumbers', () => {
     expect(nums('300-400 мм')).toEqual(['300', '400']);
   });
 });
+
+describe('alt numbers: the product name is not a claim', () => {
+  const run = (alt: string) => validateAltNumericFidelity(figure(alt), SPECS, 'HTML (base)');
+
+  it('does not read "H20 20 Вт" as a claim of 2020', () => {
+    // The regression this run produced. sourceNumbers was fixed last iteration and the commit
+    // claimed the alt side was covered too — it was not: the alt side reads NUMBER_WITH_UNIT,
+    // a second regex with the same whitespace-spanning flaw. A correct alt was reported as
+    // inventing a figure, and the false error cost a full regeneration.
+    expect(run('Лазерний модуль Ortur H20 20 Вт')).toEqual([]);
+  });
+
+  it('still fails a genuinely invented wattage next to the model name', () => {
+    // The guard must not be blunted: 40 Вт is nowhere in the specs.
+    expect(run('Лазерний модуль Ortur H20 40 Вт')).toHaveLength(1);
+  });
+
+  it('handles the unit forms the pipeline actually produces', () => {
+    const NBSP = String.fromCharCode(0xa0);
+    expect(run(`Швидкість 20000${NBSP}мм/хв`)).toEqual([]);   // NBSP, as fixNumberFormatting writes it
+    expect(run('Швидкість 20000мм/хв')).toEqual([]);          // no space before the unit
+    expect(run('Точність 0,05 мм')).toEqual([]);              // decimal comma
+    expect(run('Вага 12,5 кг')).toEqual([]);                  // decimal comma, second unit
+  });
+
+  it('treats a thousands group as one figure, not two', () => {
+    const grouped = 'Швидкість гравіювання | 20 000 мм/хв';
+    expect(validateAltNumericFidelity(figure('Швидкість 20 000 мм/хв'), grouped, 'HTML (base)')).toEqual([]);
+  });
+
+  it('reads a range as two figures, both of which must be grounded', () => {
+    const src = 'Робоча температура | 20-25 °C';
+    expect(validateAltNumericFidelity(figure('Робоча температура 20-25 °C'), src, 'HTML (base)')).toEqual([]);
+  });
+});

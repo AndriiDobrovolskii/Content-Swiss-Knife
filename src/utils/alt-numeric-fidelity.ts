@@ -53,13 +53,38 @@ const UNIT_ALTERNATION = [...UNIT_TOKENS]
   .join('|');
 
 /**
+ * How one number may continue past its first digits: a decimal part, or a thousands group.
+ *
+ * Whitespace continues a number ONLY when exactly three digits follow — the shape of a thousands
+ * group. Without that condition "Ortur H20 20 Вт" matched as the single token "20 20" and
+ * canonicalised to a phantom 2020, so a correct alt was reported as inventing a figure and a
+ * correct block patch was rejected for "dropping" one. The whitespace class is a RUN because
+ * HTML-derived text carries doubled spaces; \s already covers U+00A0 and U+202F, but they are
+ * spelled out so the intent survives the next reader.
+ *
+ * SHARED BY BOTH REGEXES BELOW ON PURPOSE. They were two near-copies, and fixing one of them last
+ * iteration left the other broken — which is exactly the bug this run surfaced.
+ */
+const NUMBER_CONTINUATION = String.raw`(?:[.,]\d+|[\s\u00A0\u202F]+\d{3}(?!\d))`;
+
+/** Digits of one number, sign excluded. A lone digit counts. */
+const NUMBER_BODY = String.raw`\d+${NUMBER_CONTINUATION}*`;
+
+/**
+ * Same, but never a lone digit — see the MINIMUM 2 DIGITS note on NUMBER_WITH_UNIT. Either the
+ * number continues (so it spans at least three characters) or it has two or more leading digits.
+ * Written this way rather than `\d{2,}` alone so "1,75" still matches from its first digit.
+ */
+const MULTI_DIGIT_NUMBER_BODY = String.raw`(?:\d+${NUMBER_CONTINUATION}+|\d{2,})`;
+
+/**
  * MINIMUM 2 DIGITS, matching specs-grounding.ts's extractNumberTokens. A single digit collides
  * far too easily ("3 mm" appears in half of all application prose), and this is a HARD gate — a
  * false positive costs a repair cycle on correct text. The reported defect class ("40 Вт" on a
  * 20 W product) is comfortably above that floor. Documented limitation, not an oversight.
  */
 const NUMBER_WITH_UNIT = new RegExp(
-  `(\\d[\\d\\s\\u00A0\\u202F.,]*\\d|\\d{2,})\\s*(?:${UNIT_ALTERNATION})(?![\\p{L}])`,
+  `(${MULTI_DIGIT_NUMBER_BODY})\\s*(?:${UNIT_ALTERNATION})(?![\\p{L}])`,
   'giu',
 );
 
@@ -97,7 +122,7 @@ function canonicalNumber(raw: string): string {
  * as a sign would trade the noise this removes for new noise. Keeping the sign where it IS one
  * matters: without it a rewrite that quietly dropped the minus from "-20 °C" would compare equal.
  */
-const NUMBER_TOKEN = /(?:(?<![\d\p{L}])[-−])?\d+(?:[.,]\d+|\s+\d{3}(?!\d))*/gu;
+const NUMBER_TOKEN = new RegExp(String.raw`(?:(?<![\d\p{L}])[-−])?${NUMBER_BODY}`, 'gu');
 
 /**
  * Every number in a source text, canonicalized — units deliberately ignored (see below).

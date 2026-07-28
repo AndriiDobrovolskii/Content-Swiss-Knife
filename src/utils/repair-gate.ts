@@ -151,6 +151,11 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     ladderCursor.set(cursorKey(issue), (ladderCursor.get(cursorKey(issue)) ?? 0) + 1);
     cursorMoves++;
   };
+  /** Burns the rest of an issue's ladder, so activeTier resolves it to 'full-regen' from now on. */
+  const exhaust = (issue: ValidationIssue) => {
+    ladderCursor.set(cursorKey(issue), resolveLadder(issue).length);
+    cursorMoves++;
+  };
 
   /**
    * Runs every issue currently sitting on `tier`, replacing exactly one addressed field per issue.
@@ -165,22 +170,38 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     let next = current;
     for (const { issue, tier: planned } of plan) {
       if (planned !== tier || !issue.path) continue;
-      const strategy = REPAIR_STRATEGIES.get(issue.rule);
-      const value = getAtPath(next, issue.path);
-      if (!strategy || typeof value !== 'string') { advance(issue); continue; }
+      try {
+        const strategy = REPAIR_STRATEGIES.get(issue.rule);
+        const value = getAtPath(next, issue.path);
+        if (!strategy || typeof value !== 'string') { advance(issue); continue; }
 
-      let replacement: string | null = null;
-      if (tier === 'deterministic' && strategy.deterministic) {
-        replacement = strategy.deterministic(value, issue);
-      } else if (tier === 'field-scoped' && strategy.fieldInstruction && opts.repairField) {
-        const instruction = strategy.fieldInstruction(value, issue);
-        replacement = (await opts.repairField(repairFieldPayload(opts.basePayload, instruction)))?.trim() || null;
+        let replacement: string | null = null;
+        if (tier === 'deterministic' && strategy.deterministic) {
+          replacement = strategy.deterministic(value, issue);
+        } else if (tier === 'field-scoped' && strategy.fieldInstruction && opts.repairField) {
+          const instruction = strategy.fieldInstruction(value, issue);
+          replacement = (await opts.repairField(repairFieldPayload(opts.basePayload, instruction)))?.trim() || null;
+        }
+
+        // Always advance: a rung is spent whether or not it worked. Repeating it would loop forever
+        // on a strategy that cannot satisfy the constraint.
+        advance(issue);
+        if (replacement !== null && replacement !== value) next = setAtPath(next, issue.path, replacement);
+      } catch (err) {
+        // getAtPath/setAtPath throw on a path they cannot resolve, and that intent is right: a
+        // malformed path is a bug in a strategy or an emission site, and it stays loud here.
+        //
+        // What was wrong is the price. The exception used to travel out of runRepairGate and out of
+        // generate(), destroying an artifact that had already been generated and paid for. "Loud"
+        // has to mean "this issue is not patchable — use the expensive instrument", not "lose the
+        // work". Exhausting the ladder resolves it to full-regen from here on.
+        console.error(
+          `[repair-gate] ${opts.label}: cannot address "${issue.path}" for rule "${issue.rule}" — ` +
+          'falling back to full regeneration for this issue.',
+          err,
+        );
+        exhaust(issue);
       }
-
-      // Always advance: a rung is spent whether or not it worked. Repeating it would loop forever
-      // on a strategy that cannot satisfy the constraint.
-      advance(issue);
-      if (replacement !== null && replacement !== value) next = setAtPath(next, issue.path, replacement);
     }
     return next;
   };
