@@ -147,3 +147,43 @@ describe('validateSentenceLength — machine-addressable output', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 });
+
+describe('validateSentenceLength — sentence boundaries', () => {
+  it('splits after a metric unit, instead of gluing two sentences into one', () => {
+    // The 37-word finding from the second real run was two correct sentences glued together:
+    // ABBREVIATIONS held "мм", so the period after "300 мм" was read as an abbreviation dot. The
+    // model had already split the sentence properly and the validator merged it back — it could
+    // not win, and the block burned a second rung for nothing.
+    const first = 'Ortur H20 20 Вт це діодний лазерний верстат із закритим корпусом та робочою зоною 420 × 300 мм.';
+    const second = 'Лазерна головка з ручним фокусуванням переміщується над столом зі швидкістю до 20000 мм/хв.';
+    expect(run(p(`${first} ${second}`))).toEqual([]);
+  });
+
+  it('does not read a word ENDING in an abbreviation as one', () => {
+    // head.endsWith('ст') matched "міст", "лист", "хвіст"; 'ін' matched "магазин". A far wider
+    // class of false merges than the units.
+    // Each half must sit under the ceiling while the merged pair clearly exceeds it — otherwise
+    // the test passes whether or not the split happens, and proves nothing.
+    const first = 'Через усю робочу зону верстата проходить довгий та жорсткий алюмінієвий міст.';
+    const second = 'Далі стоїть блок керування з окремим кабелем живлення та власним запобіжником.';
+    expect(countWords(first)).toBeLessThan(20);
+    expect(countWords(second)).toBeLessThan(20);
+    expect(countWords(`${first} ${second}`)).toBeGreaterThan(20);
+    expect(run(p(`${first} ${second}`))).toEqual([]);
+  });
+
+  it('still refuses to split on a genuine abbreviation', () => {
+    // The guard has to keep working for what it was written for.
+    const glued = 'Верстат ріже дерево, акрил, шкіру та ін. Матеріали підбирає оператор за таблицею '
+      + 'потужності, швидкості та кількості проходів для кожного окремого типу заготовки.';
+    expect(run(p(glued)).length).toBe(1);
+  });
+
+  it('still does not split when the next word is lowercase', () => {
+    // "5 мм. і далі" — the uppercase requirement in SENTENCE_BREAK already covers this, which is
+    // why dropping the units from the list is safe.
+    const glued = 'Товщина матеріалу становить 5 мм. і залежить від обраного режиму роботи верстата '
+      + 'та від того, скільки проходів оператор задає для конкретної заготовки.';
+    expect(run(p(glued)).length).toBe(1);
+  });
+});

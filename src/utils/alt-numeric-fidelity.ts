@@ -85,6 +85,21 @@ function canonicalNumber(raw: string): string {
 }
 
 /**
+ * One number token.
+ *
+ * Whitespace continues a number ONLY when exactly three digits follow it — the shape of a
+ * thousands group. Without that condition the run "H20 20 Вт" matched as a single token "20 20"
+ * and canonicalised to a phantom 2020; rewriting the phrase legitimately made the phantom vanish,
+ * and block-repair rejected a correct patch for "dropping" a figure that never existed. The
+ * whitespace class is a RUN, not one character, because HTML-derived text carries doubled spaces.
+ *
+ * A leading minus counts only at a word boundary. "300-400 mm" is a range, and reading its hyphen
+ * as a sign would trade the noise this removes for new noise. Keeping the sign where it IS one
+ * matters: without it a rewrite that quietly dropped the minus from "-20 °C" would compare equal.
+ */
+const NUMBER_TOKEN = /(?:(?<![\d\p{L}])[-−])?\d+(?:[.,]\d+|\s+\d{3}(?!\d))*/gu;
+
+/**
  * Every number in a source text, canonicalized — units deliberately ignored (see below).
  *
  * Exported for block-repair.ts, which compares the numbers in a block before and after a local
@@ -92,7 +107,7 @@ function canonicalNumber(raw: string): string {
  * "1 234,5" and "1234.5" are the same figure.
  */
 export function sourceNumbers(text: string): Set<string> {
-  const found = (text.match(/\d[\d\s  .,]*\d|\d/g) ?? []).map(canonicalNumber);
+  const found = (text.match(NUMBER_TOKEN) ?? []).map(canonicalNumber);
   return new Set(found.filter(Boolean));
 }
 

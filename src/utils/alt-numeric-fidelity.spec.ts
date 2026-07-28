@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateAltNumericFidelity } from './alt-numeric-fidelity';
+import { validateAltNumericFidelity, sourceNumbers } from './alt-numeric-fidelity';
 
 const SPECS = [
   'Потужність лазера | 20 Вт',
@@ -100,5 +100,50 @@ describe('validateAltNumericFidelity', () => {
     it('does not crash on an empty alt', () => {
       expect(validateAltNumericFidelity(figure(''), SPECS, 'x')).toEqual([]);
     });
+  });
+});
+
+
+describe('sourceNumbers', () => {
+  const nums = (text: string) => [...sourceNumbers(text)];
+
+  it('does NOT merge two separate numbers across a space', () => {
+    // The defect that threw away two correct block patches: "Ortur H20 20 Вт" matched as one
+    // token "20 20" and canonicalised to a phantom 2020. Rewriting the phrase legitimately made
+    // the phantom vanish, and the patch was rejected for "dropping" a number that never existed.
+    expect(nums('Ortur H20 20 Вт')).toEqual(['20']);
+    expect(nums('Ortur H20 потужністю 20 Вт')).toEqual(['20']);
+  });
+
+  it('does not merge across a RUN of spaces either', () => {
+    // HTML-derived text can carry doubled whitespace; the grouping rule must not depend on there
+    // being exactly one space.
+    expect(nums('H20  20 Вт')).toEqual(['20']);
+  });
+
+  it('still groups thousands, with one space or several', () => {
+    expect(nums('20 000 мм/хв')).toEqual(['20000']);
+    expect(nums('20  000 мм/хв')).toEqual(['20000']);
+  });
+
+  it('keeps decimal and mixed grouping intact', () => {
+    expect(nums('1 234,5')).toEqual(['1234.5']);
+    expect(nums('1.234,5')).toEqual(['1234.5']);
+    expect(nums('1,75 мм')).toEqual(['1.75']);
+  });
+
+  it('treats a dimension chain as separate figures', () => {
+    expect(nums('420 × 300 мм')).toEqual(['420', '300']);
+  });
+
+  it('keeps a leading minus that sits on a word boundary', () => {
+    // Without the sign, a patch that quietly dropped it would compare equal and be accepted.
+    expect(nums('Зберігання за -20 °C')).toEqual(['-20']);
+  });
+
+  it('does NOT read a hyphen between two numbers as a sign', () => {
+    // "300-400 мм" is a range, not 300 and minus 400. Reading it as a sign would replace the
+    // noise this fix removes with new noise.
+    expect(nums('300-400 мм')).toEqual(['300', '400']);
   });
 });
