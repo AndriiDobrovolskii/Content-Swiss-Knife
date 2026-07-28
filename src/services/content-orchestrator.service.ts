@@ -36,6 +36,7 @@ import { buildImageAltPrompt } from '../prompts/image-alt';
 import { buildCopywriterPrompt } from '../prompts/copywriter';
 import { SlugResponse, SeoResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta } from '../utils/repair-gate';
+import { createBlockRepairExecutor } from '../utils/block-tier';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
@@ -84,6 +85,31 @@ export class ContentOrchestratorService {
   private approvedSlugKey = signal<string | null>(null);
   private slugKey(input: ProductInput): string {
     return `${input.website.name}::${input.name.trim()}`;
+  }
+
+  /**
+   * The block-scoped repair rung for one locale.
+   *
+   * Always the fast model and never extended thinking: the task is rewriting one paragraph against
+   * an explicit instruction, not composing anything. Deep Thinking governs generation, not repair.
+   */
+  private blockRepairer(locale: string, taskLabel: string, input: ProductInput) {
+    return createBlockRepairExecutor({
+      generate: payload => this.llm.generateText(payload, false, {
+        taskLabel: `Block repair — ${taskLabel}`,
+        productName: input.name,
+        store: input.website.name,
+        lang: locale,
+      }),
+      languageLabel: `${isoToHumanLang(locale)} (${locale})`,
+      onResult: summary => {
+        if (summary.applied === 0 && summary.rejected === 0) return;
+        console.info(
+          `[block-repair] ${taskLabel}: ${summary.applied} applied, ${summary.rejected} rejected`,
+          summary.rejections,
+        );
+      },
+    });
   }
 
   /**
@@ -243,6 +269,10 @@ export class ContentOrchestratorService {
           }] : []),
         ],
         withFeedback: appendRepairFeedback,
+        // Block-scoped rung. Runs BEFORE any full regeneration and is the only instrument a
+        // warning can reach — see resolveLadder. Wired here rather than after the gate so a
+        // translation inherits already-repaired prose from the master.
+        repairBlocks: this.blockRepairer('uk-UA', 'HTML (base)', input),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
@@ -358,6 +388,10 @@ export class ContentOrchestratorService {
             ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
           ],
           withFeedback: appendRepairFeedback,
+          // Safe against structural parity: validateStructuralParity counts tags, and a rewrite
+          // inside one block changes no tag count — rejectPatch refuses any patch that is not
+          // exactly one element with the original's tag and attributes.
+          repairBlocks: this.blockRepairer(locale, `HTML (${lang})`, input),
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing ${lang} translation (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
@@ -536,6 +570,10 @@ export class ContentOrchestratorService {
           }] : []),
         ],
         withFeedback: appendRepairFeedback,
+        // Same rung as generate()'s master gate — this standalone path runs the same validators,
+        // so leaving it out would make sentence-too-long repairable in one entry point and merely
+        // reported in the other.
+        repairBlocks: this.blockRepairer(UA_ISO, 'HTML (uk-UA)', input),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
