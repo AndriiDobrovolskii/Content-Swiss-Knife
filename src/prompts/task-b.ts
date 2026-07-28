@@ -62,40 +62,43 @@ Do NOT invent prices, discounts, currency values, or availability — not provid
 those are emitted separately via Schema.org Offer. Never fabricate numbers not given in the input.
 
 — PER-LOCALE BUDGETS (grapheme counts) —
-German runs 20–30% longer; Cyrillic renders wider than Latin — budgets reflect this.
-  en-GB, en-US, en-ES : Title ≤ 60 | Desc ≤ 150
-  es-ES, es-MX        : Title ≤ 60 | Desc ≤ 150
-  pl-PL               : Title ≤ 60 | Desc ≤ 150
-  uk-UA, ru-UA        : Title ≤ 55 | Desc ≤ 150
-  de-DE               : Title ≤ 50 | Desc ≤ 150
-  (any other locale)  : Title ≤ 55 | Desc ≤ 150
+German runs 20–30% longer; Cyrillic renders wider than Latin — the de-DE budget reflects this.
+These budgets sit BELOW the hard acceptance limit on purpose. You cannot count your own characters,
+so AIM LOW and let the cascade degrade early; a title at the budget still has room to spare, while a
+title written to the limit fails. Never treat a budget as a target to fill.
+  en-GB, en-US, en-ES : Title ≤ 48 | Desc ≤ 150
+  es-ES, es-MX        : Title ≤ 48 | Desc ≤ 150
+  pl-PL               : Title ≤ 48 | Desc ≤ 150
+  uk-UA, ru-UA        : Title ≤ 48 | Desc ≤ 150
+  de-DE               : Title ≤ 45 | Desc ≤ 150
+  (any other locale)  : Title ≤ 48 | Desc ≤ 150
 Count graphemes BEFORE returning. If over budget: apply title cascade; shorten description
 Hook/Spec — never cut the front-loaded keyword + USP.
 
 — FEW-SHOT ANCHORS —
 "StoreName" below is a placeholder — always substitute the exact [Site Suffix] from [INPUT DATA].
 
-ANCHOR 1 — short product → step 1 full form (en-US, budget 60 / 150):
+ANCHOR 1 — short product → step 1 full form (en-US, budget 48 / 150):
   H1:               "Creality K1 Max"
-  meta_title:       "Creality K1 Max - 600mm/s CoreXY 3D Printer | StoreName"     [55 ✓ step 1]
+  meta_title:       "Creality K1 Max - 600mm/s CoreXY | StoreName"                [44 ✓ step 1]
   meta_description: "Print large parts fast: Creality K1 Max, 300×300×300mm build, 600mm/s speed, AI lidar camera included. Order now ➔"  [114 ✓ mobile-safe]
 
-ANCHOR 2 — medium product → step 2, suffix kept (en-US, budget 60):
-  H1:               "Bambu Lab PETG Translucent Orange 1.75mm 1kg"                [44]
-  step 1 attempt:   "Bambu Lab PETG Translucent Orange 1.75mm 1kg - AMS Filament | StoreName"  → 70 > 60 ✗
-  step 2 result:    "Bambu Lab PETG Translucent Orange 1.75mm 1kg | StoreName"     [55 ✓ suffix kept]
+ANCHOR 2 — medium product → step 2, suffix kept (en-US, budget 48):
+  H1:               "Bambu Lab PETG Orange 1kg"                                   [25]
+  step 1 attempt:   "Bambu Lab PETG Orange 1kg - AMS Filament | StoreName"       → 52 > 48 ✗
+  step 2 result:    "Bambu Lab PETG Orange 1kg | StoreName"                       [37 ✓ suffix kept]
   meta_description: "Get crystal-clear PETG parts fast: Bambu Lab PETG Translucent Orange, 1.75mm ±0.03mm, 1kg, RFID chip for AMS. Order now ➔"  [121 ✓ CTA from char 110]
 
-ANCHOR 3 — same product → step 3, bare core (de-DE, budget 50):
+ANCHOR 3 — long product → step 3, bare core (de-DE, budget 45):
   H1:               "Bambu Lab PETG Translucent Orange 1.75mm 1kg"                [44]
-  step 2 attempt:   "Bambu Lab PETG Translucent Orange 1.75mm 1kg | StoreName"   → 55 > 50 ✗
+  step 2 attempt:   "Bambu Lab PETG Translucent Orange 1.75mm 1kg | StoreName"   → 56 > 45 ✗
   step 3 result:    "Bambu Lab PETG Translucent Orange 1.75mm 1kg"                [44 ✓ bare core]
   meta_description: "Drucken Sie transparente Bauteile mit Bambu Lab PETG Translucent Orange: 1,75mm ±0,03mm, 1kg, RFID-Chip für AMS. Jetzt bestellen ➔"  [130 ✓ CTA from char 113]
 
-ANCHOR 4 — localized name as core (uk-UA, budget 55): localized name PROVIDED = category-first.
-  Localized name: "Сопло Bambu Lab загартована сталь 0,4 мм"
-  h1:               "Сопло Bambu Lab загартована сталь 0,4 мм"                    [verbatim — NOT re-ordered to brand-first, NOT re-translated]
-  meta_title:       "Сопло Bambu Lab загартована сталь 0,4 мм | StoreName"        [≈52 ✓ step 2, suffix kept]
+ANCHOR 4 — localized name as core (uk-UA, budget 48): localized name PROVIDED = category-first.
+  Localized name: "Сопло Bambu Lab 0,4 мм"
+  h1:               "Сопло Bambu Lab 0,4 мм"                                      [verbatim — NOT re-ordered to brand-first, NOT re-translated]
+  meta_title:       "Сопло Bambu Lab 0,4 мм | StoreName"                          [34 ✓ step 2, suffix kept]
   meta_description: "Друкуйте точні деталі: сопло Bambu Lab із загартованої сталі 0,4 мм, підвищена зносостійкість. Замовте зараз ➔"
   Note: the core is the localized name UNCHANGED; the cascade only appends/drops the benefit and suffix around it.
 
