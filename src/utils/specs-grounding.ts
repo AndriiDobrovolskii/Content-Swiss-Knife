@@ -153,7 +153,19 @@ export function validateSpecsGrounding(
   sourceSpecs: string,
   context: string,
   allowedParams: readonly string[] = [],
+  options: { labelAnchorTrusted?: boolean } = {},
 ): ValidationIssue[] {
+  // Is a label mismatch real evidence?
+  //
+  // Only when the model wrote that label from the SAME text this function grounds against. When it
+  // wrote from the English sheet and `sourceSpecs` is a separate Ukrainian translation, the two are
+  // independent renderings of one term: "Alarm Method" becomes "Спосіб сповіщення" in the table and
+  // something else in the source, and stem() truncates endings, so "спосіб" and "метод" — two
+  // ordinary renderings of "Method" — share nothing. A real run shipped 15 correct rows with one
+  // flagged, and which one changed between runs.
+  //
+  // Defaults to true so callers that predate the flag keep today's severity.
+  const labelAnchorTrusted = options.labelAnchorTrusted ?? true;
   const issues: ValidationIssue[] = [];
   if (!html?.trim() || !sourceSpecs?.trim()) return issues;
 
@@ -240,9 +252,13 @@ export function validateSpecsGrounding(
       evaluatedRows++;
       const grounded = numericGrounded || latinTokenGrounded || labelGrounded;
       if (!grounded) {
+        // Numbers and Latin codes survive translation unchanged, so a value that carried either
+        // and still did not match is evidence about the CONTENT, not about wording. That stays an
+        // error whatever the label anchor is worth.
+        const valueCarriedEvidence = valueNumbers.length > 0 || valueLatinTokens.length > 0;
         failedLabels.push(label);
         issues.push({
-          severity: 'error',
+          severity: labelAnchorTrusted || valueCarriedEvidence ? 'error' : 'warning',
           rule: 'spec-row-not-grounded',
           detail:
             `Spec row "${label}" is not supported by the source specifications. Reconcile before ` +
@@ -267,7 +283,10 @@ export function validateSpecsGrounding(
   // reconciliation target the per-row messages refer to, without repeating the whole list N times.
   if (issues.length > 0 && allowedParams.length > 0) {
     issues.push({
-      severity: 'error',
+      // Follows the rows it accompanies: a companion message shouting "error" over a set of
+      // warnings would put the artifact back into the repair loop this downgrade exists to keep
+      // it out of.
+      severity: issues.some(i => i.severity === 'error') ? 'error' : 'warning',
       rule: 'spec-rows-allowed-parameters',
       detail:
         `ALLOWED PARAMETERS (the complete set of §7-eligible parameters in the source ` +

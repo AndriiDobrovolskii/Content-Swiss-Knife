@@ -243,6 +243,16 @@ export class ContentOrchestratorService {
       this.progressMessage.set(useThinking ? 'Generating HTML Description (Deep Thinking)…' : 'Generating HTML Description…');
       const masterInput: ProductInput = {
         ...input,
+        // The SAME Ukrainian text that will ground §7, not the English sheet.
+        //
+        // Two translations of one English parameter is what made spec-row-not-grounded a coin
+        // flip: the model rendered "Alarm Method" as "Спосіб сповіщення" for the table while
+        // groundingSpecs rendered it some other way for the check, and stem-matching those two
+        // is unreliable by construction. Feeding the model the text the check will use makes
+        // them agree because they are the same string, not because two passes happened to align.
+        //
+        // Falls back to the raw sheet when grounding is off, which is exactly the old behaviour.
+        specs: groundingSpecs || input.specs,
         customInstructions: [
           input.customInstructions?.trim(),
           buildMasterUaOverlay(input.website.name),
@@ -271,7 +281,11 @@ export class ContentOrchestratorService {
         produce: produceHtmlA,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams),
+          // Trusted exactly when the model was given this same text (see masterInput.specs). If
+          // grounding fell back to the English sheet, a label mismatch says nothing about the row
+          // and must not cost a regeneration.
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams,
+            { labelAnchorTrusted: !!groundingSpecs }),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
           // Image text may not carry a figure the source never stated — the prompt-side rule
           // (NUMERIC_SOURCE_FIDELITY_RULES) reduces the rate; this is the deterministic gate.
@@ -558,6 +572,8 @@ export class ContentOrchestratorService {
       this.progressMessage.set(useThinking ? 'Generating Ukrainian Description (Deep Thinking)…' : 'Generating Ukrainian Description…');
       const uaInput: ProductInput = {
         ...input,
+        // Same substitution as generate()'s masterInput — see the rationale there.
+        specs: groundingSpecs || input.specs,
         customInstructions: [
           input.customInstructions?.trim(),
           buildMasterUaOverlay(input.website.name),
@@ -583,7 +599,9 @@ export class ContentOrchestratorService {
         produce: produceHtmlUa,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams),
+          // Same reasoning as the sibling call in generate().
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams,
+            { labelAnchorTrusted: !!groundingSpecs }),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
           // Image-text numeric gate — see the identical hook in generate() for rationale.
           ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),

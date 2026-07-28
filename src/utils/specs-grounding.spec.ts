@@ -475,3 +475,41 @@ describe('validateSpecsGrounding — addressable rows', () => {
     expect(rowIssue().detail).not.toMatch(/ALLOWED PARAMETERS/);
   });
 });
+
+describe('validateSpecsGrounding — how much the label anchor is worth', () => {
+  // A §7 row whose value is boolean or prose has no numeric and no Latin anchor, so grounding
+  // rests entirely on stem-matching its label. When the model wrote that label from the ENGLISH
+  // sheet and the grounding source is a SEPARATE Ukrainian translation, the two are independent
+  // renderings of one term and matching them is a coin flip — a real run shipped 15 correct rows
+  // and flagged one, and which one changed between runs. The check must not assert an error it
+  // cannot substantiate.
+  const boolRow = specSection(`<tr><td>Спосіб сповіщення</td><td>Звуковий сигнал</td></tr>`);
+
+  it('reports only a warning when the label was written from a different text', () => {
+    const issues = validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)', [], { labelAnchorTrusted: false });
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('warning');
+  });
+
+  it('keeps it an error when the model saw the very text being grounded against', () => {
+    const issues = validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)', [], { labelAnchorTrusted: true });
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('stays an error regardless when the VALUE carried evidence that did not match', () => {
+    // Numbers survive translation unchanged, so a value whose figures are absent from the source
+    // is real evidence — nothing to do with wording drift.
+    const numericRow = specSection(`<tr><td>Невідомий параметр</td><td>987 мм</td></tr>`);
+    const issues = validateSpecsGrounding(numericRow, SRC_UK, 'HTML (uk-UA)', [], { labelAnchorTrusted: false });
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('defaults to trusting the label anchor, so existing callers are unaffected', () => {
+    expect(validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)')
+      .find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('does not shout louder than its rows: the companion message follows their severity', () => {
+    const issues = validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)', ['Alarm Method'], { labelAnchorTrusted: false });
+    expect(issues.find(i => i.rule === 'spec-rows-allowed-parameters')?.severity).toBe('warning');
+  });
+});
