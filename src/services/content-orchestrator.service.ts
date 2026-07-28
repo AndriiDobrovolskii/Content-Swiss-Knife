@@ -7,6 +7,7 @@ import { cleanHtmlStructure, stripCodeFences } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
+import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from '../utils/specs-grounding';
@@ -724,8 +725,14 @@ export class ContentOrchestratorService {
 
   /** Keeps "N-in-N"/"N в N" hyphenation in sync with the HTML body's canonical form — see
    *  canonicalizeMultiInOne (S4, 2026-07-16 EXPERT3D audit: body/metadata drifted apart). */
+  /**
+   * normalizeSeoNumbers runs LAST and its position matters: it inserts NBSP between a number and
+   * its unit, so it lengthens meta_description. Because this whole method runs inside the repair
+   * gate's `produce`, `validate` measures the post-formatting string — a description that crosses
+   * 155 chars only after formatting is caught rather than shipped under a stale measurement.
+   */
   private canonicalizeSeoData(seo: SeoResponse): SeoResponse {
-    return {
+    return normalizeSeoNumbers({
       ...seo,
       seo_data: (seo.seo_data ?? []).map(item => ({
         ...item,
@@ -733,7 +740,7 @@ export class ContentOrchestratorService {
         meta_title: canonicalizeMultiInOne(item.meta_title, item.language),
         meta_description: canonicalizeMultiInOne(item.meta_description, item.language),
       })),
-    };
+    });
   }
 
   async generateKeywords(name: string, description: string): Promise<void> {
