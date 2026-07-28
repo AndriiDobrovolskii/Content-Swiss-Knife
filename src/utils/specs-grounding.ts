@@ -294,6 +294,69 @@ export function isAlreadyCyrillic(text: string): boolean {
 }
 
 /**
+ * Why grounding was switched off for a run.
+ *
+ * Three different causes collapse to the same observable state — an empty grounding source — and
+ * the code used to keep no evidence of which one fired. A run then reported "specs grounding was
+ * DISABLED" with nothing to act on, and the message named the script cause even when the call had
+ * thrown, which is simply untrue.
+ */
+export type GroundingFailure =
+  | { kind: 'provider-error' }
+  | { kind: 'empty' }
+  | { kind: 'wrong-script'; ratio: number; threshold: number; sample: string };
+
+export interface GroundingInspection {
+  /** Usable grounding source, or '' when there is none. */
+  text: string;
+  failure?: GroundingFailure;
+}
+
+/** How much of a rejected translation to quote. Enough to recognise it, not enough to flood a report. */
+const SAMPLE_LENGTH = 120;
+
+/**
+ * sanitizeGroundedTranslation, with the reason attached.
+ *
+ * The sample matters as much as the ratio: it is what distinguishes "the model echoed the English
+ * sheet back" (a prompt problem) from "something else came back" (a provider problem). Without it
+ * the ratio alone says only that the text was not Ukrainian, which was never in doubt.
+ */
+export function inspectGroundedTranslation(
+  translated: string | null | undefined,
+  script: MasterScript,
+): GroundingInspection {
+  const cleaned = stripCodeFences(translated ?? '').trim();
+  if (!cleaned) return { text: '', failure: { kind: 'empty' } };
+
+  const ratio = scriptRatio(cleaned, script);
+  if (ratio > SCRIPT_RATIO_THRESHOLD) return { text: cleaned };
+
+  return {
+    text: '',
+    failure: {
+      kind: 'wrong-script',
+      ratio: Number(ratio.toFixed(2)),
+      threshold: SCRIPT_RATIO_THRESHOLD,
+      sample: cleaned.length > SAMPLE_LENGTH ? `${cleaned.slice(0, SAMPLE_LENGTH)}…` : cleaned,
+    },
+  };
+}
+
+/** Human-readable cause, for the `specs-grounding-disabled` warning. */
+export function describeGroundingFailure(failure: GroundingFailure): string {
+  switch (failure.kind) {
+    case 'provider-error':
+      return 'the specs-translation call failed (provider error) — see the server log for the stack trace';
+    case 'empty':
+      return 'the specs-translation call returned empty text';
+    case 'wrong-script':
+      return `the translation came back in the wrong script (${failure.ratio} of letters vs a `
+        + `${failure.threshold} threshold). It returned: "${failure.sample}"`;
+  }
+}
+
+/**
  * Sanitizes a raw LLM translation before it is used as validateSpecsGrounding's grounding source.
  *
  * Never returns text outside the master's script, and never falls back to the untranslated input
@@ -309,7 +372,5 @@ export function sanitizeGroundedTranslation(
   translated: string | null | undefined,
   script: MasterScript,
 ): string {
-  const cleaned = stripCodeFences(translated ?? '').trim();
-  if (!cleaned) return '';
-  return scriptRatio(cleaned, script) > SCRIPT_RATIO_THRESHOLD ? cleaned : '';
+  return inspectGroundedTranslation(translated, script).text;
 }

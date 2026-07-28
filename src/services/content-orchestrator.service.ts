@@ -9,7 +9,10 @@ import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
-import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from '../utils/specs-grounding';
+import {
+  validateSpecsGrounding, isAlreadyCyrillic, inspectGroundedTranslation,
+  describeGroundingFailure, type GroundingInspection,
+} from '../utils/specs-grounding';
 import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
 import { validateSecondPersonScope } from '../utils/tov-second-person';
@@ -146,25 +149,29 @@ export class ContentOrchestratorService {
    * incident. Callers must surface groundingDisabled (see the `specs-grounding-disabled` issue
    * below) rather than let '' pass unnoticed.
    */
-  private async groundingSpecs(input: ProductInput): Promise<string> {
-    if (!input.specs?.trim()) return '';
-    if (isAlreadyCyrillic(input.specs)) return input.specs;
+  private async groundingSpecs(input: ProductInput): Promise<GroundingInspection> {
+    if (!input.specs?.trim()) return { text: '' };
+    if (isAlreadyCyrillic(input.specs)) return { text: input.specs };
     try {
       const translated = await this.llm.generateText(
         buildTranslatePrompt(input.specs, 'Ukrainian'),
         false, // fast model — a cheap lookup call, not master generation
         { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
       );
-      const grounded = sanitizeGroundedTranslation(translated, masterScriptFor(input.website.name));
-      if (!grounded) {
+      const inspection = inspectGroundedTranslation(translated, masterScriptFor(input.website.name));
+      if (inspection.failure) {
         console.warn(
-          `[groundingSpecs] Translation for "${input.name}" did not yield usable text in the ` +
-          `master's script — specs grounding DISABLED for this run.`,
+          `[groundingSpecs] Specs grounding DISABLED for "${input.name}": ` +
+          describeGroundingFailure(inspection.failure),
         );
       }
-      return grounded;
-    } catch {
-      return '';
+      return inspection;
+    } catch (err) {
+      // The ERROR OBJECT, not a message: the stack trace is what says whether this was a timeout,
+      // a 4xx, or a bug on our side. It used to be swallowed whole, leaving the run with a warning
+      // that named the wrong cause.
+      console.error(`[groundingSpecs] Specs translation threw for "${input.name}".`, err);
+      return { text: '', failure: { kind: 'provider-error' } };
     }
   }
 
@@ -219,7 +226,8 @@ export class ContentOrchestratorService {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);
       // Localized once for the whole run — every repair-gate attempt below reuses this same
       // string instead of re-translating on each pass (see groundingSpecs doc comment).
-      const groundingSpecs = await this.groundingSpecs(input);
+      const grounding = await this.groundingSpecs(input);
+      const groundingSpecs = grounding.text;
       // Distinguishes "no specs supplied" (guard legitimately inert) from "specs supplied but
       // the grounding source failed its post-condition" (guard silently off). The Ortur H20
       // incident this guards against was invisible for exactly this reason — a console.warn is
@@ -282,10 +290,14 @@ export class ContentOrchestratorService {
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
+            // The cause is named, not guessed. The old wording asserted the script explanation
+            // even when the call had thrown, which made the one observable signal actively
+            // misleading — and three different causes produce this same state.
             detail:
-              'Specs grounding was DISABLED for this run: the source-specs translation did not ' +
-              'yield usable text in the master\'s script. §7 rows were NOT verified against the ' +
-              'source specifications.',
+              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
+              + 'source specifications. Cause: '
+              + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
+              + '.',
             context: 'HTML (base)',
           }] : []),
         ],
@@ -528,7 +540,8 @@ export class ContentOrchestratorService {
       const { seoLangs } = getLangsForStore(input.website.name);
       // Localized once for the whole run — every repair-gate attempt below reuses this same
       // string instead of re-translating on each pass (see groundingSpecs doc comment).
-      const groundingSpecs = await this.groundingSpecs(input);
+      const grounding = await this.groundingSpecs(input);
+      const groundingSpecs = grounding.text;
       // Distinguishes "no specs supplied" (guard legitimately inert) from "specs supplied but
       // the grounding source failed its post-condition" (guard silently off). See the sibling
       // groundingDisabled comment in the base-HTML generate() path above.
@@ -584,10 +597,14 @@ export class ContentOrchestratorService {
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
+            // The cause is named, not guessed. The old wording asserted the script explanation
+            // even when the call had thrown, which made the one observable signal actively
+            // misleading — and three different causes produce this same state.
             detail:
-              'Specs grounding was DISABLED for this run: the source-specs translation did not ' +
-              'yield usable text in the master\'s script. §7 rows were NOT verified against the ' +
-              'source specifications.',
+              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
+              + 'source specifications. Cause: '
+              + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
+              + '.',
             context: 'HTML (uk-UA)',
           }] : []),
         ],

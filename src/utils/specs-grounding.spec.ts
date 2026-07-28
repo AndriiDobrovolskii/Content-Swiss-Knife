@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from './specs-grounding';
+import {
+  validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation,
+  inspectGroundedTranslation, describeGroundingFailure,
+} from './specs-grounding';
 
 const SRC = `Build Volume: 330 × 330 × 565 mm (61.5 L)
 Hopper Capacity: 105 L
@@ -377,5 +380,60 @@ describe('sanitizeGroundedTranslation', () => {
     it('returns "" for Cyrillic text requested under script: Latin', () => {
       expect(sanitizeGroundedTranslation(SRC_UK, 'Latin')).toBe('');
     });
+  });
+});
+
+describe('inspectGroundedTranslation', () => {
+  // The second real run reported "specs grounding was DISABLED" and nothing else. Three different
+  // causes produce that state and the code kept no evidence of which one fired, so the warning was
+  // unactionable — the point of this is that the NEXT run names the cause.
+
+  it('reports success with the cleaned text', () => {
+    expect(inspectGroundedTranslation(SRC_UK, 'Cyrillic')).toEqual({ text: SRC_UK });
+  });
+
+  it('distinguishes an empty translation from a wrong-script one', () => {
+    expect(inspectGroundedTranslation('   ', 'Cyrillic').failure).toEqual({ kind: 'empty' });
+    expect(inspectGroundedTranslation(SRC, 'Cyrillic').failure?.kind).toBe('wrong-script');
+  });
+
+  it('carries the measured ratio, the threshold and a sample of what came back', () => {
+    // The sample is what tells us whether the model echoed the English sheet or returned something
+    // else entirely — the difference between a prompt problem and a provider problem.
+    const failure = inspectGroundedTranslation(SRC, 'Cyrillic').failure;
+    expect(failure).toMatchObject({ kind: 'wrong-script', threshold: 0.3 });
+    if (failure?.kind === 'wrong-script') {
+      expect(failure.ratio).toBeLessThanOrEqual(0.3);
+      expect(SRC).toContain(failure.sample.replace(/…$/, ''));
+    }
+  });
+
+  it('truncates the sample instead of dumping the whole sheet into a report', () => {
+    const long = 'Material '.repeat(200);
+    const failure = inspectGroundedTranslation(long, 'Cyrillic').failure;
+    if (failure?.kind === 'wrong-script') expect(failure.sample.length).toBeLessThanOrEqual(121);
+  });
+});
+
+describe('describeGroundingFailure', () => {
+  it('names the provider error rather than blaming the script', () => {
+    // The old message claimed the translation "did not yield usable text in the master's script",
+    // which is simply untrue when the call threw.
+    const text = describeGroundingFailure({ kind: 'provider-error' });
+    expect(text).toMatch(/provider|call failed/i);
+    expect(text).not.toMatch(/script/i);
+  });
+
+  it('names an empty translation as such', () => {
+    expect(describeGroundingFailure({ kind: 'empty' })).toMatch(/empty/i);
+  });
+
+  it('quotes the ratio and the sample for a wrong-script result', () => {
+    const text = describeGroundingFailure({
+      kind: 'wrong-script', ratio: 0.04, threshold: 0.3, sample: 'Laser Head Power: 20 W',
+    });
+    expect(text).toContain('0.04');
+    expect(text).toContain('0.3');
+    expect(text).toContain('Laser Head Power');
   });
 });
