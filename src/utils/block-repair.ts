@@ -23,10 +23,24 @@ import { sourceNumbers as numbersIn } from './alt-numeric-fidelity';
  */
 const BLOCK_TAGS = new Set(['p', 'li', 'figcaption', 'td', 'h2', 'h3']);
 
+export interface HtmlBlockAncestor {
+  tag: string;
+  classes: string[];
+}
+
 export interface HtmlBlock {
   /** Position in the returned list. This is what `path` addresses as `block[i]`. */
   index: number;
   tag: string;
+  /**
+   * Enclosing elements, outermost first.
+   *
+   * Callers need scope decisions the offsets alone cannot answer — sentence-length skips prose
+   * inside a spec table or a figcaption, which used to be `el.closest('table, figcaption,
+   * section.specs')`. Carrying the chain here is what lets a validator make that call while still
+   * numbering blocks the way the patcher does.
+   */
+  ancestors: HtmlBlockAncestor[];
   /** Offset of the opening '<'. */
   start: number;
   /** Offset one past the closing '>' — `html.slice(start, end)` is `outerHTML`. */
@@ -73,7 +87,7 @@ export function extractBlocks(html: string): HtmlBlock[] {
   const doc = parseDocument(html, { withStartIndices: true, withEndIndices: true });
   const blocks: HtmlBlock[] = [];
 
-  const walk = (node: ParsedNode): void => {
+  const walk = (node: ParsedNode, ancestors: HtmlBlockAncestor[]): void => {
     if (node.type === 'tag' && node.name && BLOCK_TAGS.has(node.name)
       && typeof node.startIndex === 'number' && typeof node.endIndex === 'number') {
       const start = node.startIndex;
@@ -81,18 +95,22 @@ export function extractBlocks(html: string): HtmlBlock[] {
       blocks.push({
         index: blocks.length,
         tag: node.name,
+        ancestors,
         start,
         end,
         outerHTML: html.slice(start, end),
         text: visibleText(node).replace(/\s+/g, ' ').trim(),
       });
     }
-    for (const child of node.children ?? []) walk(child);
+    const inner = node.type === 'tag' && node.name
+      ? [...ancestors, { tag: node.name, classes: (node.attribs?.['class'] ?? '').split(/\s+/).filter(Boolean) }]
+      : ancestors;
+    for (const child of node.children ?? []) walk(child, inner);
   };
 
   // Pre-order DFS is already document order, and it visits an enclosing block before the blocks
   // nested inside it.
-  for (const child of (doc as unknown as ParsedNode).children ?? []) walk(child);
+  for (const child of (doc as unknown as ParsedNode).children ?? []) walk(child, []);
 
   return blocks;
 }

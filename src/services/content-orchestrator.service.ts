@@ -9,7 +9,10 @@ import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
-import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from '../utils/specs-grounding';
+import {
+  validateSpecsGrounding, isAlreadyCyrillic, inspectGroundedTranslation,
+  describeGroundingFailure, type GroundingInspection,
+} from '../utils/specs-grounding';
 import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
 import { validateSecondPersonScope } from '../utils/tov-second-person';
@@ -36,6 +39,7 @@ import { buildImageAltPrompt } from '../prompts/image-alt';
 import { buildCopywriterPrompt } from '../prompts/copywriter';
 import { SlugResponse, SeoResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta } from '../utils/repair-gate';
+import { createBlockRepairExecutor } from '../utils/block-tier';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
@@ -87,6 +91,51 @@ export class ContentOrchestratorService {
   }
 
   /**
+   * The block-scoped repair rung for one locale.
+   *
+   * Always the fast model and never extended thinking: the task is rewriting one paragraph against
+   * an explicit instruction, not composing anything. Deep Thinking governs generation, not repair.
+   */
+  private blockRepairer(locale: string, taskLabel: string, input: ProductInput) {
+    return createBlockRepairExecutor({
+      generate: payload => this.llm.generateText(payload, false, {
+        taskLabel: `Block repair — ${taskLabel}`,
+        productName: input.name,
+        store: input.website.name,
+        lang: locale,
+      }),
+      languageLabel: `${isoToHumanLang(locale)} (${locale})`,
+      onResult: summary => {
+        if (summary.applied === 0 && summary.rejected === 0) return;
+        // Accumulated, not replaced: the rung can run on more than one ladder pass, and a report
+        // showing only the last pass would understate what was rewritten.
+        const running = this.blockPatchTally.get(taskLabel) ?? { applied: 0, rejected: 0, rejections: [] };
+        this.blockPatchTally.set(taskLabel, {
+          applied: running.applied + summary.applied,
+          rejected: running.rejected + summary.rejected,
+          rejections: [...running.rejections, ...summary.rejections],
+        });
+        console.info(
+          `[block-repair] ${taskLabel}: ${summary.applied} applied, ${summary.rejected} rejected`,
+          summary.rejections,
+        );
+      },
+    });
+  }
+
+  /**
+   * Per-artifact block-patch tallies for the current run, keyed by the gate's label.
+   *
+   * `resolved` is deliberately absent: the executor can only count what it spliced. Whether a
+   * finding actually went away is decided by re-validation, which only the gate sees, so
+   * toArtifactReport fills that field in.
+   */
+  private blockPatchTally = new Map<
+    string,
+    Omit<NonNullable<RepairArtifactReport['blockPatches']>, 'resolved'>
+  >();
+
+  /**
    * `input.specs` is usually pasted verbatim from a manufacturer sheet (typically English), but
    * the master HTML is generated natively in Ukrainian — grounding `validateSpecsGrounding`
    * against the raw source would false-positive on every translated spec-row label (see
@@ -100,25 +149,29 @@ export class ContentOrchestratorService {
    * incident. Callers must surface groundingDisabled (see the `specs-grounding-disabled` issue
    * below) rather than let '' pass unnoticed.
    */
-  private async groundingSpecs(input: ProductInput): Promise<string> {
-    if (!input.specs?.trim()) return '';
-    if (isAlreadyCyrillic(input.specs)) return input.specs;
+  private async groundingSpecs(input: ProductInput): Promise<GroundingInspection> {
+    if (!input.specs?.trim()) return { text: '' };
+    if (isAlreadyCyrillic(input.specs)) return { text: input.specs };
     try {
       const translated = await this.llm.generateText(
         buildTranslatePrompt(input.specs, 'Ukrainian'),
         false, // fast model — a cheap lookup call, not master generation
         { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
       );
-      const grounded = sanitizeGroundedTranslation(translated, masterScriptFor(input.website.name));
-      if (!grounded) {
+      const inspection = inspectGroundedTranslation(translated, masterScriptFor(input.website.name));
+      if (inspection.failure) {
         console.warn(
-          `[groundingSpecs] Translation for "${input.name}" did not yield usable text in the ` +
-          `master's script — specs grounding DISABLED for this run.`,
+          `[groundingSpecs] Specs grounding DISABLED for "${input.name}": ` +
+          describeGroundingFailure(inspection.failure),
         );
       }
-      return grounded;
-    } catch {
-      return '';
+      return inspection;
+    } catch (err) {
+      // The ERROR OBJECT, not a message: the stack trace is what says whether this was a timeout,
+      // a 4xx, or a bug on our side. It used to be swallowed whole, leaving the run with a warning
+      // that named the wrong cause.
+      console.error(`[groundingSpecs] Specs translation threw for "${input.name}".`, err);
+      return { text: '', failure: { kind: 'provider-error' } };
     }
   }
 
@@ -153,6 +206,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {}, mainHtmlLocale: 'uk-UA' });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -172,7 +226,8 @@ export class ContentOrchestratorService {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);
       // Localized once for the whole run — every repair-gate attempt below reuses this same
       // string instead of re-translating on each pass (see groundingSpecs doc comment).
-      const groundingSpecs = await this.groundingSpecs(input);
+      const grounding = await this.groundingSpecs(input);
+      const groundingSpecs = grounding.text;
       // Distinguishes "no specs supplied" (guard legitimately inert) from "specs supplied but
       // the grounding source failed its post-condition" (guard silently off). The Ortur H20
       // incident this guards against was invisible for exactly this reason — a console.warn is
@@ -188,6 +243,16 @@ export class ContentOrchestratorService {
       this.progressMessage.set(useThinking ? 'Generating HTML Description (Deep Thinking)…' : 'Generating HTML Description…');
       const masterInput: ProductInput = {
         ...input,
+        // The SAME Ukrainian text that will ground §7, not the English sheet.
+        //
+        // Two translations of one English parameter is what made spec-row-not-grounded a coin
+        // flip: the model rendered "Alarm Method" as "Спосіб сповіщення" for the table while
+        // groundingSpecs rendered it some other way for the check, and stem-matching those two
+        // is unreliable by construction. Feeding the model the text the check will use makes
+        // them agree because they are the same string, not because two passes happened to align.
+        //
+        // Falls back to the raw sheet when grounding is off, which is exactly the old behaviour.
+        specs: groundingSpecs || input.specs,
         customInstructions: [
           input.customInstructions?.trim(),
           buildMasterUaOverlay(input.website.name),
@@ -216,7 +281,11 @@ export class ContentOrchestratorService {
         produce: produceHtmlA,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams),
+          // Trusted exactly when the model was given this same text (see masterInput.specs). If
+          // grounding fell back to the English sheet, a label mismatch says nothing about the row
+          // and must not cost a regeneration.
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams,
+            { labelAnchorTrusted: !!groundingSpecs }),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
           // Image text may not carry a figure the source never stated — the prompt-side rule
           // (NUMERIC_SOURCE_FIDELITY_RULES) reduces the rate; this is the deterministic gate.
@@ -235,20 +304,28 @@ export class ContentOrchestratorService {
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
+            // The cause is named, not guessed. The old wording asserted the script explanation
+            // even when the call had thrown, which made the one observable signal actively
+            // misleading — and three different causes produce this same state.
             detail:
-              'Specs grounding was DISABLED for this run: the source-specs translation did not ' +
-              'yield usable text in the master\'s script. §7 rows were NOT verified against the ' +
-              'source specifications.',
+              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
+              + 'source specifications. Cause: '
+              + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
+              + '.',
             context: 'HTML (base)',
           }] : []),
         ],
         withFeedback: appendRepairFeedback,
+        // Block-scoped rung. Runs BEFORE any full regeneration and is the only instrument a
+        // warning can reach — see resolveLadder. Wired here rather than after the gate so a
+        // translation inherits already-repaired prose from the master.
+        repairBlocks: this.blockRepairer('uk-UA', 'HTML (base)', input),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlAResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
-      this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult)]);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult, this.blockPatchTally.get('HTML (base)'))]);
       // Deterministic §7 category merge (dissolve <3-row categories into "Загальні відомості",
       // placed first) — runs once here, before this HTML is used for Slug/SEO grounding or
       // handed to Task C, so every downstream consumer sees the same, already-merged master.
@@ -358,12 +435,16 @@ export class ContentOrchestratorService {
             ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
           ],
           withFeedback: appendRepairFeedback,
+          // Safe against structural parity: validateStructuralParity counts tags, and a rewrite
+          // inside one block changes no tag count — rejectPatch refuses any patch that is not
+          // exactly one element with the original's tag and attributes.
+          repairBlocks: this.blockRepairer(locale, `HTML (${lang})`, input),
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing ${lang} translation (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
         const { artifact: htmlLang, finalIssues: langFinalIssues, repairsUsed: langRepairs } = htmlLangResult;
         if (langRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${langRepairs} repair(s) applied`);
-        this.repairReport.update(r => [...r, toArtifactReport(`HTML (${lang})`, htmlLangResult)]);
+        this.repairReport.update(r => [...r, toArtifactReport(`HTML (${lang})`, htmlLangResult, this.blockPatchTally.get(`HTML (${lang})`))]);
         if (langFinalIssues.length > 0) {
           this.validationIssues.update(issues => [...issues, ...langFinalIssues]);
         }
@@ -458,6 +539,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -472,7 +554,8 @@ export class ContentOrchestratorService {
       const { seoLangs } = getLangsForStore(input.website.name);
       // Localized once for the whole run — every repair-gate attempt below reuses this same
       // string instead of re-translating on each pass (see groundingSpecs doc comment).
-      const groundingSpecs = await this.groundingSpecs(input);
+      const grounding = await this.groundingSpecs(input);
+      const groundingSpecs = grounding.text;
       // Distinguishes "no specs supplied" (guard legitimately inert) from "specs supplied but
       // the grounding source failed its post-condition" (guard silently off). See the sibling
       // groundingDisabled comment in the base-HTML generate() path above.
@@ -489,6 +572,8 @@ export class ContentOrchestratorService {
       this.progressMessage.set(useThinking ? 'Generating Ukrainian Description (Deep Thinking)…' : 'Generating Ukrainian Description…');
       const uaInput: ProductInput = {
         ...input,
+        // Same substitution as generate()'s masterInput — see the rationale there.
+        specs: groundingSpecs || input.specs,
         customInstructions: [
           input.customInstructions?.trim(),
           buildMasterUaOverlay(input.website.name),
@@ -514,7 +599,9 @@ export class ContentOrchestratorService {
         produce: produceHtmlUa,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams),
+          // Same reasoning as the sibling call in generate().
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams,
+            { labelAnchorTrusted: !!groundingSpecs }),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
           // Image-text numeric gate — see the identical hook in generate() for rationale.
           ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),
@@ -528,20 +615,28 @@ export class ContentOrchestratorService {
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
+            // The cause is named, not guessed. The old wording asserted the script explanation
+            // even when the call had thrown, which made the one observable signal actively
+            // misleading — and three different causes produce this same state.
             detail:
-              'Specs grounding was DISABLED for this run: the source-specs translation did not ' +
-              'yield usable text in the master\'s script. §7 rows were NOT verified against the ' +
-              'source specifications.',
+              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
+              + 'source specifications. Cause: '
+              + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
+              + '.',
             context: 'HTML (uk-UA)',
           }] : []),
         ],
         withFeedback: appendRepairFeedback,
+        // Same rung as generate()'s master gate — this standalone path runs the same validators,
+        // so leaving it out would make sentence-too-long repairable in one entry point and merely
+        // reported in the other.
+        repairBlocks: this.blockRepairer(UA_ISO, 'HTML (uk-UA)', input),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
       const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlUaResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
-      this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult)]);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult, this.blockPatchTally.get('HTML (uk-UA)'))]);
       // Deterministic §7 category merge — see the identical hook in generate() for rationale.
       const mergedHtmlUa = mergeSmallSpecCategories(htmlUa);
       const finalHtmlUa = isConsumables ? trimConsumablesToLimit(mergedHtmlUa) : mergedHtmlUa;
@@ -654,6 +749,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: existingSlug, website: input.website });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
@@ -690,6 +786,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
@@ -884,6 +981,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, faqArtifacts: {} });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set(null);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');

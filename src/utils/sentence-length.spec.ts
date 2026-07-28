@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { validateSentenceLength, countWords } from './sentence-length';
+import { extractBlocks, getBlock } from './block-repair';
 
 const p = (t: string) => `<p>${t}</p>`;
 const run = (html: string, locale = 'uk-UA') => validateSentenceLength(html, locale, 'HTML (base)');
@@ -109,5 +110,80 @@ describe('validateSentenceLength', () => {
 
   it('returns nothing for empty html', () => {
     expect(run('')).toEqual([]);
+  });
+});
+
+describe('validateSentenceLength — machine-addressable output', () => {
+  it('addresses the offending block with a path the block patcher resolves', () => {
+    const html = `<h2>Заголовок</h2>${p('Коротке речення.')}${p(TOO_LONG)}`;
+    const [issue] = run(html);
+    expect(issue.path).toBeDefined();
+    // The index must be extractBlocks' index, not "the Nth <p>" — the patcher resolves it there.
+    expect(getBlock(html, issue.path!)).toBe(p(TOO_LONG));
+  });
+
+  it('agrees with extractBlocks on numbering when non-prose blocks sit in between', () => {
+    // The failure this prevents is silent: a validator counting only <p> and a patcher counting
+    // <h2> too would disagree about which block is number 1, and the repair would rewrite the
+    // wrong paragraph while reporting success.
+    const html = `${p('Перше.')}<h2>Заголовок</h2><figcaption>Підпис</figcaption>${p(TOO_LONG)}`;
+    const [issue] = run(html);
+    const blocks = extractBlocks(html);
+    const index = Number(/^block\[(\d+)\]$/.exec(issue.path!)![1]);
+    expect(blocks[index].outerHTML).toBe(p(TOO_LONG));
+  });
+
+  it('reports the measured word count and the ceiling as structured operands', () => {
+    // Never re-parsed out of `detail` — that is what `measured` exists to prevent. Tied to
+    // countWords rather than a copied literal, so the two cannot drift apart: "20 Вт" counts as
+    // one token, which is why the figure is not the naive word count.
+    const [issue] = run(p(TOO_LONG));
+    expect(issue.measured).toEqual({ actual: countWords(TOO_LONG), limit: 20, unit: 'words' });
+  });
+
+  it('gives each offending block its own path', () => {
+    const html = `${p(TOO_LONG)}${p('Коротке.')}${p(TOO_LONG.replace('20 Вт', '30 Вт'))}`;
+    const paths = run(html).map(i => i.path);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+});
+
+describe('validateSentenceLength — sentence boundaries', () => {
+  it('splits after a metric unit, instead of gluing two sentences into one', () => {
+    // The 37-word finding from the second real run was two correct sentences glued together:
+    // ABBREVIATIONS held "мм", so the period after "300 мм" was read as an abbreviation dot. The
+    // model had already split the sentence properly and the validator merged it back — it could
+    // not win, and the block burned a second rung for nothing.
+    const first = 'Ortur H20 20 Вт це діодний лазерний верстат із закритим корпусом та робочою зоною 420 × 300 мм.';
+    const second = 'Лазерна головка з ручним фокусуванням переміщується над столом зі швидкістю до 20000 мм/хв.';
+    expect(run(p(`${first} ${second}`))).toEqual([]);
+  });
+
+  it('does not read a word ENDING in an abbreviation as one', () => {
+    // head.endsWith('ст') matched "міст", "лист", "хвіст"; 'ін' matched "магазин". A far wider
+    // class of false merges than the units.
+    // Each half must sit under the ceiling while the merged pair clearly exceeds it — otherwise
+    // the test passes whether or not the split happens, and proves nothing.
+    const first = 'Через усю робочу зону верстата проходить довгий та жорсткий алюмінієвий міст.';
+    const second = 'Далі стоїть блок керування з окремим кабелем живлення та власним запобіжником.';
+    expect(countWords(first)).toBeLessThan(20);
+    expect(countWords(second)).toBeLessThan(20);
+    expect(countWords(`${first} ${second}`)).toBeGreaterThan(20);
+    expect(run(p(`${first} ${second}`))).toEqual([]);
+  });
+
+  it('still refuses to split on a genuine abbreviation', () => {
+    // The guard has to keep working for what it was written for.
+    const glued = 'Верстат ріже дерево, акрил, шкіру та ін. Матеріали підбирає оператор за таблицею '
+      + 'потужності, швидкості та кількості проходів для кожного окремого типу заготовки.';
+    expect(run(p(glued)).length).toBe(1);
+  });
+
+  it('still does not split when the next word is lowercase', () => {
+    // "5 мм. і далі" — the uppercase requirement in SENTENCE_BREAK already covers this, which is
+    // why dropping the units from the list is safe.
+    const glued = 'Товщина матеріалу становить 5 мм. і залежить від обраного режиму роботи верстата '
+      + 'та від того, скільки проходів оператор задає для конкретної заготовки.';
+    expect(run(p(glued)).length).toBe(1);
   });
 });
