@@ -619,61 +619,135 @@ function printFormInfo() {
     return;
   }
 
-  Logger.log('=== Форма: ' + form.getTitle() + ' ===');
-  Logger.log('Редагування: ' + form.getEditUrl());
-  Logger.log('Для редакторів: ' + form.getPublishedUrl());
-  Logger.log('Вимагає входу: ' + form.requiresLogin());
+  // Identity first, and the id unconditionally: several forms have been created over time, and
+  // a report has to say which one it is even when getTitle() comes back empty — as it did.
+  Logger.log('=== Форма ===');
+  Logger.log('Назва: ' + probe_(function () {
+    return form.getTitle() || DriveApp.getFileById(form.getId()).getName() || '(без назви)';
+  }));
+  Logger.log('ID: ' + probe_(function () { return form.getId(); }));
+  Logger.log('Редагування: ' + probe_(function () { return form.getEditUrl(); }));
+  Logger.log('Для редакторів: ' + probe_(function () { return form.getPublishedUrl(); }));
   Logger.log('');
 
-  Logger.log('=== Питання ===');
-  form.getItems().forEach(function (item, index) {
-    Logger.log((index + 1) + '. [' + item.getType() + '] ' + item.getTitle());
-  });
-  Logger.log('');
+  // The point of the whole function — printed before anything that might fail.
+  reportEntryIds_(form);
+  reportSheet_(form);
+  reportScreenshotQuestion_(form);
+  reportQuestions_(form);
+  reportLoginRequirement_(form);
+}
 
-  // The two the app prefills. A mismatch against src/environments means the button opens the
-  // form with that field empty — Forms ignores an unknown entry rather than complaining.
-  var ids = collectEntryIds_(form);
+/**
+ * Runs one probe and turns any failure into a line of the report.
+ *
+ * A diagnostic that dies on its fourth line is useless exactly when it is needed: the first
+ * version of this function aborted on requiresLogin() and took the entry ids, the questions and
+ * the sheet columns down with it.
+ */
+function probe_(fn) {
+  try {
+    return fn();
+  } catch (err) {
+    return 'не вдалося прочитати — ' + err;
+  }
+}
+
+function reportEntryIds_(form) {
   Logger.log('=== Поточні entry.* — звірте з src/environments/environment*.ts ===');
-  Logger.log("    entryAuthor: '" + ids.author + "',   // " + Q_AUTHOR);
-  Logger.log("    entryTool:   '" + ids.tool + "',   // " + Q_TOOL);
-  Logger.log('');
-
-  var hasUpload = form.getItems().some(function (item) {
-    return item.getType() === FormApp.ItemType.FILE_UPLOAD;
-  });
-  Logger.log(hasUpload
-    ? 'Питання для скріншотів: є.'
-    : 'Питання для скріншотів: НЕМАЄ — додайте вручну (тип File upload), скрипт цього не вміє.');
-
-  var uploadTitled = form.getItems().some(function (item) {
-    return item.getType() === FormApp.ItemType.FILE_UPLOAD
-      && item.getTitle().indexOf(Q_SCREENSHOT) === 0;
-  });
-  if (hasUpload && !uploadTitled) {
-    Logger.log('УВАГА: заголовок питання не починається з «' + Q_SCREENSHOT
-      + '» — скрипт не знайде колонку і не надішле зображення.');
+  try {
+    // A mismatch means the button opens the form with that field empty: Forms ignores an
+    // unknown entry rather than complaining. Changing a question's TYPE is enough to cause it.
+    var ids = collectEntryIds_(form);
+    Logger.log("    entryAuthor: '" + ids.author + "',   // " + Q_AUTHOR);
+    Logger.log("    entryTool:   '" + ids.tool + "',   // " + Q_TOOL);
+  } catch (err) {
+    Logger.log('Не вдалося: ' + err);
+    Logger.log('Обхід: форма → ⋮ → «Отримати заповнене посилання», заповніть два поля,');
+    Logger.log('візьміть entry.* з отриманого URL.');
   }
   Logger.log('');
+}
 
-  var destinationId = form.getDestinationId();
-  if (!destinationId) {
-    Logger.log('До форми не привʼязана таблиця відповідей.');
-    return;
-  }
-
-  var sheet = responseSheet_(SpreadsheetApp.openById(destinationId));
-  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+function reportSheet_(form) {
   Logger.log('=== Колонки таблиці (порядок неважливий, пошук іде за назвою) ===');
-  headers.forEach(function (header, index) {
-    Logger.log('  ' + (index + 1) + '. ' + header);
-  });
-
-  ['Статус', 'Коментар розробника'].forEach(function (name) {
-    if (headers.indexOf(name) === -1) {
-      Logger.log('УВАГА: колонки «' + name + '» немає — додайте її заголовком у перший рядок.');
+  try {
+    var destinationId = form.getDestinationId();
+    if (!destinationId) {
+      Logger.log('До форми не привʼязана таблиця відповідей.');
+      Logger.log('');
+      return;
     }
-  });
+
+    var sheet = responseSheet_(SpreadsheetApp.openById(destinationId));
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    headers.forEach(function (header, index) {
+      Logger.log('  ' + (index + 1) + '. ' + header);
+    });
+
+    [STATUS_COL_NAME, COMMENT_COL_NAME].forEach(function (name) {
+      if (headers.indexOf(name) === -1) {
+        Logger.log('УВАГА: колонки «' + name + '» немає — додайте її заголовком у перший рядок.');
+      }
+    });
+  } catch (err) {
+    Logger.log('Не вдалося прочитати таблицю: ' + err);
+  }
+  Logger.log('');
+}
+
+function reportScreenshotQuestion_(form) {
+  try {
+    var uploads = form.getItems().filter(function (item) {
+      return item.getType() === FormApp.ItemType.FILE_UPLOAD;
+    });
+
+    if (!uploads.length) {
+      Logger.log('Питання для скріншотів: НЕМАЄ — додайте вручну (тип File upload).');
+      Logger.log('Скрипт цього не вміє: у класі Form немає addFileUploadItem.');
+    } else if (!uploads.some(function (item) { return item.getTitle().indexOf(Q_SCREENSHOT) === 0; })) {
+      Logger.log('Питання для скріншотів: є, але заголовок не починається з «' + Q_SCREENSHOT + '»');
+      Logger.log('— скрипт не знайде колонку і не надішле зображення.');
+    } else {
+      Logger.log('Питання для скріншотів: є, заголовок правильний.');
+    }
+  } catch (err) {
+    Logger.log('Не вдалося перевірити питання для скріншотів: ' + err);
+  }
+  Logger.log('');
+}
+
+function reportQuestions_(form) {
+  Logger.log('=== Питання ===');
+  try {
+    form.getItems().forEach(function (item, index) {
+      Logger.log((index + 1) + '. [' + item.getType() + '] ' + item.getTitle());
+    });
+  } catch (err) {
+    Logger.log('Не вдалося прочитати список питань: ' + err);
+  }
+  Logger.log('');
+}
+
+/**
+ * Whether the form is closed to outsiders — the only thing standing between a public repository
+ * and anyone filling in the team's tracker. Never skipped silently.
+ */
+function reportLoginRequirement_(form) {
+  Logger.log('=== Доступ до форми ===');
+  try {
+    Logger.log(form.requiresLogin()
+      ? 'Вимагає входу: так — відповідати можуть лише свої.'
+      : 'Вимагає входу: НІ. Форма приймає відповіді від будь-кого, а її URL лежить у '
+        + 'публічному репозиторії. Увімкніть обмеження у Settings → Responses.');
+  } catch (err) {
+    // requiresLogin is Workspace-only, and Forms also returns "Failed to edit the form" while the
+    // form is open in another tab. Either way the answer is unknown, and unknown is not "fine".
+    Logger.log('Прочитати не вдалося: ' + err);
+    Logger.log('ПЕРЕВІРТЕ ВРУЧНУ: форма → Settings → Responses → відповіді обмежені організацією.');
+    Logger.log('Це не дрібниця: setRequireLogin(true) при створенні форми міг впасти так само,');
+    Logger.log('і тоді форма лишилась відкритою, а її URL — у публічному репозиторії.');
+  }
 }
 
 /**
