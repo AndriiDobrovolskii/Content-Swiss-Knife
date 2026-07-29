@@ -18,10 +18,10 @@ export const environment = {
    */
   feedbackForm: {
     /** Published `/viewform` URL of the form. */
-    baseUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSfs-1OIyd3EIBDjgro2YAiKdZzRqx1sIN5TnNLN7d94RHOK-A/viewform',
+    baseUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSd5Hruvpa21cnbciJUm-v1-VlZpRlkBoxFClMjzCRNn9Z5OmA/viewform',
     /** `entry.<id>` of the "Хто подає запит?" question. */
-    entryAuthor: 'entry.1694701209',
+    entryAuthor: 'entry.564046838',
     /** `entry.<id>` of the "Де це трапилось?" question. */
-    entryTool: 'entry.910335970',
+    entryTool: 'entry.1601330257',
   },
 };
