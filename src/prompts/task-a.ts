@@ -15,7 +15,12 @@ Before writing, reconcile any conflicting component counts or repeated figures i
 input's story shape per [NARRATIVE FIDELITY], and keep every image's alt, figcaption and lead-in
 consistent with its manifest caption per the IMAGE GROUNDING LOCK.
 CRITICAL: §2 (Killer Specs table) has NO H2 heading and NO <section> wrapper — place the Killer
-Specs table directly after the hook paragraph without any surrounding heading or section element.`;
+Specs table directly after the hook paragraph without any surrounding heading or section element.
+LISTS OVER RUN-ON SENTENCES: when body prose would enumerate three or more parallel items in
+one sentence, emit a short lead-in <p> followed by a <ul> with one <li> per item, instead of
+a single long sentence. Applies to §3 and §5 body text only — never to the §1 hook, the §2
+or §7 tables, or the §9 closing. Two items stay inside the sentence. Do not place a <figure>
+directly after a </ul>: an image still needs its own lead-in <p>.`;
 
 // ── Consumables instruction (replaces §1–§9 entirely) ─────────────────────
 

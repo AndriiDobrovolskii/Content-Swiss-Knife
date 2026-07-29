@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  REPAIR_STRATEGIES, getAtPath, resolveLadder, setAtPath, slugify, truncateAtWordBoundary,
+  REPAIR_STRATEGIES, getAtPath, isLadderCandidate, resolveLadder, setAtPath, slugify,
+  truncateAtWordBoundary,
 } from './repair-strategy';
 import type { ValidationIssue } from './output-validator';
 
@@ -138,9 +139,74 @@ describe('slugify', () => {
   });
 });
 
+describe('warnings on the ladder', () => {
+  const sentenceIssue = (overrides: Partial<ValidationIssue> = {}): ValidationIssue => ({
+    severity: 'warning',
+    rule: 'sentence-too-long',
+    detail: 'Sentence of 21 words exceeds the uk-UA hard ceiling of 20. Split it into two.',
+    context: 'HTML (base)',
+    path: 'block[7]',
+    measured: { actual: 21, limit: 20, unit: 'words' },
+    ...overrides,
+  });
+
+  it('gives sentence-too-long TWO block-scoped rungs', () => {
+    // One attempt is not enough in practice. The first real run split off an independent tail and
+    // left a three-item enumeration intact, so the sentence was still 26 words against a ceiling
+    // of 20 — patched, accepted, unresolved. The second attempt sees the already-improved text and
+    // a request narrowed to one block instead of eleven; both favour it.
+    expect(resolveLadder(sentenceIssue())).toEqual(['block-scoped', 'block-scoped']);
+  });
+
+  it('stops at two rungs rather than retrying indefinitely', () => {
+    // A third attempt on the same sentence means the instruction cannot break it, and it should
+    // reach the report honestly instead of burning calls.
+    expect(resolveLadder(sentenceIssue()).filter(t => t === 'block-scoped')).toHaveLength(2);
+  });
+
+  it('NEVER terminates a warning ladder with full-regen', () => {
+    // The admission argument in full: a block rewrite is safe to spend on a warning because the
+    // worst case is that the block is left alone. Regenerating a whole artifact for a stylistic
+    // finding is not — it is free to break the fields it was not asked about. No warning, whatever
+    // its rule, may reach that instrument.
+    expect(resolveLadder(sentenceIssue())).not.toContain('full-regen');
+  });
+
+  it('still terminates an ERROR ladder with full-regen', () => {
+    expect(resolveLadder(sentenceIssue({ severity: 'error' })))
+      .toEqual(['block-scoped', 'block-scoped', 'full-regen']);
+  });
+
+  it('admits an error to the ladder unconditionally', () => {
+    expect(isLadderCandidate({ severity: 'error', rule: 'spec-count-mismatch', detail: 'd', context: 'c' }))
+      .toBe(true);
+  });
+
+  it('admits a warning only when it is addressable AND registered', () => {
+    expect(isLadderCandidate(sentenceIssue())).toBe(true);
+    // No path — nothing to address, so nothing a tier could rewrite.
+    expect(isLadderCandidate(sentenceIssue({ path: undefined }))).toBe(false);
+    // Registered rules only: a warning with no strategy would occupy a rung that cannot act,
+    // and the un-migrated rules in output-validator.ts must keep behaving exactly as before.
+    expect(isLadderCandidate(sentenceIssue({ rule: 'br-spacing' }))).toBe(false);
+  });
+});
+
 describe('registry strategies', () => {
-  it('registers exactly the two intended rules and nothing by analogy', () => {
-    expect([...REPAIR_STRATEGIES.keys()].sort()).toEqual(['meta-title-length', 'slug-charset']);
+  it('registers exactly the intended rules and nothing by analogy', () => {
+    expect([...REPAIR_STRATEGIES.keys()].sort())
+      .toEqual(['meta-title-length', 'sentence-too-long', 'slug-charset']);
+  });
+
+  it('does NOT repair spec-row-not-grounded, because the finding itself is unreliable', () => {
+    // Registered in an earlier iteration, removed after the output proved the claim false: a §7
+    // table with 15 correct rows had one flagged, and WHICH one changed between runs depending on
+    // how the grounding translation happened to word the term. Repairing on a false claim means
+    // renaming a correctly named row — worse than doing nothing.
+    expect(resolveLadder({
+      severity: 'error', rule: 'spec-row-not-grounded', detail: 'd',
+      context: 'HTML (uk-UA)', path: 'block[12]',
+    })).toEqual(['full-regen']);
   });
 
   it('meta-title tier-1 instruction states the arithmetic from `measured`, not from `detail`', () => {
