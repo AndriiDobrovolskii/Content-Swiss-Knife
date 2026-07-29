@@ -8,6 +8,7 @@ import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { fixDecimalSeparator } from '../utils/decimal-separator';
+import { restoreIdentifierDots } from '../utils/identifier-decimal';
 import { extractVideoEmbeds, restoreMissingVideos, validateVideoCoverage, SourceVideoEmbed } from '../utils/video-manifest';
 import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
@@ -282,6 +283,10 @@ export class ContentOrchestratorService {
         // Immediately after fixNumberFormatting, which has already stripped thousands separators —
         // so the decimal pass sees one unambiguous number shape per value.
         html = fixDecimalSeparator(html, 'uk-UA');
+        // The inverse: a comma the MODEL wrote inside an identifier (F/2,0, 2,4G). Nothing else
+        // catches those — the validator only looks for the opposite. Safe next to the forward
+        // pass, which only ever touches a decimal followed by a unit.
+        html = restoreIdentifierDots(html, 'uk-UA');
         // AFTER fixNumberFormatting so the cyrillizer sees a canonical NUM<NBSP>UNIT shape, and
         // BEFORE normalizeTerminology so its Cyrillic word-boundary lookarounds see final
         // orthography. Both neighbours are idempotent and independent, so this is a documented
@@ -457,7 +462,7 @@ export class ContentOrchestratorService {
               html = this.applySpanishExpert3dReplacements(html);
             }
             // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
-            html = normalizeTerminology(cyrillizeUnits(fixDecimalSeparator(fixNumberFormatting(html), locale), locale), locale);
+            html = normalizeTerminology(cyrillizeUnits(restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(html), locale), locale), locale), locale);
             return canonicalizeMultiInOne(html, locale);
           },
           validate: (html) => [
@@ -527,6 +532,7 @@ export class ContentOrchestratorService {
               // Ordering mirrors produceHtmlA above and is documented there.
               html = fixNumberFormatting(html);
               html = fixDecimalSeparator(html, isoCode);
+              html = restoreIdentifierDots(html, isoCode);
               html = cyrillizeUnits(html, isoCode);
               html = normalizeTerminology(html, isoCode);
               return canonicalizeMultiInOne(html, isoCode);
@@ -641,6 +647,8 @@ export class ContentOrchestratorService {
         html = fixNumberFormatting(html);
         // Ordering rationale as in generate()'s master produce.
         html = fixDecimalSeparator(html, UA_ISO);
+        // See the sibling comment in generate()'s master produce.
+        html = restoreIdentifierDots(html, UA_ISO);
         html = cyrillizeUnits(html, UA_ISO);
         html = normalizeTerminology(html, UA_ISO);
         html = canonicalizeMultiInOne(html, UA_ISO);
@@ -780,6 +788,7 @@ export class ContentOrchestratorService {
             // Same normalizer chain as the sibling FAQ produce in generate() — see the rationale there.
             html = fixNumberFormatting(html);
             html = fixDecimalSeparator(html, UA_ISO);
+            html = restoreIdentifierDots(html, UA_ISO);
             html = cyrillizeUnits(html, UA_ISO);
             html = normalizeTerminology(html, UA_ISO);
             return canonicalizeMultiInOne(html, UA_ISO);
