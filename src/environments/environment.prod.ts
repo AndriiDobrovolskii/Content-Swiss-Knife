@@ -14,10 +14,10 @@ export const environment = {
    */
   feedbackForm: {
     /** Published `/viewform` URL of the form. */
-    baseUrl: '',
+    baseUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSfs-1OIyd3EIBDjgro2YAiKdZzRqx1sIN5TnNLN7d94RHOK-A/viewform',
     /** `entry.<id>` of the "Хто подає запит?" question. */
-    entryAuthor: '',
+    entryAuthor: 'entry.1694701209',
     /** `entry.<id>` of the "Де це трапилось?" question. */
-    entryTool: '',
+    entryTool: 'entry.910335970',
   },
 };

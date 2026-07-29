@@ -13,23 +13,29 @@
  */
 
 // ---------------------------------------------------------------------------
-// Settings — edit these two lines, then run setUp().
+// Settings — Script Properties, NOT constants in this file.
 // ---------------------------------------------------------------------------
+//
+// This repository is public, so nothing configurable lives in the source. Set the
+// values in the Apps Script project instead: Project Settings → Script Properties.
+// A bot token pasted into this file would be published the moment it is committed.
+//
+//   NOTIFY_EMAIL       — where the "new request" mail goes.
+//                        Unset → the script owner's own address.
+//   TELEGRAM_BOT_TOKEN — leave unset to disable Telegram notifications entirely.
+//   TELEGRAM_CHAT_ID   — target chat; required together with the token.
+//   TELEGRAM_TOPIC_ID  — forum topic id; unset when the chat has no topics.
 
-/** Where the "new request" notification goes. Leave empty to use the script owner's address. */
-var NOTIFY_EMAIL = '';
-
-/**
- * Optional Telegram / Slack / Discord incoming-webhook URL.
- * Empty string = messenger notifications off, email only.
- */
-var WEBHOOK_URL = '';
+/** Read one Script Property; '' when it is not set. */
+function setting_(name) {
+  return PropertiesService.getScriptProperties().getProperty(name) || '';
+}
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-var FORM_TITLE = 'Content Swiss Knife — запити на автоматизацію';
+var FORM_TITLE = 'Content Swiss Knife — запити на покращення';
 
 var Q_AUTHOR = 'Хто подає запит?';
 var Q_TOOL = 'Де це трапилось?';
@@ -118,11 +124,16 @@ function createForm_() {
   form.setAllowResponseEdits(true);
   form.setProgressBar(false);
 
-  // Domain-restricted by default on Workspace accounts; harmless/absent on personal ones.
+  // The form URL lives in a public repository, so the form itself must not accept
+  // anonymous answers. On a Workspace account this restricts responses to the
+  // organisation; on a personal account the call fails and the form would silently
+  // stay open — hence the loud warning rather than a shrug.
   try {
-    form.setRequireLogin(false);
+    form.setRequireLogin(true);
   } catch (err) {
-    Logger.log('setRequireLogin недоступний для цього акаунта — це нормально: ' + err);
+    Logger.log('!!! УВАГА: setRequireLogin(true) не спрацював — форма ЛИШИЛАСЬ ВІДКРИТОЮ.');
+    Logger.log('!!! Це не Workspace-акаунт. Закрийте форму вручну:');
+    Logger.log('!!! форма → Settings → Responses → збір підтверджених адрес. Помилка: ' + err);
   }
 
   // Free text, not a dropdown: the app prefills it from localStorage, so a new
@@ -160,11 +171,6 @@ function createForm_() {
   return form;
 }
 
-/**
- * There is no documented getter for a question's `entry.<id>`. The reliable way is to
- * build a throwaway prefilled URL for one question at a time and read the id back out —
- * one question per URL keeps the id-to-question mapping unambiguous.
- */
 function collectEntryIds_(form) {
   var ids = { author: '', tool: '' };
 
@@ -198,8 +204,6 @@ function linkSpreadsheet_(form) {
   var spreadsheet = SpreadsheetApp.create(FORM_TITLE + ' (відповіді)');
   form.setDestination(FormApp.DestinationType.SPREADSHEET, spreadsheet.getId());
   SpreadsheetApp.flush();
-  // Re-open: the response sheet is created after setDestination, so the handle we
-  // already have does not know about it yet.
   return SpreadsheetApp.openById(spreadsheet.getId());
 }
 
@@ -241,8 +245,6 @@ function prepareSheet_(spreadsheet) {
 function responseSheet_(spreadsheet) {
   var sheets = spreadsheet.getSheets();
   for (var i = 0; i < sheets.length; i++) {
-    // The name is localised ("Form Responses 1" / "Відповіді форми (1)"), so match on
-    // the form-link property instead of the title where possible.
     if (sheets[i].getFormUrl()) return sheets[i];
   }
   return sheets[0];
@@ -253,13 +255,10 @@ function responseSheet_(spreadsheet) {
 // ---------------------------------------------------------------------------
 
 function installTrigger_(spreadsheet) {
-  // Re-running setUp() must not stack duplicate notifications.
   ScriptApp.getProjectTriggers().forEach(function (trigger) {
     if (trigger.getHandlerFunction() === HANDLER_NAME) ScriptApp.deleteTrigger(trigger);
   });
 
-  // Bound to the spreadsheet rather than the form: this gives the handler the new
-  // row (e.range) as well as the answers, so it can stamp the default status.
   ScriptApp.newTrigger(HANDLER_NAME)
     .forSpreadsheet(spreadsheet)
     .onFormSubmit()
@@ -268,28 +267,50 @@ function installTrigger_(spreadsheet) {
 
 /** Installed trigger — do not call directly. */
 function onFeedbackSubmit(e) {
-  var summary = '';
+  var summaryText = '';
+  var summaryHtml = '';
+  
   try {
-    summary = stampStatusAndSummarise_(e);
+    var summaries = stampStatusAndSummarise_(e);
+    summaryText = summaries.text;
+    summaryHtml = summaries.html;
   } catch (err) {
-    summary = 'Новий запит надійшов, але прочитати його не вдалося: ' + err;
+    summaryText = 'Новий запит надійшов, але прочитати його не вдалося: ' + err;
+    summaryHtml = summaryText;
   }
 
-  var recipient = NOTIFY_EMAIL || Session.getEffectiveUser().getEmail();
+  // Відправка на Email (звичайним текстом)
+  var recipient = setting_('NOTIFY_EMAIL') || Session.getEffectiveUser().getEmail();
   if (recipient) {
-    MailApp.sendEmail(recipient, 'Новий запит на автоматизацію', summary);
+    MailApp.sendEmail(recipient, 'CSK: Новий запит на автоматизацію', summaryText);
   }
 
-  if (WEBHOOK_URL) {
+  // Відправка в Telegram (HTML)
+  var botToken = setting_('TELEGRAM_BOT_TOKEN');
+  var chatId = setting_('TELEGRAM_CHAT_ID');
+  var topicId = setting_('TELEGRAM_TOPIC_ID');
+
+  if (botToken && chatId) {
     try {
-      UrlFetchApp.fetch(WEBHOOK_URL, {
+      var payload = {
+        chat_id: chatId,
+        text: '💡 <b>Новий запит на автоматизацію</b>\n\n' + summaryHtml,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      };
+
+      if (topicId) {
+        payload.message_thread_id = topicId;
+      }
+
+      UrlFetchApp.fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
         method: 'post',
         contentType: 'application/json',
-        payload: JSON.stringify({ text: summary, content: summary }),
-        muteHttpExceptions: true, // a broken webhook must not kill the email
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
       });
     } catch (err) {
-      Logger.log('Вебхук не спрацював: ' + err);
+      Logger.log('Telegram сповіщення не спрацювало: ' + err);
     }
   }
 }
@@ -301,11 +322,28 @@ function stampStatusAndSummarise_(e) {
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
 
-  var lines = [];
+  var linesText = [];
+  var linesHtml = [];
+  
   for (var i = 0; i < headers.length; i++) {
     var header = String(headers[i]);
     if (!header || header === STATUS_COL_NAME || header === COMMENT_COL_NAME) continue;
-    lines.push(header + ':\n' + values[i] + '\n');
+    
+    var val = String(values[i]);
+    
+    // Для Email
+    linesText.push(header + ':\n' + val + '\n');
+    
+    // Для Telegram: екрануємо HTML-теги користувача, щоб не зламати parse_mode: 'HTML'
+    var safeVal = val.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    var safeHeader = header.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    
+    // Загортаємо в <code> блок, якщо це питання ДО або ПІСЛЯ, для краси
+    if (header === Q_BEFORE || header === Q_AFTER) {
+       safeVal = '<code>' + safeVal + '</code>';
+    }
+    
+    linesHtml.push('<b>' + safeHeader + ':</b>\n' + safeVal + '\n');
   }
 
   var statusIndex = headers.indexOf(STATUS_COL_NAME);
@@ -313,6 +351,13 @@ function stampStatusAndSummarise_(e) {
     sheet.getRange(row, statusIndex + 1).setValue(STATUS_NEW);
   }
 
-  lines.push('Таблиця: ' + sheet.getParent().getUrl());
-  return lines.join('\n');
+  var sheetUrl = sheet.getParent().getUrl();
+  
+  linesText.push('Таблиця: ' + sheetUrl);
+  linesHtml.push('<a href="' + sheetUrl + '">Відкрити таблицю 📊</a>');
+  
+  return {
+    text: linesText.join('\n'),
+    html: linesHtml.join('\n')
+  };
 }
