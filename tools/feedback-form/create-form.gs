@@ -76,6 +76,25 @@ var STATUS_COLORS = {
 
 var HANDLER_NAME = 'onFeedbackSubmit';
 
+/**
+ * Title prefix of the screenshot question.
+ *
+ * The question itself has to be added by hand in the Forms UI: the Form class has
+ * addTextItem, addParagraphTextItem, addListItem and the rest, but NO addFileUploadItem —
+ * Apps Script can read a file-upload answer and cannot create the question. Matched on the
+ * prefix because the exact wording is typed in the UI, not here.
+ */
+var Q_SCREENSHOT = 'Скріншот';
+
+/** How much of the "before"/"after" fields the chat message shows. The rest is in the sheet. */
+var PREVIEW_CHARS = 200;
+
+/** sendMessage caps text at 4096 characters. */
+var TELEGRAM_TEXT_LIMIT = 4096;
+
+/** sendPhoto refuses anything above 10 MB; such a file is left as a link instead. */
+var TELEGRAM_PHOTO_LIMIT_BYTES = 10 * 1024 * 1024;
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -102,6 +121,12 @@ function setUp() {
   Logger.log('Форма (для редакторів): ' + form.getPublishedUrl());
   Logger.log('Таблиця зі статусами: ' + spreadsheet.getUrl());
   Logger.log('Лист відповідей: ' + sheet.getName());
+  Logger.log('');
+  Logger.log('=== Два кроки, яких цей скрипт зробити не може ===');
+  Logger.log('1. Додайте у форму питання «Скріншот (необовʼязково)» типу File upload.');
+  Logger.log('   FormApp не має addFileUploadItem — таке питання створюється лише в UI форми.');
+  Logger.log('2. Запустіть testTelegram() і прийміть запит на доступ до Drive: надсилання');
+  Logger.log('   скріншотів потребує скоупа, якого при першій авторизації ще не було.');
   Logger.log('');
   Logger.log('Далі: дайте команді доступ на ПЕРЕГЛЯД до таблиці — саме прозорий статус');
   Logger.log('тримає форму живою. Текст анонсу — у tools/feedback-form/README.md.');
@@ -267,55 +292,45 @@ function installTrigger_(spreadsheet) {
 
 /** Installed trigger — do not call directly. */
 function onFeedbackSubmit(e) {
+  var summary = null;
   var summaryText = '';
-  var summaryHtml = '';
-  
+
   try {
-    var summaries = stampStatusAndSummarise_(e);
-    summaryText = summaries.text;
-    summaryHtml = summaries.html;
+    summary = stampStatusAndSummarise_(e);
+    summaryText = summary.text;
   } catch (err) {
     summaryText = 'Новий запит надійшов, але прочитати його не вдалося: ' + err;
-    summaryHtml = summaryText;
   }
 
-  // Відправка на Email (звичайним текстом)
+  // Mail carries the request in full — it is the archive copy, and MailApp has no size limit
+  // worth worrying about here.
   var recipient = setting_('NOTIFY_EMAIL') || Session.getEffectiveUser().getEmail();
   if (recipient) {
     MailApp.sendEmail(recipient, 'CSK: Новий запит на автоматизацію', summaryText);
   }
 
-  // Відправка в Telegram (HTML)
-  var botToken = setting_('TELEGRAM_BOT_TOKEN');
   var chatId = setting_('TELEGRAM_CHAT_ID');
-  var topicId = setting_('TELEGRAM_TOPIC_ID');
+  if (!setting_('TELEGRAM_BOT_TOKEN') || !chatId) return;
 
-  if (botToken && chatId) {
-    try {
-      var payload = {
-        chat_id: chatId,
-        text: '💡 <b>Новий запит на автоматизацію</b>\n\n' + summaryHtml,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true
-      };
-
-      if (topicId) {
-        payload.message_thread_id = topicId;
-      }
-
-      UrlFetchApp.fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify(payload),
-        muteHttpExceptions: true
-      });
-    } catch (err) {
-      Logger.log('Telegram сповіщення не спрацювало: ' + err);
-    }
+  if (!summary) {
+    sendTelegram_('sendMessage', { chat_id: chatId, text: summaryText });
+    return;
   }
+
+  // Chat gets a signal, not the record: the "before"/"after" fields hold HTML pasted out of
+  // the editor, routinely 20 000+ characters. sendMessage caps at 4096, so the old message
+  // was rejected outright — and even truncated it would have been a wall of markup.
+  sendTelegram_('sendMessage', {
+    chat_id: chatId,
+    text: buildTelegramText_(summary.fields, summary.sheetUrl),
+    parse_mode: 'HTML',
+    disable_web_page_preview: true
+  });
+
+  sendScreenshots_(summary.fields, fieldValue_(summary.fields, Q_TARGET) || 'Скріншот із запиту');
 }
 
-/** Write the default status into the new row and build the notification text. */
+/** Write the default status into the new row, and return the answers plus the mail body. */
 function stampStatusAndSummarise_(e) {
   var sheet = e.range.getSheet();
   var row = e.range.getRow();
@@ -323,27 +338,15 @@ function stampStatusAndSummarise_(e) {
   var values = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
 
   var linesText = [];
-  var linesHtml = [];
-  
+  var fields = [];
+
   for (var i = 0; i < headers.length; i++) {
     var header = String(headers[i]);
     if (!header || header === STATUS_COL_NAME || header === COMMENT_COL_NAME) continue;
-    
-    var val = String(values[i]);
-    
-    // Для Email
-    linesText.push(header + ':\n' + val + '\n');
-    
-    // Для Telegram: екрануємо HTML-теги користувача, щоб не зламати parse_mode: 'HTML'
-    var safeVal = val.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    var safeHeader = header.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    
-    // Загортаємо в <code> блок, якщо це питання ДО або ПІСЛЯ, для краси
-    if (header === Q_BEFORE || header === Q_AFTER) {
-       safeVal = '<code>' + safeVal + '</code>';
-    }
-    
-    linesHtml.push('<b>' + safeHeader + ':</b>\n' + safeVal + '\n');
+
+    var value = String(values[i]);
+    linesText.push(header + ':\n' + value + '\n');
+    fields.push({ header: header, value: value });
   }
 
   var statusIndex = headers.indexOf(STATUS_COL_NAME);
@@ -352,12 +355,200 @@ function stampStatusAndSummarise_(e) {
   }
 
   var sheetUrl = sheet.getParent().getUrl();
-  
   linesText.push('Таблиця: ' + sheetUrl);
-  linesHtml.push('<a href="' + sheetUrl + '">Відкрити таблицю 📊</a>');
-  
-  return {
-    text: linesText.join('\n'),
-    html: linesHtml.join('\n')
-  };
+
+  // Returns data, not formatted output: mail and chat want very different things out of it.
+  return { text: linesText.join('\n'), fields: fields, sheetUrl: sheetUrl };
+}
+
+function fieldValue_(fields, header) {
+  for (var i = 0; i < fields.length; i++) {
+    if (fields[i].header === header) return fields[i].value;
+  }
+  return '';
+}
+
+/** The compact chat message: who/where/what, a readable excerpt, and a way to the full record. */
+function buildTelegramText_(fields, sheetUrl) {
+  var head = ['💡 <b>Новий запит на автоматизацію</b>', ''];
+
+  [{ header: Q_AUTHOR, label: 'Хто' },
+   { header: Q_TOOL, label: 'Де' },
+   { header: Q_TARGET, label: 'Що' },
+   { header: Q_FREQUENCY, label: 'Частота' }].forEach(function (field) {
+    var value = fieldValue_(fields, field.header);
+    if (value) head.push('<b>' + field.label + ':</b> ' + escapeHtml_(value));
+  });
+
+  var previews = [];
+  [{ header: Q_BEFORE, label: 'ДО' },
+   { header: Q_AFTER, label: 'ПІСЛЯ' }].forEach(function (field) {
+    var value = fieldValue_(fields, field.header);
+    if (value) previews.push('', '<b>' + field.label + ':</b>', '<i>' + previewText_(value) + '</i>');
+  });
+
+  var tail = ['', '<a href="' + sheetUrl + '">Відкрити таблицю 📊</a>'];
+
+  var text = head.concat(previews, tail).join('\n');
+  if (text.length <= TELEGRAM_TEXT_LIMIT) return text;
+
+  // Unreachable with 200-character previews, but the product name is free text too. Drop the
+  // previews wholesale rather than slicing: a cut through an HTML tag would trade one silent
+  // failure ("message is too long") for another ("can't parse entities").
+  return head.concat(tail).join('\n');
+}
+
+/**
+ * A readable excerpt of a field that contains pasted HTML.
+ *
+ * The markup is stripped rather than shown. Telegram renders only a narrow set of tags, so the
+ * alternative — escaping the source — puts `&lt;p style="margin:0 0 12px"&gt;…` in the chat,
+ * which is unreadable and spends the whole character budget on attributes. The original, with
+ * its formatting intact, stays in the sheet and in the mail.
+ */
+function previewText_(raw) {
+  var text = String(raw).replace(/<[^>]+>/g, ' ');
+
+  // Decode BEFORE collapsing, so that an &nbsp; becomes a space that the collapse can absorb.
+  // The pipeline emits NBSP deliberately (NUM<NBSP>UNIT), so this is the common case, not an edge.
+  text = decodeEntities_(text).replace(/\s+/g, ' ').trim();
+
+  if (text.length <= PREVIEW_CHARS) return escapeHtml_(text);
+
+  var clipped = text.slice(0, PREVIEW_CHARS);
+  // Back off to a word boundary, but only when the cut actually landed inside a word —
+  // testing the character just past the cut. Backing off unconditionally would throw away a
+  // whole word whenever the budget happened to end exactly on one.
+  var cutMidWord = /\S/.test(text.charAt(PREVIEW_CHARS));
+  var atWord = cutMidWord ? clipped.replace(/\s+\S*$/, '') : clipped;
+  // Escaping comes last, on the already-clipped text: clipping escaped text could cut through
+  // an entity and hand Telegram a half-written `&am`.
+  return escapeHtml_(atWord || clipped) + '…';
+}
+
+function decodeEntities_(text) {
+  return text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&'); // last, or `&amp;lt;` would decode twice into `<`
+}
+
+function escapeHtml_(text) {
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Post the uploaded screenshots into the chat.
+ *
+ * The file-upload question has to be created by hand in the Forms UI — see Q_SCREENSHOT. Its
+ * answer arrives in the sheet as comma-separated `.../open?id=<id>` links, so the ids are read
+ * straight out of the cell and the separator never matters.
+ */
+function sendScreenshots_(fields, caption) {
+  var cell = '';
+  for (var i = 0; i < fields.length; i++) {
+    if (fields[i].header.indexOf(Q_SCREENSHOT) === 0) { cell = fields[i].value; break; }
+  }
+  if (!cell) return;
+
+  var chatId = setting_('TELEGRAM_CHAT_ID');
+  var ids = cell.match(/[-\w]{25,}/g) || [];
+
+  ids.forEach(function (id) {
+    try {
+      var file = DriveApp.getFileById(id);
+
+      if (file.getSize() > TELEGRAM_PHOTO_LIMIT_BYTES) {
+        Logger.log('Файл завеликий для Telegram, лишається в таблиці: ' + file.getUrl());
+        return;
+      }
+
+      // An image goes as a photo so it is visible in the chat; anything else (PDF, docx) as a
+      // document, which sendPhoto would reject.
+      var isImage = file.getMimeType().indexOf('image/') === 0;
+      var payload = { chat_id: chatId, caption: caption };
+      payload[isImage ? 'photo' : 'document'] = file.getBlob();
+
+      sendTelegram_(isImage ? 'sendPhoto' : 'sendDocument', payload);
+    } catch (err) {
+      Logger.log('Не вдалося надіслати файл ' + id + ': ' + err);
+    }
+  });
+}
+
+/**
+ * One Telegram call, with the failure made visible.
+ *
+ * `muteHttpExceptions: true` stays — a rejected message must not abort the trigger after the
+ * mail has already gone out. What changes is that the response is now READ: without this a 400
+ * returns normally, the catch never fires, and nothing reaches the log. Telegram names the
+ * reason verbatim in the body's `description` field.
+ */
+function sendTelegram_(method, payload) {
+  var botToken = setting_('TELEGRAM_BOT_TOKEN');
+  if (!botToken) return false;
+
+  // setting_ returns a string; message_thread_id must be an integer. Number('') is 0 and
+  // Number('abc') is NaN — both falsy, so an unset or malformed property just omits the field.
+  var topicId = Number(setting_('TELEGRAM_TOPIC_ID'));
+  if (topicId) payload.message_thread_id = topicId;
+
+  var hasBlob = false;
+  for (var key in payload) {
+    if (payload[key] && typeof payload[key].getBytes === 'function') hasBlob = true;
+  }
+
+  // A payload carrying a Blob must be multipart, and UrlFetchApp only builds that when
+  // contentType is left unset. Declaring application/json here would post the JSON of a Blob.
+  var options = hasBlob
+    ? { method: 'post', payload: payload, muteHttpExceptions: true }
+    : {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      };
+
+  try {
+    var response = UrlFetchApp.fetch('https://api.telegram.org/bot' + botToken + '/' + method, options);
+    if (response.getResponseCode() === 200) return true;
+
+    Logger.log('!!! Telegram відхилив ' + method + ' (HTTP ' + response.getResponseCode() + '): '
+      + response.getContentText());
+    return false;
+  } catch (err) {
+    Logger.log('!!! Telegram: запит ' + method + ' не вдався: ' + err);
+    return false;
+  }
+}
+
+/**
+ * Run this from the editor to check the Telegram setup without submitting the form.
+ * Verdict goes to View → Execution log.
+ */
+function testTelegram() {
+  var missing = [];
+  if (!setting_('TELEGRAM_BOT_TOKEN')) missing.push('TELEGRAM_BOT_TOKEN');
+  var chatId = setting_('TELEGRAM_CHAT_ID');
+  if (!chatId) missing.push('TELEGRAM_CHAT_ID');
+
+  if (missing.length) {
+    Logger.log('Не задано у Script Properties: ' + missing.join(', '));
+    Logger.log('Project Settings → Script Properties → Add script property.');
+    return;
+  }
+
+  var ok = sendTelegram_('sendMessage', {
+    chat_id: chatId,
+    text: '✅ <b>Content Swiss Knife</b>\nПеревірка звʼязку — сповіщення налаштовані правильно.',
+    parse_mode: 'HTML',
+    disable_web_page_preview: true
+  });
+
+  Logger.log(ok
+    ? 'Надіслано. Якщо в чаті порожньо — TELEGRAM_CHAT_ID вказує не на той чат.'
+    : 'Не надіслано. Причина — у рядку вище, поле "description" у відповіді Telegram.');
 }
