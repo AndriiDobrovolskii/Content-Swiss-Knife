@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from './specs-grounding';
+import {
+  validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation,
+  inspectGroundedTranslation, describeGroundingFailure,
+} from './specs-grounding';
+import { getBlock, extractBlocks } from './block-repair';
 
 const SRC = `Build Volume: 330 × 330 × 565 mm (61.5 L)
 Hopper Capacity: 105 L
@@ -453,5 +457,135 @@ describe('sanitizeGroundedTranslation', () => {
     it('returns "" for Cyrillic text requested under script: Latin', () => {
       expect(sanitizeGroundedTranslation(SRC_UK, 'Latin')).toBe('');
     });
+  });
+});
+
+describe('inspectGroundedTranslation', () => {
+  // The second real run reported "specs grounding was DISABLED" and nothing else. Three different
+  // causes produce that state and the code kept no evidence of which one fired, so the warning was
+  // unactionable — the point of this is that the NEXT run names the cause.
+
+  it('reports success with the cleaned text', () => {
+    expect(inspectGroundedTranslation(SRC_UK, 'Cyrillic')).toEqual({ text: SRC_UK });
+  });
+
+  it('distinguishes an empty translation from a wrong-script one', () => {
+    expect(inspectGroundedTranslation('   ', 'Cyrillic').failure).toEqual({ kind: 'empty' });
+    expect(inspectGroundedTranslation(SRC, 'Cyrillic').failure?.kind).toBe('wrong-script');
+  });
+
+  it('carries the measured ratio, the threshold and a sample of what came back', () => {
+    // The sample is what tells us whether the model echoed the English sheet or returned something
+    // else entirely — the difference between a prompt problem and a provider problem.
+    const failure = inspectGroundedTranslation(SRC, 'Cyrillic').failure;
+    expect(failure).toMatchObject({ kind: 'wrong-script', threshold: 0.3 });
+    if (failure?.kind === 'wrong-script') {
+      expect(failure.ratio).toBeLessThanOrEqual(0.3);
+      expect(SRC).toContain(failure.sample.replace(/…$/, ''));
+    }
+  });
+
+  it('truncates the sample instead of dumping the whole sheet into a report', () => {
+    const long = 'Material '.repeat(200);
+    const failure = inspectGroundedTranslation(long, 'Cyrillic').failure;
+    if (failure?.kind === 'wrong-script') expect(failure.sample.length).toBeLessThanOrEqual(121);
+  });
+});
+
+describe('describeGroundingFailure', () => {
+  it('names the provider error rather than blaming the script', () => {
+    // The old message claimed the translation "did not yield usable text in the master's script",
+    // which is simply untrue when the call threw.
+    const text = describeGroundingFailure({ kind: 'provider-error' });
+    expect(text).toMatch(/provider|call failed/i);
+    expect(text).not.toMatch(/script/i);
+  });
+
+  it('names an empty translation as such', () => {
+    expect(describeGroundingFailure({ kind: 'empty' })).toMatch(/empty/i);
+  });
+
+  it('quotes the ratio and the sample for a wrong-script result', () => {
+    const text = describeGroundingFailure({
+      kind: 'wrong-script', ratio: 0.04, threshold: 0.3, sample: 'Laser Head Power: 20 W',
+    });
+    expect(text).toContain('0.04');
+    expect(text).toContain('0.3');
+    expect(text).toContain('Laser Head Power');
+  });
+});
+
+describe('validateSpecsGrounding — addressable rows', () => {
+  // A label that drifted between two independent translations of the same English parameter is
+  // the real case: "Child Lock" became "Дитячий замок" in the grounding source and "Блокування
+  // від дітей" in the table. The validator is right that they do not match; what was wrong is
+  // that correcting one label cost a full regeneration — the instrument that once deleted 8 of
+  // 15 live rows. The label lives in a <td>, which the block tier can rewrite in place.
+  const html = specSection(
+    `<tr><td>Тип лазера</td><td>Діодний, 10 Вт</td></tr>`
+    + `<tr><td>Блокування від дітей</td><td>Так</td></tr>`,
+  );
+  const rowIssue = () =>
+    validateSpecsGrounding(html, SRC_UK, 'HTML (uk-UA)').find(i => i.rule === 'spec-row-not-grounded')!;
+
+  it('addresses the offending LABEL cell, not the row or the value', () => {
+    expect(getBlock(html, rowIssue().path!)).toBe('<td>Блокування від дітей</td>');
+  });
+
+  it('numbers the cell the way extractBlocks does', () => {
+    // Same discipline as sentence-length: a validator and a patcher that disagree about which
+    // block is number N would rename somebody else's cell and report success.
+    const index = Number(/^block\[(\d+)\]$/.exec(rowIssue().path!)![1]);
+    expect(extractBlocks(html)[index].outerHTML).toBe('<td>Блокування від дітей</td>');
+  });
+
+  it('carries the allowed parameters in the row issue itself, not only in the companion message', () => {
+    // The block prompt passes each issue's `detail` verbatim. Without the list in THIS detail the
+    // model is told to correct a label with no idea what to correct it to.
+    const issue = validateSpecsGrounding(html, SRC_UK, 'HTML (uk-UA)', ['Laser Type', 'Child Lock'])
+      .find(i => i.rule === 'spec-row-not-grounded')!;
+    expect(issue.detail).toContain('Child Lock');
+  });
+
+  it('omits the list when no allowed parameters were supplied', () => {
+    expect(rowIssue().detail).not.toMatch(/ALLOWED PARAMETERS/);
+  });
+});
+
+describe('validateSpecsGrounding — how much the label anchor is worth', () => {
+  // A §7 row whose value is boolean or prose has no numeric and no Latin anchor, so grounding
+  // rests entirely on stem-matching its label. When the model wrote that label from the ENGLISH
+  // sheet and the grounding source is a SEPARATE Ukrainian translation, the two are independent
+  // renderings of one term and matching them is a coin flip — a real run shipped 15 correct rows
+  // and flagged one, and which one changed between runs. The check must not assert an error it
+  // cannot substantiate.
+  const boolRow = specSection(`<tr><td>Спосіб сповіщення</td><td>Звуковий сигнал</td></tr>`);
+
+  it('reports only a warning when the label was written from a different text', () => {
+    const issues = validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)', [], { labelAnchorTrusted: false });
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('warning');
+  });
+
+  it('keeps it an error when the model saw the very text being grounded against', () => {
+    const issues = validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)', [], { labelAnchorTrusted: true });
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('stays an error regardless when the VALUE carried evidence that did not match', () => {
+    // Numbers survive translation unchanged, so a value whose figures are absent from the source
+    // is real evidence — nothing to do with wording drift.
+    const numericRow = specSection(`<tr><td>Невідомий параметр</td><td>987 мм</td></tr>`);
+    const issues = validateSpecsGrounding(numericRow, SRC_UK, 'HTML (uk-UA)', [], { labelAnchorTrusted: false });
+    expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('defaults to trusting the label anchor, so existing callers are unaffected', () => {
+    expect(validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)')
+      .find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+  });
+
+  it('does not shout louder than its rows: the companion message follows their severity', () => {
+    const issues = validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)', ['Alarm Method'], { labelAnchorTrusted: false });
+    expect(issues.find(i => i.rule === 'spec-rows-allowed-parameters')?.severity).toBe('warning');
   });
 });

@@ -33,6 +33,39 @@ describe('buildBlockRepairPrompt', () => {
     expect(contract.text).toMatch(/exactly one element/i);
   });
 
+  it('says a length ceiling is always satisfiable, so skipping one is not a valid answer', () => {
+    // The escape hatch ("a block you cannot improve gets no <patch>") is needed for safety, but on
+    // the first real run it let the model give up on a sentence it could have split.
+    const [contract] = buildBlockRepairPrompt([request()], 'Ukrainian (uk-UA)').systemBlocks;
+    expect(contract.text).toMatch(/always.*split|split.*always/i);
+  });
+
+  it('tells the model to break the enumeration itself, not an unrelated tail', () => {
+    // The observed failure: given a 26-word sentence listing three programs, the model split off a
+    // short independent clause and left the enumeration whole, so the sentence stayed over the
+    // ceiling — patched, accepted, unresolved.
+    const [contract] = buildBlockRepairPrompt([request()], 'Ukrainian (uk-UA)').systemBlocks;
+    expect(contract.text).toMatch(/list|enumerat/i);
+  });
+
+  it('forbids inventing a spec label and demands the document language', () => {
+    // The allowed-parameter list is ENGLISH ("Child Lock") while the table is Ukrainian. Told to
+    // "pick one from the list" without this, the model copies the English wording into the cell
+    // and trades one defect for another.
+    const [contract] = buildBlockRepairPrompt([request()], 'Ukrainian (uk-UA)').systemBlocks;
+    expect(contract.text).toMatch(/exactly one/i);
+    expect(contract.text).toMatch(/language\s+of\s+the\s+document/i);
+    expect(contract.text).toMatch(/quote/i); // no quotes wrapped around the label
+  });
+
+  it('gives a concrete cutting operation, not another exhortation to be brief', () => {
+    // Two runs proved "split the list itself" does not land. This states the target as a number
+    // and names where to cut.
+    const [contract] = buildBlockRepairPrompt([request()], 'Ukrainian (uk-UA)').systemBlocks;
+    expect(contract.text).toMatch(/semicolon/i);
+    expect(contract.text).toMatch(/every\s+sentence[\s\S]{0,40}under the limit/i);
+  });
+
   it('addresses each block by the index the response must echo back', () => {
     const { userContent } = buildBlockRepairPrompt([request({ index: 3 })], 'Ukrainian (uk-UA)');
     expect(userContent).toContain('block="3"');
