@@ -39,6 +39,72 @@ describe('validateSentenceLength', () => {
     expect(run(p(`${exactly20.slice(0, -1)} іще.`))).toHaveLength(1);
   });
 
+  /**
+   * Regression suite for the XGRIDS L2 Pro 23:14 run: 3 of its 9 sentence-too-long warnings were
+   * §2b bullets of the form `<li><b>Label:</b> sentence</li>`. A colon is not a sentence
+   * terminator, so measuring el.textContent counted label + sentence as ONE sentence:
+   *
+   *   4 + 19 = 23   |   6 + 15 = 21   |   8 + 14 = 22
+   *
+   * Every one of the three sentences is under the ceiling on its own. The domain model has always
+   * treated these as separate fields — BulletItem { lead, text } in description-doc.ts, rendered
+   * by renderBullets as `<b>${lead}</b>${text}`.
+   */
+  describe('bold lead-in is a label, not part of the sentence', () => {
+    const li = (t: string) => `<ul><li>${t}</li></ul>`;
+
+    it('accepts the three real bullets from the run (23, 21 and 22 words with their labels)', () => {
+      const bullets = [
+        `<b>Миттєва кольорова хмара точок:</b> алгоритм LixelUpSample™ обробляє дані на льоту, ` +
+        `тому оператор отримує готовий результат одразу в полі, без окремого етапу камеральної обробки.`,
+
+        `<b>16-канальний LiDAR з діапазоном 0,5–120 м:</b> один прохід охоплює великі об'єкти — ` +
+        `від будівельного майданчика до ділянки траси — без додаткових точок стояння.`,
+
+        `<b>Ступінь захисту IP54 та діапазон -20 °C – 50 °C:</b> сканер продовжує роботу на ` +
+        `майданчику чи в кар'єрі за пилу, вологи та перепадів температури.`,
+      ];
+      for (const b of bullets) expect(run(li(b))).toEqual([]);
+    });
+
+    it('a lead-in ending in a full stop counts too — the signal is position, not punctuation', () => {
+      // Center 3D Print's house style; the space lives inside the <b>.
+      const bullet =
+        `<b>Складається за лічені хвилини. </b>Тришарова конструкція розкладається без інструментів, ` +
+        `а фіксатори утримують раму жорстко навіть на нерівній підлозі майстерні.`;
+      expect(run(li(bullet))).toEqual([]);
+    });
+
+    it('measures the lead-in itself, so an over-long "label" is still reported', () => {
+      const longLead = Array.from({ length: 25 }, (_, i) => `слово${i}`).join(' ');
+      const issues = run(li(`<b>${longLead}:</b> коротке речення.`));
+      expect(issues).toHaveLength(1);
+      expect(issues[0].detail).toContain('слово24');
+      // The reported sentence must be the LEAD ALONE. Without this the test also passes on the
+      // old behaviour, where lead+sentence were one 27-word blob that happened to contain
+      // "слово24" — i.e. it would not discriminate.
+      expect(issues[0].detail).not.toContain('коротке речення');
+      expect(issues[0].detail).toContain('of 25 words');
+    });
+
+    it('bold in the MIDDLE of a sentence splits nothing', () => {
+      const withInlineBold = TOO_LONG.replace('гравіювання', '<b>гравіювання</b>');
+      expect(run(p(withInlineBold))).toHaveLength(1);
+    });
+
+    it('an <li> with no bold lead-in is measured exactly as before', () => {
+      expect(run(li(TOO_LONG))).toHaveLength(1);
+    });
+
+    it('does not silence the real long paragraphs from the same run', () => {
+      const real29 =
+        `Обертовий LiDAR, дві панорамні камери та 6DOF IMU працюють як єдина система: ` +
+        `алгоритм Multi-SLAM об'єднує їхні дані в реальному часі, тому оператор бачить ` +
+        `остаточний результат ще до завершення маршруту.`;
+      expect(run(p(real29))).toHaveLength(1);
+    });
+  });
+
   describe('sentence splitting hazards', () => {
     it('does not split on an abbreviation followed by a capital', () => {
       const text = 'Комплект містить 500 шт. Наступний етап — калібрування столу.';

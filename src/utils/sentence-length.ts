@@ -98,6 +98,47 @@ export function countWords(sentence: string): number {
 }
 
 /**
+ * Splits a prose block into the segments that are measured independently.
+ *
+ * A bullet's bold lead-in is a LABEL, not the opening of the sentence that follows it. The schema
+ * models them as separate fields — BulletItem { lead, text } in description-doc.ts, emitted by
+ * renderBullets as `<b>${lead}</b>${text}` — but a colon is not a sentence terminator, so reading
+ * el.textContent glued them into one over-long "sentence". Real incident (XGRIDS L2 Pro,
+ * 2026-07-28): three §2b bullets reported at 23, 21 and 22 words whose sentences were 19, 15 and
+ * 14 — every one of them correct prose, and every one of them about to be rewritten by the repair
+ * ladder to satisfy a measurement that was wrong.
+ *
+ * The lead is MEASURED, not discarded: it becomes its own segment, so a lead-in that is itself
+ * over the ceiling still reports. Discarding it would create a blind spot.
+ *
+ * The test is structural — "the first meaningful node is <b>/<strong>" — not textual. Bold in the
+ * MIDDLE of a sentence is untouched because it is not first. Punctuation is deliberately not part
+ * of the test: Center 3D Print writes its leads with a full stop rather than a colon, so position
+ * is the only reliable signal.
+ *
+ * If a bold opening turns out to be a genuine sentence start rather than a label, the effect is a
+ * slightly MORE PERMISSIVE count — the same bias countWords already documents as correct for a
+ * warning-severity rule.
+ */
+function proseSegments(el: Element): string[] {
+  const nodes = Array.from(el.childNodes);
+  // The index, not the node: `find` yields `Node | undefined`, which neither narrows across the
+  // isLead guard nor survives an `indexOf` round-trip cleanly.
+  const i = nodes.findIndex(n => (n.textContent ?? '').trim().length > 0);
+  const first = i >= 0 ? nodes[i] : null;
+  const isLead =
+    !!first &&
+    first.nodeType === 1 && // Node.ELEMENT_NODE — `tagName` exists only on Element
+    ['B', 'STRONG'].includes((first as Element).tagName);
+  if (!isLead) return [el.textContent ?? ''];
+
+  // Walked through the DOM rather than by stripping the lead's text off the front of the block:
+  // string surgery breaks on a lead whose wording recurs later in the sentence.
+  const rest = nodes.slice(i + 1).map(n => n.textContent ?? '').join('');
+  return [first!.textContent ?? '', rest];
+}
+
+/**
  * @param html    generated HTML for one locale
  * @param locale  BCP47; an unmapped locale returns no issues rather than guessing a ceiling
  * @param context reporting label, e.g. "HTML (base)"
@@ -126,7 +167,10 @@ export function validateSentenceLength(
   for (const el of Array.from(doc.querySelectorAll('p, li'))) {
     if (el.closest('table, figcaption, section.specs')) continue;
 
-    for (const sentence of splitSentences((el.textContent ?? '').replace(/\s+/g, ' '))) {
+    const sentences = proseSegments(el)
+      .flatMap(segment => splitSentences(segment.replace(/\s+/g, ' ')));
+
+    for (const sentence of sentences) {
       const words = countWords(sentence);
       if (words <= band.ceiling) continue;
       const key = sentence.slice(0, 80);
