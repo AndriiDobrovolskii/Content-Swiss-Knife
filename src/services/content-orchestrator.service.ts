@@ -7,6 +7,7 @@ import { cleanHtmlStructure, stripCodeFences } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
+import { fixDecimalSeparator } from '../utils/decimal-separator';
 import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
@@ -266,6 +267,9 @@ export class ContentOrchestratorService {
         html = wrapVideoFigures(html, input.name);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
+        // Immediately after fixNumberFormatting, which has already stripped thousands separators —
+        // so the decimal pass sees one unambiguous number shape per value.
+        html = fixDecimalSeparator(html, 'uk-UA');
         // AFTER fixNumberFormatting so the cyrillizer sees a canonical NUM<NBSP>UNIT shape, and
         // BEFORE normalizeTerminology so its Cyrillic word-boundary lookarounds see final
         // orthography. Both neighbours are idempotent and independent, so this is a documented
@@ -428,7 +432,7 @@ export class ContentOrchestratorService {
               html = this.applySpanishExpert3dReplacements(html);
             }
             // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
-            html = normalizeTerminology(cyrillizeUnits(fixNumberFormatting(html), locale), locale);
+            html = normalizeTerminology(cyrillizeUnits(fixDecimalSeparator(fixNumberFormatting(html), locale), locale), locale);
             return canonicalizeMultiInOne(html, locale);
           },
           validate: (html) => [
@@ -497,18 +501,25 @@ export class ContentOrchestratorService {
               // no block rung either) — held to the master's standard without the master's tooling.
               // Ordering mirrors produceHtmlA above and is documented there.
               html = fixNumberFormatting(html);
+              html = fixDecimalSeparator(html, isoCode);
               html = cyrillizeUnits(html, isoCode);
               html = normalizeTerminology(html, isoCode);
               return canonicalizeMultiInOne(html, isoCode);
             },
             validate: validateFaqHtml,
             withFeedback: appendRepairFeedback,
+            // Without this rung a FAQ warning was unreachable by ANY instrument: the block pass is
+            // the only thing that can act on a warning (see the master gate's note), and the FAQ
+            // gate simply had none. That is why the L2 Pro report listed three FAQ warnings under
+            // "not repaired" with no patch attempts against them. blockRepairer makes no
+            // assumptions about document shape, so it is safe on the FAQ's schema-free HTML.
+            repairBlocks: this.blockRepairer(isoCode, `FAQ (${isoCode})`, input),
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing FAQ (${isoCode}) (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           });
           const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
           if (faqRepairs > 0) console.info(`[repair-gate] FAQ (${isoCode}): ${faqRepairs} repair(s) applied`);
-          this.repairReport.update(r => [...r, toArtifactReport(`FAQ (${isoCode})`, faqResult)]);
+          this.repairReport.update(r => [...r, toArtifactReport(`FAQ (${isoCode})`, faqResult, this.blockPatchTally.get(`FAQ (${isoCode})`))]);
           if (faqHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
           } else {
@@ -597,6 +608,7 @@ export class ContentOrchestratorService {
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
         // Ordering rationale as in generate()'s master produce.
+        html = fixDecimalSeparator(html, UA_ISO);
         html = cyrillizeUnits(html, UA_ISO);
         html = normalizeTerminology(html, UA_ISO);
         html = canonicalizeMultiInOne(html, UA_ISO);
@@ -725,18 +737,21 @@ export class ContentOrchestratorService {
             html = stripCodeFences(html);
             // Same normalizer chain as the sibling FAQ produce in generate() — see the rationale there.
             html = fixNumberFormatting(html);
+            html = fixDecimalSeparator(html, UA_ISO);
             html = cyrillizeUnits(html, UA_ISO);
             html = normalizeTerminology(html, UA_ISO);
             return canonicalizeMultiInOne(html, UA_ISO);
           },
           validate: validateFaqHtml,
           withFeedback: appendRepairFeedback,
+          // Same rung as the sibling FAQ gate in generate() — see the rationale there.
+          repairBlocks: this.blockRepairer(UA_ISO, 'FAQ (uk-UA)', input),
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing FAQ (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
         const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
         if (faqRepairs > 0) console.info(`[repair-gate] FAQ (uk-UA): ${faqRepairs} repair(s) applied`);
-        this.repairReport.update(r => [...r, toArtifactReport('FAQ (uk-UA)', faqResult)]);
+        this.repairReport.update(r => [...r, toArtifactReport('FAQ (uk-UA)', faqResult, this.blockPatchTally.get('FAQ (uk-UA)'))]);
         if (faqHtml.startsWith('<')) {
           this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [UA_ISO]: faqHtml } }));
         } else {
