@@ -199,6 +199,82 @@ describe('validateSpecsGrounding — allowedParams (repair guidance)', () => {
   });
 });
 
+/**
+ * Regression suite for the XGRIDS L2 Pro 23:14 run.
+ *
+ * The row `Роздільна здатність | 1 × 1 Мп` was reported as not grounded even though the source
+ * sheet plainly carries a `Resolution` parameter — it appears in the ALLOWED PARAMETERS list,
+ * which is derived from the untranslated input. It failed all three anchors for mechanical
+ * reasons: every number in the value is a single digit (below the ≥2-digit floor), the unit is
+ * Cyrillic so there is no Latin token, and the label anchor compares against a TRANSLATION whose
+ * wording drifted. Its two neighbours in the same category passed only by luck of value shape.
+ */
+describe('count-parity precondition', () => {
+  // A drifted translation: "Resolution" came back as "Розділення", so no label word of
+  // "Роздільна здатність" survives into the grounding source.
+  const SRC_DRIFTED =
+    `Розділення: 1 × 1 МП\n` +
+    `Затвор: global shutter\n` +
+    `Поле зору: 190° × 119°`;
+
+  const POSITIONING_CAMERA_ROWS =
+    `<tr><td>Роздільна здатність</td><td>1 × 1 Мп</td></tr>` +
+    `<tr><td>Затвор</td><td>Глобальний (global shutter)</td></tr>` +
+    `<tr><td>Кут огляду</td><td>190° × 119°</td></tr>`;
+
+  const ALLOWED_3 = ['Resolution', 'Shutter', 'FOV'];
+
+  it('sanity: without parity, the drifted row IS reported (the behaviour being conditioned)', () => {
+    const issues = validateSpecsGrounding(
+      specSection(POSITIONING_CAMERA_ROWS), SRC_DRIFTED, 'HTML (uk-UA)', [...ALLOWED_3, 'Extra'],
+    );
+    const rows = issues.filter(i => i.rule === 'spec-row-not-grounded');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].detail).toContain('Роздільна здатність');
+  });
+
+  it('emits nothing when the row count exactly matches the source parameter count', () => {
+    // 3 rows, 3 source parameters. A fabricated row would necessarily make actual > expected,
+    // so under exact parity an unmatched row can only be a translation-matching artifact.
+    const issues = validateSpecsGrounding(
+      specSection(POSITIONING_CAMERA_ROWS), SRC_DRIFTED, 'HTML (uk-UA)', ALLOWED_3,
+    );
+    expect(issues).toEqual([]);
+  });
+
+  it('still catches an INVENTED row, because inventing one breaks parity', () => {
+    // Base rows all ground here (the label matches the drifted translation verbatim), so the one
+    // failure below is the phantom and nothing else — otherwise the mass-failure breaker collapses
+    // the result and the test would pass for the wrong reason.
+    const grounded =
+      `<tr><td>Розділення</td><td>1 × 1 Мп</td></tr>` +
+      `<tr><td>Затвор</td><td>Глобальний (global shutter)</td></tr>` +
+      `<tr><td>Кут огляду</td><td>190° × 119°</td></tr>`;
+    const withPhantom = grounded + `<tr><td>Throughput</td><td>0330 кг/год</td></tr>`;
+    const issues = validateSpecsGrounding(
+      specSection(withPhantom), SRC_DRIFTED, 'HTML (uk-UA)', ALLOWED_3,
+    );
+    const rows = issues.filter(i => i.rule === 'spec-row-not-grounded');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].detail).toContain('Throughput');
+  });
+
+  it('stays active on a shortfall — the Ortur H20 incident shape (fewer rows than the source has)', () => {
+    const issues = validateSpecsGrounding(
+      specSection(`<tr><td>Throughput</td><td>0330 kg/hr</td></tr>`),
+      SRC,
+      'HTML (base)',
+      ['Build Volume', 'Hopper Capacity', 'Layer Thickness', 'Laser'],
+    );
+    expect(issues.some(i => i.rule === 'spec-row-not-grounded')).toBe(true);
+  });
+
+  it('does not fire when allowedParams is empty — parity is unknowable, so nothing changes', () => {
+    const issues = validateSpecsGrounding(specSection(POSITIONING_CAMERA_ROWS), SRC_DRIFTED, 'HTML (uk-UA)');
+    expect(issues.some(i => i.rule === 'spec-row-not-grounded')).toBe(true);
+  });
+});
+
 describe('mass-failure circuit breaker', () => {
   // Deterministic fixtures: `count` grounded rows via the numeric anchor (distinct 4-digit
   // values starting at 1000), and `count` ungrounded rows with fabricated labels/values that
