@@ -542,7 +542,12 @@ describe('validateSpecsGrounding — addressable rows', () => {
   it('carries the allowed parameters in the row issue itself, not only in the companion message', () => {
     // The block prompt passes each issue's `detail` verbatim. Without the list in THIS detail the
     // model is told to correct a label with no idea what to correct it to.
-    const issue = validateSpecsGrounding(html, SRC_UK, 'HTML (uk-UA)', ['Laser Type', 'Child Lock'])
+    //
+    // The list is deliberately LONGER than the table has rows: under exact count parity the
+    // grounding guard stands down entirely (see the COUNT-PARITY PRECONDITION), and this test is
+    // about what the row issue SAYS, not about when it fires. Trimming it back to two entries
+    // would silently stop exercising the assertion below.
+    const issue = validateSpecsGrounding(html, SRC_UK, 'HTML (uk-UA)', ['Work Area', 'Laser Type', 'Child Lock'])
       .find(i => i.rule === 'spec-row-not-grounded')!;
     expect(issue.detail).toContain('Child Lock');
   });
@@ -585,7 +590,9 @@ describe('validateSpecsGrounding — how much the label anchor is worth', () => 
   });
 
   it('does not shout louder than its rows: the companion message follows their severity', () => {
-    const issues = validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)', ['Alarm Method'], { labelAnchorTrusted: false });
+    // Two allowed parameters against a one-row table, on purpose: exact count parity stands the
+    // whole guard down, and this test is about the companion message's SEVERITY, not its trigger.
+    const issues = validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)', ['Work Area', 'Alarm Method'], { labelAnchorTrusted: false });
     expect(issues.find(i => i.rule === 'spec-rows-allowed-parameters')?.severity).toBe('warning');
   });
 });

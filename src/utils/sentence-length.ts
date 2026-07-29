@@ -18,6 +18,7 @@
  * Pure function, no LLM.
  */
 
+import { parseDocument } from 'htmlparser2';
 import type { ValidationIssue } from './output-validator';
 import { SENTENCE_LENGTH_BANDS } from '../prompt-core/constants';
 import { LATIN_TO_CYRILLIC_UNITS } from './unit-tables';
@@ -158,23 +159,45 @@ export function countWords(sentence: string): number {
  * If a bold opening turns out to be a genuine sentence start rather than a label, the effect is a
  * slightly MORE PERMISSIVE count — the same bias countWords already documents as correct for a
  * warning-severity rule.
+ *
+ * Reads `block.outerHTML` rather than a DOM element: this validator moved to the extractBlocks
+ * model so that its `path` numbering matches the block patcher's, and blocks carry the original
+ * bytes, not a live node. Parsed with htmlparser2 — the same parser extractBlocks itself uses, so
+ * the two never disagree about what a block contains.
  */
-function proseSegments(el: Element): string[] {
-  const nodes = Array.from(el.childNodes);
-  // The index, not the node: `find` yields `Node | undefined`, which neither narrows across the
-  // isLead guard nor survives an `indexOf` round-trip cleanly.
-  const i = nodes.findIndex(n => (n.textContent ?? '').trim().length > 0);
+function proseSegments(outerHTML: string): string[] {
+  const doc = parseDocument(outerHTML) as unknown as ParsedNode;
+  const root = (doc.children ?? []).find(node => node.type === 'tag');
+  const nodes = root?.children ?? [];
+
+  // The index, not the node: the lead test turns on whether the bold element is FIRST, and the
+  // position is what carries that meaning.
+  const i = nodes.findIndex(node => nodeText(node).trim().length > 0);
   const first = i >= 0 ? nodes[i] : null;
   const isLead =
     !!first &&
-    first.nodeType === 1 && // Node.ELEMENT_NODE — `tagName` exists only on Element
-    ['B', 'STRONG'].includes((first as Element).tagName);
-  if (!isLead) return [el.textContent ?? ''];
+    first.type === 'tag' &&
+    ['b', 'strong'].includes((first.name ?? '').toLowerCase()); // htmlparser2 lower-cases names
+  if (!isLead) return [nodes.map(nodeText).join('')];
 
-  // Walked through the DOM rather than by stripping the lead's text off the front of the block:
-  // string surgery breaks on a lead whose wording recurs later in the sentence.
-  const rest = nodes.slice(i + 1).map(n => n.textContent ?? '').join('');
-  return [first!.textContent ?? '', rest];
+  // Walked through the parse tree rather than by stripping the lead's text off the front of the
+  // block: string surgery breaks on a lead whose wording recurs later in the sentence.
+  const rest = nodes.slice(i + 1).map(nodeText).join('');
+  return [nodeText(first), rest];
+}
+
+/** Structural view of what parseDocument returns; avoids a direct dependency on `domhandler`. */
+interface ParsedNode {
+  type: string;
+  name?: string;
+  data?: string;
+  children?: ParsedNode[];
+}
+
+/** Visible text of a parsed node, mirroring block-repair's own traversal. */
+function nodeText(node: ParsedNode): string {
+  if (node.type === 'text') return node.data ?? '';
+  return (node.children ?? []).map(nodeText).join('');
 }
 
 /**
@@ -200,11 +223,10 @@ export function validateSentenceLength(
     if (block.tag !== 'p' && block.tag !== 'li') continue;
     if (block.ancestors.some(isExcludedScope)) continue;
 
-    const sentences = proseSegments(el)
-      .flatMap(segment => splitSentences(segment.replace(/\s+/g, ' ')));
+    const sentences = proseSegments(block.outerHTML)
+      .flatMap(segment => splitSentences(segment.replace(/\s+/g, ' ').trim()));
 
     for (const sentence of sentences) {
-    for (const sentence of splitSentences(block.text)) {
       const words = countWords(sentence);
       if (words <= band.ceiling) continue;
       const key = sentence.slice(0, 80);
