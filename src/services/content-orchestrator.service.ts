@@ -8,6 +8,7 @@ import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { fixDecimalSeparator } from '../utils/decimal-separator';
+import { extractVideoEmbeds, restoreMissingVideos, validateVideoCoverage, SourceVideoEmbed } from '../utils/video-manifest';
 import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
@@ -217,6 +218,9 @@ export class ContentOrchestratorService {
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
 
     const isConsumables = input.templateId === 'consumables-resin';
+    // Video embeds the source supplied — the output is obliged to contain every one of them.
+    // Consumables mode has no §3 to put a video in, so it opts out entirely.
+    const videoEmbeds = isConsumables ? [] : extractVideoEmbeds(input.description);
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
     // Extra headroom for the master specifically when an image manifest exists — Task A
     // doesn't reliably hit "exactly N images" on the first pass, and a dropped image is a
@@ -261,9 +265,17 @@ export class ContentOrchestratorService {
         ].filter(Boolean).join('\n\n'),
       };
       const basePayloadA = buildPromptA(masterInput, 'Ukrainian (uk-UA)');
+      // What the LAST produce call had to splice back. Read by the validate array below, which
+      // runs against that same artifact, to surface automatic placement as a warning.
+      let restoredVideos: SourceVideoEmbed[] = [];
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
         let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' }, creativeEffort);
         html = stripCodeFences(html);
+        // BEFORE wrapVideoFigures, so a restored embed goes through exactly the same figure and
+        // attribute contract as one the model emitted itself.
+        const restoration = restoreMissingVideos(html, videoEmbeds, input.name, 'uk-UA');
+        html = restoration.html;
+        restoredVideos = restoration.restored;
         html = wrapVideoFigures(html, input.name, 'uk-UA');
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
@@ -306,6 +318,19 @@ export class ContentOrchestratorService {
           // §7 must not collapse into one catch-all category — runs on the master only, since
           // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
           ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
+          // Should never fire: restoreMissingVideos ran in produce. That is the point — this is
+          // the assertion that the deterministic layer worked, not the mechanism that makes it.
+          ...validateVideoCoverage(html, videoEmbeds, 'HTML (base)'),
+          // Placement by code rather than by the model. Warning tier: the artifact is correct,
+          // but the editor should know the anchor was chosen mechanically.
+          ...restoredVideos.map(e => ({
+            severity: 'warning' as const,
+            rule: 'video-embed-restored',
+            detail:
+              `The model omitted the source video embed (${e.src}); it was re-inserted `
+              + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+            context: 'HTML (base)',
+          })),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
@@ -569,6 +594,8 @@ export class ContentOrchestratorService {
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
 
     const isConsumables = input.templateId === 'consumables-resin';
+    // See the sibling comment in generate().
+    const videoEmbeds = isConsumables ? [] : extractVideoEmbeds(input.description);
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
 
     await this.withProgress(async () => {
@@ -601,9 +628,14 @@ export class ContentOrchestratorService {
         ].filter(Boolean).join('\n\n'),
       };
       const basePayloadA = buildPromptA(uaInput, UA_BASE_LANGUAGE);
+      // See the sibling comment in generate().
+      let restoredVideos: SourceVideoEmbed[] = [];
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
         let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
         html = stripCodeFences(html);
+        const restoration = restoreMissingVideos(html, videoEmbeds, input.name, UA_ISO);
+        html = restoration.html;
+        restoredVideos = restoration.restored;
         html = wrapVideoFigures(html, input.name, UA_ISO);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
@@ -634,6 +666,16 @@ export class ContentOrchestratorService {
           ...validateSentenceLength(html, UA_ISO, 'HTML (uk-UA)'),
           // §7 category-collapse guard — see the identical hook in generate() for rationale.
           ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
+          // Video coverage + automatic-placement notice — see the identical hook in generate().
+          ...validateVideoCoverage(html, videoEmbeds, 'HTML (uk-UA)'),
+          ...restoredVideos.map(e => ({
+            severity: 'warning' as const,
+            rule: 'video-embed-restored',
+            detail:
+              `The model omitted the source video embed (${e.src}); it was re-inserted `
+              + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+            context: 'HTML (uk-UA)',
+          })),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',

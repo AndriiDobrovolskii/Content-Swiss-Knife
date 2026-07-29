@@ -58,7 +58,13 @@ export function videoFigcaption(productName: string, locale?: string): string {
   return (FIGCAPTION_TEMPLATES[lang] ?? FIGCAPTION_TEMPLATES['en'])(productName);
 }
 
-function isVideoSrc(src: string): boolean {
+/**
+ * Is this iframe a YouTube/Vimeo video embed (as opposed to a map or a widget)?
+ *
+ * Exported so video-manifest.ts recognises exactly the same set of embeds this wrapper does. A
+ * second copy of the host list is how "the extractor found it but the wrapper ignored it" starts.
+ */
+export function isVideoSrc(src: string): boolean {
   return src.includes('youtube.com') || src.includes('youtu.be') || src.includes('vimeo.com');
 }
 
