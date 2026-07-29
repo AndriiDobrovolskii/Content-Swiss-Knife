@@ -65,9 +65,17 @@ function checkNumberFormatting(html: string, locale: string | undefined, issues:
   //                          double-broken value like a comma-less, space-less "1.75mm" for units the separate
   //                          unit-spacing check doesn't cover, e.g. "2.4GHz")
   // (?!\.\d)               — not followed by another ".digit" (multi-part version)
+  // (?<![Ff]\/)            — not an f-number aperture ("F/2.0", "f/1.8"). A lens aperture is a
+  //                          ratio designation carried verbatim from the source sheet, not a
+  //                          measured quantity, so rewriting it to "F/2,0" would edit a spec value
+  //                          to satisfy a typography rule. Observed on XGRIDS L2 Pro (2026-07-28),
+  //                          where `Діафрагма | F/2.0` was the only hit in the whole document.
+  //                          Deliberately [Ff] and not [A-Za-z]: a digit before the slash ("1/2.5")
+  //                          and a spaced ratio ("км/год 1.5") must both keep firing.
+  //                          Known limitation, not closed: "F/ 2.0" with a space still slips past.
   // Known limitation: a bare two-part version like "AMS 2.0" can still false-positive — accepted, severity stays 'warning'.
   const dotDecimal = text.match(
-    /(?<![\w.])(?<!IEEE\s)(?<!USB\s)(?<!Bluetooth\s)(?<!HDMI\s)\d+\.(?!\d{3}(?!\d))(?=(\d+))\1(?!(?:Q|D|X|AB|ac|ax|be|[abgnx])(?![a-zA-Z]))(?!\.\d)/i,
+    /(?<![\w.])(?<!IEEE\s)(?<!USB\s)(?<!Bluetooth\s)(?<!HDMI\s)(?<![Ff]\/)\d+\.(?!\d{3}(?!\d))(?=(\d+))\1(?!(?:Q|D|X|AB|ac|ax|be|[abgnx])(?![a-zA-Z]))(?!\.\d)/i,
   );
   if (dotDecimal) {
     issues.push({

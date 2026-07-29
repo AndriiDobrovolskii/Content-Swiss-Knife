@@ -20,6 +20,38 @@ const ORTUR_H20_SPECS = `| Item | Specification |
 | **Camera** | 200,000 Pixel |
 | **Maximum Height of Engravable Objects** | 98mm |`;
 
+/**
+ * The XGRIDS L2 Pro shape: a manufacturer sheet split into several CATEGORY tables rather than
+ * one flat one. Reduced from the real sheet — what this fixture exists to exercise is structural
+ * (several header+separator pairs in one document), not which rows happen to be present.
+ *
+ * "Resolution" and "Shutter" appear in BOTH camera tables. That is not a typo: the real sheet
+ * lists them once for the panoramic camera and once for the positioning camera, and both must
+ * survive into the label list — see the duplicate test below.
+ */
+const MULTI_TABLE_SPECS = [
+  '## System Parameters',
+  '',
+  '| Item | Specification |',
+  '| :--- | :--- |',
+  '| Weight | 1.7 kg |',
+  '| Storage | 1 TB SSD |',
+  '',
+  '## Panoramic Camera',
+  '',
+  '| Item | Specification |',
+  '| :--- | :--- |',
+  '| Resolution | 2 x 48 MP |',
+  '| Shutter | Rolling shutter |',
+  '',
+  '## Positioning Camera',
+  '',
+  '| Item | Specification |',
+  '| :--- | :--- |',
+  '| Resolution | 1 x 1 MP |',
+  '| Shutter | Global shutter |',
+].join('\n');
+
 function specSection(rowCount: number): string {
   const rows = Array.from({ length: rowCount }, (_, i) => `<tr><td>Row ${i}</td><td>${i}</td></tr>`).join('');
   return `<section class="specs"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table></section>`;
@@ -147,6 +179,9 @@ describe('expectedSpecParameterLabels', () => {
     const cases: Array<[string, string]> = [
       [ORTUR_H20_SPECS, 'H20 Laser Engraving Machine'],
       [ORTUR_H20_SPECS, 'Some Unrelated Product'],
+      // Multi-table: without this case the invariant only ever ran on the input shape where the
+      // single-table parser bug cannot show itself.
+      [MULTI_TABLE_SPECS, 'XGRIDS L2 Pro'],
       [`| Item | Specification |\n| :--- | :--- |\n| Compatible Nozzle Model | E3D V6 |\n| Weight | 12 kg |`, 'Creality K1 Max'],
       [`| Item | Specification |\n| :--- | :--- |\n| Full Name | Ortur H20 Laser Engraving Machine |\n| Weight | 2.5 kg |`, 'H20 Laser Engraving Machine'],
       [`| Item | Specification |\n| :--- | :--- |\n| Weight | 12 kg |\n| Color | N/A |\n| Warranty | - |`, ''],
@@ -155,6 +190,103 @@ describe('expectedSpecParameterLabels', () => {
     for (const [specs, name] of cases) {
       expect(countExpectedSpecRows(specs, name)).toBe(expectedSpecParameterLabels(specs, name).length);
     }
+  });
+});
+
+/**
+ * Regression suite for the XGRIDS L2 Pro incident: the parser read only the FIRST markdown table
+ * in input.specs, so a sheet split into 8 category tables yielded 8 "allowed parameters" out of
+ * 45 real ones. The artifact shipped with 4 unresolved §7 errors and the repair attempt was
+ * discarded, because the "ALLOWED PARAMETERS" message it was handed was false.
+ */
+describe('expectedSpecParameterLabels — multi-table sheets', () => {
+  it('reads every table when they are separated by blank lines and headings', () => {
+    const labels = expectedSpecParameterLabels(MULTI_TABLE_SPECS, 'XGRIDS L2 Pro');
+    expect(labels).toEqual(['Weight', 'Storage', 'Resolution', 'Shutter', 'Resolution', 'Shutter']);
+  });
+
+  it('reads both tables when a heading is the ONLY thing between them (no blank lines)', () => {
+    const md = [
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| Weight | 1.7 kg |',
+      '## Accuracy',
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| RMSE | 3 cm |',
+    ].join('\n');
+    expect(expectedSpecParameterLabels(md, '')).toEqual(['Weight', 'RMSE']);
+  });
+
+  it('does not swallow the second table\'s header or separator as data rows when tables are adjacent', () => {
+    // No blank line, no heading — table 2 starts on the line after table 1's last row. This is
+    // the shape a nested-loop parser gets wrong: "Item" and ":---" are well-formed pipe rows, so
+    // an inner loop that only breaks on a NON-table line happily files them as spec rows.
+    const md = [
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| Weight | 1.7 kg |',
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| Storage | 1 TB SSD |',
+    ].join('\n');
+    const labels = expectedSpecParameterLabels(md, '');
+    expect(labels).toEqual(['Weight', 'Storage']);
+    expect(labels).not.toContain('Item');
+    expect(labels).not.toContain(':---');
+  });
+
+  it('does not absorb prose sitting between two tables', () => {
+    const md = [
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| Weight | 1.7 kg |',
+      '',
+      'Values above are typical and may vary by batch.',
+      '',
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| Storage | 1 TB SSD |',
+    ].join('\n');
+    expect(expectedSpecParameterLabels(md, '')).toEqual(['Weight', 'Storage']);
+  });
+
+  it('excludes a product-name row found in the SECOND table, not only the first', () => {
+    const md = [
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| Weight | 1.7 kg |',
+      '',
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| Product Name | XGRIDS L2 Pro |',
+      '| RMSE | 3 cm |',
+    ].join('\n');
+    const labels = expectedSpecParameterLabels(md, 'XGRIDS L2 Pro');
+    expect(labels).toEqual(['Weight', 'RMSE']);
+  });
+
+  it('keeps BOTH occurrences of a label repeated across tables — the list is a string[], never a Set', () => {
+    // Two cameras legitimately each have a "Resolution" row. Collapsing them would tell the
+    // repair model that one of the two rows is unaccounted for, i.e. instruct it to delete data.
+    const labels = expectedSpecParameterLabels(MULTI_TABLE_SPECS, 'XGRIDS L2 Pro');
+    expect(labels.filter(l => l === 'Resolution')).toHaveLength(2);
+    expect(labels.filter(l => l === 'Shutter')).toHaveLength(2);
+    expect(countExpectedSpecRows(MULTI_TABLE_SPECS, 'XGRIDS L2 Pro')).toBe(6);
+  });
+
+  it('still excludes empty/"N/A" values in a later table', () => {
+    const md = [
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| Weight | 1.7 kg |',
+      '',
+      '| Item | Specification |',
+      '| :--- | :--- |',
+      '| Colour | N/A |',
+      '| Storage | 1 TB SSD |',
+    ].join('\n');
+    expect(expectedSpecParameterLabels(md, '')).toEqual(['Weight', 'Storage']);
   });
 });
 

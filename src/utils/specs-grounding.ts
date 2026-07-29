@@ -51,6 +51,7 @@ import type { ValidationIssue } from './output-validator';
 import { extractBlocks } from './block-repair';
 import { stripCodeFences } from './html-cleaner';
 import { stripThousandsSeparators } from './number-format-fixer';
+import { countActualSpecRows } from './spec-count-parity';
 
 /** Words too generic to serve as grounding evidence for a label. */
 const LABEL_STOPWORDS = new Set([
@@ -178,6 +179,41 @@ export function validateSpecsGrounding(
 
   const specTables = Array.from(doc.querySelectorAll('section.specs table'));
   if (specTables.length === 0) return issues; // nothing in scope → no-op
+
+  // COUNT-PARITY PRECONDITION
+  //
+  // When the table has exactly as many rows as the source has §7-eligible parameters, a
+  // fabricated row is arithmetically impossible: inventing one necessarily makes actual >
+  // expected. Under exact parity an unmatched row can therefore only be an artifact of matching
+  // against a TRANSLATION of the source, never a hallucination — so the guard stands down.
+  //
+  // Real incident (XGRIDS L2 Pro 16/120, 2026-07-28): `Роздільна здатність | 1 × 1 Мп` was
+  // reported as ungrounded while the source plainly carries a `Resolution` parameter. It missed
+  // all three anchors for mechanical reasons — every number in the value is a single digit (below
+  // extractNumberTokens' ≥2-digit floor), the unit is Cyrillic so there is no Latin token, and the
+  // translated source rendered the label with different wording. Its two neighbours in the same
+  // category passed only by luck of value shape (one had a Latin loanword, one had 3-digit
+  // numbers). A verdict decided by the shape a value happens to take is not evidence about the
+  // source.
+  //
+  // Same reasoning the mass-failure breaker below already applies: the gate may only narrow
+  // output when it trusts its own input.
+  //
+  // ACCEPTED COST: a 1-for-1 swap (delete a real row, invent a fake one) preserves the count and
+  // becomes invisible here. That is a far rarer failure than the translation-wording drift seen
+  // twice in consecutive runs, and the phantom row this module was written for
+  // ("Throughput | 0330 kg/hr") was an ADDITION, which parity still catches.
+  //
+  // The count comes from countActualSpecRows rather than being recomputed here, and that is
+  // load-bearing: the grading loop below scopes rows with `tbody tr`, and so does
+  // countActualSpecRows. A stricter selector here could declare parity while the loop still had
+  // rows to fail (or the reverse). Because allowedParams.length === countExpectedSpecRows() is an
+  // already-tested invariant, this predicate is exactly "validateSpecCountParity has nothing to
+  // say about this table" — one rule expressed in two places, not two rules.
+  if (allowedParams.length > 0) {
+    const actualRows = countActualSpecRows(html);
+    if (actualRows >= 0 && actualRows === allowedParams.length) return issues;
+  }
 
   const sourceNorm = normalizeText(sourceSpecs);
   // Symmetric stemming: source words are stemmed the same way as label words, so exact matches
