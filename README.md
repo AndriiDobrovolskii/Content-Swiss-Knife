@@ -15,6 +15,7 @@ It is built around a single quality benchmark: match or exceed hand‑crafted, C
 - [Architecture](#architecture)
 - [How generation works](#how-generation-works)
 - [Tools & modes](#tools--modes)
+- [Improvement-request tracker](#improvement-request-tracker)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Running the app](#running-the-app)
@@ -116,6 +117,22 @@ Beyond the main generator, the app ships several focused modes:
 - **Image Tools** — image processing and AI alt‑text generation *(under product review — see roadmap)*.
 
 Source material can be supplied directly, pulled from a **URL** (with a fetch → reader‑fallback chain for bot‑protected pages), or extracted from a **PDF**. Product enrichment by name is available via Serper.
+
+---
+
+## Improvement-request tracker
+
+The editors using this tool are the ones who notice which manual step keeps repeating.
+A 💡 **«Запропонувати покращення»** button at the bottom of the sidebar opens a Google Form
+prefilled with who is asking and which mode they were in; the HTML editor has the same
+button in its toolbar, and there it also copies the current (beautified) HTML to the
+clipboard for the form's "before" field. Responses land in a Google Sheet with **Статус**
+and **Коментар розробника** columns, which the team can watch read-only.
+
+The form, the sheet and the submit notification are created by a one-off Apps Script —
+see [`tools/feedback-form/README.md`](tools/feedback-form/README.md). It prints the values
+that go into `feedbackForm` in `src/environments/environment*.ts`; until `baseUrl` is filled
+in, both buttons stay hidden.
 
 ---
 
@@ -254,10 +271,15 @@ src/
     llm.service.ts
     retrieval.service.ts
     history.service.ts
+    feedback-context.service.ts      # Who is asking (improvement-request form)
   utils/
     output-validator.ts     # Acceptance-criteria checks
     html-cleaner.ts
-  app/                       # Angular standalone components, types
+    feedback-url.ts         # Prefilled Google Form link builder
+  environments/             # environment.ts / environment.prod.ts (fileReplacements)
+  app/                      # Angular standalone components, types
+tools/
+  feedback-form/            # One-off Apps Script that creates the form + sheet
 ```
 
 ---

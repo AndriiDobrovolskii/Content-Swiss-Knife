@@ -17,6 +17,9 @@ import { SourceInputComponent } from './components/source-input/source-input.com
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { HtmlEditorComponent } from './components/html-editor/html-editor.component';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
+import { FeedbackContextService } from '../services/feedback-context.service';
+import { buildFeedbackUrl } from '../utils/feedback-url';
+import { environment } from '../environments/environment';
 import saveAs from 'file-saver';
 
 interface InputImage {
@@ -187,6 +190,11 @@ const TRANSLATIONS = {
     repairReportPersisted: 'still failing',
     repairReportDownload: 'Download .md',
     repairReportWarningsOnly: 'warning(s) — informational, no repair needed',
+    feedbackBtn: 'Suggest an improvement',
+    feedbackTooltip: 'Something routine you keep doing by hand? Tell us — opens the request form',
+    feedbackRenameTooltip: 'Change your name',
+    feedbackNamePrompt: 'Your name (goes into the request so we know who to ask back):',
+    feedbackPopupBlocked: 'The browser blocked the new tab. Open the form:',
   },
   uk: {
     appTitle: 'SEO Content',
@@ -350,7 +358,30 @@ const TRANSLATIONS = {
     repairReportPersisted: 'досі не пройдено',
     repairReportDownload: 'Завантажити .md',
     repairReportWarningsOnly: 'попередження — інформаційно, виправлення не потрібне',
+    feedbackBtn: 'Запропонувати покращення',
+    feedbackTooltip: 'Робите щось рутинне руками? Напишіть — відкриється форма запиту',
+    feedbackRenameTooltip: 'Змінити своє ім’я',
+    feedbackNamePrompt: 'Ваше ім’я (потрапить у запит, щоб було зрозуміло, в кого перепитати):',
+    feedbackPopupBlocked: 'Браузер заблокував нову вкладку. Відкрити форму:',
   }
+};
+
+/**
+ * Tool names sent to the "Де це трапилось?" field of the request form.
+ * Keep in sync with the dropdown options in tools/feedback-form/create-form.gs.
+ */
+const TOOL_LABEL: Record<AppMode, string> = {
+  'generator': 'Generator',
+  'ua-generator': 'UA Description',
+  'optimizer': 'Optimizer',
+  'translator': 'Translator',
+  'image-tools': 'Image Tools',
+  'seo-generator': 'SEO Meta',
+  'copywriter': 'Copywriter',
+  'readability': 'Readability',
+  'slug-generator': 'Slug Generator',
+  'html-editor': 'HTML-редактор',
+  'dashboard': 'Dashboard',
 };
 
 @Component({
@@ -363,6 +394,7 @@ export class AppComponent {
   private orchestrator = inject(ContentOrchestratorService);
   private historyService = inject(HistoryService);
   private llmService = inject(LlmService);
+  private feedback = inject(FeedbackContextService);
 
   // App Mode
   appMode = signal<AppMode>('generator');
@@ -376,6 +408,14 @@ export class AppComponent {
 
   // Computed Labels
   uiLabels = computed(() => TRANSLATIONS[this.uiLanguage()]);
+
+  // --- IMPROVEMENT-REQUEST FORM ---
+  // null until the form is configured in src/environments/ — the buttons stay hidden.
+  feedbackUrl = computed(() => buildFeedbackUrl(environment.feedbackForm, {
+    author: this.feedback.editorName(),
+    tool: TOOL_LABEL[this.appMode()],
+  }));
+  feedbackPopupBlocked = signal<boolean>(false);
 
   // Dark Mode
   darkMode = signal<boolean>(false);
@@ -706,6 +746,25 @@ export class AppComponent {
       return;
     }
     this.appMode.set(mode);
+  }
+
+  // --- IMPROVEMENT-REQUEST FORM ---
+
+  /** Open the request form prefilled with who is asking and which tool they were in. */
+  openFeedback() {
+    // Synchronous on purpose: no await between the click and window.open, so the
+    // transient user activation is still alive and the popup is not blocked.
+    if (!this.feedback.ensureEditorName(this.uiLabels().feedbackNamePrompt)) return;
+
+    const url = this.feedbackUrl();
+    if (!url) return;
+
+    this.feedbackPopupBlocked.set(!this.feedback.openFormTab(url));
+  }
+
+  /** Fix a name typed wrong the first time — the prompt only appears while the name is empty. */
+  renameEditor() {
+    this.feedback.askEditorName(this.uiLabels().feedbackNamePrompt);
   }
 
   onWebsiteChange(event: Event) {
