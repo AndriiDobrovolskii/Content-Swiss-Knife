@@ -489,8 +489,17 @@ export class ContentOrchestratorService {
             maxRepairs: this.maxRepairs(),
             basePayload: basePayloadFaq,
             produce: async (payload) => {
-              const html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode }, creativeEffort);
-              return stripCodeFences(html);
+              let html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode }, creativeEffort);
+              html = stripCodeFences(html);
+              // The FAQ is validated by the same validateGeneratedHtml as the master, so it must
+              // get the same deterministic normalizers. Without them the gate reports unit-spacing
+              // and latin-unit-in-cyrillic-text findings that no instrument can reach (the FAQ had
+              // no block rung either) — held to the master's standard without the master's tooling.
+              // Ordering mirrors produceHtmlA above and is documented there.
+              html = fixNumberFormatting(html);
+              html = cyrillizeUnits(html, isoCode);
+              html = normalizeTerminology(html, isoCode);
+              return canonicalizeMultiInOne(html, isoCode);
             },
             validate: validateFaqHtml,
             withFeedback: appendRepairFeedback,
@@ -712,8 +721,13 @@ export class ContentOrchestratorService {
           maxRepairs: this.maxRepairs(),
           basePayload: basePayloadFaq,
           produce: async (payload) => {
-            const html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
-            return stripCodeFences(html);
+            let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
+            html = stripCodeFences(html);
+            // Same normalizer chain as the sibling FAQ produce in generate() — see the rationale there.
+            html = fixNumberFormatting(html);
+            html = cyrillizeUnits(html, UA_ISO);
+            html = normalizeTerminology(html, UA_ISO);
+            return canonicalizeMultiInOne(html, UA_ISO);
           },
           validate: validateFaqHtml,
           withFeedback: appendRepairFeedback,
