@@ -100,10 +100,34 @@ var TELEGRAM_PHOTO_LIMIT_BYTES = 10 * 1024 * 1024;
 // ---------------------------------------------------------------------------
 
 function setUp() {
+  // setUp() BUILDS A NEW FORM every time — createForm_ calls FormApp.create. Anything added by
+  // hand afterwards (the file-upload question, an extra question, a changed question type) exists
+  // only in the old form and is not carried over, and the new form gets new entry ids that no
+  // longer match src/environments. Running it twice is therefore destructive, so the second run
+  // stops here unless it is asked for explicitly.
+  var existing = setting_('FORM_URL');
+  if (existing && setting_('FORCE_NEW_FORM') !== 'yes') {
+    Logger.log('Форму вже створено: ' + existing);
+    Logger.log('');
+    Logger.log('Повторний запуск створив би ЩЕ ОДНУ форму з нуля — без жодної з ваших ручних');
+    Logger.log('правок і з новими entry.*, які довелося б знову переносити в конфіг.');
+    Logger.log('Правте наявну форму в UI; для діагностики запустіть printFormInfo().');
+    Logger.log('');
+    Logger.log('Якщо форма справді потрібна нова: Script Properties → FORCE_NEW_FORM = yes.');
+    return;
+  }
+
   var form = createForm_();
   var spreadsheet = linkSpreadsheet_(form);
   var sheet = prepareSheet_(spreadsheet);
   installTrigger_(spreadsheet);
+
+  // Remembered so printFormInfo() can reach the live form, and so a second setUp() can refuse.
+  PropertiesService.getScriptProperties().setProperties({
+    FORM_URL: form.getEditUrl(),
+    SPREADSHEET_URL: spreadsheet.getUrl()
+  });
+  PropertiesService.getScriptProperties().deleteProperty('FORCE_NEW_FORM');
 
   var entries = collectEntryIds_(form);
 
@@ -200,11 +224,8 @@ function collectEntryIds_(form) {
   var ids = { author: '', tool: '' };
 
   form.getItems().forEach(function (item) {
-    if (item.getTitle() === Q_AUTHOR) {
-      ids.author = entryIdFor_(form, item.asTextItem().createResponse('placeholder'));
-    } else if (item.getTitle() === Q_TOOL) {
-      ids.tool = entryIdFor_(form, item.asListItem().createResponse(TOOLS[0]));
-    }
+    if (item.getTitle() === Q_AUTHOR) ids.author = entryIdFor_(form, item);
+    else if (item.getTitle() === Q_TOOL) ids.tool = entryIdFor_(form, item);
   });
 
   if (!ids.author || !ids.tool) {
@@ -215,10 +236,45 @@ function collectEntryIds_(form) {
   return ids;
 }
 
-function entryIdFor_(form, itemResponse) {
-  var url = form.createResponse().withItemResponse(itemResponse).toPrefilledUrl();
-  var match = url.match(/entry\.(\d+)/);
-  return match ? 'entry.' + match[1] : '';
+/**
+ * The `entry.<id>` of one question.
+ *
+ * There is no getter for it, so the id is read back out of a throwaway prefilled URL — one
+ * question per URL, which keeps the id-to-question mapping unambiguous.
+ *
+ * Dispatches on the item's ACTUAL type instead of assuming one. Switching a question from short
+ * answer to paragraph in the UI is an ordinary edit, and a hard-coded asTextItem() throws on it.
+ * Worth knowing: that switch also gives the question a NEW entry id, so the prefill in
+ * src/environments stops filling it — silently, since Forms just ignores an unknown entry.
+ */
+function entryIdFor_(form, item) {
+  var response;
+  try {
+    switch (item.getType()) {
+      case FormApp.ItemType.TEXT:
+        response = item.asTextItem().createResponse('placeholder');
+        break;
+      case FormApp.ItemType.PARAGRAPH_TEXT:
+        response = item.asParagraphTextItem().createResponse('placeholder');
+        break;
+      case FormApp.ItemType.LIST:
+        response = item.asListItem().createResponse(item.asListItem().getChoices()[0].getValue());
+        break;
+      case FormApp.ItemType.MULTIPLE_CHOICE:
+        response = item.asMultipleChoiceItem()
+          .createResponse(item.asMultipleChoiceItem().getChoices()[0].getValue());
+        break;
+      default:
+        return ''; // file upload, scale, date… — nothing the app prefills
+    }
+
+    var url = form.createResponse().withItemResponse(response).toPrefilledUrl();
+    var match = url.match(/entry\.(\d+)/);
+    return match ? 'entry.' + match[1] : '';
+  } catch (err) {
+    Logger.log('Не вдалося прочитати entry id для «' + item.getTitle() + '»: ' + err);
+    return '';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +443,18 @@ function buildTelegramText_(fields, sheetUrl) {
     if (value) previews.push('', '<b>' + field.label + ':</b>', '<i>' + previewText_(value) + '</i>');
   });
 
+  // Anything the form has grown since this script was written. Questions get added in the UI, and
+  // a new one appearing in the sheet and the mail but not in the chat would be a silent gap.
+  // Same 200-character preview, so an added paragraph question cannot blow the message up either.
+  var known = [Q_AUTHOR, Q_TOOL, Q_TARGET, Q_FREQUENCY, Q_BEFORE, Q_AFTER];
+  fields.forEach(function (field) {
+    if (!field.value) return;
+    if (known.indexOf(field.header) !== -1) return;
+    if (field.header.indexOf(Q_SCREENSHOT) === 0) return; // goes as an image, not as text
+    previews.push('', '<b>' + escapeHtml_(field.header) + ':</b>',
+      '<i>' + previewText_(field.value) + '</i>');
+  });
+
   var tail = ['', '<a href="' + sheetUrl + '">Відкрити таблицю 📊</a>'];
 
   var text = head.concat(previews, tail).join('\n');
@@ -523,6 +591,89 @@ function sendTelegram_(method, payload) {
     Logger.log('!!! Telegram: запит ' + method + ' не вдався: ' + err);
     return false;
   }
+}
+
+/**
+ * Report on the LIVE form: current entry ids, the questions as they stand now, and the column
+ * order of the response sheet. Creates nothing and changes nothing — run it after editing the
+ * form by hand to see whether src/environments still matches reality.
+ *
+ * Needs the FORM_URL script property; setUp() writes it. For a form created before that, paste
+ * the form's edit URL into Script Properties → FORM_URL yourself.
+ */
+function printFormInfo() {
+  var formUrl = setting_('FORM_URL');
+  if (!formUrl) {
+    Logger.log('Не задано FORM_URL у Script Properties.');
+    Logger.log('Відкрийте форму в режимі редагування, скопіюйте URL з адресного рядка');
+    Logger.log('і додайте властивість FORM_URL з цим значенням.');
+    return;
+  }
+
+  var form;
+  try {
+    form = FormApp.openByUrl(formUrl);
+  } catch (err) {
+    Logger.log('Не вдалося відкрити форму за FORM_URL: ' + err);
+    Logger.log('Потрібен URL РЕДАГУВАННЯ (…/edit), а не той, що для редакторів (…/viewform).');
+    return;
+  }
+
+  Logger.log('=== Форма: ' + form.getTitle() + ' ===');
+  Logger.log('Редагування: ' + form.getEditUrl());
+  Logger.log('Для редакторів: ' + form.getPublishedUrl());
+  Logger.log('Вимагає входу: ' + form.requiresLogin());
+  Logger.log('');
+
+  Logger.log('=== Питання ===');
+  form.getItems().forEach(function (item, index) {
+    Logger.log((index + 1) + '. [' + item.getType() + '] ' + item.getTitle());
+  });
+  Logger.log('');
+
+  // The two the app prefills. A mismatch against src/environments means the button opens the
+  // form with that field empty — Forms ignores an unknown entry rather than complaining.
+  var ids = collectEntryIds_(form);
+  Logger.log('=== Поточні entry.* — звірте з src/environments/environment*.ts ===');
+  Logger.log("    entryAuthor: '" + ids.author + "',   // " + Q_AUTHOR);
+  Logger.log("    entryTool:   '" + ids.tool + "',   // " + Q_TOOL);
+  Logger.log('');
+
+  var hasUpload = form.getItems().some(function (item) {
+    return item.getType() === FormApp.ItemType.FILE_UPLOAD;
+  });
+  Logger.log(hasUpload
+    ? 'Питання для скріншотів: є.'
+    : 'Питання для скріншотів: НЕМАЄ — додайте вручну (тип File upload), скрипт цього не вміє.');
+
+  var uploadTitled = form.getItems().some(function (item) {
+    return item.getType() === FormApp.ItemType.FILE_UPLOAD
+      && item.getTitle().indexOf(Q_SCREENSHOT) === 0;
+  });
+  if (hasUpload && !uploadTitled) {
+    Logger.log('УВАГА: заголовок питання не починається з «' + Q_SCREENSHOT
+      + '» — скрипт не знайде колонку і не надішле зображення.');
+  }
+  Logger.log('');
+
+  var destinationId = form.getDestinationId();
+  if (!destinationId) {
+    Logger.log('До форми не привʼязана таблиця відповідей.');
+    return;
+  }
+
+  var sheet = responseSheet_(SpreadsheetApp.openById(destinationId));
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  Logger.log('=== Колонки таблиці (порядок неважливий, пошук іде за назвою) ===');
+  headers.forEach(function (header, index) {
+    Logger.log('  ' + (index + 1) + '. ' + header);
+  });
+
+  ['Статус', 'Коментар розробника'].forEach(function (name) {
+    if (headers.indexOf(name) === -1) {
+      Logger.log('УВАГА: колонки «' + name + '» немає — додайте її заголовком у перший рядок.');
+    }
+  });
 }
 
 /**
