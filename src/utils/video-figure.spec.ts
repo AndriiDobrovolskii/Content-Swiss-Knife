@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { wrapVideoFigures } from './video-figure';
+import { wrapVideoFigures, videoFigcaption } from './video-figure';
 
 const PRODUCT = 'Acme X1';
 
@@ -36,6 +36,18 @@ describe('wrapVideoFigures', () => {
 
     const figcaption = figure!.querySelector(':scope > figcaption');
     expect(figcaption!.textContent).toBe(`Video review of ${PRODUCT}`);
+  });
+
+  it('writes the figcaption in the artifact language', () => {
+    // This caption used to be hardcoded English and shipped inside the uk-UA master — a
+    // divergence description-doc.ts and render-reconciliation.report.md both already recorded.
+    const html = `<p><iframe src="https://www.youtube.com/embed/abc"></iframe></p>`;
+    const caption = (locale?: string) =>
+      parse(wrapVideoFigures(html, PRODUCT, locale)).querySelector('figcaption')!.textContent;
+
+    expect(caption('uk-UA')).toBe(`Відеоогляд ${PRODUCT}`);
+    expect(caption('ru-UA')).toBe(`Видеообзор ${PRODUCT}`);
+    expect(caption('pl-PL')).toBe(`Recenzja wideo ${PRODUCT}`);
   });
 
   it('ensures rel=0 while preserving the rest of the src', () => {
@@ -103,5 +115,23 @@ describe('wrapVideoFigures', () => {
     const doc = parse(wrapVideoFigures(html, PRODUCT));
     expect(doc.querySelector('figure')).toBeNull();
     expect(doc.querySelector('p')!.textContent).toBe('No videos here.');
+  });
+});
+
+describe('videoFigcaption', () => {
+  it('resolves by primary subtag, so every region of a language shares one template', () => {
+    expect(videoFigcaption(PRODUCT, 'es-ES')).toBe(videoFigcaption(PRODUCT, 'es-MX'));
+    expect(videoFigcaption(PRODUCT, 'en-GB')).toBe(videoFigcaption(PRODUCT, 'en-US'));
+  });
+
+  it('falls back to English for an unmapped language or a missing locale', () => {
+    const english = `Video review of ${PRODUCT}`;
+    expect(videoFigcaption(PRODUCT, 'ja-JP')).toBe(english);
+    expect(videoFigcaption(PRODUCT, '')).toBe(english);
+    expect(videoFigcaption(PRODUCT)).toBe(english);
+  });
+
+  it('is case-insensitive about the locale tag', () => {
+    expect(videoFigcaption(PRODUCT, 'UK-ua')).toBe(`Відеоогляд ${PRODUCT}`);
   });
 });

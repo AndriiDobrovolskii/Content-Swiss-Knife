@@ -2,9 +2,9 @@
  * video-figure.ts
  *
  * Deterministic post-step for the generation path: wraps generated
- * YouTube/Vimeo `<iframe>` embeds in a <figure> with a templated <figcaption>
- * ("Video review of {productName}"). Runs after Task A fence-strip in
- * ContentOrchestratorService.generate(), before the English HTML is stored and
+ * YouTube/Vimeo `<iframe>` embeds in a <figure> with a templated, LOCALIZED
+ * <figcaption> (see FIGCAPTION_TEMPLATES). Runs after Task A fence-strip in
+ * ContentOrchestratorService.generate(), before the master HTML is stored and
  * handed to Task B/C.
  *
  * Why code, not a prompt rule: iframe attributes (src, allow, referrerpolicy…)
@@ -27,6 +27,37 @@ const REFERRERPOLICY_VALUE = 'strict-origin-when-cross-origin';
 const FIGURE_STYLE = 'width: 100%; max-width: 1140px; margin: 0 auto 20px; aspect-ratio: 16 / 9;';
 const FIGCAPTION_STYLE = 'text-align: center; font-size: 14px; color: #666; margin-top: 10px;';
 
+/**
+ * Figcaption template per language, keyed by the BCP47 PRIMARY SUBTAG.
+ *
+ * This caption used to be hardcoded English and was emitted into the uk-UA master, which two
+ * places in the repo already recorded as a defect: description-doc.ts notes that real artifacts
+ * carry the target-language form ("Відеоогляд …"), and test/render-reconciliation.report.md logs
+ * the same divergence between the renderer and this file.
+ *
+ * Keyed on the primary subtag, not the full locale, so en-GB/en-US/en-ES and es-ES/es-MX each
+ * resolve without enumerating every region. An unmapped language falls back to English — the
+ * previous behaviour exactly, so no locale can regress into a missing caption.
+ *
+ * Every form places the product name last and uninflected: product names are Latin brand strings
+ * that stay nominative, which keeps the templates grammatical without case handling.
+ */
+const FIGCAPTION_TEMPLATES: Readonly<Record<string, (product: string) => string>> = {
+  en: p => `Video review of ${p}`,
+  uk: p => `Відеоогляд ${p}`,
+  ru: p => `Видеообзор ${p}`,
+  pl: p => `Recenzja wideo ${p}`,
+  de: p => `Video-Review zu ${p}`,
+  es: p => `Vídeo-reseña de ${p}`,
+  pt: p => `Análise em vídeo de ${p}`,
+};
+
+/** The figcaption text for one product in one locale. Exported for the spec. */
+export function videoFigcaption(productName: string, locale?: string): string {
+  const lang = (locale ?? '').toLowerCase().split('-')[0];
+  return (FIGCAPTION_TEMPLATES[lang] ?? FIGCAPTION_TEMPLATES['en'])(productName);
+}
+
 function isVideoSrc(src: string): boolean {
   return src.includes('youtube.com') || src.includes('youtu.be') || src.includes('vimeo.com');
 }
@@ -34,8 +65,10 @@ function isVideoSrc(src: string): boolean {
 /**
  * Wrap every YouTube/Vimeo iframe in `html` into the corrected figure structure.
  * Non-video iframes and iframe-free HTML are returned untouched.
+ *
+ * @param locale BCP47 for the figcaption language; omitted falls back to English.
  */
-export function wrapVideoFigures(html: string, productName: string): string {
+export function wrapVideoFigures(html: string, productName: string, locale?: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
   doc.querySelectorAll('iframe').forEach(iframe => {
@@ -66,7 +99,7 @@ export function wrapVideoFigures(html: string, productName: string): string {
 
     const figcaption = doc.createElement('figcaption');
     figcaption.setAttribute('style', FIGCAPTION_STYLE);
-    figcaption.textContent = `Video review of ${productName}`;
+    figcaption.textContent = videoFigcaption(productName, locale);
 
     // 4. Splice into the DOM. If the iframe sits directly inside a <p>, replace
     //    that <p> with the <figure> (a <figure> inside <p> is invalid HTML).

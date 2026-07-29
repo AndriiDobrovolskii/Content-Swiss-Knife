@@ -264,7 +264,7 @@ export class ContentOrchestratorService {
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
         let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' }, creativeEffort);
         html = stripCodeFences(html);
-        html = wrapVideoFigures(html, input.name);
+        html = wrapVideoFigures(html, input.name, 'uk-UA');
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
         // Immediately after fixNumberFormatting, which has already stripped thousands separators —
@@ -604,7 +604,7 @@ export class ContentOrchestratorService {
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
         let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
         html = stripCodeFences(html);
-        html = wrapVideoFigures(html, input.name);
+        html = wrapVideoFigures(html, input.name, UA_ISO);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
         // Ordering rationale as in generate()'s master produce.
