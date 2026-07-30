@@ -95,6 +95,9 @@ export const ProductDescriptionDocSchema = z.object({
     items: z.array(z.object({ scenario: NonEmpty, text: Prose })).min(4).max(8),
   }),
   compatibility: SubsectionSchema.optional(),
+  // §5b — same shape as §5, deliberately a separate field. See the note on ProductDescriptionDoc
+  // .operatingTips for why this is a missing slot rather than a rename of `compatibility`.
+  operatingTips: SubsectionSchema.optional(),
   packageContents: z.object({ heading: NonEmpty, items: z.array(NonEmpty).min(1) }).optional(),
   specs: z.object({
     heading: NonEmpty,
