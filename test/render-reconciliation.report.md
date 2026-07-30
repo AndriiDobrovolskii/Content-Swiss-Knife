@@ -169,10 +169,11 @@ and it is the wrong name for what it holds.
    the 2,500-char ceiling in `CONSUMABLES_SIMPLIFIED_SCHEMA`, so they were not generated in that
    mode. PR-2 §5.2's prediction — that `ProductDescriptionDocSchema` cleanly rejects §C1–§C6
    artifacts — therefore remains **untested**.
-5. **`applications` has no figure slot.** `applications.items` is `{ scenario, text }` with no
-   `Block[]`, but the master prompt distributes figures across §3 **and** §4. Any corpus item with a
-   figure anchored in §4 will fail reconciliation. Not fixed here — it needs a corpus item to
-   confirm the shape before the schema changes again.
+5. ~~**`applications` has no figure slot.**~~ **CLOSED.** A corpus item confirmed the shape, so the
+   schema was extended once rather than speculatively: `applications.blocks?: ApplicationsBlock[]`
+   now renders between the heading and the item list. `blocks` is deliberately narrower than
+   `Block` — no `bullets`, so §4 can never grow a second `<ul>` competing with `items`. See §4.1,
+   which records what closing this cost the renderer.
 
 ### To unblock
 
@@ -184,10 +185,16 @@ one with ≥ 3 spec categories. `ProductInput` then comes from `localStorage` ex
 
 ## 6. Note on `vitest.config.ts`
 
-`include` was widened from `['src/**/*.spec.ts']` to add `'test/**/*.spec.ts'`. This is the one
-change outside PR-2's stated diff scope and is deliberate: without it the reconciliation harness
+`include` was widened from `['src/**/*.spec.ts']` to add `'test/**/*.spec.ts'`. It was the one
+change outside PR-2's stated diff scope, and deliberate: without it the reconciliation harness
 never executes, and a suite that never runs reports success. `coverage.include` stays
 `src/utils/**`, so the 80% thresholds are unaffected.
+
+**No longer a caveat on this branch.** The widening shipped with PR-2 (`6bcd742`) and reached main
+via PR #49, so both sides now carry it identically. It has also outgrown its original justification:
+`test/anthropic-provider.spec.ts`, `test/gemini-provider.spec.ts` and `test/llm-routes.spec.ts`
+arrived on main under the same entry, and `test/` is now a normal suite location rather than a
+single-harness exception.
 
 ---
 
