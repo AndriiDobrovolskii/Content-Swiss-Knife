@@ -71,11 +71,14 @@ else
 fi
 
 # Warn (not fail) about orchestrator inline prompts — known/accepted technical debt
+# `grep -c` already prints "0" on no match, but exits 1 — so `|| echo "0"` appended a SECOND line
+# and the test below died with "[: 0\n0: integer expected", silently skipping this warning
+# entirely. Let grep's own count stand; the fallback covers only a missing file.
 ORCH_INLINE=$(grep -c '"You are\|`You are\|\[ROLE\]' \
-  src/services/content-orchestrator.service.ts 2>/dev/null || echo "0")
-if [ "$ORCH_INLINE" -gt 0 ]; then
+  src/services/content-orchestrator.service.ts 2>/dev/null || true)
+if [ "${ORCH_INLINE:-0}" -gt 0 ]; then
   echo -e "  ${YELLOW}  ⚠ WARNING: content-orchestrator.service.ts still has ${ORCH_INLINE} inline prompt(s).${NC}"
-  echo -e "  ${YELLOW}  Known debt. Track in REFACTOR_PLAN.md, not a blocker.${NC}"
+  echo -e "  ${YELLOW}  Known debt — see \"Known accepted tech debt\" in CLAUDE.md. Not a blocker.${NC}"
 fi
 
 echo ""

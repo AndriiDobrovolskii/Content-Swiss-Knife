@@ -29,7 +29,7 @@ Instructions for Claude Code in this repository. Read before making any change.
 
 An Angular app that generates SEO/AEO/GEO-optimized product descriptions for 3D-printing and scanning e-commerce stores. It used to live in Google AI Studio on Gemini; we are migrating it to local development with a provider-independent architecture.
 
-The detailed migration plan is in `REFACTOR_PLAN.md`. This file holds operational rules; the plan holds strategy. On conflict, `REFACTOR_PLAN.md` wins.
+**This file is the authority** for both operational rules and migration strategy. `REFACTOR_PLAN.md` is a stub kept only to retire a long-standing dangling reference — it holds no strategy and overrides nothing. The live state of the `ProductDescriptionDoc` migration is in `test/render-reconciliation.report.md` (§3 for transform dispositions, §5 for what still blocks the next phase).
 
 ## Stack
 
@@ -50,7 +50,7 @@ npm run test:watch     # vitest watch mode
 npm run test:coverage  # vitest + V8 coverage report
 ```
 
-**After every Claude Code session:** `bash arch-guard.sh` — verifies the 4 architecture rules and frozen-file checksums. Run `bash arch-guard.sh --rebaseline` only after an intentional frozen-file change that was explicitly approved.
+**After every Claude Code session:** `bash arch-guard.sh` — verifies architecture rules #1, #3, #4 (Rule #2 has no automated check — see "Known accepted tech debt") and frozen-file checksums. Run `bash arch-guard.sh --rebaseline` only after an intentional frozen-file change that was explicitly approved.
 
 Before considering a task done: `npm run lint && npm run build` must pass with no errors.
 
@@ -98,7 +98,9 @@ Adding a provider means: a new class in `server/providers/`, a new `case` in `fa
 
 ## Known accepted tech debt
 
-`content-orchestrator.service.ts` contains several inline prompt functions (`buildOptimizerPrompt`, `buildReadabilityPrompt`, `buildKeywordsPrompt`, `buildImageAltPrompt`, `buildCopywriterPrompt`). These are flagged as warnings (not errors) by `arch-guard.sh` — they are tracked debt, not violations. Do not treat them as a pattern to follow; new prompts go in `src/prompts/`.
+**The inline-prompt debt is paid.** `buildOptimizerPrompt`, `buildReadabilityPrompt`, `buildKeywordsPrompt`, `buildImageAltPrompt` and `buildCopywriterPrompt` all live in `src/prompts/` now and are imported by `content-orchestrator.service.ts`, not defined in it. `arch-guard.sh`'s warning for this no longer fires because there is nothing left to warn about. New prompts go in `src/prompts/`.
+
+**`arch-guard.sh` checks 3 of the 5 rules above, not 4.** It implements Rule #1 (no direct SDK calls), Rule #3 (no prompt strings in services) and Rule #4 (no keys in frontend). **Rule #2 — retrieval separate from the LLM — has no automated check**; it is enforced by review only. Do not read a green arch-guard as evidence that Rule #2 holds.
 
 ## Hard rules for output HTML (acceptance criteria)
 
@@ -120,7 +122,7 @@ Any change to the prompt/generation is checked against these. If the output viol
 - Small atomic changes, one plan phase at a time. Each phase — its own branch/PR.
 - Before swapping a provider/prompt — capture a golden output for regression.
 - Keep a working rollback switch to the previous provider until the corresponding phase is complete.
-- In the PR, state which `REFACTOR_PLAN.md` phase was closed and how the acceptance criteria were verified.
+- In the PR, state which phase was closed (e.g. the PR-1/PR-2/PR-3 sequence tracked in `test/render-reconciliation.report.md`) and how the acceptance criteria were verified.
 
 ## What NOT to do
 
