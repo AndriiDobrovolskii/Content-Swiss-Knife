@@ -170,7 +170,11 @@ export function restoreMissingVideos(
 
     const iframe = doc.createElement('iframe');
     iframe.setAttribute('src', embed.src);
-    if (embed.title) iframe.setAttribute('title', embed.title);
+    // Deliberately NO title: embed.title is the SOURCE-language string (a YouTube title, i.e.
+    // usually English), and this is the repair path — no model runs here to translate it, and
+    // wrapVideoFigures preserves any title it finds. Copying it would nail a foreign-language
+    // accessible name onto a uk-UA artifact. Leaving it off lets wrapVideoFigures synthesize
+    // videoFallbackTitle() in the artifact's own language instead.
 
     if (anchor?.parentNode) {
       anchor.parentNode.insertBefore(lead, anchor);

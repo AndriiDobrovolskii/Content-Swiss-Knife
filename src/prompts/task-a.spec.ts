@@ -168,6 +168,30 @@ describe('buildPromptA — [VIDEO MANIFEST]', () => {
     expect(userContent).toMatch(/VERBATIM/);
   });
 
+  it('labels the supplied title as source-language input and orders it rewritten in the body language', () => {
+    // The manifest used to hand the model the source title unlabelled and with no instruction, so
+    // the English YouTube title was copied straight through into the uk-UA master and every
+    // translation of it (EXPERT3D XGRIDS L2 Pro).
+    const { userContent } = buildPromptA(withVideo());
+    expect(userContent).toContain('source title: "Hands-on"');
+    expect(userContent).toMatch(/do NOT copy it through/i);
+    expect(userContent).toMatch(/title="" in the BODY LANGUAGE/i);
+  });
+
+  it('downgrades double quotes inside a source title so they cannot desync the quoted-value format', () => {
+    const quoted: ProductInput = {
+      ...inputFor('3DPrinter'),
+      description: `<iframe src="${SRC}" title='Hands-on with "Lixel L2 Pro"'></iframe>`,
+    };
+    const { userContent } = buildPromptA(quoted);
+    expect(userContent).toContain(`source title: "Hands-on with 'Lixel L2 Pro'"`);
+    // Scoped to the manifest line only: [Raw Description] further down legitimately still carries
+    // the original iframe, double quotes and all — it is the untouched input.
+    const manifestLine = userContent.split('\n').find(l => l.includes('source title:'))!;
+    expect(manifestLine).not.toContain('"Lixel L2 Pro"');
+    expect(manifestLine.match(/"/g)).toHaveLength(2); // exactly the pair delimiting the value
+  });
+
   it('anchors the embed to a section that actually exists in the schema', () => {
     // The master rule used to say "place in Deep Dive" — a section named nowhere in Schema v3.0.
     expect(buildPromptA(withVideo()).userContent).toContain('§3 FUNCTIONALITY');

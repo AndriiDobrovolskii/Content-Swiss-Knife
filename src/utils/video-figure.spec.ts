@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { wrapVideoFigures, videoFigcaption } from './video-figure';
+import { wrapVideoFigures, videoFigcaption, videoFallbackTitle } from './video-figure';
 
 const PRODUCT = 'Acme X1';
 
@@ -91,16 +91,31 @@ describe('wrapVideoFigures', () => {
     expect(doc.body.querySelector(':scope > figure')).not.toBeNull();
   });
 
-  it('synthesizes title="{productName} video" when absent', () => {
+  it('synthesizes the fallback title in the artifact language when absent', () => {
+    // The fallback used to be hardcoded English `${PRODUCT} video`, so a uk-UA master shipped an
+    // English accessible name next to a Ukrainian figcaption.
     const html = `<p><iframe src="https://www.youtube.com/embed/abc"></iframe></p>`;
-    const iframe = parse(wrapVideoFigures(html, PRODUCT)).querySelector('iframe')!;
-    expect(iframe.getAttribute('title')).toBe(`${PRODUCT} video`);
+    const title = (locale?: string) =>
+      parse(wrapVideoFigures(html, PRODUCT, locale)).querySelector('iframe')!.getAttribute('title');
+
+    expect(title('uk-UA')).toBe(`Відео: ${PRODUCT}`);
+    expect(title('pl-PL')).toBe(`Wideo: ${PRODUCT}`);
+    expect(title('ru-UA')).toBe(`Видео: ${PRODUCT}`);
+    expect(title()).toBe(`Video: ${PRODUCT}`);
   });
 
   it('preserves an existing iframe title', () => {
+    // Load-bearing: on the normal path the title is model-authored prose already written in the
+    // artifact's language (Task A) or translated into it (Task C). The wrapper must not clobber it.
     const html = `<p><iframe src="https://www.youtube.com/embed/abc" title="Hands-on demo"></iframe></p>`;
     const iframe = parse(wrapVideoFigures(html, PRODUCT)).querySelector('iframe')!;
     expect(iframe.getAttribute('title')).toBe('Hands-on demo');
+  });
+
+  it('keeps a model-written localized title even when it differs from the fallback', () => {
+    const html = `<p><iframe src="https://www.youtube.com/embed/abc" title="Огляд системи кріплень"></iframe></p>`;
+    const iframe = parse(wrapVideoFigures(html, PRODUCT, 'uk-UA')).querySelector('iframe')!;
+    expect(iframe.getAttribute('title')).toBe('Огляд системи кріплень');
   });
 
   it('leaves a non-video iframe (e.g. a map) untouched', () => {
@@ -133,5 +148,51 @@ describe('videoFigcaption', () => {
 
   it('is case-insensitive about the locale tag', () => {
     expect(videoFigcaption(PRODUCT, 'UK-ua')).toBe(`Відеоогляд ${PRODUCT}`);
+  });
+});
+
+describe('videoFallbackTitle', () => {
+  const STORE_LOCALES = ['en-GB', 'en-ES', 'en-US', 'uk-UA', 'ru-UA', 'pl-PL', 'de-DE', 'es-ES', 'es-MX', 'pt-PT'];
+
+  it('resolves by primary subtag, so every region of a language shares one template', () => {
+    expect(videoFallbackTitle(PRODUCT, 'es-ES')).toBe(videoFallbackTitle(PRODUCT, 'es-MX'));
+    expect(videoFallbackTitle(PRODUCT, 'en-GB')).toBe(videoFallbackTitle(PRODUCT, 'en-US'));
+  });
+
+  it('falls back to English for an unmapped language or a missing locale', () => {
+    const english = `Video: ${PRODUCT}`;
+    expect(videoFallbackTitle(PRODUCT, 'ja-JP')).toBe(english);
+    expect(videoFallbackTitle(PRODUCT, '')).toBe(english);
+    expect(videoFallbackTitle(PRODUCT)).toBe(english);
+  });
+
+  it('is case-insensitive about the locale tag', () => {
+    expect(videoFallbackTitle(PRODUCT, 'UK-ua')).toBe(`Відео: ${PRODUCT}`);
+  });
+
+  it('is never identical to the figcaption — AT reads both, and duplicates get announced twice', () => {
+    for (const locale of STORE_LOCALES) {
+      expect(videoFallbackTitle(PRODUCT, locale)).not.toBe(videoFigcaption(PRODUCT, locale));
+    }
+  });
+
+  it('covers every store locale explicitly', () => {
+    // Spelled out rather than asserted as "not English": de-DE legitimately reads "Video:" too,
+    // so only an explicit table distinguishes a correct German template from a missing key.
+    const expected: Record<string, string> = {
+      'en-GB': `Video: ${PRODUCT}`,
+      'en-ES': `Video: ${PRODUCT}`,
+      'en-US': `Video: ${PRODUCT}`,
+      'de-DE': `Video: ${PRODUCT}`,
+      'uk-UA': `Відео: ${PRODUCT}`,
+      'ru-UA': `Видео: ${PRODUCT}`,
+      'pl-PL': `Wideo: ${PRODUCT}`,
+      'es-ES': `Vídeo: ${PRODUCT}`,
+      'es-MX': `Vídeo: ${PRODUCT}`,
+      'pt-PT': `Vídeo: ${PRODUCT}`,
+    };
+    for (const locale of STORE_LOCALES) {
+      expect(videoFallbackTitle(PRODUCT, locale)).toBe(expected[locale]);
+    }
   });
 });

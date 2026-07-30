@@ -106,9 +106,12 @@ function buildVideoBlock(input: ProductInput, isConsumables: boolean): string {
   const embeds = extractVideoEmbeds(input.description);
   if (embeds.length === 0) return '';
   const lines = embeds
-    .map((e, i) => `${i + 1}. ${e.src}${e.title ? ` — title: "${e.title}"` : ''}`)
+    // Double quotes are stripped from the title: the line below is a quoted-value format and
+    // real YouTube titles carry quotes (Hands-on with "Lixel L2 Pro"), which would desync the
+    // delimiters. Only the prompt rendering is affected — never the emitted HTML.
+    .map((e, i) => `${i + 1}. ${e.src}${e.title ? ` — source title: "${e.title.replace(/"/g, "'")}"` : ''}`)
     .join('\n');
-  return `\n[VIDEO MANIFEST] — COUNT=${embeds.length}. HARD RULE: the output contains exactly ${embeds.length} <iframe> tag(s) — every src below appears exactly once, copied VERBATIM (never invent, rewrite, shorten, drop, or duplicate an embed). Introduce each with its own lead-in <p> in the body language, and place it in §3 FUNCTIONALITY, before §7. The lead-in must not restate the figcaption:
+  return `\n[VIDEO MANIFEST] — COUNT=${embeds.length}. HARD RULE: the output contains exactly ${embeds.length} <iframe> tag(s) — every src below appears exactly once, copied VERBATIM (never invent, rewrite, shorten, drop, or duplicate an embed). Introduce each with its own lead-in <p> in the body language, and place it in §3 FUNCTIONALITY, before §7. The lead-in must not restate the figcaption. TITLE ATTRIBUTE: the "source title" below is the ORIGINAL-language title, given as input — do NOT copy it through. Write each iframe's title="" in the BODY LANGUAGE: a translation of the source title that keeps its meaning, or, when no source title is given, a short descriptive one. Model names, brand names and numerals stay unchanged:
 ${lines}`;
 }
 

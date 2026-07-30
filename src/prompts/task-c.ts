@@ -8,11 +8,14 @@ TRANSLATION PASS — NOT base generation: [BASE HTML] below already contains the
 source-language description. PRESERVE every existing <figure>...</figure> block exactly as
 structured: do NOT strip, remove, regenerate, reorder, merge, split, add, or duplicate any
 <figure>, <img>, or <iframe> element. Every attribute stays byte-identical — src, href, loading,
-decoding, inline style, width/height — with TWO exceptions: translate the visible text inside
-<figcaption> (including its <b> lead-in label) into the target language, and translate the <img>
-alt="" attribute value into the target language. Do not otherwise alter the meaning, wording
-length, or structure of the figcaption/alt beyond translating them. If [BASE HTML] contains zero
-<figure> blocks, do not invent any.`;
+decoding, inline style, width/height — with THREE exceptions: translate the visible text inside
+<figcaption> (including its <b> lead-in label) into the target language, translate the <img>
+alt="" attribute value into the target language, and translate the <iframe> title="" attribute
+value into the target language (it is the frame's accessible name, read aloud by screen readers,
+so it must never stay in the source language). Do not otherwise alter the meaning, wording
+length, or structure of the figcaption/alt/title beyond translating them; model names, brand
+names and numerals stay unchanged. If [BASE HTML] contains zero <figure> blocks, do not
+invent any.`;
 
 const HAS_FIGURE_MARKUP = /<figure\b/i;
 
