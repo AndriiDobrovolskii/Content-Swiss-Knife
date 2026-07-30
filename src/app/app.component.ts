@@ -4,7 +4,6 @@ import { ContentOrchestratorService } from '../services/content-orchestrator.ser
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
 import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry, TabDescriptor } from './types';
-import { CreativeEffort } from '../prompt-core/payload';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
@@ -16,6 +15,7 @@ import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { HtmlEditorComponent } from './components/html-editor/html-editor.component';
+import { ModelSettingsComponent } from './components/model-settings/model-settings.component';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
 import { FeedbackContextService } from '../services/feedback-context.service';
 import { buildFeedbackUrl } from '../utils/feedback-url';
@@ -387,7 +387,7 @@ const TOOL_LABEL: Record<AppMode, string> = {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent],
+  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent, ModelSettingsComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent {
@@ -433,9 +433,6 @@ export class AppComponent {
   supplementalContent = signal<string>('');
   customInstructions = signal<string>('');
   generatorUseThinking = signal<boolean>(true); // Default to true as per original behavior
-  // Sonnet 5 thinking depth when Deep Thinking Mode is on. 'medium' matches the server's
-  // previous fixed default (ANTHROPIC_THINKING_EFFORT), so leaving this untouched is a no-op.
-  generatorCreativeEffort = signal<CreativeEffort>('medium');
 
   // --- TEMPLATE STATE ---
   availableTemplates = CONTENT_TEMPLATES;
@@ -491,6 +488,7 @@ export class AppComponent {
   // UI State
   activeTab = signal<string>('html');
   showHistory = signal(false);
+  showModelSettings = signal(false);
 
   // --- COMPARISON STATE ---
   comparisonIds = signal<string[]>([]);
@@ -822,7 +820,6 @@ export class AppComponent {
   updateTranslatorLang(event: Event) { this.translatorTargetLang.set((event.target as HTMLSelectElement).value); }
   toggleTranslatorThinking() { this.translatorUseThinking.update(v => !v); }
   toggleGeneratorThinking() { this.generatorUseThinking.update(v => !v); }
-  setGeneratorCreativeEffort(level: CreativeEffort) { this.generatorCreativeEffort.set(level); }
   toggleOptimizerThinking() { this.optimizerUseThinking.update(v => !v); }
   toggleCopywriterThinking() { this.copywriterUseThinking.update(v => !v); }
   toggleSeoThinking() { this.seoUseThinking.update(v => !v); }
@@ -873,14 +870,14 @@ export class AppComponent {
     const input = this.buildGeneratorInput();
     if (!input) return;
     this.activeTab.set('html');
-    await this.orchestrator.generate(input, this.generatorUseThinking(), this.generatorCreativeEffort());
+    await this.orchestrator.generate(input, this.generatorUseThinking());
   }
 
   async generateUa() {
     const input = this.buildGeneratorInput();
     if (!input) return;
     this.activeTab.set('html');
-    await this.orchestrator.generateUaContent(input, this.generatorUseThinking(), this.generatorCreativeEffort());
+    await this.orchestrator.generateUaContent(input, this.generatorUseThinking());
   }
 
   async generateSeoOnly() {
@@ -960,6 +957,7 @@ export class AppComponent {
   }
 
   toggleHistory() { this.showHistory.update(v => !v); }
+  toggleModelSettings() { this.showModelSettings.update(v => !v); }
 
   restoreHistory(item: HistoryItem) {
     this.appMode.set('generator');

@@ -45,7 +45,7 @@ import { SlugResponse, SeoResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta } from '../utils/repair-gate';
 import { createBlockRepairExecutor } from '../utils/block-tier';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
-import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
+import { PromptPayload } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
 import { validateSpecCategoryShape } from '../utils/spec-category-shape';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
@@ -202,7 +202,7 @@ export class ContentOrchestratorService {
     ].filter(Boolean).join('\n');
   }
 
-  async generate(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
+  async generate(input: ProductInput, useThinking = false): Promise<void> {
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
     // localized name authoritative across H1/title/URL without ever reusing a stale name.
@@ -270,7 +270,7 @@ export class ContentOrchestratorService {
       // runs against that same artifact, to surface automatic placement as a warning.
       let restoredVideos: SourceVideoEmbed[] = [];
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' }, creativeEffort);
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
         html = stripCodeFences(html);
         // BEFORE wrapVideoFigures, so a restored embed goes through exactly the same figure and
         // attribute contract as one the model emitted itself.
@@ -393,7 +393,7 @@ export class ContentOrchestratorService {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
           const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn);
           // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }, creativeEffort);
+          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
           const slugData = this.normalizeSlugResponse(rawSlug);
           this.content.update(c => ({ ...c, slugData }));
           this.approvedSlugKey.set(this.slugKey(input));
@@ -416,7 +416,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }, creativeEffort)),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -456,7 +456,7 @@ export class ContentOrchestratorService {
           basePayload: basePayloadC,
           produce: async (payload) => {
             // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale }, creativeEffort);
+            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale });
             html = stripCodeFences(html);
             if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
               html = this.applySpanishExpert3dReplacements(html);
@@ -523,7 +523,7 @@ export class ContentOrchestratorService {
             maxRepairs: this.maxRepairs(),
             basePayload: basePayloadFaq,
             produce: async (payload) => {
-              let html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode }, creativeEffort);
+              let html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode });
               html = stripCodeFences(html);
               // The FAQ is validated by the same validateGeneratedHtml as the master, so it must
               // get the same deterministic normalizers. Without them the gate reports unit-spacing
@@ -584,7 +584,7 @@ export class ContentOrchestratorService {
   /** Native uk-UA generation: Task A is called directly in Ukrainian (no English base,
    *  no Task C translation loop). SEO/slug/FAQ are scoped to uk-UA only. Mirrors generate()'s
    *  repair gates and validators for the artifacts it shares. */
-  async generateUaContent(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
+  async generateUaContent(input: ProductInput, useThinking = false): Promise<void> {
     const UA_ISO = 'uk-UA';
     const UA_BASE_LANGUAGE = 'Ukrainian (uk-UA)';
 
@@ -637,7 +637,7 @@ export class ContentOrchestratorService {
       // See the sibling comment in generate().
       let restoredVideos: SourceVideoEmbed[] = [];
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
         html = stripCodeFences(html);
         const restoration = restoreMissingVideos(html, videoEmbeds, input.name, UA_ISO);
         html = restoration.html;
@@ -727,7 +727,7 @@ export class ContentOrchestratorService {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
         const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
-        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
+        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO });
         const slugData = this.normalizeSlugResponse(rawSlug);
         this.content.update(c => ({ ...c, slugData }));
         this.approvedSlugKey.set(this.slugKey(input));
@@ -748,7 +748,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
-        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort)),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO })),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -783,7 +783,7 @@ export class ContentOrchestratorService {
           maxRepairs: this.maxRepairs(),
           basePayload: basePayloadFaq,
           produce: async (payload) => {
-            let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
+            let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
             html = stripCodeFences(html);
             // Same normalizer chain as the sibling FAQ produce in generate() — see the rationale there.
             html = fixNumberFormatting(html);
