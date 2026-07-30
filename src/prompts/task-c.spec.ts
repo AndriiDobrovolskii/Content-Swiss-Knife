@@ -113,6 +113,17 @@ describe('buildPromptC — image preservation manifest is conditional on figure 
     expect(payload.userContent).toContain('[IMAGE MANIFEST]');
   });
 
+  it('names the <iframe> title as translatable, not as a byte-identical attribute', () => {
+    // The manifest used to grant exactly TWO exceptions (figcaption text, img alt) and lock every
+    // other attribute byte-identical, which directly contradicted the per-language blocks below
+    // ("Translate alt=… and title=…") and left the English YouTube title in every translation.
+    const html = '<p>Lead-in.</p><figure><iframe src="https://youtube.com/embed/x" title="Hands-on demo"></iframe><figcaption>Caption</figcaption></figure>';
+    const { userContent } = buildPromptC(html, 'Portuguese (EXPERT3D)', '');
+    expect(userContent).toContain('THREE exceptions');
+    expect(userContent).not.toContain('TWO exceptions');
+    expect(userContent).toMatch(/translate the <iframe> title="" attribute\s+value into the target language/i);
+  });
+
   it('omits the [IMAGE MANIFEST] block when the input contains a bare <img> tag with no <figure> wrapper', () => {
     const html = '<p>Lead-in.</p><img src="a.jpg" alt="A">';
     const payload = buildPromptC(html, 'Portuguese (EXPERT3D)', '');

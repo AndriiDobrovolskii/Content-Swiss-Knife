@@ -162,6 +162,22 @@ describe('restoreMissingVideos', () => {
     expect(doc.querySelector('iframe')!.getAttribute('loading')).toBe('lazy');
   });
 
+  it('does not carry the source-language title onto the repaired iframe', () => {
+    // The fixture embed carries an English YouTube title. Restoration is the one path with no
+    // model in the loop, so copying that title through would nail an English accessible name
+    // onto a uk-UA artifact. Leaving it off lets wrapVideoFigures supply the uk fallback.
+    const sourceTitle = 'Lixel L2 Pro: The Harness System for Hands-Free 3D Scanning';
+    expect(embeds[0].title).toBe(sourceTitle); // guard: the fixture really does carry one
+
+    const bare = parse(restoreMissingVideos(GENERATED_HTML, embeds, PRODUCT, 'uk-UA').html);
+    expect(bare.querySelector('iframe')!.hasAttribute('title')).toBe(false);
+
+    const wrapped = restoreMissingVideos(GENERATED_HTML, embeds, PRODUCT, 'uk-UA').html;
+    const iframe = parse(wrapVideoFigures(wrapped, PRODUCT, 'uk-UA')).querySelector('iframe')!;
+    expect(iframe.getAttribute('title')).toBe(`Відео: ${PRODUCT}`);
+    expect(iframe.getAttribute('title')).not.toBe(sourceTitle);
+  });
+
   it('does not disturb the image figures already in the document', () => {
     const { html } = restoreMissingVideos(GENERATED_HTML, embeds, PRODUCT, 'uk-UA');
     const doc = parse(html);

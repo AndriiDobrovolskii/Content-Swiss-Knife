@@ -309,7 +309,10 @@ contains it. Dropping it is an error of the same order as dropping a manifest im
 to save characters against the global cap. Cut narrative prose instead.
 TYPE A iframe (YouTube/Vimeo): preserve the <iframe> and its src VERBATIM, and place it in
 §3 FUNCTIONALITY — after the sub-section paragraph its subject belongs to, and always before
-§7 TECHNICAL SPECIFICATIONS. TYPE B direct MP4/CDN/OGV:
+§7 TECHNICAL SPECIFICATIONS. VERBATIM covers src, allow, referrerpolicy and allowfullscreen —
+technical, never edited. The title attribute is the ONE exception: it is prose (the frame's
+accessible name, read aloud by screen readers), so write it in the body language — never leave
+a source-language title standing in a translated artifact. TYPE B direct MP4/CDN/OGV:
   <div style="text-align:center;"><video width="100%" height="auto" controls style="max-width:800px;border:1px solid #ccc;border-radius:8px;"><source src="[URL]" type="video/[fmt]">[translated fallback]</video></div>
 Detect format by extension. Introduce every embed with a lead-in <p>. Emit exactly one copy
 per language version.

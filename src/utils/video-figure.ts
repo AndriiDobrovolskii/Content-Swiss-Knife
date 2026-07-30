@@ -59,6 +59,35 @@ export function videoFigcaption(productName: string, locale?: string): string {
 }
 
 /**
+ * Fallback `<iframe title>` per language — used ONLY when the model wrote no title of its own
+ * (or when restoreMissingVideos had to repair a dropped embed, where no model is involved).
+ * On the normal path the title is model-authored prose, translated per language.
+ *
+ * Deliberately shorter than, and textually distinct from, FIGCAPTION_TEMPLATES above: the
+ * title is the frame's accessible name and the figcaption is visible text beside it, so
+ * assistive tech reads both. Identical strings make it announce the same sentence twice.
+ *
+ * Third parallel locale map for video — see also LEAD_IN_TEMPLATES in video-manifest.ts.
+ * Adding a language means adding it in all three. Same primary-subtag keying and same
+ * English fallback as FIGCAPTION_TEMPLATES.
+ */
+const VIDEO_TITLE_FALLBACKS: Readonly<Record<string, (product: string) => string>> = {
+  en: p => `Video: ${p}`,
+  uk: p => `Відео: ${p}`,
+  ru: p => `Видео: ${p}`,
+  pl: p => `Wideo: ${p}`,
+  de: p => `Video: ${p}`,
+  es: p => `Vídeo: ${p}`,
+  pt: p => `Vídeo: ${p}`,
+};
+
+/** The fallback iframe title for one product in one locale. Exported for the spec. */
+export function videoFallbackTitle(productName: string, locale?: string): string {
+  const lang = (locale ?? '').toLowerCase().split('-')[0];
+  return (VIDEO_TITLE_FALLBACKS[lang] ?? VIDEO_TITLE_FALLBACKS['en'])(productName);
+}
+
+/**
  * Is this iframe a YouTube/Vimeo video embed (as opposed to a map or a widget)?
  *
  * Exported so video-manifest.ts recognises exactly the same set of embeds this wrapper does. A
@@ -72,7 +101,9 @@ export function isVideoSrc(src: string): boolean {
  * Wrap every YouTube/Vimeo iframe in `html` into the corrected figure structure.
  * Non-video iframes and iframe-free HTML are returned untouched.
  *
- * @param locale BCP47 for the figcaption language; omitted falls back to English.
+ * @param locale BCP47 for the figcaption language and the fallback iframe title; omitted
+ *               falls back to English. A title the model already wrote is preserved as-is —
+ *               it is prose it was instructed to write in the artifact's own language.
  */
 export function wrapVideoFigures(html: string, productName: string, locale?: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -93,7 +124,10 @@ export function wrapVideoFigures(html: string, productName: string, locale?: str
       .forEach(name => iframe.removeAttribute(name));
 
     iframe.setAttribute('style', IFRAME_STYLE);
-    iframe.setAttribute('title', existingTitle && existingTitle.trim() ? existingTitle : `${productName} video`);
+    iframe.setAttribute(
+      'title',
+      existingTitle && existingTitle.trim() ? existingTitle : videoFallbackTitle(productName, locale),
+    );
     iframe.setAttribute('loading', 'lazy');
     iframe.setAttribute('allow', ALLOW_VALUE);
     iframe.setAttribute('referrerpolicy', REFERRERPOLICY_VALUE);
