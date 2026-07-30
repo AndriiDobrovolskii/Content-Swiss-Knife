@@ -1,7 +1,12 @@
 # Render reconciliation report
 
-**Status:** 2 of 2 artifacts reconciled.
-**PR-3 gate:** ✅ **OPEN** — for the two products it covers. Read §4.2 and §5 before trusting it further.
+**Status:** 2 of 2 artifacts reconciled · 24 of 24 renderable store × locale combinations conform.
+**PR-3 gate:** ✅ **OPEN**. Read §4.2, §5 and §9 for what each half does and does not prove.
+
+**Two gates, not one — see §9.** Reconciliation proves the renderer reproduces bytes production
+shipped (exact, but only for stores an accepted artifact exists for). Conformance proves it obeys
+the documented rules for **every** store in `STORE_REGISTRY`. The corpus is no longer something to
+grow; it is a regression anchor.
 
 Generated for PR-2, updated during the reconciliation pass. Read this before reviewing PR-3.
 
@@ -309,3 +314,60 @@ The security property is unchanged and is pinned by a test. The re-admit pattern
 attribute slot, so `<strong onclick="…">` stays fully escaped — only the bare literals `<b>`,
 `</b>`, `<strong>` and `</strong>` come back to life. `<em>`, `<a>` and everything else remain
 schema errors: this widened an allow-list by exactly one entry, it did not become a sanitizer.
+
+---
+
+## 9. The all-sites gate — conformance, not a bigger corpus
+
+§5 item 2 asked for a corpus of six products. That requirement is **withdrawn as the route to
+covering all sites**, because it answers the wrong question. Reconciliation is empirical: it can
+only ever cover stores an accepted artifact exists for, and reaching all eight would mean generating
+fresh products for every one of them, forever, as stores are added.
+
+The rules the templater must obey are already written down — CLAUDE.md's acceptance criteria,
+`STORE_REGISTRY`, and the §2a header maps. So the second gate is derived from configuration instead
+of from samples.
+
+### 9.1 What now exists
+
+**`src/prompt-core/store-render-rules.ts`** — one place that answers "what does rendering for store
+X mean": `imageBaseUrl`, `locales`, `killerSpecsHeaders(locale)`, `admitsOperatingTips`. Every field
+**delegates** to `getStore()` / `getKillerSpecsHeaders()` / `isCenter3dPrintStore()` rather than
+restating them, and a test asserts that delegation for every registry entry — CLAUDE.md makes
+`STORE_REGISTRY` authoritative, and a second copy would rot silently.
+
+`renderDescription()` resolves its §2a headers through it. The corpus stayed **byte-identical**,
+which is the proof the refactor changed address and not behaviour.
+
+**`test/render-conformance.spec.ts`** — 8 stores × every locale they publish = **27 combinations,
+24 renderable**, each asserting zero validator errors plus the CLAUDE.md rules: no
+`schema.org/Product`, exactly one `<section class="specs">` and one `<hr>` after it, the header pair
+that store and locale resolve to, image srcs under the store's own base, first-eager/rest-lazy,
+figcaption on every figure, no figure inside a `<p>`, and the video embed surviving.
+
+Cases are enumerated **from the registry**, so adding a store adds cases automatically. Verified by
+experiment, not assertion: inserting a fake store made the coverage tests fail *and* raised the run
+from 243 to 253 tests — the new store was actually rendered and checked, not merely counted.
+
+### 9.2 What it deliberately does not prove
+
+**Prose quality.** The fixture is locale-neutral (brand names, model numbers, metric units). Writing
+idiomatic copy in eight languages would mean inventing the content the model is supposed to produce,
+and the language rules are the prompt's concern with their own tests.
+
+This is a boundary, not a hidden gap. Every locale-prose rule in `output-validator.ts` is a
+**warning** — `es-forbidden-calque`, `pt-forbidden-calque`, `decimal-separator`,
+`thousands-separator`, `unit-spacing` — so "zero errors" stays a real bar. The one that is an
+`error`, `uk-forbidden-calque`, fires only on specific anglicisms a clean fixture never contains.
+
+### 9.3 A config gap it found immediately
+
+**`Expert-3DPrinter` ships `imageBaseUrl: ''`** (`constants.ts:23`). `figureSrc()` concatenates
+`${imageBaseUrl}${brand}/${model}/${file}`, so that store would emit **relative** `<img src>` —
+broken on any CMS page not served from the site root. Invisible while only two stores were rendered.
+
+`renderContextFor()` now **refuses** it with a named error rather than shipping images that 404, and
+the matrix records it as the one store blocked this way. Filling in the real URL turns its 3 locales
+live automatically; a second store developing the same hole fails the coverage check.
+
+**This needs a decision from someone who knows the store's CDN path** — it is recorded, not fixed.

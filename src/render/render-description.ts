@@ -23,7 +23,8 @@ import type {
   Subsection,
   VideoEmbed,
 } from '../domain/description-doc';
-import { KILLER_SPECS_HEADERS, getKillerSpecsHeaders } from '../prompt-core/constants';
+import { KILLER_SPECS_HEADERS } from '../prompt-core/constants';
+import { getRenderRules } from '../prompt-core/store-render-rules';
 import { ensureRel0 } from '../utils/video-url';
 
 export interface RenderContext {
@@ -207,12 +208,21 @@ function renderSubsection(
 
 /**
  * §2a — the 2-column collapsed form. [VERBATIM from table-finalize.ts]: the first cell is
- * `${label}: ${value}` and the header pair comes from getKillerSpecsHeaders, which layers the
+ * `${label}: ${value}` and the header pair comes from the store's rules, which layer the
  * Center 3D Print override on top of KILLER_SPECS_HEADERS.
+ *
+ * Resolved through getRenderRules() rather than getKillerSpecsHeaders() directly, so every
+ * per-store rendering decision has one home — see store-render-rules.ts. The lookup it performs is
+ * identical; this is a change of address, not of behaviour.
+ *
+ * The `?? KILLER_SPECS_HEADERS['en-gb']` fallback stays HERE rather than moving into the rules
+ * object. `killerSpecsHeaders` returns undefined deliberately, because table-finalize.ts uses that
+ * signal to reuse the header the model already wrote; a renderer has no such second source and must
+ * emit something, so the default belongs at this call site and nowhere else.
  */
 function renderKillerSpecs(doc: ProductDescriptionDoc, ctx: RenderContext): string {
   const [paramHeader, benefitHeader] =
-    getKillerSpecsHeaders(doc.locale, ctx.storeName ?? '') ?? KILLER_SPECS_HEADERS['en-gb'];
+    getRenderRules(ctx.storeName ?? '').killerSpecsHeaders(doc.locale) ?? KILLER_SPECS_HEADERS['en-gb'];
   const rows = doc.killerSpecs
     .map(s => `<tr><td>${esc(s.label)}: ${esc(s.value)}</td><td>${prose(s.why)}</td></tr>`)
     .join('\n');
