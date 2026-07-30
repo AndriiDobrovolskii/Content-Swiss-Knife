@@ -150,10 +150,30 @@ serialization**, not including it.
 
 ### 4.3 A modelling stretch worth knowing about
 
-Center 3D Print's "Поради щодо експлуатації" block is mapped onto `compatibility` (§5). It is not
-compatibility information — it is C3D's Style-B operating-tips section — but the Doc has no slot
-for it and §5 is the one that renders in the right position with the right shape. It reconciles,
-and it is the wrong name for what it holds.
+Center 3D Print's "Поради щодо експлуатації" block was mapped onto `compatibility` (§5). It is not
+compatibility information — it is C3D's Style-B operating-tips section — but the Doc had no slot
+for it and §5 was the one that renders in the right position with the right shape. It reconciled,
+and it was the wrong name for what it held.
+
+**RESOLVED — and NOT by renaming `compatibility`.** The reading above was half right. Checking the
+prompt shows §5 is correctly named and correctly scoped: `master-system-prompt.ts` restricts it to
+*"ONLY physical cross-compatibility"* — materials and hardware — and explicitly routes software,
+drivers, OS and connectivity **out** to §3. Operating tips are neither. So nothing about
+`compatibility` was wrong; a sibling was missing.
+
+The block is also first-class rather than ad-hoc, which is the argument for modelling it at all:
+`OPERATING_TIPS_H2_MARKERS` (`src/prompt-core/constants.ts`) is its single source of truth, and
+`tov-second-person.ts` matches against that same array so the prompt and the linter cannot drift.
+
+`ProductDescriptionDoc.operatingTips?: Subsection` now exists, renders in §5's slot (immediately
+after `compatibility` when both are present), and is registered in `forEachBlockInOrder` — which is
+the whole reason that traversal was extracted. A test pins the property that made the fixture move
+safe: a document carrying only one of the two sections renders **byte-identically** either way, so
+moving the block reflowed nothing. The C3D fixture now holds it on the correct field and both
+artifacts still reconcile across all five checks.
+
+This is the fifth renderer/model correction the corpus produced, and the first found by reading the
+prompt rather than by hitting a wall while authoring.
 
 ---
 

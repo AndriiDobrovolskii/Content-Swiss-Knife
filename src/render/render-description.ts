@@ -294,6 +294,13 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
     parts.push(renderSubsection(doc.compatibility, doc, positions, ctx));
   }
 
+  // §5b — Center 3D Print's Style B operating-tips block, in §5's slot. A document carrying only
+  // one of the two renders identically either way, which is what makes it safe to move a block off
+  // `compatibility` onto its correct field without reflowing the artifact.
+  if (doc.operatingTips) {
+    parts.push(renderSubsection(doc.operatingTips, doc, positions, ctx));
+  }
+
   if (doc.packageContents) {
     const items = doc.packageContents.items.map(i => `<li>${esc(i)}</li>`).join('\n');
     parts.push(`<h2>${esc(doc.packageContents.heading)}</h2>\n<ul>\n${items}\n</ul>`);
