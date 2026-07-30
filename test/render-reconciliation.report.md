@@ -62,8 +62,13 @@ Implemented as a `videos[]` manifest parallel to `figures[]` plus a `{ kind: 'vi
 **not** folded into `figures[]`, which would force the renderer to branch on URL shape.
 
 One deviation from the code worth recording: the artifact's figcaption is **localized**
-("Відеоогляд …"), while `video-figure.ts` hardcodes English `Video review of ${productName}`. The
+("Відеоогляд …"), while `video-figure.ts` hardcoded English `Video review of ${productName}`. The
 Doc therefore models `VideoEmbed.caption` as a model-authored `Prose` field rather than a template.
+
+**Resolved for language:** `video-figure.ts` now localizes its template per BCP47 primary subtag
+(`FIGCAPTION_TEMPLATES`), so the master no longer ships an English caption into a uk-UA artifact.
+The `Prose` modelling still stands on its own merit — a template can localize the wording but
+cannot describe what a particular video shows.
 
 ### 2.3 Confirmed correct in PR-1 — no change needed
 

@@ -3,19 +3,23 @@ import { withRetry } from '../utils/retry.js';
 import { normalizePayload } from '../utils/payload.js';
 import { parseJsonResponse } from '../utils/json-parse.js';
 import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
+import { resolveSlot } from './model-support.js';
+
+// Fallback slot used when a caller doesn't pass one (direct unit-test calls, a request that
+// predates the settings menu). Mirrors the historical env-driven defaults.
+const FALLBACK_DEEP = () => resolveSlot('anthropic', {
+  model: process.env.ANTHROPIC_MODEL_THINKING || 'claude-sonnet-5',
+  level: process.env.ANTHROPIC_THINKING_EFFORT || 'medium',
+});
+const FALLBACK_FAST = () => resolveSlot('anthropic', {
+  model: process.env.ANTHROPIC_MODEL_FAST || 'claude-haiku-4-5',
+  level: 'disabled',
+});
 
 export class AnthropicProvider {
-  constructor(apiKey, opts = {}) {
+  constructor(apiKey) {
     this.client = new Anthropic({ apiKey });
-    this.thinkingModel = opts.thinkingModel || process.env.ANTHROPIC_MODEL_THINKING || 'claude-sonnet-5';
-    this.fastModel = opts.fastModel || process.env.ANTHROPIC_MODEL_FAST || 'claude-haiku-4-5';
-    // Sonnet 5 defaults to effort 'high' (~= Sonnet 4.6 at 'max'). We pin 'medium',
-    // which is the closest behavioral match to the previous Sonnet 4.6 @ high pass.
-    this.thinkingEffort = opts.thinkingEffort || process.env.ANTHROPIC_THINKING_EFFORT || 'medium';
   }
-
-  // Deep Thinking ON → mode 'creative'/'creative-json' → Sonnet. OFF → Haiku.
-  #modelFor(mode) { return (mode === 'creative' || mode === 'creative-json') ? this.thinkingModel : this.fastModel; }
 
   // Turn our blocks into a cacheable Anthropic system array.
   #toSystem(blocks = []) {
@@ -24,33 +28,38 @@ export class AnthropicProvider {
       .map(b => ({ type: 'text', text: b.text, ...(b.cache ? { cache_control: { type: 'ephemeral', ttl: '1h' } } : {}) }));
   }
 
-  // `effort` is a per-request override of this.thinkingEffort — 'disabled' means Sonnet 5
-  // with thinking off (no output_config sent at all); 'low'/'medium'/'high' means adaptive
-  // thinking at that depth. Falls back to the fixed this.thinkingEffort when omitted, so
-  // callers that don't pass it (e.g. analyzeImage) keep their current behavior. Ignored on
-  // non-creative modes — Haiku never runs thinking.
-  async generate(payload, mode = 'text', effort) {
+  // Translate a catalog thinking level into Anthropic's request shape.
+  // 'disabled' → thinking off, no output_config at all. Everything else → adaptive thinking
+  // at that effort. Manual thinking with budget_tokens is a 400 on Sonnet 5; adaptive +
+  // output_config.effort is the only supported form.
+  #thinkingConfig(level) {
+    if (level === 'disabled') return { thinking: { type: 'disabled' } };
+    // Anthropic has no 'minimal'; the catalog never offers it for a Claude model, but clamp
+    // defensively so a hand-rolled request can't produce a 400.
+    const effort = level === 'minimal' ? 'low' : level;
+    return { thinking: { type: 'adaptive' }, output_config: { effort } };
+  }
+
+  /**
+   * `slot` is the resolved { model, level, maxOutputTokens } for this call, chosen by the
+   * settings menu and validated server-side. Deep Thinking Mode picks which slot; this
+   * provider no longer decides the model from `mode`.
+   */
+  async generate(payload, mode = 'text', slot) {
     const { systemBlocks = [], userContent = '' } = normalizePayload(payload);
+    const isCreative = mode === 'creative' || mode === 'creative-json';
+    const { model, level, maxOutputTokens } = slot || (isCreative ? FALLBACK_DEEP() : FALLBACK_FAST());
 
     return withRetry(async () => {
-      const isCreative = mode === 'creative' || mode === 'creative-json';
       const config = {
-        // Sonnet 5's tokenizer emits ~30% more tokens for the same text, and max_tokens
-        // caps thinking + response text combined. 64000 leaves headroom for both.
-        // Non-creative modes route to Haiku (old tokenizer, no thinking) — unchanged.
-        model: this.#modelFor(mode),
-        max_tokens: isCreative ? 64000 : 16000,
+        model,
+        // The model's real output ceiling. max_tokens caps thinking + response text combined
+        // on Sonnet 5, so this must leave room for both.
+        max_tokens: maxOutputTokens,
         system: this.#toSystem(systemBlocks),
         messages: [{ role: 'user', content: userContent }],
+        ...this.#thinkingConfig(level),
       };
-      if (isCreative) {
-        if (effort === 'disabled') {
-          config.thinking = { type: 'disabled' };
-        } else {
-          config.thinking = { type: 'adaptive' };
-          config.output_config = { effort: effort || this.thinkingEffort };
-        }
-      }
 
       const hasCacheBlocks = systemBlocks.some(b => b?.cache);
       const stream = hasCacheBlocks
@@ -62,20 +71,20 @@ export class AnthropicProvider {
       // or the repair gate as if it were a valid artifact.
       if (response.stop_reason === 'max_tokens') {
         throw new Error(
-          `[anthropic] output truncated: hit max_tokens (${config.max_tokens}) on ${config.model} / ${mode}. ` +
-          `Raise max_tokens or lower output_config.effort.`
+          `[anthropic] output truncated: hit max_tokens (${config.max_tokens}) on ${model} / ${mode}. ` +
+          `Raise the model's maxOutputTokens in model-catalog.json or lower the thinking level.`
         );
       }
       if (response.stop_reason === 'refusal') {
-        throw new Error(`[anthropic] request refused by safety classifier on ${config.model} / ${mode}.`);
+        throw new Error(`[anthropic] request refused by safety classifier on ${model} / ${mode}.`);
       }
 
       const u = response.usage || {};
-      console.log('[anthropic]', config.model, mode,
+      console.log('[anthropic]', model, mode, `thinking=${level}`,
         { in: u.input_tokens, out: u.output_tokens, cw: u.cache_creation_input_tokens, cr: u.cache_read_input_tokens });
 
       const usage = {
-        model: config.model,
+        model,
         mode,
         inputTokens: u.input_tokens,
         outputTokens: u.output_tokens,
@@ -89,40 +98,26 @@ export class AnthropicProvider {
     });
   }
 
-  async analyzeImage(base64Data, mimeType, prompt, useThinking = false) {
+  async analyzeImage(base64Data, mimeType, prompt, useThinking = false, slot) {
+    const { model, level, maxOutputTokens } = slot || (useThinking ? FALLBACK_DEEP() : FALLBACK_FAST());
+
     return withRetry(async () => {
-      const model = useThinking ? this.thinkingModel : this.fastModel;
+      const thinking = this.#thinkingConfig(level);
       const config = {
         model,
-        // Sonnet 5: max_tokens caps thinking + response text COMBINED. Deep Thinking ON runs
-        // adaptive thinking, so the ceiling must leave room for reasoning AND the caption;
-        // 300 (the old value) starved either the thinking or the answer. The caption itself is
-        // tiny (<= 20 words), so 8000 is pure headroom against truncation, not a cost — only
-        // tokens actually generated bill. OFF path (Haiku, thinking disabled) needs the caption
-        // budget only.
-        max_tokens: useThinking ? 8000 : 1000,
+        // The caption itself is tiny (<= 20 words), but max_tokens caps thinking + text
+        // combined, so a thinking run needs real headroom. Only tokens actually generated
+        // bill, so the ceiling is free insurance against truncation.
+        max_tokens: thinking.thinking.type === 'disabled' ? 1000 : Math.min(8000, maxOutputTokens),
         messages: [{
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64Data } },
             { type: 'text', text: prompt }
           ]
-        }]
+        }],
+        ...thinking,
       };
-      if (useThinking) {
-        // Deep Thinking ON → Sonnet 5. Adaptive thinking lets the model reason about the image
-        // (identify the subject, read on-image text, pick the single most useful sentence)
-        // before writing a concise best-practice alt caption. Manual thinking with
-        // budget_tokens is a 400 error on Sonnet 5 — adaptive + effort is the only supported
-        // mode. Reuses the pipeline's pinned effort ('medium') for behavioral consistency with
-        // generate().
-        config.thinking = { type: 'adaptive' };
-        config.output_config = { effort: this.thinkingEffort };
-      } else {
-        // Deep Thinking OFF → Haiku. Sonnet 5 would run adaptive thinking if `thinking` were
-        // omitted, so pin it disabled; no-op on the Haiku path. Nothing competes with the caption.
-        config.thinking = { type: 'disabled' };
-      }
 
       const response = await this.client.messages.create(config);
 
@@ -131,7 +126,7 @@ export class AnthropicProvider {
       if (response.stop_reason === 'max_tokens') {
         throw new Error(
           `[anthropic] vision output truncated: hit max_tokens (${config.max_tokens}) on ${model}. ` +
-          `Raise max_tokens or lower output_config.effort.`
+          `Raise max_tokens or lower the thinking level.`
         );
       }
       if (response.stop_reason === 'refusal') {
@@ -144,11 +139,16 @@ export class AnthropicProvider {
     });
   }
 
-  async extractFromPdf(base64Data) {
+  async extractFromPdf(base64Data, slot) {
+    const { model } = slot || FALLBACK_FAST();
     return withRetry(async () => {
       const response = await this.client.messages.create({
-        model: this.fastModel,
+        model,
         max_tokens: 4096,
+        // Extraction is mechanical transcription. Pin thinking off — Sonnet 5 runs adaptive
+        // thinking when `thinking` is omitted, which would eat this small budget if a
+        // thinking-capable model is assigned to the Fast slot. No-op on Haiku.
+        thinking: { type: 'disabled' },
         messages: [{
           role: 'user',
           content: [

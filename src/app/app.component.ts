@@ -4,7 +4,6 @@ import { ContentOrchestratorService } from '../services/content-orchestrator.ser
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
 import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry, TabDescriptor } from './types';
-import { CreativeEffort } from '../prompt-core/payload';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
@@ -16,7 +15,11 @@ import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { HtmlEditorComponent } from './components/html-editor/html-editor.component';
+import { ModelSettingsComponent } from './components/model-settings/model-settings.component';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
+import { FeedbackContextService } from '../services/feedback-context.service';
+import { buildFeedbackUrl } from '../utils/feedback-url';
+import { environment } from '../environments/environment';
 import saveAs from 'file-saver';
 
 interface InputImage {
@@ -187,6 +190,11 @@ const TRANSLATIONS = {
     repairReportPersisted: 'still failing',
     repairReportDownload: 'Download .md',
     repairReportWarningsOnly: 'warning(s) — informational, no repair needed',
+    feedbackBtn: 'Suggest an improvement',
+    feedbackTooltip: 'Something routine you keep doing by hand? Tell us — opens the request form',
+    feedbackRenameTooltip: 'Change your name',
+    feedbackNamePrompt: 'Your name (goes into the request so we know who to ask back):',
+    feedbackPopupBlocked: 'The browser blocked the new tab. Open the form:',
   },
   uk: {
     appTitle: 'SEO Content',
@@ -350,19 +358,43 @@ const TRANSLATIONS = {
     repairReportPersisted: 'досі не пройдено',
     repairReportDownload: 'Завантажити .md',
     repairReportWarningsOnly: 'попередження — інформаційно, виправлення не потрібне',
+    feedbackBtn: 'Запропонувати покращення',
+    feedbackTooltip: 'Робите щось рутинне руками? Напишіть — відкриється форма запиту',
+    feedbackRenameTooltip: 'Змінити своє ім’я',
+    feedbackNamePrompt: 'Ваше ім’я (потрапить у запит, щоб було зрозуміло, в кого перепитати):',
+    feedbackPopupBlocked: 'Браузер заблокував нову вкладку. Відкрити форму:',
   }
+};
+
+/**
+ * Tool names sent to the "Де це трапилось?" field of the request form.
+ * Keep in sync with the dropdown options in tools/feedback-form/create-form.gs.
+ */
+const TOOL_LABEL: Record<AppMode, string> = {
+  'generator': 'Generator',
+  'ua-generator': 'UA Description',
+  'optimizer': 'Optimizer',
+  'translator': 'Translator',
+  'image-tools': 'Image Tools',
+  'seo-generator': 'SEO Meta',
+  'copywriter': 'Copywriter',
+  'readability': 'Readability',
+  'slug-generator': 'Slug Generator',
+  'html-editor': 'HTML-редактор',
+  'dashboard': 'Dashboard',
 };
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent],
+  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent, ModelSettingsComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent {
   private orchestrator = inject(ContentOrchestratorService);
   private historyService = inject(HistoryService);
   private llmService = inject(LlmService);
+  private feedback = inject(FeedbackContextService);
 
   // App Mode
   appMode = signal<AppMode>('generator');
@@ -376,6 +408,14 @@ export class AppComponent {
 
   // Computed Labels
   uiLabels = computed(() => TRANSLATIONS[this.uiLanguage()]);
+
+  // --- IMPROVEMENT-REQUEST FORM ---
+  // null until the form is configured in src/environments/ — the buttons stay hidden.
+  feedbackUrl = computed(() => buildFeedbackUrl(environment.feedbackForm, {
+    author: this.feedback.editorName(),
+    tool: TOOL_LABEL[this.appMode()],
+  }));
+  feedbackPopupBlocked = signal<boolean>(false);
 
   // Dark Mode
   darkMode = signal<boolean>(false);
@@ -393,9 +433,6 @@ export class AppComponent {
   supplementalContent = signal<string>('');
   customInstructions = signal<string>('');
   generatorUseThinking = signal<boolean>(true); // Default to true as per original behavior
-  // Sonnet 5 thinking depth when Deep Thinking Mode is on. 'medium' matches the server's
-  // previous fixed default (ANTHROPIC_THINKING_EFFORT), so leaving this untouched is a no-op.
-  generatorCreativeEffort = signal<CreativeEffort>('medium');
 
   // --- TEMPLATE STATE ---
   availableTemplates = CONTENT_TEMPLATES;
@@ -451,6 +488,7 @@ export class AppComponent {
   // UI State
   activeTab = signal<string>('html');
   showHistory = signal(false);
+  showModelSettings = signal(false);
 
   // --- COMPARISON STATE ---
   comparisonIds = signal<string[]>([]);
@@ -708,6 +746,25 @@ export class AppComponent {
     this.appMode.set(mode);
   }
 
+  // --- IMPROVEMENT-REQUEST FORM ---
+
+  /** Open the request form prefilled with who is asking and which tool they were in. */
+  openFeedback() {
+    // Synchronous on purpose: no await between the click and window.open, so the
+    // transient user activation is still alive and the popup is not blocked.
+    if (!this.feedback.ensureEditorName(this.uiLabels().feedbackNamePrompt)) return;
+
+    const url = this.feedbackUrl();
+    if (!url) return;
+
+    this.feedbackPopupBlocked.set(!this.feedback.openFormTab(url));
+  }
+
+  /** Fix a name typed wrong the first time — the prompt only appears while the name is empty. */
+  renameEditor() {
+    this.feedback.askEditorName(this.uiLabels().feedbackNamePrompt);
+  }
+
   onWebsiteChange(event: Event) {
     const siteName = (event.target as HTMLSelectElement).value;
     if (!siteName) {
@@ -763,7 +820,6 @@ export class AppComponent {
   updateTranslatorLang(event: Event) { this.translatorTargetLang.set((event.target as HTMLSelectElement).value); }
   toggleTranslatorThinking() { this.translatorUseThinking.update(v => !v); }
   toggleGeneratorThinking() { this.generatorUseThinking.update(v => !v); }
-  setGeneratorCreativeEffort(level: CreativeEffort) { this.generatorCreativeEffort.set(level); }
   toggleOptimizerThinking() { this.optimizerUseThinking.update(v => !v); }
   toggleCopywriterThinking() { this.copywriterUseThinking.update(v => !v); }
   toggleSeoThinking() { this.seoUseThinking.update(v => !v); }
@@ -814,14 +870,14 @@ export class AppComponent {
     const input = this.buildGeneratorInput();
     if (!input) return;
     this.activeTab.set('html');
-    await this.orchestrator.generate(input, this.generatorUseThinking(), this.generatorCreativeEffort());
+    await this.orchestrator.generate(input, this.generatorUseThinking());
   }
 
   async generateUa() {
     const input = this.buildGeneratorInput();
     if (!input) return;
     this.activeTab.set('html');
-    await this.orchestrator.generateUaContent(input, this.generatorUseThinking(), this.generatorCreativeEffort());
+    await this.orchestrator.generateUaContent(input, this.generatorUseThinking());
   }
 
   async generateSeoOnly() {
@@ -901,6 +957,7 @@ export class AppComponent {
   }
 
   toggleHistory() { this.showHistory.update(v => !v); }
+  toggleModelSettings() { this.showModelSettings.update(v => !v); }
 
   restoreHistory(item: HistoryItem) {
     this.appMode.set('generator');

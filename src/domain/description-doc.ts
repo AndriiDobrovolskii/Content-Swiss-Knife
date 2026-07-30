@@ -102,8 +102,10 @@ export interface VideoEmbed {
   /** <iframe title> — escaped as an attribute value by the renderer. */
   title: string;
   /**
-   * Localized caption. Real artifacts carry the target-language form ("Відеоогляд …"), not
-   * video-figure.ts's hardcoded English "Video review of …" template.
+   * Localized caption. Real artifacts carry the target-language form ("Відеоогляд …").
+   * video-figure.ts now localizes its template too (FIGCAPTION_TEMPLATES), so the two no longer
+   * disagree about language — this stays `Prose` because a model-authored caption can describe
+   * what the video actually shows, which a per-language template cannot.
    */
   caption: Prose;
 }

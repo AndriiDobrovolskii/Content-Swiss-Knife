@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from 'dotenv';
-import { createProvider } from './providers/factory.js';
+import { resolveRequest as resolveLlmRequest, slotFor } from './llm-request.js';
 import { SerperRetrieval } from './retrieval/serper.js';
 import { fetchUrl } from './retrieval/fetcher.js';
 import { computeCost } from './usage/pricing.js';
@@ -17,20 +17,32 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-const provider = createProvider(LLM_PROVIDER);
 const serper = new SerperRetrieval(process.env.SERPER_API_KEY);
+
+// Bind the env fallback once; the per-request logic lives in ./llm-request.js so it can be
+// tested without booting Express or holding API keys.
+const resolveRequest = (body, slotName) => resolveLlmRequest(body, slotName, LLM_PROVIDER);
+
+function sendError(res, error, tag) {
+  const status = error.status || 500;
+  console.error(`[${tag}] error:`, error.message);
+  res.status(status).json({ error: error.message });
+}
 
 // ── LLM routes ─────────────────────────────────────────────────────────────
 
 app.post('/api/llm/generate', async (req, res) => {
   try {
-    const { systemBlocks = [], userContent = '', mode = 'text', effort, taskLabel, productName, store, lang } = req.body;
-    const { result, usage } = await provider.generate({ systemBlocks, userContent }, mode, effort);
+    const { systemBlocks = [], userContent = '', mode = 'text', taskLabel, productName, store, lang } = req.body;
+    const { provider, instance, slot } = resolveRequest(req.body, slotFor(mode));
+    const { result, usage } = await instance.generate({ systemBlocks, userContent }, mode, slot);
 
     if (usage) {
       try {
         insertUsage({
-          provider: LLM_PROVIDER,
+          // The provider that actually served THIS request — not the boot-time env value,
+          // which would mislabel every Gemini row as anthropic.
+          provider,
           model: usage.model,
           mode: usage.mode,
           taskLabel, productName, store, lang,
@@ -48,30 +60,31 @@ app.post('/api/llm/generate', async (req, res) => {
 
     res.json({ result });
   } catch (error) {
-    console.error('[LLM] generate error:', error.message);
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 'LLM generate');
   }
 });
 
 app.post('/api/llm/vision', async (req, res) => {
   try {
     const { base64Data, mimeType, prompt, useThinking = false } = req.body;
-    const result = await provider.analyzeImage(base64Data, mimeType, prompt, useThinking);
+    // Vision has no `mode`, so Deep Thinking Mode picks the slot directly.
+    const { instance, slot } = resolveRequest(req.body, useThinking ? 'deep' : 'fast');
+    const result = await instance.analyzeImage(base64Data, mimeType, prompt, useThinking, slot);
     res.json({ result });
   } catch (error) {
-    console.error('[LLM] vision error:', error.message);
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 'LLM vision');
   }
 });
 
 app.post('/api/llm/pdf', async (req, res) => {
   try {
     const { base64Data } = req.body;
-    const result = await provider.extractFromPdf(base64Data);
+    // Extraction is mechanical transcription — always the cheap slot.
+    const { instance, slot } = resolveRequest(req.body, 'fast');
+    const result = await instance.extractFromPdf(base64Data, slot);
     res.json({ result });
   } catch (error) {
-    console.error('[LLM] pdf error:', error.message);
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 'LLM pdf');
   }
 });
 

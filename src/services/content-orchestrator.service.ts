@@ -7,9 +7,16 @@ import { cleanHtmlStructure, stripCodeFences } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
+import { fixDecimalSeparator } from '../utils/decimal-separator';
+import { restoreIdentifierDots } from '../utils/identifier-decimal';
+import { extractVideoEmbeds, restoreMissingVideos, validateVideoCoverage, SourceVideoEmbed } from '../utils/video-manifest';
+import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
-import { validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation } from '../utils/specs-grounding';
+import {
+  validateSpecsGrounding, isAlreadyCyrillic, inspectGroundedTranslation,
+  describeGroundingFailure, type GroundingInspection,
+} from '../utils/specs-grounding';
 import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
 import { validateSecondPersonScope } from '../utils/tov-second-person';
@@ -36,8 +43,9 @@ import { buildImageAltPrompt } from '../prompts/image-alt';
 import { buildCopywriterPrompt } from '../prompts/copywriter';
 import { SlugResponse, SeoResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta } from '../utils/repair-gate';
+import { createBlockRepairExecutor } from '../utils/block-tier';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
-import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
+import { PromptPayload } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
 import { validateSpecCategoryShape } from '../utils/spec-category-shape';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
@@ -87,6 +95,51 @@ export class ContentOrchestratorService {
   }
 
   /**
+   * The block-scoped repair rung for one locale.
+   *
+   * Always the fast model and never extended thinking: the task is rewriting one paragraph against
+   * an explicit instruction, not composing anything. Deep Thinking governs generation, not repair.
+   */
+  private blockRepairer(locale: string, taskLabel: string, input: ProductInput) {
+    return createBlockRepairExecutor({
+      generate: payload => this.llm.generateText(payload, false, {
+        taskLabel: `Block repair — ${taskLabel}`,
+        productName: input.name,
+        store: input.website.name,
+        lang: locale,
+      }),
+      languageLabel: `${isoToHumanLang(locale)} (${locale})`,
+      onResult: summary => {
+        if (summary.applied === 0 && summary.rejected === 0) return;
+        // Accumulated, not replaced: the rung can run on more than one ladder pass, and a report
+        // showing only the last pass would understate what was rewritten.
+        const running = this.blockPatchTally.get(taskLabel) ?? { applied: 0, rejected: 0, rejections: [] };
+        this.blockPatchTally.set(taskLabel, {
+          applied: running.applied + summary.applied,
+          rejected: running.rejected + summary.rejected,
+          rejections: [...running.rejections, ...summary.rejections],
+        });
+        console.info(
+          `[block-repair] ${taskLabel}: ${summary.applied} applied, ${summary.rejected} rejected`,
+          summary.rejections,
+        );
+      },
+    });
+  }
+
+  /**
+   * Per-artifact block-patch tallies for the current run, keyed by the gate's label.
+   *
+   * `resolved` is deliberately absent: the executor can only count what it spliced. Whether a
+   * finding actually went away is decided by re-validation, which only the gate sees, so
+   * toArtifactReport fills that field in.
+   */
+  private blockPatchTally = new Map<
+    string,
+    Omit<NonNullable<RepairArtifactReport['blockPatches']>, 'resolved'>
+  >();
+
+  /**
    * `input.specs` is usually pasted verbatim from a manufacturer sheet (typically English), but
    * the master HTML is generated natively in Ukrainian — grounding `validateSpecsGrounding`
    * against the raw source would false-positive on every translated spec-row label (see
@@ -100,25 +153,29 @@ export class ContentOrchestratorService {
    * incident. Callers must surface groundingDisabled (see the `specs-grounding-disabled` issue
    * below) rather than let '' pass unnoticed.
    */
-  private async groundingSpecs(input: ProductInput): Promise<string> {
-    if (!input.specs?.trim()) return '';
-    if (isAlreadyCyrillic(input.specs)) return input.specs;
+  private async groundingSpecs(input: ProductInput): Promise<GroundingInspection> {
+    if (!input.specs?.trim()) return { text: '' };
+    if (isAlreadyCyrillic(input.specs)) return { text: input.specs };
     try {
       const translated = await this.llm.generateText(
         buildTranslatePrompt(input.specs, 'Ukrainian'),
         false, // fast model — a cheap lookup call, not master generation
         { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
       );
-      const grounded = sanitizeGroundedTranslation(translated, masterScriptFor(input.website.name));
-      if (!grounded) {
+      const inspection = inspectGroundedTranslation(translated, masterScriptFor(input.website.name));
+      if (inspection.failure) {
         console.warn(
-          `[groundingSpecs] Translation for "${input.name}" did not yield usable text in the ` +
-          `master's script — specs grounding DISABLED for this run.`,
+          `[groundingSpecs] Specs grounding DISABLED for "${input.name}": ` +
+          describeGroundingFailure(inspection.failure),
         );
       }
-      return grounded;
-    } catch {
-      return '';
+      return inspection;
+    } catch (err) {
+      // The ERROR OBJECT, not a message: the stack trace is what says whether this was a timeout,
+      // a 4xx, or a bug on our side. It used to be swallowed whole, leaving the run with a warning
+      // that named the wrong cause.
+      console.error(`[groundingSpecs] Specs translation threw for "${input.name}".`, err);
+      return { text: '', failure: { kind: 'provider-error' } };
     }
   }
 
@@ -145,7 +202,7 @@ export class ContentOrchestratorService {
     ].filter(Boolean).join('\n');
   }
 
-  async generate(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
+  async generate(input: ProductInput, useThinking = false): Promise<void> {
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
     // localized name authoritative across H1/title/URL without ever reusing a stale name.
@@ -153,6 +210,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: reusedSlug, website: input.website, faqArtifacts: {}, mainHtmlLocale: 'uk-UA' });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -161,6 +219,9 @@ export class ContentOrchestratorService {
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
 
     const isConsumables = input.templateId === 'consumables-resin';
+    // Video embeds the source supplied — the output is obliged to contain every one of them.
+    // Consumables mode has no §3 to put a video in, so it opts out entirely.
+    const videoEmbeds = isConsumables ? [] : extractVideoEmbeds(input.description);
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
     // Extra headroom for the master specifically when an image manifest exists — Task A
     // doesn't reliably hit "exactly N images" on the first pass, and a dropped image is a
@@ -172,7 +233,8 @@ export class ContentOrchestratorService {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);
       // Localized once for the whole run — every repair-gate attempt below reuses this same
       // string instead of re-translating on each pass (see groundingSpecs doc comment).
-      const groundingSpecs = await this.groundingSpecs(input);
+      const grounding = await this.groundingSpecs(input);
+      const groundingSpecs = grounding.text;
       // Distinguishes "no specs supplied" (guard legitimately inert) from "specs supplied but
       // the grounding source failed its post-condition" (guard silently off). The Ortur H20
       // incident this guards against was invisible for exactly this reason — a console.warn is
@@ -188,18 +250,43 @@ export class ContentOrchestratorService {
       this.progressMessage.set(useThinking ? 'Generating HTML Description (Deep Thinking)…' : 'Generating HTML Description…');
       const masterInput: ProductInput = {
         ...input,
+        // The SAME Ukrainian text that will ground §7, not the English sheet.
+        //
+        // Two translations of one English parameter is what made spec-row-not-grounded a coin
+        // flip: the model rendered "Alarm Method" as "Спосіб сповіщення" for the table while
+        // groundingSpecs rendered it some other way for the check, and stem-matching those two
+        // is unreliable by construction. Feeding the model the text the check will use makes
+        // them agree because they are the same string, not because two passes happened to align.
+        //
+        // Falls back to the raw sheet when grounding is off, which is exactly the old behaviour.
+        specs: groundingSpecs || input.specs,
         customInstructions: [
           input.customInstructions?.trim(),
           buildMasterUaOverlay(input.website.name),
         ].filter(Boolean).join('\n\n'),
       };
       const basePayloadA = buildPromptA(masterInput, 'Ukrainian (uk-UA)');
+      // What the LAST produce call had to splice back. Read by the validate array below, which
+      // runs against that same artifact, to surface automatic placement as a warning.
+      let restoredVideos: SourceVideoEmbed[] = [];
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' }, creativeEffort);
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
         html = stripCodeFences(html);
-        html = wrapVideoFigures(html, input.name);
+        // BEFORE wrapVideoFigures, so a restored embed goes through exactly the same figure and
+        // attribute contract as one the model emitted itself.
+        const restoration = restoreMissingVideos(html, videoEmbeds, input.name, 'uk-UA');
+        html = restoration.html;
+        restoredVideos = restoration.restored;
+        html = wrapVideoFigures(html, input.name, 'uk-UA');
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
+        // Immediately after fixNumberFormatting, which has already stripped thousands separators —
+        // so the decimal pass sees one unambiguous number shape per value.
+        html = fixDecimalSeparator(html, 'uk-UA');
+        // The inverse: a comma the MODEL wrote inside an identifier (F/2,0, 2,4G). Nothing else
+        // catches those — the validator only looks for the opposite. Safe next to the forward
+        // pass, which only ever touches a decimal followed by a unit.
+        html = restoreIdentifierDots(html, 'uk-UA');
         // AFTER fixNumberFormatting so the cyrillizer sees a canonical NUM<NBSP>UNIT shape, and
         // BEFORE normalizeTerminology so its Cyrillic word-boundary lookarounds see final
         // orthography. Both neighbours are idempotent and independent, so this is a documented
@@ -216,7 +303,11 @@ export class ContentOrchestratorService {
         produce: produceHtmlA,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams),
+          // Trusted exactly when the model was given this same text (see masterInput.specs). If
+          // grounding fell back to the English sheet, a label mismatch says nothing about the row
+          // and must not cost a regeneration.
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams,
+            { labelAnchorTrusted: !!groundingSpecs }),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
           // Image text may not carry a figure the source never stated — the prompt-side rule
           // (NUMERIC_SOURCE_FIDELITY_RULES) reduces the rate; this is the deterministic gate.
@@ -232,23 +323,44 @@ export class ContentOrchestratorService {
           // §7 must not collapse into one catch-all category — runs on the master only, since
           // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
           ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
+          // Should never fire: restoreMissingVideos ran in produce. That is the point — this is
+          // the assertion that the deterministic layer worked, not the mechanism that makes it.
+          ...validateVideoCoverage(html, videoEmbeds, 'HTML (base)'),
+          // Placement by code rather than by the model. Warning tier: the artifact is correct,
+          // but the editor should know the anchor was chosen mechanically.
+          ...restoredVideos.map(e => ({
+            severity: 'warning' as const,
+            rule: 'video-embed-restored',
+            detail:
+              `The model omitted the source video embed (${e.src}); it was re-inserted `
+              + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+            context: 'HTML (base)',
+          })),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
+            // The cause is named, not guessed. The old wording asserted the script explanation
+            // even when the call had thrown, which made the one observable signal actively
+            // misleading — and three different causes produce this same state.
             detail:
-              'Specs grounding was DISABLED for this run: the source-specs translation did not ' +
-              'yield usable text in the master\'s script. §7 rows were NOT verified against the ' +
-              'source specifications.',
+              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
+              + 'source specifications. Cause: '
+              + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
+              + '.',
             context: 'HTML (base)',
           }] : []),
         ],
         withFeedback: appendRepairFeedback,
+        // Block-scoped rung. Runs BEFORE any full regeneration and is the only instrument a
+        // warning can reach — see resolveLadder. Wired here rather than after the gate so a
+        // translation inherits already-repaired prose from the master.
+        repairBlocks: this.blockRepairer('uk-UA', 'HTML (base)', input),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlAResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
-      this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult)]);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult, this.blockPatchTally.get('HTML (base)'))]);
       // Deterministic §7 category merge (dissolve <3-row categories into "Загальні відомості",
       // placed first) — runs once here, before this HTML is used for Slug/SEO grounding or
       // handed to Task C, so every downstream consumer sees the same, already-merged master.
@@ -281,7 +393,7 @@ export class ContentOrchestratorService {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
           const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn);
           // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }, creativeEffort);
+          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
           const slugData = this.normalizeSlugResponse(rawSlug);
           this.content.update(c => ({ ...c, slugData }));
           this.approvedSlugKey.set(this.slugKey(input));
@@ -304,7 +416,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }, creativeEffort)),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -344,13 +456,13 @@ export class ContentOrchestratorService {
           basePayload: basePayloadC,
           produce: async (payload) => {
             // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale }, creativeEffort);
+            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale });
             html = stripCodeFences(html);
             if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
               html = this.applySpanishExpert3dReplacements(html);
             }
             // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
-            html = normalizeTerminology(cyrillizeUnits(fixNumberFormatting(html), locale), locale);
+            html = normalizeTerminology(cyrillizeUnits(restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(html), locale), locale), locale), locale);
             return canonicalizeMultiInOne(html, locale);
           },
           validate: (html) => [
@@ -358,12 +470,16 @@ export class ContentOrchestratorService {
             ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
           ],
           withFeedback: appendRepairFeedback,
+          // Safe against structural parity: validateStructuralParity counts tags, and a rewrite
+          // inside one block changes no tag count — rejectPatch refuses any patch that is not
+          // exactly one element with the original's tag and attributes.
+          repairBlocks: this.blockRepairer(locale, `HTML (${lang})`, input),
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing ${lang} translation (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
         const { artifact: htmlLang, finalIssues: langFinalIssues, repairsUsed: langRepairs } = htmlLangResult;
         if (langRepairs > 0) console.info(`[repair-gate] HTML (${lang}): ${langRepairs} repair(s) applied`);
-        this.repairReport.update(r => [...r, toArtifactReport(`HTML (${lang})`, htmlLangResult)]);
+        this.repairReport.update(r => [...r, toArtifactReport(`HTML (${lang})`, htmlLangResult, this.blockPatchTally.get(`HTML (${lang})`))]);
         if (langFinalIssues.length > 0) {
           this.validationIssues.update(issues => [...issues, ...langFinalIssues]);
         }
@@ -407,17 +523,34 @@ export class ContentOrchestratorService {
             maxRepairs: this.maxRepairs(),
             basePayload: basePayloadFaq,
             produce: async (payload) => {
-              const html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode }, creativeEffort);
-              return stripCodeFences(html);
+              let html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode });
+              html = stripCodeFences(html);
+              // The FAQ is validated by the same validateGeneratedHtml as the master, so it must
+              // get the same deterministic normalizers. Without them the gate reports unit-spacing
+              // and latin-unit-in-cyrillic-text findings that no instrument can reach (the FAQ had
+              // no block rung either) — held to the master's standard without the master's tooling.
+              // Ordering mirrors produceHtmlA above and is documented there.
+              html = fixNumberFormatting(html);
+              html = fixDecimalSeparator(html, isoCode);
+              html = restoreIdentifierDots(html, isoCode);
+              html = cyrillizeUnits(html, isoCode);
+              html = normalizeTerminology(html, isoCode);
+              return canonicalizeMultiInOne(html, isoCode);
             },
             validate: validateFaqHtml,
             withFeedback: appendRepairFeedback,
+            // Without this rung a FAQ warning was unreachable by ANY instrument: the block pass is
+            // the only thing that can act on a warning (see the master gate's note), and the FAQ
+            // gate simply had none. That is why the L2 Pro report listed three FAQ warnings under
+            // "not repaired" with no patch attempts against them. blockRepairer makes no
+            // assumptions about document shape, so it is safe on the FAQ's schema-free HTML.
+            repairBlocks: this.blockRepairer(isoCode, `FAQ (${isoCode})`, input),
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing FAQ (${isoCode}) (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           });
           const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
           if (faqRepairs > 0) console.info(`[repair-gate] FAQ (${isoCode}): ${faqRepairs} repair(s) applied`);
-          this.repairReport.update(r => [...r, toArtifactReport(`FAQ (${isoCode})`, faqResult)]);
+          this.repairReport.update(r => [...r, toArtifactReport(`FAQ (${isoCode})`, faqResult, this.blockPatchTally.get(`FAQ (${isoCode})`))]);
           if (faqHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
           } else {
@@ -451,13 +584,14 @@ export class ContentOrchestratorService {
   /** Native uk-UA generation: Task A is called directly in Ukrainian (no English base,
    *  no Task C translation loop). SEO/slug/FAQ are scoped to uk-UA only. Mirrors generate()'s
    *  repair gates and validators for the artifacts it shares. */
-  async generateUaContent(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
+  async generateUaContent(input: ProductInput, useThinking = false): Promise<void> {
     const UA_ISO = 'uk-UA';
     const UA_BASE_LANGUAGE = 'Ukrainian (uk-UA)';
 
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: UA_ISO });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -466,13 +600,16 @@ export class ContentOrchestratorService {
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
 
     const isConsumables = input.templateId === 'consumables-resin';
+    // See the sibling comment in generate().
+    const videoEmbeds = isConsumables ? [] : extractVideoEmbeds(input.description);
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
 
     await this.withProgress(async () => {
       const { seoLangs } = getLangsForStore(input.website.name);
       // Localized once for the whole run — every repair-gate attempt below reuses this same
       // string instead of re-translating on each pass (see groundingSpecs doc comment).
-      const groundingSpecs = await this.groundingSpecs(input);
+      const grounding = await this.groundingSpecs(input);
+      const groundingSpecs = grounding.text;
       // Distinguishes "no specs supplied" (guard legitimately inert) from "specs supplied but
       // the grounding source failed its post-condition" (guard silently off). See the sibling
       // groundingDisabled comment in the base-HTML generate() path above.
@@ -489,19 +626,29 @@ export class ContentOrchestratorService {
       this.progressMessage.set(useThinking ? 'Generating Ukrainian Description (Deep Thinking)…' : 'Generating Ukrainian Description…');
       const uaInput: ProductInput = {
         ...input,
+        // Same substitution as generate()'s masterInput — see the rationale there.
+        specs: groundingSpecs || input.specs,
         customInstructions: [
           input.customInstructions?.trim(),
           buildMasterUaOverlay(input.website.name),
         ].filter(Boolean).join('\n\n'),
       };
       const basePayloadA = buildPromptA(uaInput, UA_BASE_LANGUAGE);
+      // See the sibling comment in generate().
+      let restoredVideos: SourceVideoEmbed[] = [];
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
         html = stripCodeFences(html);
-        html = wrapVideoFigures(html, input.name);
+        const restoration = restoreMissingVideos(html, videoEmbeds, input.name, UA_ISO);
+        html = restoration.html;
+        restoredVideos = restoration.restored;
+        html = wrapVideoFigures(html, input.name, UA_ISO);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
         // Ordering rationale as in generate()'s master produce.
+        html = fixDecimalSeparator(html, UA_ISO);
+        // See the sibling comment in generate()'s master produce.
+        html = restoreIdentifierDots(html, UA_ISO);
         html = cyrillizeUnits(html, UA_ISO);
         html = normalizeTerminology(html, UA_ISO);
         html = canonicalizeMultiInOne(html, UA_ISO);
@@ -514,7 +661,9 @@ export class ContentOrchestratorService {
         produce: produceHtmlUa,
         validate: html => [
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams),
+          // Same reasoning as the sibling call in generate().
+          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams,
+            { labelAnchorTrusted: !!groundingSpecs }),
           ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
           // Image-text numeric gate — see the identical hook in generate() for rationale.
           ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),
@@ -525,23 +674,41 @@ export class ContentOrchestratorService {
           ...validateSentenceLength(html, UA_ISO, 'HTML (uk-UA)'),
           // §7 category-collapse guard — see the identical hook in generate() for rationale.
           ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
+          // Video coverage + automatic-placement notice — see the identical hook in generate().
+          ...validateVideoCoverage(html, videoEmbeds, 'HTML (uk-UA)'),
+          ...restoredVideos.map(e => ({
+            severity: 'warning' as const,
+            rule: 'video-embed-restored',
+            detail:
+              `The model omitted the source video embed (${e.src}); it was re-inserted `
+              + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+            context: 'HTML (uk-UA)',
+          })),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
+            // The cause is named, not guessed. The old wording asserted the script explanation
+            // even when the call had thrown, which made the one observable signal actively
+            // misleading — and three different causes produce this same state.
             detail:
-              'Specs grounding was DISABLED for this run: the source-specs translation did not ' +
-              'yield usable text in the master\'s script. §7 rows were NOT verified against the ' +
-              'source specifications.',
+              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
+              + 'source specifications. Cause: '
+              + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
+              + '.',
             context: 'HTML (uk-UA)',
           }] : []),
         ],
         withFeedback: appendRepairFeedback,
+        // Same rung as generate()'s master gate — this standalone path runs the same validators,
+        // so leaving it out would make sentence-too-long repairable in one entry point and merely
+        // reported in the other.
+        repairBlocks: this.blockRepairer(UA_ISO, 'HTML (uk-UA)', input),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
       const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlUaResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
-      this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult)]);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult, this.blockPatchTally.get('HTML (uk-UA)'))]);
       // Deterministic §7 category merge — see the identical hook in generate() for rationale.
       const mergedHtmlUa = mergeSmallSpecCategories(htmlUa);
       const finalHtmlUa = isConsumables ? trimConsumablesToLimit(mergedHtmlUa) : mergedHtmlUa;
@@ -560,7 +727,7 @@ export class ContentOrchestratorService {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
         const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
-        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
+        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO });
         const slugData = this.normalizeSlugResponse(rawSlug);
         this.content.update(c => ({ ...c, slugData }));
         this.approvedSlugKey.set(this.slugKey(input));
@@ -581,7 +748,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
-        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort)),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO })),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -616,17 +783,26 @@ export class ContentOrchestratorService {
           maxRepairs: this.maxRepairs(),
           basePayload: basePayloadFaq,
           produce: async (payload) => {
-            const html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
-            return stripCodeFences(html);
+            let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
+            html = stripCodeFences(html);
+            // Same normalizer chain as the sibling FAQ produce in generate() — see the rationale there.
+            html = fixNumberFormatting(html);
+            html = fixDecimalSeparator(html, UA_ISO);
+            html = restoreIdentifierDots(html, UA_ISO);
+            html = cyrillizeUnits(html, UA_ISO);
+            html = normalizeTerminology(html, UA_ISO);
+            return canonicalizeMultiInOne(html, UA_ISO);
           },
           validate: validateFaqHtml,
           withFeedback: appendRepairFeedback,
+          // Same rung as the sibling FAQ gate in generate() — see the rationale there.
+          repairBlocks: this.blockRepairer(UA_ISO, 'FAQ (uk-UA)', input),
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing FAQ (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
         const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
         if (faqRepairs > 0) console.info(`[repair-gate] FAQ (uk-UA): ${faqRepairs} repair(s) applied`);
-        this.repairReport.update(r => [...r, toArtifactReport('FAQ (uk-UA)', faqResult)]);
+        this.repairReport.update(r => [...r, toArtifactReport('FAQ (uk-UA)', faqResult, this.blockPatchTally.get('FAQ (uk-UA)'))]);
         if (faqHtml.startsWith('<')) {
           this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [UA_ISO]: faqHtml } }));
         } else {
@@ -654,6 +830,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: existingSlug, website: input.website });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
@@ -690,6 +867,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
@@ -724,8 +902,14 @@ export class ContentOrchestratorService {
 
   /** Keeps "N-in-N"/"N в N" hyphenation in sync with the HTML body's canonical form — see
    *  canonicalizeMultiInOne (S4, 2026-07-16 EXPERT3D audit: body/metadata drifted apart). */
+  /**
+   * normalizeSeoNumbers runs LAST and its position matters: it inserts NBSP between a number and
+   * its unit, so it lengthens meta_description. Because this whole method runs inside the repair
+   * gate's `produce`, `validate` measures the post-formatting string — a description that crosses
+   * 155 chars only after formatting is caught rather than shipped under a stale measurement.
+   */
   private canonicalizeSeoData(seo: SeoResponse): SeoResponse {
-    return {
+    return normalizeSeoNumbers({
       ...seo,
       seo_data: (seo.seo_data ?? []).map(item => ({
         ...item,
@@ -733,7 +917,7 @@ export class ContentOrchestratorService {
         meta_title: canonicalizeMultiInOne(item.meta_title, item.language),
         meta_description: canonicalizeMultiInOne(item.meta_description, item.language),
       })),
-    };
+    });
   }
 
   async generateKeywords(name: string, description: string): Promise<void> {
@@ -884,6 +1068,7 @@ export class ContentOrchestratorService {
     this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, faqArtifacts: {} });
     this.validationIssues.set([]);
     this.repairReport.set([]);
+    this.blockPatchTally.clear();
     this.repairReportMeta.set(null);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');

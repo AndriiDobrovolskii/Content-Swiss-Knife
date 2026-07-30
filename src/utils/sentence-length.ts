@@ -18,9 +18,21 @@
  * Pure function, no LLM.
  */
 
+import { parseDocument } from 'htmlparser2';
 import type { ValidationIssue } from './output-validator';
 import { SENTENCE_LENGTH_BANDS } from '../prompt-core/constants';
 import { LATIN_TO_CYRILLIC_UNITS } from './unit-tables';
+import { extractBlocks, type HtmlBlockAncestor } from './block-repair';
+
+/**
+ * The old `el.closest('table, figcaption, section.specs')`, expressed against the ancestor chain
+ * extractBlocks reports. A <p> is never itself one of these, so testing ancestors only is
+ * equivalent to closest(), which also matches the element itself.
+ */
+function isExcludedScope(a: HtmlBlockAncestor): boolean {
+  return a.tag === 'table' || a.tag === 'figcaption'
+    || (a.tag === 'section' && a.classes.includes('specs'));
+}
 
 /**
  * A terminator ends a sentence only when whitespace and then an opening quote or an uppercase
@@ -35,11 +47,38 @@ const SENTENCE_BREAK = /([.!?…])["»)\]]?\s+(?=[«"'([]?\p{Lu})/gu;
 /**
  * Residual guard: a terminator directly after one of these is an abbreviation dot, not a full
  * stop, even when the next word is capitalised. Lowercased comparison, longest-first.
+ *
+ * METRIC UNIT SYMBOLS ARE DELIBERATELY ABSENT. Ukrainian and international typographic rules
+ * write mm/cm/kg WITHOUT a trailing period, so a period after "мм" is a guaranteed sentence end,
+ * never an abbreviation dot. Having them here glued two correct sentences into one 37-word
+ * finding on a real run — the model had split the sentence properly and the validator merged it
+ * back, so it could not win and the block burned a repair rung for nothing.
+ *
+ * What remains are contractions of WORDS ("штук" -> "шт.", "гривня" -> "грн.", "рисунок" ->
+ * "рис."), which do take the period. Those stay.
  */
 const ABBREVIATIONS = [
   'т. д', 'т. п', 'т. е', 'т. ч', 'та ін', 'и др', 'напр', 'рис', 'табл', 'див',
-  'шт', 'мм', 'см', 'кг', 'год', 'хв', 'мин', 'грн', 'ін', 'ст', 'вул', 'обл',
+  'шт', 'год', 'хв', 'мин', 'грн', 'ін', 'ст', 'вул', 'обл',
 ];
+
+/**
+ * True when `head` ends with `abbr` AS A WHOLE TOKEN.
+ *
+ * A plain endsWith matched word ENDINGS: 'ст' fired on "міст", "лист", "хвіст", and 'ін' on
+ * "магазин", silently gluing the following sentence onto the current one. That class of false
+ * merge is wider than the unit one above.
+ *
+ * NOT implemented with a word-boundary escape. In JavaScript `\b` is defined through
+ * `\w` = [A-Za-z0-9_], so it does not apply to Cyrillic at all — "міст" contains no word
+ * characters and `\b` behaves nothing like the intent. The boundary is therefore checked
+ * directly, against `\p{L}` with the u flag.
+ */
+function endsWithAbbrevToken(head: string, abbr: string): boolean {
+  if (!head.endsWith(abbr)) return false;
+  const before = head[head.length - abbr.length - 1];
+  return before === undefined || !/\p{L}/u.test(before);
+}
 
 /** Units that merge into the preceding number when counting words — see countWords. */
 const UNIT_WORDS = new Set<string>([
@@ -56,7 +95,8 @@ function splitSentences(text: string): string[] {
     const candidate = text.slice(start, (match.index ?? 0) + 1);
     const head = candidate.slice(0, -1).trimEnd().toLowerCase();
     const isAbbrev =
-      ABBREVIATIONS.some(a => head.endsWith(a)) || /(?:^|\s)\p{Lu}$/u.test(candidate.slice(0, -1));
+      ABBREVIATIONS.some(a => endsWithAbbrevToken(head, a))
+      || /(?:^|\s)\p{Lu}$/u.test(candidate.slice(0, -1));
     if (isAbbrev) continue;
     out.push(text.slice(start, (match.index ?? 0) + 1).trim());
     start = end;
@@ -98,6 +138,69 @@ export function countWords(sentence: string): number {
 }
 
 /**
+ * Splits a prose block into the segments that are measured independently.
+ *
+ * A bullet's bold lead-in is a LABEL, not the opening of the sentence that follows it. The schema
+ * models them as separate fields — BulletItem { lead, text } in description-doc.ts, emitted by
+ * renderBullets as `<b>${lead}</b>${text}` — but a colon is not a sentence terminator, so reading
+ * el.textContent glued them into one over-long "sentence". Real incident (XGRIDS L2 Pro,
+ * 2026-07-28): three §2b bullets reported at 23, 21 and 22 words whose sentences were 19, 15 and
+ * 14 — every one of them correct prose, and every one of them about to be rewritten by the repair
+ * ladder to satisfy a measurement that was wrong.
+ *
+ * The lead is MEASURED, not discarded: it becomes its own segment, so a lead-in that is itself
+ * over the ceiling still reports. Discarding it would create a blind spot.
+ *
+ * The test is structural — "the first meaningful node is <b>/<strong>" — not textual. Bold in the
+ * MIDDLE of a sentence is untouched because it is not first. Punctuation is deliberately not part
+ * of the test: Center 3D Print writes its leads with a full stop rather than a colon, so position
+ * is the only reliable signal.
+ *
+ * If a bold opening turns out to be a genuine sentence start rather than a label, the effect is a
+ * slightly MORE PERMISSIVE count — the same bias countWords already documents as correct for a
+ * warning-severity rule.
+ *
+ * Reads `block.outerHTML` rather than a DOM element: this validator moved to the extractBlocks
+ * model so that its `path` numbering matches the block patcher's, and blocks carry the original
+ * bytes, not a live node. Parsed with htmlparser2 — the same parser extractBlocks itself uses, so
+ * the two never disagree about what a block contains.
+ */
+function proseSegments(outerHTML: string): string[] {
+  const doc = parseDocument(outerHTML) as unknown as ParsedNode;
+  const root = (doc.children ?? []).find(node => node.type === 'tag');
+  const nodes = root?.children ?? [];
+
+  // The index, not the node: the lead test turns on whether the bold element is FIRST, and the
+  // position is what carries that meaning.
+  const i = nodes.findIndex(node => nodeText(node).trim().length > 0);
+  const first = i >= 0 ? nodes[i] : null;
+  const isLead =
+    !!first &&
+    first.type === 'tag' &&
+    ['b', 'strong'].includes((first.name ?? '').toLowerCase()); // htmlparser2 lower-cases names
+  if (!isLead) return [nodes.map(nodeText).join('')];
+
+  // Walked through the parse tree rather than by stripping the lead's text off the front of the
+  // block: string surgery breaks on a lead whose wording recurs later in the sentence.
+  const rest = nodes.slice(i + 1).map(nodeText).join('');
+  return [nodeText(first), rest];
+}
+
+/** Structural view of what parseDocument returns; avoids a direct dependency on `domhandler`. */
+interface ParsedNode {
+  type: string;
+  name?: string;
+  data?: string;
+  children?: ParsedNode[];
+}
+
+/** Visible text of a parsed node, mirroring block-repair's own traversal. */
+function nodeText(node: ParsedNode): string {
+  if (node.type === 'text') return node.data ?? '';
+  return (node.children ?? []).map(nodeText).join('');
+}
+
+/**
  * @param html    generated HTML for one locale
  * @param locale  BCP47; an unmapped locale returns no issues rather than guessing a ceiling
  * @param context reporting label, e.g. "HTML (base)"
@@ -113,20 +216,17 @@ export function validateSentenceLength(
   const band = SENTENCE_LENGTH_BANDS[locale.toLowerCase()];
   if (!band) return issues;
 
-  let doc: Document;
-  try {
-    doc = new DOMParser().parseFromString(html, 'text/html');
-  } catch {
-    return issues; // DOMParser unavailable — skip, same guard style as specs-grounding.ts
-  }
-
   const seen = new Set<string>();
   // Body prose only. Spec-table cells are not sentences; figcaptions are governed by the figure
   // rules and no rule asks to shorten them; headings are not prose either.
-  for (const el of Array.from(doc.querySelectorAll('p, li'))) {
-    if (el.closest('table, figcaption, section.specs')) continue;
+  for (const block of extractBlocks(html)) {
+    if (block.tag !== 'p' && block.tag !== 'li') continue;
+    if (block.ancestors.some(isExcludedScope)) continue;
 
-    for (const sentence of splitSentences((el.textContent ?? '').replace(/\s+/g, ' '))) {
+    const sentences = proseSegments(block.outerHTML)
+      .flatMap(segment => splitSentences(segment.replace(/\s+/g, ' ').trim()));
+
+    for (const sentence of sentences) {
       const words = countWords(sentence);
       if (words <= band.ceiling) continue;
       const key = sentence.slice(0, 80);
@@ -139,6 +239,13 @@ export function validateSentenceLength(
           `Sentence of ${words} words exceeds the ${locale} hard ceiling of ${band.ceiling} ` +
           `([SENTENCE LENGTH]). Split it into two shorter sentences: "${sentence}"`,
         context,
+        // Addressed the way the block patcher resolves it. Numbering MUST come from extractBlocks:
+        // a validator counting only <p> and a patcher counting <h2> too would disagree about which
+        // block is number 1, and the repair would rewrite the wrong paragraph while reporting
+        // success — a silent corruption, not a visible failure.
+        path: `block[${block.index}]`,
+        // Structured operands, never re-parsed out of `detail`.
+        measured: { actual: words, limit: band.ceiling, unit: 'words' },
       });
     }
   }

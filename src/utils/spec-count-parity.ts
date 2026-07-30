@@ -64,31 +64,56 @@ export function findMalformedTableLines(markdown: string): number[] {
 }
 
 /**
- * Locates a canonical Markdown table by its header+separator pair (e.g. "| Item |
- * Specification |" followed by "| :--- | :--- |") — this anchors the table start regardless of
+ * Locates canonical Markdown tables by their header+separator pair (e.g. "| Item |
+ * Specification |" followed by "| :--- | :--- |") — this anchors a table start regardless of
  * what precedes it (a heading, prose, blank lines), and regardless of what language the header
  * cells are written in. Returns the data rows only (header/separator excluded). Returns an empty
  * array when no such pair is found — callers treat that as "cannot verify," not "zero rows."
+ *
+ * WHY EVERY TABLE, NOT JUST THE FIRST
+ * This used to stop at the first header+separator pair and read until the first non-table line.
+ * A manufacturer sheet split into CATEGORY tables — the normal shape for anything more complex
+ * than a printer — was therefore read down to its first category. Real incident (XGRIDS L2 Pro
+ * 16/120, 2026-07-28): a sheet of 45 parameters across 8 category tables produced
+ * `expected = 8`, so specs-grounding.ts handed the repair model an "ALLOWED PARAMETERS" list
+ * naming 8 of the 45 rows it had legitimately emitted. Following that instruction meant deleting
+ * 37 grounded rows, the repair attempt was correctly discarded as not strictly better, and the
+ * artifact shipped with 4 unresolved §7 errors that were never the model's fault.
+ *
+ * WHY A FLAT SCAN WITH A FLAG, NOT NESTED LOOPS
+ * The obvious fix — an inner loop per table that breaks on the first non-table line — is wrong
+ * for ADJACENT tables (table 2's header on the line right after table 1's last row, no blank
+ * line between). "| Item | Specification |" and "| :--- | :--- |" are well-formed pipe rows, so
+ * an inner loop files them as spec rows: two junk entries per adjacency, in both the row count
+ * and the allowed-parameter list. Detecting the header+separator pair BEFORE consulting
+ * `inTable` makes that unrepresentable — a header can only ever open a table, never become data.
+ * (The old single-table version had the same flaw; it is covered by a test now.)
  *
  * LIMITATION: assumes cell values contain no literal "|" character — true for the technical-spec
  * domain this pipeline targets (dimensions, units, model numbers).
  */
 function parseCanonicalRows(markdown: string): Array<{ item: string; spec: string }> {
   const lines = markdown.split('\n');
-  let start = -1;
-  for (let i = 0; i < lines.length - 1; i++) {
-    const header = rowCells(lines[i]);
-    const sep = rowCells(lines[i + 1]);
-    if (header && header.length >= 2 && sep && isSeparatorRow(sep)) { start = i + 2; break; }
-  }
-  if (start === -1) return [];
-
   const rows: Array<{ item: string; spec: string }> = [];
-  for (let i = start; i < lines.length; i++) {
+  let inTable = false;
+
+  // Indexed `for`, not `for…of`: this needs a one-line lookahead for the separator, and needs to
+  // consume that separator with an extra increment.
+  for (let i = 0; i < lines.length; i++) {
     const cells = rowCells(lines[i]);
-    if (!cells) break; // table ends at the first non-table line
-    if (cells.length < 2) continue;
-    rows.push({ item: cells[0] ?? '', spec: cells[1] ?? '' });
+    const next = i + 1 < lines.length ? rowCells(lines[i + 1]) : null;
+
+    // A header+separator pair opens a table ANYWHERE — including directly after the previous
+    // table's last row. Checked before `inTable` on purpose; see the note above.
+    if (cells && cells.length >= 2 && next && isSeparatorRow(next)) {
+      inTable = true;
+      i++; // consume the separator
+      continue;
+    }
+    if (!inTable) continue;
+    if (!cells) { inTable = false; continue; } // a non-table line closes the table
+    if (isSeparatorRow(cells)) continue;       // a stray separator is not data
+    if (cells.length >= 2) rows.push({ item: cells[0] ?? '', spec: cells[1] ?? '' });
   }
   return rows;
 }

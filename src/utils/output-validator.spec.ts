@@ -362,6 +362,21 @@ describe('validateGeneratedHtml — Rule: decimal-separator', () => {
     expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'pt-PT'), 'decimal-separator')).toBeDefined();
   });
 
+  it('does NOT flag an f-number aperture (F/2.0, f/1.8) — an optical designation, not a measurement', () => {
+    // XGRIDS L2 Pro, 2026-07-28: the §7 row `Діафрагма | F/2.0` was the ONLY decimal-separator hit
+    // in the whole document. An f-number is a lens-aperture ratio carried verbatim from the source
+    // sheet; rewriting it to "F/2,0" edits a spec value to satisfy a typography rule.
+    for (const html of ['<td>Діафрагма</td><td>F/2.0</td>', '<p>Об’єктив f/1.8 із ручним фокусом.</p>']) {
+      expectNoRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'decimal-separator');
+    }
+  });
+
+  it('still flags a dot decimal after a NON-f slash, so the f-number carve-out stays narrow', () => {
+    // A digit before the slash (a fraction) and a plain unit ratio must both keep firing.
+    const html = '<p>Крок різьби 1/2.5 мм на секцію.</p>';
+    expect(findRule(validateGeneratedHtml(html, 'test', undefined, 'uk-UA'), 'decimal-separator')).toBeDefined();
+  });
+
   it('does NOT flag bare 802.1x/802.11-family standard numbers with no "IEEE" prefix', () => {
     for (const [locale, html] of [
       ['uk-UA', '<p>Підтримується стандарт 802.1Q для тегування VLAN.</p>'],

@@ -553,6 +553,366 @@ describe('runRepairGate — tiered repair ladder', () => {
     expect(Array.from(shipped.seo_data[0].meta_title).length).toBeLessThanOrEqual(55);
     expect(produce).toHaveBeenCalledTimes(1); // no regeneration was needed or spent
   });
+
+  it('gives two issues in the SAME context but different paths independent ladders', async () => {
+    // issueKey is rule::context, which separates en-GB from pl-PL but NOT two findings inside one
+    // artifact. validation-issues.ts:17-22 already says so: for sentence-too-long and friends,
+    // "keying on rule+context alone would collapse genuinely distinct findings into one".
+    //
+    // Shared cursor, two issues, a 3-rung ladder: pass 0 advances it twice, so pass 1 reads rung 2
+    // — 'full-regen' — and the deterministic terminator never runs for EITHER title. Twelve
+    // sentence-too-long findings in one HTML (base) is the case this has to survive.
+    const sameContext = (index: number, actual: number): ValidationIssue => ({
+      ...titleIssue(index, actual),
+      context: 'SEO meta (uk-UA)', // deliberately identical for both
+    });
+    const produce = vi.fn().mockResolvedValue(seoArtifact(['W'.repeat(80), 'Z'.repeat(80)]));
+    const repairField = vi.fn().mockResolvedValue('B'.repeat(70)); // still over the limit
+    const validate = vi.fn()
+      .mockReturnValueOnce([sameContext(0, 80), sameContext(1, 80)])
+      .mockReturnValueOnce([sameContext(0, 70), sameContext(1, 70)])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    const shipped = result.artifact as ReturnType<typeof seoArtifact>;
+    expect(Array.from(shipped.seo_data[0].meta_title).length).toBeLessThanOrEqual(55);
+    expect(Array.from(shipped.seo_data[1].meta_title).length).toBeLessThanOrEqual(55);
+  });
+
+  // ── Warnings on the ladder, via the block-scoped tier ────────────────────────
+
+  const sentenceWarning = (path = 'block[0]'): ValidationIssue => ({
+    severity: 'warning',
+    rule: 'sentence-too-long',
+    detail: 'Sentence of 21 words exceeds the uk-UA hard ceiling of 20. Split it into two.',
+    context: 'HTML (base)',
+    path,
+    measured: { actual: 21, limit: 20, unit: 'words' },
+  });
+
+  it('sends a repairable warning to the block tier and ships the rewrite', async () => {
+    // The whole point of the feature: 14 sentence-too-long warnings used to be printed and
+    // ignored, because the loop never started while the error count was zero.
+    const produce = vi.fn().mockResolvedValue('<p>Одне дуже довге речення.</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>Одне дуже. Довге речення.</p>');
+    const validate = vi.fn().mockReturnValueOnce([sentenceWarning()]).mockReturnValue([]);
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).toHaveBeenCalledTimes(1);
+    expect(repairBlocks.mock.calls[0][1]).toEqual([sentenceWarning()]); // the issues on that rung
+    expect(result.artifact).toBe('<p>Одне дуже. Довге речення.</p>');
+    expect(produce).toHaveBeenCalledTimes(1); // no regeneration was spent on a warning
+  });
+
+  it('states the measured shortfall on the second block rung, not the first', async () => {
+    // The two-rung ladder existed but both rungs sent the same words, so a model that had just
+    // missed the ceiling was asked again with no idea it had missed. EXPERT3D XGRIDS L2 Pro
+    // (2026-07-29) ran with both rungs and still shipped the warning.
+    const produce = vi.fn().mockResolvedValue('<p>довге</p>');
+    const repairBlocks = vi.fn()
+      .mockResolvedValueOnce('<p>трохи коротше</p>')   // applied, but still over the ceiling
+      .mockResolvedValue('<p>коротко</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([sentenceWarning()])                                        // 21 words
+      .mockReturnValueOnce([{ ...sentenceWarning(), measured: { actual: 23, limit: 20, unit: 'words' } }])
+      .mockReturnValue([]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).toHaveBeenCalledTimes(2);
+    // First rung: the validator's own detail, untouched.
+    expect(repairBlocks.mock.calls[0][1][0].detail).toBe(sentenceWarning().detail);
+    // Second rung: the deficit is named, and the arithmetic is the issue's own operands.
+    const retryDetail: string = repairBlocks.mock.calls[1][1][0].detail;
+    expect(retryDetail).toContain('THE PREVIOUS ATTEMPT DID NOT SATISFY THIS CONSTRAINT');
+    expect(retryDetail).toContain('still 23 words against a limit of 20');
+    expect(retryDetail).toContain('Remove at least 3 more words');
+  });
+
+  it('does not escalate a finding that carries no measured operands', async () => {
+    // Without operands there is no shortfall to state, so the instruction must go out unchanged
+    // rather than gain a sentence built from undefined.
+    const unmeasured = { ...sentenceWarning(), measured: undefined };
+    const produce = vi.fn().mockResolvedValue('<p>довге</p>');
+    const repairBlocks = vi.fn().mockResolvedValueOnce('<p>інше</p>').mockResolvedValue('<p>ще інше</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([unmeasured])
+      .mockReturnValueOnce([unmeasured])
+      .mockReturnValue([]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).toHaveBeenCalledTimes(2);
+    expect(repairBlocks.mock.calls[1][1][0].detail).toBe(unmeasured.detail);
+  });
+
+  it('does not escalate when the retry finding is already within its limit', async () => {
+    // A stale-but-satisfied measurement must not produce "remove at least -1 more words".
+    const produce = vi.fn().mockResolvedValue('<p>довге</p>');
+    const repairBlocks = vi.fn().mockResolvedValueOnce('<p>інше</p>').mockResolvedValue('<p>ще інше</p>');
+    const satisfied = { ...sentenceWarning(), measured: { actual: 18, limit: 20, unit: 'words' as const } };
+    const validate = vi.fn()
+      .mockReturnValueOnce([sentenceWarning()])
+      .mockReturnValueOnce([satisfied])
+      .mockReturnValue([]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks.mock.calls[1][1][0].detail).toBe(satisfied.detail);
+  });
+
+  it('never escalates a warning to full regeneration, even when the fix does not take', async () => {
+    // A warning the cheap rungs cannot fix stays reported. Spending a whole-artifact rewrite on a
+    // stylistic finding would trade a cosmetic problem for a correctness risk.
+    const produce = vi.fn().mockResolvedValue('<p>Одне дуже довге речення.</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>Одне дуже довге речення.</p>');
+    const validate = vi.fn().mockReturnValue([sentenceWarning()]);
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 2, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(produce).toHaveBeenCalledTimes(1);
+    // Two rungs, both spent, then the ladder ends — it never reaches full-regen. The count is 2
+    // rather than 1 because sentence-too-long now gets a retry; the property under test is that
+    // the escalation stops here, not how many cheap attempts it makes.
+    expect(repairBlocks).toHaveBeenCalledTimes(2);
+    expect(result.repairsUsed).toBe(0);
+    expect(result.finalIssues).toEqual([sentenceWarning()]); // still reported, honestly
+  });
+
+  it('leaves an unaddressable warning alone', async () => {
+    // No path — nothing for a tier to rewrite. It must behave exactly as it did before the ladder.
+    const produce = vi.fn().mockResolvedValue('<p>Текст.</p>');
+    const repairBlocks = vi.fn();
+    const validate = vi.fn().mockReturnValue([{ ...sentenceWarning(), path: undefined }]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).not.toHaveBeenCalled();
+    expect(produce).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a warning-only fix, which leaves the error count unchanged at zero', async () => {
+    // The regression guard compares errors. A pass that only cleared warnings moves that count by
+    // nothing, so a "strictly fewer errors" rule would discard every warning fix ever made.
+    const produce = vi.fn().mockResolvedValue('<p>довге</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>коротке</p>');
+    const validate = vi.fn().mockReturnValueOnce([sentenceWarning()]).mockReturnValue([]);
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(result.artifact).toBe('<p>коротке</p>');
+    expect(result.finalIssues).toEqual([]);
+  });
+
+  it('counts how many block findings actually went away, not just how many patches landed', async () => {
+    // A patch can be applied, pass every structural check, and still leave the sentence too long —
+    // exactly what the first real run did, and `applied: 10` said nothing about it. Two findings
+    // here; only one of them ever clears.
+    const produce = vi.fn().mockResolvedValue('<p>довге</p><p>довге</p>');
+    const repairBlocks = vi.fn()
+      .mockResolvedValueOnce('<p>коротке</p><p>трохи коротше</p>')
+      .mockResolvedValueOnce('<p>коротке</p><p>усе ще задовге</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([sentenceWarning('block[0]'), sentenceWarning('block[1]')])
+      .mockReturnValue([sentenceWarning('block[1]')]);
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(result.blockScopedResolved).toBe(1);
+  });
+
+  it('re-runs the block tier on the artifact that actually shipped after a regeneration won', async () => {
+    // The ladder runs BEFORE the regeneration loop, on an artifact that loop may then replace.
+    // When a regeneration wins on errors, `best` becomes an artifact the block tier has never
+    // seen, and every patch made earlier is discarded along with the artifact it was applied to.
+    // The first real run only kept its 10 patches because the regeneration happened to lose.
+    const produce = vi.fn()
+      .mockResolvedValueOnce('<p>перший, задовгий</p>')
+      .mockResolvedValueOnce('<p>регенерований, задовгий</p>');
+    const repairBlocks = vi.fn()
+      .mockResolvedValueOnce('<p>перший, виправлений</p>')
+      .mockResolvedValueOnce('<p>регенерований, виправлений</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([makeIssue('spec-count-mismatch'), sentenceWarning()]) // initial: 1 error + 1 warning
+      .mockReturnValueOnce([makeIssue('spec-count-mismatch')])                    // after ladder: warning fixed
+      .mockReturnValueOnce([sentenceWarning()])                                   // regeneration: error gone, warning back
+      .mockReturnValue([]);                                                       // after the final block pass
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(produce).toHaveBeenCalledTimes(2);
+    expect(repairBlocks).toHaveBeenCalledTimes(2); // once on the ladder, once on what shipped
+    expect(result.artifact).toBe('<p>регенерований, виправлений</p>');
+    expect(result.finalIssues).toEqual([]);
+  });
+
+  it('rolls the final block pass back if it increased the error count', async () => {
+    const produce = vi.fn()
+      .mockResolvedValueOnce('<p>перший</p>')
+      .mockResolvedValueOnce('<p>регенерований</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>зіпсований</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([makeIssue('spec-count-mismatch')])   // initial: 1 error, no block work
+      .mockReturnValueOnce([sentenceWarning()])                  // regeneration wins: 0 errors
+      .mockReturnValue([makeIssue('seo-empty')]);                // final pass made it worse
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(result.artifact).toBe('<p>регенерований</p>');
+    expect(result.finalIssues).toEqual([sentenceWarning()]);
+  });
+
+  it('does not spend a final pass when the ladder already handled this artifact', async () => {
+    // No regeneration won, so `best` is the artifact the ladder worked on and its cursors still
+    // mean something. A further pass here would be a third attempt, past the two-rung cap.
+    const produce = vi.fn().mockResolvedValue('<p>задовге</p>');
+    const repairBlocks = vi.fn().mockResolvedValue('<p>задовге</p>');
+    const validate = vi.fn().mockReturnValue([sentenceWarning()]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).toHaveBeenCalledTimes(2); // the two ladder rungs, and no more
+  });
+
+  it('does not destroy a paid-for artifact when a registered rule carries a malformed path', async () => {
+    // parsePath throws by design, and the intent — fail loudly rather than look like "nothing to
+    // fix" — is right. What was wrong is the price: the exception went through runRepairGate and
+    // out of generate(), taking an artifact that had already been generated and paid for. Loud
+    // must mean "this issue is not patchable", not "lose the work".
+    const artifact = seoArtifact(['W'.repeat(80)]);
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const malformed: ValidationIssue = { ...titleIssue(0, 80), path: 'seo_data.meta_title' };
+    const validate = vi.fn().mockReturnValue([malformed]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+      repairField: vi.fn().mockResolvedValue('Short'),
+    });
+
+    expect(result.artifact).toBe(artifact);
+    expect(result.finalIssues).toEqual([malformed]);
+  });
+
+  it('escalates a malformed path to full-regen instead of retrying it', async () => {
+    const produce = vi.fn()
+      .mockResolvedValueOnce(seoArtifact(['W'.repeat(80)]))
+      .mockResolvedValueOnce(seoArtifact(['ok']));
+    const malformed: ValidationIssue = { ...titleIssue(0, 80), path: 'seo_data.meta_title' };
+    const validate = vi.fn().mockReturnValueOnce([malformed]).mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+      repairField: vi.fn(),
+    });
+
+    expect(produce).toHaveBeenCalledTimes(2); // the ladder gave up, tier 2 ran
+    expect(result.repairsUsed).toBe(1);
+  });
+
+  // ── The ladder must not be allowed to make things worse ──────────────────────
+  //
+  // The full-regen loop below has always had this discipline (strictly better wins, ties keep the
+  // earliest). The ladder had none: whatever it produced became the shipped state unconditionally.
+  // That was survivable while only errors entered the ladder; it is not once warnings do, because
+  // then a purely stylistic pass can ship a worse artifact.
+
+  it('ships the PRE-ladder artifact when the ladder increased the error count', async () => {
+    const original = seoArtifact([], ['Bad Slug!']);
+    const produce = vi.fn().mockResolvedValue(original);
+    const validate = vi.fn()
+      .mockReturnValueOnce([slugIssue(0)])                                   // 1 error going in
+      .mockReturnValueOnce([makeIssue('spec-count-mismatch'), makeIssue('seo-empty')]) // 2 coming out
+      .mockReturnValue([]);
+
+    // maxRepairs 0 so the full-regen loop cannot mask the result — this isolates the ladder.
+    const result = await runRepairGate({
+      label: 'Slugs', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.artifact).toBe(original);            // same reference — the ladder's work was dropped
+    expect(result.finalIssues).toEqual([slugIssue(0)]); // and so were its issues
+  });
+
+  it('ships the PRE-ladder artifact when the ladder traded a repairable error for an unrepairable one', async () => {
+    // The concrete path: slugify coerces "Ortur H20!" and "ortur-h20" to the same string, so a
+    // slug-charset error (ladder-repairable, tier 0) becomes slug-duplicate — which has no
+    // registered strategy and therefore costs a full regeneration. The COUNT is unchanged, so a
+    // plain count guard misses it. What must not happen is the ladder manufacturing work that only
+    // the instrument it exists to avoid can do.
+    const original = seoArtifact([], ['Bad Slug!', 'bad-slug']);
+    const produce = vi.fn().mockResolvedValue(original);
+    const duplicate: ValidationIssue = {
+      severity: 'error', rule: 'slug-duplicate', detail: 'duplicate', context: 'Slug (L1)',
+    };
+    const validate = vi.fn()
+      .mockReturnValueOnce([slugIssue(0)])
+      .mockReturnValueOnce([duplicate])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'Slugs', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.artifact).toBe(original);
+    expect(result.finalIssues).toEqual([slugIssue(0)]);
+  });
+
+  it('keeps the ladder result when it strictly reduced the error count', async () => {
+    // The guard must not fire on the happy path — this is the behaviour every other ladder test
+    // depends on, asserted here directly so a too-eager guard fails loudly.
+    const produce = vi.fn().mockResolvedValue(seoArtifact([], ['Bad Slug!']));
+    const validate = vi.fn().mockReturnValueOnce([slugIssue(0)]).mockReturnValue([]);
+
+    const result = await runRepairGate({
+      label: 'Slugs', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+    });
+
+    expect((result.artifact as ReturnType<typeof seoArtifact>).slugs[0].slug).toBe('bad-slug');
+    expect(result.finalIssues).toEqual([]);
+  });
 });
 
 describe('formatRepairReportMarkdown', () => {
@@ -731,7 +1091,9 @@ describe('formatRepairReportMarkdown', () => {
     const md = formatRepairReportMarkdown(reports, META);
 
     expect(md).toContain('No repairs were needed');
-    expect(md).toContain('## Warnings (no repairs needed)');
+    // Renamed from "(no repairs needed)": with warnings now repairable, one appearing here means a
+    // repair did not happen or did not work — the old heading would assert the opposite.
+    expect(md).toContain('## Warnings (not repaired)');
     expect(md).toContain('[HTML (uk-UA)]');
     expect(md).toContain('`decimal-separator`');
     expect(md).toContain('detail for decimal-separator');
@@ -758,7 +1120,7 @@ describe('formatRepairReportMarkdown', () => {
     expect(md).toContain('[HTML (uk-UA)]');
     expect(md).toContain('`spec-row-not-grounded-mass-failure`');
     // Not the early-return-branch heading — a repair DID happen this run.
-    expect(md).not.toContain('## Warnings (no repairs needed)');
+    expect(md).not.toContain('## Warnings (not repaired)');
   });
 
   it('surfaces a warning that belongs to a REPAIRED artifact itself, not just a sibling clean one', () => {
@@ -796,5 +1158,59 @@ describe('formatRepairReportMarkdown', () => {
     const md = formatRepairReportMarkdown(reports, META);
 
     expect(md).not.toContain('## Warnings');
+  });
+});
+
+describe('formatRepairReportMarkdown — local block patches', () => {
+  const META = { product: 'Ortur H20 20 W', store: 'EXPERT3D', generatedAt: '2026-07-28T10:00:00.000Z' };
+
+  const clean = (label: string, blockPatches?: RepairArtifactReport['blockPatches']): RepairArtifactReport => ({
+    label, repairsUsed: 0, attempts: [], finalIssues: [], status: 'clean', shippedAttempt: 0, blockPatches,
+  });
+
+  it('reports resolved separately from applied, so an ineffective patch is visible', () => {
+    // The gap between the two is the signal the first real run hid: 10 patches applied, and no way
+    // to tell from the report that one of them left the sentence over its ceiling.
+    const md = formatRepairReportMarkdown([
+      clean('HTML (uk-UA)', { applied: 10, resolved: 9, rejected: 0, rejections: [] }),
+    ], META);
+    expect(md).toContain('- Local block patches applied: 10');
+    expect(md).toContain('- Local block findings resolved: 9');
+    expect(md).toMatch(/10 applied.*9 resolved/);
+  });
+
+  it('does NOT claim nothing was needed when block patches were applied', () => {
+    // The exact untruthfulness class PR #50 fixed: a report that reads "no repairs were needed"
+    // while the artifact was in fact rewritten. A block patch IS a repair — a cheaper one.
+    const md = formatRepairReportMarkdown([clean('HTML (uk-UA)', { applied: 3, resolved: 3, rejected: 0, rejections: [] })], META);
+    expect(md).not.toContain('No repairs were needed');
+  });
+
+  it('still says nothing was needed when truly nothing happened', () => {
+    expect(formatRepairReportMarkdown([clean('HTML (uk-UA)')], META)).toContain('No repairs were needed');
+  });
+
+  it('counts applied and rejected block patches in the summary', () => {
+    const md = formatRepairReportMarkdown([
+      clean('HTML (uk-UA)', { applied: 3, resolved: 3, rejected: 1, rejections: ['block[4]: changed the numbers'] }),
+      clean('HTML (PL)', { applied: 2, resolved: 2, rejected: 0, rejections: [] }),
+    ], META);
+    expect(md).toContain('- Local block patches applied: 5');
+    expect(md).toContain('- Local block patches rejected: 1');
+  });
+
+  it('says why a patch was rejected, per artifact', () => {
+    // A silent rejection is indistinguishable from "the model had nothing to fix" — and the
+    // difference is the whole signal about whether the repair prompt is working.
+    const md = formatRepairReportMarkdown([
+      clean('HTML (uk-UA)', { applied: 1, resolved: 1, rejected: 1, rejections: ['block[4]: the replacement changed the numbers in the block'] }),
+    ], META);
+    expect(md).toContain('## Local patches');
+    expect(md).toContain('HTML (uk-UA)');
+    expect(md).toContain('the replacement changed the numbers in the block');
+  });
+
+  it('omits the section entirely when the block tier never ran', () => {
+    expect(formatRepairReportMarkdown([clean('HTML (uk-UA)')], META)).not.toContain('## Local patches');
   });
 });

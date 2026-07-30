@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, NgZone, computed, effect, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, NgZone, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Editor } from '@tiptap/core';
 import { EditorView } from '@codemirror/view';
@@ -15,6 +15,9 @@ import { beautifyHtml, createSourceEditorState, getSearchMatchInfo, themeCompart
 import { vscodeLight, vscodeDark } from '@uiw/codemirror-theme-vscode';
 import { FindReplacePanelComponent } from './find-replace-panel.component';
 import type { FindReplaceQuery } from './find-replace-query';
+import { FeedbackContextService } from '../../../services/feedback-context.service';
+import { buildFeedbackUrl } from '../../../utils/feedback-url';
+import { environment } from '../../../environments/environment';
 
 const LABELS = {
   en: {
@@ -73,6 +76,11 @@ const LABELS = {
     sourceModeTooltip: 'Source code',
     fullscreenTooltip: 'Fullscreen',
     findReplaceTooltip: 'Find and replace (Ctrl+F)',
+    feedbackTooltip: 'Suggest an improvement — the current HTML is copied to the clipboard for the "before" field',
+    feedbackCopied: 'HTML copied — paste it into the "before" field',
+    feedbackNamePrompt: 'Your name (goes into the request so we know who to ask back):',
+    feedbackPopupBlocked: 'The browser blocked the new tab. Open the form:',
+    feedbackOpenForm: 'Open the form',
   },
   uk: {
     title: 'HTML-редактор',
@@ -130,6 +138,11 @@ const LABELS = {
     sourceModeTooltip: 'Вихідний код',
     fullscreenTooltip: 'На весь екран',
     findReplaceTooltip: 'Знайти і замінити (Ctrl+F)',
+    feedbackTooltip: 'Запропонувати покращення — поточний HTML скопіюється в буфер для поля «ДО»',
+    feedbackCopied: 'HTML скопійовано — вставте його в поле «ДО»',
+    feedbackNamePrompt: 'Ваше ім’я (потрапить у запит, щоб було зрозуміло, в кого перепитати):',
+    feedbackPopupBlocked: 'Браузер заблокував нову вкладку. Відкрити форму:',
+    feedbackOpenForm: 'Відкрити форму',
   },
 };
 
@@ -180,6 +193,8 @@ const HIGHLIGHT_COLORS = ['#fef08a', '#bbf7d0', '#fbcfe8', '#bfdbfe'];
   templateUrl: './html-editor.component.html',
 })
 export class HtmlEditorComponent {
+  private feedback = inject(FeedbackContextService);
+
   lang = input<'en' | 'uk'>('uk');
   t = computed(() => LABELS[this.lang()]);
 
@@ -189,6 +204,14 @@ export class HtmlEditorComponent {
   issues = signal<ValidationIssue[]>([]);
   showIssues = signal<boolean>(false);
   copiedFlash = signal<boolean>(false);
+
+  feedbackCopiedFlash = signal<boolean>(false);
+  feedbackPopupBlocked = signal<boolean>(false);
+  // null until the form is configured in src/environments/ — the button stays hidden.
+  feedbackUrl = computed(() => buildFeedbackUrl(environment.feedbackForm, {
+    author: this.feedback.editorName(),
+    tool: 'HTML-редактор',
+  }));
 
   sourceMode = signal<boolean>(false);
   sourceHtml = signal<string>('');
@@ -396,6 +419,30 @@ export class HtmlEditorComponent {
     this.showIssues.set(false);
     this.copiedFlash.set(true);
     setTimeout(() => this.copiedFlash.set(false), 1500);
+  }
+
+  // --- Improvement-request form ---
+
+  /**
+   * Put the current HTML on the clipboard for the form's "before" field, then open
+   * the form. The name is asked synchronously, before any await, so window.open still
+   * runs inside the click's user activation; the clipboard write is awaited because
+   * Firefox/Safari reject it once a new tab takes the focus away.
+   */
+  async copyAndOpenFeedback() {
+    if (!this.feedback.ensureEditorName(this.t().feedbackNamePrompt)) return;
+
+    const url = this.feedbackUrl();
+    if (!url) return;
+
+    if (this.loaded()) {
+      // Beautified, not raw: a minified blob is unreadable in a spreadsheet cell.
+      await navigator.clipboard.writeText(beautifyHtml(this.buildCopyHtml()));
+      this.feedbackCopiedFlash.set(true);
+      setTimeout(() => this.feedbackCopiedFlash.set(false), 4000);
+    }
+
+    this.feedbackPopupBlocked.set(!this.feedback.openFormTab(url));
   }
 
   // --- Source mode ---

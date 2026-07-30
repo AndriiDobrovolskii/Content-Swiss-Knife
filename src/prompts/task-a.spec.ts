@@ -117,3 +117,85 @@ describe('buildPromptA — ToV system-block scoping', () => {
     }
   });
 });
+
+describe('buildPromptA — lists instead of run-on sentences', () => {
+  // Generation-side fix for the one warning class the repair tier could not close. Two runs
+  // showed the model will not split a three-item enumeration on instruction, and a block patch
+  // cannot turn a <p> into a <ul>: rejectPatch requires one element with the same root tag, and
+  // validateStructuralParity counts <li> between the master and its translations. At generation
+  // time neither constraint applies and a list is the natural shape for an enumeration.
+  const taskBlock = (input: ProductInput) => buildPromptA(input).systemBlocks[1].text;
+
+  it('tells the standard schema to list three or more parallel items', () => {
+    const text = taskBlock(inputFor('3DPrinter'));
+    expect(text).toMatch(/three or more parallel items/i);
+    expect(text).toMatch(/<ul>/);
+  });
+
+  it('confines the rule to body prose, away from the hook, the tables and the closing', () => {
+    // Left unbounded this turns a description into bullet soup, and §2/§7 are tables already.
+    const text = taskBlock(inputFor('3DPrinter'));
+    expect(text).toMatch(/§3 and §5/);
+    expect(text).toMatch(/never to the §1 hook/i);
+  });
+
+  it('keeps a figure from losing its lead-in paragraph', () => {
+    // Acceptance criteria require a <p> lead-in directly above every <figure>; without this the
+    // list could take that position.
+    expect(taskBlock(inputFor('3DPrinter'))).toMatch(/<figure>\s*directly after/i);
+  });
+
+  it('does NOT add the rule to consumables, which has no §3 or §5', () => {
+    const consumables = { ...inputFor('3DPrinter'), templateId: 'consumables-resin' };
+    expect(taskBlock(consumables)).not.toMatch(/three or more parallel items/i);
+  });
+});
+
+describe('buildPromptA — [VIDEO MANIFEST]', () => {
+  const SRC = 'https://www.youtube.com/embed/Bw2xL_gL7zc';
+  const withVideo = (storeName = '3DPrinter'): ProductInput => ({
+    ...inputFor(storeName),
+    description: `An SLS 3D printer.\n\n<iframe src="${SRC}" title="Hands-on"></iframe>`,
+  });
+
+  it('states the count and the verbatim src when the source has an embed', () => {
+    // Video used to have no manifest at all while images had a COUNT=N HARD RULE, and the model
+    // dropped the embed whenever images were present to crowd it out.
+    const { userContent } = buildPromptA(withVideo());
+    expect(userContent).toContain('[VIDEO MANIFEST] — COUNT=1');
+    expect(userContent).toContain(SRC);
+    expect(userContent).toContain('title: "Hands-on"');
+    expect(userContent).toMatch(/VERBATIM/);
+  });
+
+  it('anchors the embed to a section that actually exists in the schema', () => {
+    // The master rule used to say "place in Deep Dive" — a section named nowhere in Schema v3.0.
+    expect(buildPromptA(withVideo()).userContent).toContain('§3 FUNCTIONALITY');
+  });
+
+  it('counts two distinct embeds and deduplicates a repeated one', () => {
+    const other = 'https://player.vimeo.com/video/12345';
+    const two = { ...inputFor('3DPrinter'), description: `<iframe src="${SRC}"></iframe><iframe src="${other}"></iframe>` };
+    expect(buildPromptA(two).userContent).toContain('[VIDEO MANIFEST] — COUNT=2');
+
+    const dupe = { ...inputFor('3DPrinter'), description: `<iframe src="${SRC}"></iframe><iframe src="${SRC}?rel=0"></iframe>` };
+    expect(buildPromptA(dupe).userContent).toContain('[VIDEO MANIFEST] — COUNT=1');
+  });
+
+  it('leaves userContent byte-identical when the source has no video', () => {
+    // The no-video case is the overwhelming majority; adding anything here would churn the
+    // prompt cache for every product that has no embed.
+    const plain = inputFor('3DPrinter');
+    expect(buildPromptA(plain).userContent).not.toContain('[VIDEO MANIFEST]');
+  });
+
+  it('emits no video block in consumables mode, which has no §3', () => {
+    const consumables = { ...withVideo(), templateId: 'consumables-resin' };
+    expect(buildPromptA(consumables).userContent).not.toContain('[VIDEO MANIFEST]');
+  });
+
+  it('ignores a non-video iframe such as an embedded map', () => {
+    const map = { ...inputFor('3DPrinter'), description: '<iframe src="https://maps.google.com/maps?q=x"></iframe>' };
+    expect(buildPromptA(map).userContent).not.toContain('[VIDEO MANIFEST]');
+  });
+});

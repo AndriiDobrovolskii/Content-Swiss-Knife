@@ -48,8 +48,10 @@
  */
 
 import type { ValidationIssue } from './output-validator';
+import { extractBlocks } from './block-repair';
 import { stripCodeFences } from './html-cleaner';
 import { stripThousandsSeparators } from './number-format-fixer';
+import { countActualSpecRows } from './spec-count-parity';
 
 /** Words too generic to serve as grounding evidence for a label. */
 const LABEL_STOPWORDS = new Set([
@@ -152,7 +154,19 @@ export function validateSpecsGrounding(
   sourceSpecs: string,
   context: string,
   allowedParams: readonly string[] = [],
+  options: { labelAnchorTrusted?: boolean } = {},
 ): ValidationIssue[] {
+  // Is a label mismatch real evidence?
+  //
+  // Only when the model wrote that label from the SAME text this function grounds against. When it
+  // wrote from the English sheet and `sourceSpecs` is a separate Ukrainian translation, the two are
+  // independent renderings of one term: "Alarm Method" becomes "Спосіб сповіщення" in the table and
+  // something else in the source, and stem() truncates endings, so "спосіб" and "метод" — two
+  // ordinary renderings of "Method" — share nothing. A real run shipped 15 correct rows with one
+  // flagged, and which one changed between runs.
+  //
+  // Defaults to true so callers that predate the flag keep today's severity.
+  const labelAnchorTrusted = options.labelAnchorTrusted ?? true;
   const issues: ValidationIssue[] = [];
   if (!html?.trim() || !sourceSpecs?.trim()) return issues;
 
@@ -165,6 +179,41 @@ export function validateSpecsGrounding(
 
   const specTables = Array.from(doc.querySelectorAll('section.specs table'));
   if (specTables.length === 0) return issues; // nothing in scope → no-op
+
+  // COUNT-PARITY PRECONDITION
+  //
+  // When the table has exactly as many rows as the source has §7-eligible parameters, a
+  // fabricated row is arithmetically impossible: inventing one necessarily makes actual >
+  // expected. Under exact parity an unmatched row can therefore only be an artifact of matching
+  // against a TRANSLATION of the source, never a hallucination — so the guard stands down.
+  //
+  // Real incident (XGRIDS L2 Pro 16/120, 2026-07-28): `Роздільна здатність | 1 × 1 Мп` was
+  // reported as ungrounded while the source plainly carries a `Resolution` parameter. It missed
+  // all three anchors for mechanical reasons — every number in the value is a single digit (below
+  // extractNumberTokens' ≥2-digit floor), the unit is Cyrillic so there is no Latin token, and the
+  // translated source rendered the label with different wording. Its two neighbours in the same
+  // category passed only by luck of value shape (one had a Latin loanword, one had 3-digit
+  // numbers). A verdict decided by the shape a value happens to take is not evidence about the
+  // source.
+  //
+  // Same reasoning the mass-failure breaker below already applies: the gate may only narrow
+  // output when it trusts its own input.
+  //
+  // ACCEPTED COST: a 1-for-1 swap (delete a real row, invent a fake one) preserves the count and
+  // becomes invisible here. That is a far rarer failure than the translation-wording drift seen
+  // twice in consecutive runs, and the phantom row this module was written for
+  // ("Throughput | 0330 kg/hr") was an ADDITION, which parity still catches.
+  //
+  // The count comes from countActualSpecRows rather than being recomputed here, and that is
+  // load-bearing: the grading loop below scopes rows with `tbody tr`, and so does
+  // countActualSpecRows. A stricter selector here could declare parity while the loop still had
+  // rows to fail (or the reverse). Because allowedParams.length === countExpectedSpecRows() is an
+  // already-tested invariant, this predicate is exactly "validateSpecCountParity has nothing to
+  // say about this table" — one rule expressed in two places, not two rules.
+  if (allowedParams.length > 0) {
+    const actualRows = countActualSpecRows(html);
+    if (actualRows >= 0 && actualRows === allowedParams.length) return issues;
+  }
 
   const sourceNorm = normalizeText(sourceSpecs);
   // Symmetric stemming: source words are stemmed the same way as label words, so exact matches
@@ -184,6 +233,26 @@ export function validateSpecsGrounding(
   // ("Тип", "ПЗ") in practice, not just in theory.
   let evaluatedRows = 0;
   const failedLabels: string[] = [];
+
+  // Addressing for block-scoped repair. A label that drifted between two independent translations
+  // of the same English parameter ("Child Lock" -> "Дитячий замок" in the grounding source,
+  // "Блокування від дітей" in the table) is a real and recurring case. The claim is correct — the
+  // wordings do differ — but the remedy this rule's own text asks for is "correct only its label",
+  // and that used to cost a full regeneration: the instrument that once deleted 8 of 15 live rows.
+  //
+  // Scoped to section.specs so a §2 Killer-Specs cell holding the same text cannot be addressed by
+  // mistake, and each cell is claimed at most once so two rows sharing a label stay distinct.
+  const specLabelCells = extractBlocks(html).filter(
+    b => b.tag === 'td' && b.ancestors.some(a => a.tag === 'section' && a.classes.includes('specs')),
+  );
+  const claimedCells = new Set<number>();
+  const addressLabelCell = (label: string): string | undefined => {
+    const wanted = label.replace(/\s+/g, ' ');
+    const cell = specLabelCells.find(b => !claimedCells.has(b.index) && b.text === wanted);
+    if (!cell) return undefined;
+    claimedCells.add(cell.index);
+    return `block[${cell.index}]`;
+  };
 
   for (const table of specTables) {
     // Iterate <tbody> rows only — the <thead> "Parameter | Value" header row is not a spec.
@@ -219,16 +288,28 @@ export function validateSpecsGrounding(
       evaluatedRows++;
       const grounded = numericGrounded || latinTokenGrounded || labelGrounded;
       if (!grounded) {
+        // Numbers and Latin codes survive translation unchanged, so a value that carried either
+        // and still did not match is evidence about the CONTENT, not about wording. That stays an
+        // error whatever the label anchor is worth.
+        const valueCarriedEvidence = valueNumbers.length > 0 || valueLatinTokens.length > 0;
         failedLabels.push(label);
         issues.push({
-          severity: 'error',
+          severity: labelAnchorTrusted || valueCarriedEvidence ? 'error' : 'warning',
           rule: 'spec-row-not-grounded',
           detail:
             `Spec row "${label}" is not supported by the source specifications. Reconcile before ` +
             `removing: if it corresponds to one of the allowed parameters under different ` +
             `wording, KEEP the row and correct only its label to match. Remove the row only if ` +
-            `it corresponds to no allowed parameter. Never invent values or units.`,
+            `it corresponds to no allowed parameter. Never invent values or units.` +
+            // Repeated HERE, not only in the companion spec-rows-allowed-parameters issue: the
+            // block-repair prompt hands over each issue's `detail` verbatim, so without the list
+            // in this one the model is told to correct a label with nothing to correct it to.
+            (allowedParams.length > 0
+              ? ` ALLOWED PARAMETERS (pick exactly one, and write its name in the language of the `
+                + `table — do not copy the English wording): ${allowedParams.join(', ')}.`
+              : ''),
           context,
+          path: addressLabelCell(label),
         });
       }
     }
@@ -238,7 +319,10 @@ export function validateSpecsGrounding(
   // reconciliation target the per-row messages refer to, without repeating the whole list N times.
   if (issues.length > 0 && allowedParams.length > 0) {
     issues.push({
-      severity: 'error',
+      // Follows the rows it accompanies: a companion message shouting "error" over a set of
+      // warnings would put the artifact back into the repair loop this downgrade exists to keep
+      // it out of.
+      severity: issues.some(i => i.severity === 'error') ? 'error' : 'warning',
       rule: 'spec-rows-allowed-parameters',
       detail:
         `ALLOWED PARAMETERS (the complete set of §7-eligible parameters in the source ` +
@@ -294,6 +378,69 @@ export function isAlreadyCyrillic(text: string): boolean {
 }
 
 /**
+ * Why grounding was switched off for a run.
+ *
+ * Three different causes collapse to the same observable state — an empty grounding source — and
+ * the code used to keep no evidence of which one fired. A run then reported "specs grounding was
+ * DISABLED" with nothing to act on, and the message named the script cause even when the call had
+ * thrown, which is simply untrue.
+ */
+export type GroundingFailure =
+  | { kind: 'provider-error' }
+  | { kind: 'empty' }
+  | { kind: 'wrong-script'; ratio: number; threshold: number; sample: string };
+
+export interface GroundingInspection {
+  /** Usable grounding source, or '' when there is none. */
+  text: string;
+  failure?: GroundingFailure;
+}
+
+/** How much of a rejected translation to quote. Enough to recognise it, not enough to flood a report. */
+const SAMPLE_LENGTH = 120;
+
+/**
+ * sanitizeGroundedTranslation, with the reason attached.
+ *
+ * The sample matters as much as the ratio: it is what distinguishes "the model echoed the English
+ * sheet back" (a prompt problem) from "something else came back" (a provider problem). Without it
+ * the ratio alone says only that the text was not Ukrainian, which was never in doubt.
+ */
+export function inspectGroundedTranslation(
+  translated: string | null | undefined,
+  script: MasterScript,
+): GroundingInspection {
+  const cleaned = stripCodeFences(translated ?? '').trim();
+  if (!cleaned) return { text: '', failure: { kind: 'empty' } };
+
+  const ratio = scriptRatio(cleaned, script);
+  if (ratio > SCRIPT_RATIO_THRESHOLD) return { text: cleaned };
+
+  return {
+    text: '',
+    failure: {
+      kind: 'wrong-script',
+      ratio: Number(ratio.toFixed(2)),
+      threshold: SCRIPT_RATIO_THRESHOLD,
+      sample: cleaned.length > SAMPLE_LENGTH ? `${cleaned.slice(0, SAMPLE_LENGTH)}…` : cleaned,
+    },
+  };
+}
+
+/** Human-readable cause, for the `specs-grounding-disabled` warning. */
+export function describeGroundingFailure(failure: GroundingFailure): string {
+  switch (failure.kind) {
+    case 'provider-error':
+      return 'the specs-translation call failed (provider error) — see the server log for the stack trace';
+    case 'empty':
+      return 'the specs-translation call returned empty text';
+    case 'wrong-script':
+      return `the translation came back in the wrong script (${failure.ratio} of letters vs a `
+        + `${failure.threshold} threshold). It returned: "${failure.sample}"`;
+  }
+}
+
+/**
  * Sanitizes a raw LLM translation before it is used as validateSpecsGrounding's grounding source.
  *
  * Never returns text outside the master's script, and never falls back to the untranslated input
@@ -309,7 +456,5 @@ export function sanitizeGroundedTranslation(
   translated: string | null | undefined,
   script: MasterScript,
 ): string {
-  const cleaned = stripCodeFences(translated ?? '').trim();
-  if (!cleaned) return '';
-  return scriptRatio(cleaned, script) > SCRIPT_RATIO_THRESHOLD ? cleaned : '';
+  return inspectGroundedTranslation(translated, script).text;
 }

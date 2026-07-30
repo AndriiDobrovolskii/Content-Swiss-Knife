@@ -31,6 +31,9 @@ The artifact contains these sections, in this fixed order:
   §7 TECHNICAL SPECIFICATIONS ........ mandatory, row count = input row count exactly
   §9 COMMERCIAL CLOSING / CTA ........ mandatory, 80–150 words
 (§0 H1 belongs to the CMS; §8 FAQ/HowTo belongs to dedicated artifacts — see [ROUTING].)
+Plus, when the input supplies one: the VIDEO EMBED — conditional, lives inside §3, one lead-in
+<p> + one <iframe>. It is part of this contract, not an optional extra: an embed present in the
+input is present in the output. See [VIDEO].
 
 GLOBAL HARD CAP: 28,000 characters total, counting all spaces, text, and HTML tags.
 Plan the budget before writing: when input volume is large, compress the narrative sections
@@ -85,6 +88,9 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
 100% schema-free HTML:
 - Write every element in the body with attributes drawn ONLY from this whitelist:
   class, style, src, alt, href, width, height, loading, decoding, controls, type.
+  EXCEPTION — <iframe>, which additionally takes: title, allow, allowfullscreen,
+  referrerpolicy. Without these the embed does not play, so "preserve verbatim" in [VIDEO]
+  wins over this whitelist for an iframe and only for an iframe.
 - When source markup carries itemscope / itemtype / itemprop (Product, FAQPage, HowTo,
   BreadcrumbList, VideoObject, ImageObject, Article, PropertyValue / additionalProperty),
   strip the attribute and keep the plain element: <span itemprop="name">X</span> → X;
@@ -298,7 +304,12 @@ ending at §9.
    localized: "${BRAND_GUARANTEE_EN}"
 
 [VIDEO]
-TYPE A iframe (YouTube/Vimeo): preserve verbatim, place in Deep Dive. TYPE B direct MP4/CDN/OGV:
+MANDATORY WHEN PRESENT: if [Raw Description] or a [VIDEO MANIFEST] supplies an embed, the output
+contains it. Dropping it is an error of the same order as dropping a manifest image — never a way
+to save characters against the global cap. Cut narrative prose instead.
+TYPE A iframe (YouTube/Vimeo): preserve the <iframe> and its src VERBATIM, and place it in
+§3 FUNCTIONALITY — after the sub-section paragraph its subject belongs to, and always before
+§7 TECHNICAL SPECIFICATIONS. TYPE B direct MP4/CDN/OGV:
   <div style="text-align:center;"><video width="100%" height="auto" controls style="max-width:800px;border:1px solid #ccc;border-radius:8px;"><source src="[URL]" type="video/[fmt]">[translated fallback]</video></div>
 Detect format by extension. Introduce every embed with a lead-in <p>. Emit exactly one copy
 per language version.
