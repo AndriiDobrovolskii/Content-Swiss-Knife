@@ -45,8 +45,11 @@ import { parseHTML } from 'linkedom';
 /** Sentinel for every field a human still has to decide. Chosen to fail the schema, not satisfy it. */
 export const TODO = 'TODO';
 
-/** Prose fields admit `<b>` and nothing else — see the Prose type in description-doc.ts. */
-const PROSE_ALLOWED_TAGS = new Set(['B']);
+/**
+ * Prose fields admit `<b>` and `<strong>` — see the Prose type in description-doc.ts. The master
+ * prompt mandates both and gives them different jobs, so an artifact using either is representable.
+ */
+const PROSE_ALLOWED_TAGS = new Set(['B', 'STRONG']);
 
 /**
  * Parses an artifact fragment into a container element.
@@ -205,11 +208,27 @@ export function parseKillerSpecs(html) {
 
 /** `<li><b>{lead}</b>{text}</li>` — the space between them is authored content, never injected. */
 function parseBullets(ul) {
-  return [...ul.querySelectorAll('li')].map(li => {
+  const items = [...ul.querySelectorAll('li')];
+
+  // A list whose items carry NO <b> at all is not a malformed BulletItem list — it is §6 package
+  // contents, whose model is `items: string[]`. That is a TOP-LEVEL field, not a Block, so there is
+  // genuinely nowhere in `blocks` to put it. Refuse, but say what it actually is: the first draft
+  // of this message blamed a missing lead-in and sent the reader looking for a defect in the
+  // artifact instead of at the one <h2> group they still have to assign by hand.
+  if (items.length > 0 && items.every(li => !li.querySelector('b'))) {
+    throw new Error(
+      `a <ul> whose items have no <b> lead-in (e.g. "${items[0].textContent.trim().slice(0, 40)}") ` +
+        `is §6 package contents, which is the top-level \`packageContents\` field rather than a Block. ` +
+        `Move that <h2> group there by hand — the section assignment is yours to make, not this tool's.`,
+    );
+  }
+
+  return items.map(li => {
     const b = li.querySelector('b');
     if (!b) {
       throw new Error(
-        `list item "${li.textContent.trim().slice(0, 60)}" has no <b> lead-in. BulletItem requires one.`,
+        `list item "${li.textContent.trim().slice(0, 60)}" has no <b> lead-in, but its siblings do. ` +
+          `A BulletItem list must be uniform.`,
       );
     }
     // Everything after </b> is the text; keeping it verbatim preserves whichever side of the bold

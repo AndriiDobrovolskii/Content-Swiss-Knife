@@ -349,3 +349,27 @@ describe('§C consumables artifacts cannot be modelled as a ProductDescriptionDo
     expect(() => scaffoldDoc(html, { locale: 'uk-UA' })).toThrow(/<div> has no Block kind/i);
   });
 });
+
+/**
+ * §6-shaped plain lists. Not a model gap — `packageContents.items` is `string[]` and holds these
+ * fine — but a scaffolder limitation worth an accurate error, because the section assignment that
+ * resolves it is a judgment call this tool deliberately does not make.
+ */
+describe('parseBullets — a list with no <b> lead-ins', () => {
+  const plainList = `<h2>Комплект постачання</h2>
+<ul><li>Верстат xTool M1 Ultra</li><li>Ротаційна насадка RA2 Pro</li></ul>`;
+
+  it('names it as §6 package contents rather than blaming a missing lead-in', () => {
+    expect(() => scaffoldDoc(plainList, { locale: 'uk-UA' })).toThrow(/§6 package contents/i);
+  });
+
+  it('says the assignment belongs to the author, not the tool', () => {
+    expect(() => scaffoldDoc(plainList, { locale: 'uk-UA' })).toThrow(/by hand/i);
+  });
+
+  /** A genuinely malformed list — some items have a lead-in, one does not — keeps its own error. */
+  it('still reports a non-uniform list as the defect it is', () => {
+    const mixed = `<h2>G</h2><ul><li><b>Лейбл. </b>Текст.</li><li>Без лейбла</li></ul>`;
+    expect(() => scaffoldDoc(mixed, { locale: 'uk-UA' })).toThrow(/siblings do/i);
+  });
+});

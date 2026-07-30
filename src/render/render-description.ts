@@ -66,12 +66,15 @@ function esc(s: string): string {
 }
 
 /**
- * Escape, then re-admit the single permitted inline tag. The schema already rejected anything else,
+ * Escape, then re-admit the two permitted inline tags. The schema already rejected anything else,
  * so this is defence in depth rather than the only line.
  *
- * The re-admit pattern has no attribute slot, so `<b onclick="…">` can never come back to life —
- * only the exact literals `<b>` and `</b>` do. `'` is deliberately left unescaped: every attribute
- * this module emits is double-quoted.
+ * `<strong>` is admitted alongside `<b>` because master-system-prompt.ts §[FORMAT] mandates both and
+ * gives them different jobs. Widening the allow-list does NOT widen the security property: the
+ * re-admit pattern still has no attribute slot, so `<b onclick="…">` and `<strong onclick="…">`
+ * alike can never come back to life — only the exact literals `<b>`, `</b>`, `<strong>` and
+ * `</strong>` do. `'` is deliberately left unescaped: every attribute this module emits is
+ * double-quoted.
  *
  * ACCEPTED EDGE CASE: because the two literals are re-admitted independently, input like
  * `<b onclick="x">y</b>` yields an escaped opening tag next to a live orphan `</b>`. That is
@@ -80,7 +83,7 @@ function esc(s: string): string {
  * parsing logic to a module whose whole value is that it has none.
  */
 function prose(s: string): string {
-  return esc(s).replace(/&lt;(\/?)b&gt;/g, '<$1b>');
+  return esc(s).replace(/&lt;(\/?)(b|strong)&gt;/g, '<$1$2>');
 }
 
 /**

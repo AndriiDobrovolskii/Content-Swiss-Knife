@@ -21,6 +21,12 @@ That corpus does not exist:
   §1 requires for `RenderContext` (`imageBaseUrl`, `brandFolder`, `modelFolder`) and for the
   `validateGeneratedHtml` call.
 
+  > **Superseded — see §5 item 3.** The second bullet's *conclusion* was wrong. Neither
+  > `RenderContext` nor `validateGeneratedHtml` actually needs `ProductInput`: `derive-ctx.mjs`
+  > reconstructs the context from the artifact's own image URLs, and the validator takes what it
+  > needs from the Doc. The exports are still unusable, but because of **app vintage**, not missing
+  > input. The observation stands; the diagnosis does not.
+
 The exports were still enough to answer the questions PR-2 exists to ask — and one answer was
 decisive enough to change PR-1's shipped renderer. Scope was therefore split: land every correction
 the artifacts prove, defer only what genuinely needs generated data.
@@ -163,8 +169,34 @@ and it is the wrong name for what it holds.
    What the gate does NOT yet prove is in the remaining items: two artifacts, one product, one
    locale.
 2. **Corpus is 2 items, not 6**, and both are the same product (Ortur H20 20 W) across two stores.
-3. **No `ProductInput`** for any artifact — `RenderContext` must be reconstructed by hand, or
-   recovered from `localStorage` once fresh generations exist.
+   Still the largest gap, and §7 below shows it is not cosmetic — the first genuinely different
+   product exposed a model defect that two same-product artifacts could never have revealed.
+3. ~~**No `ProductInput`**~~ **— this was the wrong diagnosis, and it mattered.**
+   `RenderContext` does **not** need `ProductInput`. `derive-ctx.mjs` reconstructs it from the
+   artifact's own image URLs plus the store's `imageBaseUrl`, and `validateGeneratedHtml` takes
+   `localizedName` and the image manifest from the **Doc**, not from the input. Verified end to end
+   on an export this corpus has never used:
+
+   ```
+   $ node test/tools/derive-ctx.mjs …/expert3d_bambu_lab_p2s_combo/description_uk-UA.html \
+       https://impresora-3d.es/image/catalog/products/ EXPERT3D
+   { "imageBaseUrl": "…", "brandFolder": "bambu-lab", "modelFolder": "p2s-combo", "storeName": "EXPERT3D" }
+   ```
+
+   **The real blocker is app era, not missing input.** Report §2.4 already observed that shape
+   varies across app vintages; the consequence was not drawn. Running the scaffolder over the eight
+   newest non-Ortur exports, **every one is unusable**, for three distinct reasons:
+
+   | Reason | Meaning |
+   |---|---|
+   | `killer-spec row has 3 cell(s), expected 2` | pre-`finalizeTablesForDisplay` vintage — §2a was never collapsed to two columns |
+   | `<div> has no Block kind` | a §C consumables artifact, or a table sitting inside an `<h2>` group |
+   | `a <ul> whose items have no <b> lead-in … is §6 package contents` | §6-shaped list, which is a top-level field rather than a Block — a scaffolder limit, not a model gap |
+
+   So the "generate ≥ 6 fresh products" requirement stands, and for a **sharper reason than
+   originally given**: the corpus must be produced by the CURRENT pipeline. Older exports encode
+   superseded conventions, and reconciling against them would pin the renderer to shapes production
+   no longer emits. Nothing about `ProductInput` is what stands in the way.
 4. ~~**No consumables-mode artifact.**~~ **CLOSED — and the prediction was aimed at the wrong gate.**
    A §C export now exists: `3ddevice_formlabs__fuse_1__30w_printer_120v_uptime_kit` (2026-07-28),
    a third store and a genuinely different product from the two Ortur H20 items. It runs 4,978
@@ -245,3 +277,35 @@ This is the fourth renderer/model correction the corpus produced — after the �
 bullet space, and the ≥1-block rule. All four were invisible to code reading and all four surfaced
 within two artifacts, which is the strongest available argument for growing the corpus before
 PR-3 rather than after.
+
+---
+
+## 8. Sixth correction — `Prose` contradicted the master prompt
+
+Found by pointing the scaffolder at `expert3d_bambu_lab_p2s_combo`, the first genuinely different
+product tried against the model:
+
+```
+paragraph: contains <strong>, but a Prose field admits only <b>.
+```
+
+`master-system-prompt.ts` §[FORMAT] instructs the model to emit **both** tags, with different jobs:
+
+> Reserve `<strong>` for brands / main model / core USPs at a density of 2–3 per 500 characters
+> maximum; use `<b>` for inline spec scannability.
+
+`Prose` admitted only `<b>`. So an artifact that followed the prompt's own instruction could not be
+represented — the model contradicted the prompt, and the prompt was right.
+
+**Scope, measured rather than assumed.** Across the 20 most recent exports, 4 contain `<strong>`
+(one with 6 instances) — roughly **one artifact in five was unrepresentable**. Both current corpus
+items contain **zero**, which is exactly why two same-product artifacts could not surface it. This
+is the strongest evidence yet that the corpus must grow across **products**, not just stores.
+
+**Fixed** in all four places that encode the allow-list: the `Prose` type, `PROSE_FORBIDDEN` in the
+schema, `prose()` in the renderer, and `PROSE_ALLOWED_TAGS` in the scaffolder.
+
+The security property is unchanged and is pinned by a test. The re-admit pattern still has no
+attribute slot, so `<strong onclick="…">` stays fully escaped — only the bare literals `<b>`,
+`</b>`, `<strong>` and `</strong>` come back to life. `<em>`, `<a>` and everything else remain
+schema errors: this widened an allow-list by exactly one entry, it did not become a sanitizer.

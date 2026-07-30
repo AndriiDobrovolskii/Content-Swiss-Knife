@@ -9,10 +9,16 @@ import { z } from 'zod';
 import { forEachBlockInOrder } from './description-doc';
 import type { ProductDescriptionDoc } from './description-doc';
 
-/** Prose allows only <b>…</b>. Any other tag is a schema error, not something to sanitize away. */
-const PROSE_FORBIDDEN = /<(?!\/?b\s*>)[^>]+>/;
+/**
+ * Prose allows `<b>` and `<strong>`. Any other tag is a schema error, not something to sanitize away.
+ *
+ * Both, because master-system-prompt.ts §[FORMAT] mandates both and gives them different jobs —
+ * `<strong>` for brands/model/USPs, `<b>` for inline spec scannability. The allow-list is still an
+ * allow-list: `<em>`, `<a>` and everything else remain errors.
+ */
+const PROSE_FORBIDDEN = /<(?!\/?(?:b|strong)\s*>)[^>]+>/;
 const Prose = z.string().min(1).refine(s => !PROSE_FORBIDDEN.test(s), {
-  message: 'Prose fields may contain only <b> tags; no other HTML is permitted.',
+  message: 'Prose fields may contain only <b> and <strong> tags; no other HTML is permitted.',
 });
 
 const NonEmpty = z.string().min(1);

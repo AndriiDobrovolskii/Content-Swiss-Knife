@@ -10,7 +10,15 @@
  * ../render/render-description.ts. Neither concern belongs in this file.
  */
 
-/** Prose fields may contain <b>…</b> and nothing else. Enforced by the schema, sanitized by the renderer. */
+/**
+ * Prose fields may contain `<b>` and `<strong>`, and nothing else. Enforced by the schema,
+ * sanitized by the renderer.
+ *
+ * BOTH tags, because the master prompt distinguishes them deliberately: "Reserve <strong> for
+ * brands / main model / core USPs at a density of 2–3 per 500 characters maximum; use <b> for
+ * inline spec scannability" (§[FORMAT]). Admitting only `<b>` made every artifact that followed
+ * that instruction unrepresentable — roughly one in five of the exports surveyed.
+ */
 export type Prose = string;
 
 export interface KillerSpec {

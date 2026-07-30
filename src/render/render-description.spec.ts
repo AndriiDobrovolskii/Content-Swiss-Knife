@@ -572,12 +572,12 @@ describe('ProductDescriptionDocSchema', () => {
     expect(ProductDescriptionDocSchema.safeParse(d).success).toBe(false);
   });
 
-  it('rejects prose carrying any tag other than <b>', () => {
+  it('rejects prose carrying any tag other than <b> or <strong>', () => {
     const d = fullDoc();
     d.hook = 'Ось <i>курсив</i>.';
     const result = ProductDescriptionDocSchema.safeParse(d);
     expect(result.success).toBe(false);
-    expect(JSON.stringify(result.error!.issues)).toContain('only <b> tags');
+    expect(JSON.stringify(result.error!.issues)).toContain('only <b> and <strong> tags');
   });
 });
 
@@ -695,5 +695,68 @@ describe('§7 spec values — a parameter may hold several values', () => {
     const empty = fullDoc();
     empty.specs.categories[0].rows.push({ label: 'Порожньо', value: [] });
     expect(ProductDescriptionDocSchema.safeParse(empty).success).toBe(false);
+  });
+});
+
+/**
+ * PROSE ADMITS <strong> AS WELL AS <b>.
+ *
+ * The model was wrong, not the artifacts. master-system-prompt.ts §[FORMAT] instructs:
+ * "Reserve <strong> for brands / main model / core USPs at a density of 2–3 per 500 characters
+ * maximum; use <b> for inline spec scannability." Two distinct tags, deliberately distinguished —
+ * and `Prose` admitted only one of them, so an artifact that followed the prompt's own instruction
+ * could not be represented.
+ *
+ * WHY THE FIRST TWO CORPUS ITEMS MISSED IT: both carry ZERO <strong>. A survey of 20 recent
+ * exports found 4 that use it (one with 6 instances), so roughly one artifact in five was
+ * unrepresentable. This is the clearest case yet for growing the corpus across PRODUCTS rather than
+ * stores — the gap was invisible to two artifacts of the same product and surfaced on the first
+ * genuinely different one.
+ */
+describe('Prose — <strong> alongside <b>', () => {
+  function docWithStrong(): ProductDescriptionDoc {
+    const d = fullDoc();
+    d.hook = 'Флагман <strong>Bambu Lab P2S</strong> друкує з <b>0,01 мм</b> точністю.';
+    return d;
+  }
+
+  it('accepts <strong> in a Prose field', () => {
+    expect(ProductDescriptionDocSchema.safeParse(docWithStrong()).success).toBe(true);
+  });
+
+  it('emits <strong> live rather than escaping it', () => {
+    expect(render(docWithStrong()))
+      .toContain('<p>Флагман <strong>Bambu Lab P2S</strong> друкує з <b>0,01 мм</b> точністю.</p>');
+  });
+
+  /**
+   * The security property that makes re-admitting a tag safe: the pattern has no attribute slot,
+   * so only the bare literals come back to life. Widening the allow-list must not widen that.
+   */
+  it('never re-admits an attribute on <strong>, so no handler can survive', () => {
+    const d = fullDoc();
+    d.hook = 'x <strong onclick="alert(1)">y</strong> z';
+    const html = render(d);
+
+    // The opening tag stays fully escaped — the handler is inert text, not an attribute.
+    expect(html).toContain('&lt;strong onclick=&quot;alert(1)&quot;&gt;');
+    // No LIVE <strong> carrying anything. The literal string "onclick" survives inside the escaped
+    // text, which is the point: it is displayed, not executed.
+    expect(html).not.toMatch(/<strong\s[^>]*>/);
+    // Same accepted edge case documented on prose(): the closing literal is re-admitted on its own
+    // and left as an orphan. An unmatched </strong> is inert in every browser.
+    expect(html).toContain('y</strong> z');
+  });
+
+  it('still rejects any other tag', () => {
+    const d = fullDoc();
+    d.hook = 'see <a href="/x">this</a>';
+    expect(ProductDescriptionDocSchema.safeParse(d).success).toBe(false);
+  });
+
+  it('still rejects <em>, which the prompt does not authorise', () => {
+    const d = fullDoc();
+    d.hook = 'an <em>emphasis</em> tag';
+    expect(ProductDescriptionDocSchema.safeParse(d).success).toBe(false);
   });
 });
