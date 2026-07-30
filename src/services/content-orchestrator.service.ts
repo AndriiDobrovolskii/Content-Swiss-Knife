@@ -7,6 +7,9 @@ import { cleanHtmlStructure, stripCodeFences } from '../utils/html-cleaner';
 import { wrapVideoFigures } from '../utils/video-figure';
 import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
+import { fixDecimalSeparator } from '../utils/decimal-separator';
+import { restoreIdentifierDots } from '../utils/identifier-decimal';
+import { extractVideoEmbeds, restoreMissingVideos, validateVideoCoverage, SourceVideoEmbed } from '../utils/video-manifest';
 import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
@@ -42,7 +45,7 @@ import { SlugResponse, SeoResponse } from '../app/types';
 import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta } from '../utils/repair-gate';
 import { createBlockRepairExecutor } from '../utils/block-tier';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
-import { PromptPayload, CreativeEffort } from '../prompt-core/payload';
+import { PromptPayload } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
 import { validateSpecCategoryShape } from '../utils/spec-category-shape';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
@@ -199,7 +202,7 @@ export class ContentOrchestratorService {
     ].filter(Boolean).join('\n');
   }
 
-  async generate(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
+  async generate(input: ProductInput, useThinking = false): Promise<void> {
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
     // localized name authoritative across H1/title/URL without ever reusing a stale name.
@@ -216,6 +219,9 @@ export class ContentOrchestratorService {
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
 
     const isConsumables = input.templateId === 'consumables-resin';
+    // Video embeds the source supplied — the output is obliged to contain every one of them.
+    // Consumables mode has no §3 to put a video in, so it opts out entirely.
+    const videoEmbeds = isConsumables ? [] : extractVideoEmbeds(input.description);
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
     // Extra headroom for the master specifically when an image manifest exists — Task A
     // doesn't reliably hit "exactly N images" on the first pass, and a dropped image is a
@@ -260,12 +266,27 @@ export class ContentOrchestratorService {
         ].filter(Boolean).join('\n\n'),
       };
       const basePayloadA = buildPromptA(masterInput, 'Ukrainian (uk-UA)');
+      // What the LAST produce call had to splice back. Read by the validate array below, which
+      // runs against that same artifact, to surface automatic placement as a warning.
+      let restoredVideos: SourceVideoEmbed[] = [];
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' }, creativeEffort);
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
         html = stripCodeFences(html);
-        html = wrapVideoFigures(html, input.name);
+        // BEFORE wrapVideoFigures, so a restored embed goes through exactly the same figure and
+        // attribute contract as one the model emitted itself.
+        const restoration = restoreMissingVideos(html, videoEmbeds, input.name, 'uk-UA');
+        html = restoration.html;
+        restoredVideos = restoration.restored;
+        html = wrapVideoFigures(html, input.name, 'uk-UA');
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
+        // Immediately after fixNumberFormatting, which has already stripped thousands separators —
+        // so the decimal pass sees one unambiguous number shape per value.
+        html = fixDecimalSeparator(html, 'uk-UA');
+        // The inverse: a comma the MODEL wrote inside an identifier (F/2,0, 2,4G). Nothing else
+        // catches those — the validator only looks for the opposite. Safe next to the forward
+        // pass, which only ever touches a decimal followed by a unit.
+        html = restoreIdentifierDots(html, 'uk-UA');
         // AFTER fixNumberFormatting so the cyrillizer sees a canonical NUM<NBSP>UNIT shape, and
         // BEFORE normalizeTerminology so its Cyrillic word-boundary lookarounds see final
         // orthography. Both neighbours are idempotent and independent, so this is a documented
@@ -302,6 +323,19 @@ export class ContentOrchestratorService {
           // §7 must not collapse into one catch-all category — runs on the master only, since
           // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
           ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
+          // Should never fire: restoreMissingVideos ran in produce. That is the point — this is
+          // the assertion that the deterministic layer worked, not the mechanism that makes it.
+          ...validateVideoCoverage(html, videoEmbeds, 'HTML (base)'),
+          // Placement by code rather than by the model. Warning tier: the artifact is correct,
+          // but the editor should know the anchor was chosen mechanically.
+          ...restoredVideos.map(e => ({
+            severity: 'warning' as const,
+            rule: 'video-embed-restored',
+            detail:
+              `The model omitted the source video embed (${e.src}); it was re-inserted `
+              + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+            context: 'HTML (base)',
+          })),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
@@ -359,7 +393,7 @@ export class ContentOrchestratorService {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
           const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn);
           // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }, creativeEffort);
+          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
           const slugData = this.normalizeSlugResponse(rawSlug);
           this.content.update(c => ({ ...c, slugData }));
           this.approvedSlugKey.set(this.slugKey(input));
@@ -382,7 +416,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }, creativeEffort)),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -422,13 +456,13 @@ export class ContentOrchestratorService {
           basePayload: basePayloadC,
           produce: async (payload) => {
             // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale }, creativeEffort);
+            let html = await this.llm.generateText(payload, useThinking, { taskLabel: `HTML (${lang})`, productName: input.name, store: input.website.name, lang: locale });
             html = stripCodeFences(html);
             if (isExpert3d && (lang === 'ES' || lang === 'PT')) {
               html = this.applySpanishExpert3dReplacements(html);
             }
             // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
-            html = normalizeTerminology(cyrillizeUnits(fixNumberFormatting(html), locale), locale);
+            html = normalizeTerminology(cyrillizeUnits(restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(html), locale), locale), locale), locale);
             return canonicalizeMultiInOne(html, locale);
           },
           validate: (html) => [
@@ -489,17 +523,34 @@ export class ContentOrchestratorService {
             maxRepairs: this.maxRepairs(),
             basePayload: basePayloadFaq,
             produce: async (payload) => {
-              const html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode }, creativeEffort);
-              return stripCodeFences(html);
+              let html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode });
+              html = stripCodeFences(html);
+              // The FAQ is validated by the same validateGeneratedHtml as the master, so it must
+              // get the same deterministic normalizers. Without them the gate reports unit-spacing
+              // and latin-unit-in-cyrillic-text findings that no instrument can reach (the FAQ had
+              // no block rung either) — held to the master's standard without the master's tooling.
+              // Ordering mirrors produceHtmlA above and is documented there.
+              html = fixNumberFormatting(html);
+              html = fixDecimalSeparator(html, isoCode);
+              html = restoreIdentifierDots(html, isoCode);
+              html = cyrillizeUnits(html, isoCode);
+              html = normalizeTerminology(html, isoCode);
+              return canonicalizeMultiInOne(html, isoCode);
             },
             validate: validateFaqHtml,
             withFeedback: appendRepairFeedback,
+            // Without this rung a FAQ warning was unreachable by ANY instrument: the block pass is
+            // the only thing that can act on a warning (see the master gate's note), and the FAQ
+            // gate simply had none. That is why the L2 Pro report listed three FAQ warnings under
+            // "not repaired" with no patch attempts against them. blockRepairer makes no
+            // assumptions about document shape, so it is safe on the FAQ's schema-free HTML.
+            repairBlocks: this.blockRepairer(isoCode, `FAQ (${isoCode})`, input),
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing FAQ (${isoCode}) (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           });
           const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
           if (faqRepairs > 0) console.info(`[repair-gate] FAQ (${isoCode}): ${faqRepairs} repair(s) applied`);
-          this.repairReport.update(r => [...r, toArtifactReport(`FAQ (${isoCode})`, faqResult)]);
+          this.repairReport.update(r => [...r, toArtifactReport(`FAQ (${isoCode})`, faqResult, this.blockPatchTally.get(`FAQ (${isoCode})`))]);
           if (faqHtml.startsWith('<')) {
             this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
           } else {
@@ -533,7 +584,7 @@ export class ContentOrchestratorService {
   /** Native uk-UA generation: Task A is called directly in Ukrainian (no English base,
    *  no Task C translation loop). SEO/slug/FAQ are scoped to uk-UA only. Mirrors generate()'s
    *  repair gates and validators for the artifacts it shares. */
-  async generateUaContent(input: ProductInput, useThinking = false, creativeEffort?: CreativeEffort): Promise<void> {
+  async generateUaContent(input: ProductInput, useThinking = false): Promise<void> {
     const UA_ISO = 'uk-UA';
     const UA_BASE_LANGUAGE = 'Ukrainian (uk-UA)';
 
@@ -549,6 +600,8 @@ export class ContentOrchestratorService {
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
 
     const isConsumables = input.templateId === 'consumables-resin';
+    // See the sibling comment in generate().
+    const videoEmbeds = isConsumables ? [] : extractVideoEmbeds(input.description);
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
 
     await this.withProgress(async () => {
@@ -581,13 +634,21 @@ export class ContentOrchestratorService {
         ].filter(Boolean).join('\n\n'),
       };
       const basePayloadA = buildPromptA(uaInput, UA_BASE_LANGUAGE);
+      // See the sibling comment in generate().
+      let restoredVideos: SourceVideoEmbed[] = [];
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
+        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
         html = stripCodeFences(html);
-        html = wrapVideoFigures(html, input.name);
+        const restoration = restoreMissingVideos(html, videoEmbeds, input.name, UA_ISO);
+        html = restoration.html;
+        restoredVideos = restoration.restored;
+        html = wrapVideoFigures(html, input.name, UA_ISO);
         html = wrapImageFigures(html);
         html = fixNumberFormatting(html);
         // Ordering rationale as in generate()'s master produce.
+        html = fixDecimalSeparator(html, UA_ISO);
+        // See the sibling comment in generate()'s master produce.
+        html = restoreIdentifierDots(html, UA_ISO);
         html = cyrillizeUnits(html, UA_ISO);
         html = normalizeTerminology(html, UA_ISO);
         html = canonicalizeMultiInOne(html, UA_ISO);
@@ -613,6 +674,16 @@ export class ContentOrchestratorService {
           ...validateSentenceLength(html, UA_ISO, 'HTML (uk-UA)'),
           // §7 category-collapse guard — see the identical hook in generate() for rationale.
           ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
+          // Video coverage + automatic-placement notice — see the identical hook in generate().
+          ...validateVideoCoverage(html, videoEmbeds, 'HTML (uk-UA)'),
+          ...restoredVideos.map(e => ({
+            severity: 'warning' as const,
+            rule: 'video-embed-restored',
+            detail:
+              `The model omitted the source video embed (${e.src}); it was re-inserted `
+              + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+            context: 'HTML (uk-UA)',
+          })),
           ...(groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
@@ -656,7 +727,7 @@ export class ContentOrchestratorService {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
         const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
-        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
+        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO });
         const slugData = this.normalizeSlugResponse(rawSlug);
         this.content.update(c => ({ ...c, slugData }));
         this.approvedSlugKey.set(this.slugKey(input));
@@ -677,7 +748,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
-        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort)),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO })),
         validate: (json) => validateSeoMetadata(json, ''),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -712,17 +783,26 @@ export class ContentOrchestratorService {
           maxRepairs: this.maxRepairs(),
           basePayload: basePayloadFaq,
           produce: async (payload) => {
-            const html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO }, creativeEffort);
-            return stripCodeFences(html);
+            let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
+            html = stripCodeFences(html);
+            // Same normalizer chain as the sibling FAQ produce in generate() — see the rationale there.
+            html = fixNumberFormatting(html);
+            html = fixDecimalSeparator(html, UA_ISO);
+            html = restoreIdentifierDots(html, UA_ISO);
+            html = cyrillizeUnits(html, UA_ISO);
+            html = normalizeTerminology(html, UA_ISO);
+            return canonicalizeMultiInOne(html, UA_ISO);
           },
           validate: validateFaqHtml,
           withFeedback: appendRepairFeedback,
+          // Same rung as the sibling FAQ gate in generate() — see the rationale there.
+          repairBlocks: this.blockRepairer(UA_ISO, 'FAQ (uk-UA)', input),
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing FAQ (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
         const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
         if (faqRepairs > 0) console.info(`[repair-gate] FAQ (uk-UA): ${faqRepairs} repair(s) applied`);
-        this.repairReport.update(r => [...r, toArtifactReport('FAQ (uk-UA)', faqResult)]);
+        this.repairReport.update(r => [...r, toArtifactReport('FAQ (uk-UA)', faqResult, this.blockPatchTally.get('FAQ (uk-UA)'))]);
         if (faqHtml.startsWith('<')) {
           this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [UA_ISO]: faqHtml } }));
         } else {

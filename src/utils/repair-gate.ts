@@ -156,6 +156,35 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     ladderCursor.set(cursorKey(issue), resolveLadder(issue).length);
     cursorMoves++;
   };
+  /**
+   * Second attempt at a MEASURED finding: state the shortfall outright.
+   *
+   * sentence-too-long already has TWO block rungs (repair-strategy.ts) precisely because one was
+   * demonstrably not enough. What it did not have is any difference between the two attempts: both
+   * sent the validator's `detail` verbatim, so a model that had just missed the ceiling was asked
+   * again in the same words, with no signal that it had missed or by how much. EXPERT3D XGRIDS
+   * L2 Pro (2026-07-29) ran with both rungs in place and still shipped the warning — 5 patches
+   * applied, 3 findings resolved.
+   *
+   * `measured` operands turn "did it work" into a comparison rather than a judgement, so the
+   * second rung can name the exact deficit. `detail` is what block-tier.ts forwards verbatim as
+   * the instruction, so escalating it needs no signature change anywhere in the executor.
+   *
+   * Rungs beyond the second are deliberately not added here: a sentence that survives two explicit
+   * instructions should reach the report honestly rather than burn a third call.
+   */
+  const escalateForRetry = (issue: ValidationIssue, isRetry: boolean): ValidationIssue => {
+    if (!isRetry || !issue.measured) return issue;
+    const { actual, limit, unit } = issue.measured;
+    if (actual <= limit) return issue;
+    return {
+      ...issue,
+      detail:
+        `${issue.detail} THE PREVIOUS ATTEMPT DID NOT SATISFY THIS CONSTRAINT — it is still `
+        + `${actual} ${unit} against a limit of ${limit}. Remove at least ${actual - limit} more `
+        + `${unit}; split into two sentences if that is what it takes.`,
+    };
+  };
 
   /**
    * Runs every issue currently sitting on `tier`, replacing exactly one addressed field per issue.
@@ -218,9 +247,13 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
   ): Promise<T> => {
     const onRung = plan.filter(p => p.tier === 'block-scoped' && p.issue.path).map(p => p.issue);
     if (onRung.length === 0) return current;
+    // Read the cursor BEFORE advancing: a non-zero rung means this issue has already had one
+    // block attempt, which is exactly what escalateForRetry needs to know.
+    const instructions = onRung.map(issue =>
+      escalateForRetry(issue, (ladderCursor.get(cursorKey(issue)) ?? 0) > 0));
     // Spent whether or not an executor exists, so the ladder always terminates.
     for (const issue of onRung) advance(issue);
-    return opts.repairBlocks ? opts.repairBlocks(current, onRung) : current;
+    return opts.repairBlocks ? opts.repairBlocks(current, instructions) : current;
   };
 
   // `attempt` tracks which generation `best` currently holds, so the report can state what actually

@@ -1,0 +1,56 @@
+{
+  "providers": [
+    {
+      "id": "anthropic",
+      "label": "Anthropic",
+      "models": [
+        {
+          "id": "claude-sonnet-5",
+          "label": "Claude Sonnet 5",
+          "tier": "premium",
+          "levels": ["disabled", "low", "medium", "high"],
+          "defaultLevel": "medium",
+          "maxOutputTokens": 64000
+        },
+        {
+          "id": "claude-opus-4-8",
+          "label": "Claude Opus 4.8",
+          "tier": "premium",
+          "levels": ["disabled", "low", "medium", "high"],
+          "defaultLevel": "medium",
+          "maxOutputTokens": 64000
+        },
+        {
+          "id": "claude-haiku-4-5",
+          "label": "Claude Haiku 4.5",
+          "tier": "fast",
+          "levels": ["disabled"],
+          "defaultLevel": "disabled",
+          "maxOutputTokens": 16000
+        }
+      ]
+    },
+    {
+      "id": "gemini",
+      "label": "Google Gemini",
+      "models": [
+        {
+          "id": "gemini-3.1-pro-preview",
+          "label": "Gemini 3.1 Pro",
+          "tier": "premium",
+          "levels": ["low", "medium", "high"],
+          "defaultLevel": "medium",
+          "maxOutputTokens": 65536
+        },
+        {
+          "id": "gemini-3.6-flash",
+          "label": "Gemini 3.6 Flash",
+          "tier": "fast",
+          "levels": ["minimal", "low", "medium", "high"],
+          "defaultLevel": "medium",
+          "maxOutputTokens": 65536
+        }
+      ]
+    }
+  ]
+}

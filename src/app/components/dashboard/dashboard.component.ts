@@ -147,10 +147,14 @@ export class DashboardComponent implements OnInit {
     }
   }
 
+  /** Warm hues for Anthropic's premium tier, cool for Google's, green for the cheap models —
+   *  so a mixed-provider cost table is readable at a glance. */
   modelBadgeClass(model: string): string {
     const m = model.toLowerCase();
     if (m.includes('opus')) return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
     if (m.includes('haiku')) return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    if (m.includes('gemini') && m.includes('pro')) return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+    if (m.includes('gemini')) return 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300';
     return 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300';
   }
 

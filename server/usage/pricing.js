@@ -15,6 +15,15 @@ const DEFAULT_PRICES = {
   'claude-opus-4-5':   { in: 5.00, out: 25.00, cw: 6.25, cr: 0.50 },
   'claude-haiku-4-5':  { in: 1.00, out: 5.00,  cw: 1.25, cr: 0.10 },
   'claude-haiku-3-5':  { in: 0.80, out: 4.00,  cw: 1.00, cr: 0.08 },
+
+  // Google Gemini. `out` covers thinking tokens too — GeminiProvider folds thoughtsTokenCount
+  // into outputTokens, because Google bills reasoning at the full output rate.
+  // cw is 0: implicit context caching has no per-token write charge (storage is billed per
+  // hour, which this schema doesn't model). cr is the cached-input rate.
+  // NOTE: Pro's >200k-token tier ($4.00 in / $18.00 out) is NOT modeled — prompts that large
+  // will under-report here. Split the entry if that becomes a real usage pattern.
+  'gemini-3.1-pro-preview': { in: 2.00, out: 12.00, cw: 0, cr: 0.20 },
+  'gemini-3.6-flash':       { in: 1.50, out:  7.50, cw: 0, cr: 0.15 },
 };
 
 const FALLBACK_PRICE = { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 };

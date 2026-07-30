@@ -2,6 +2,7 @@ import { ProductInput, ImageManifestEntry, CONTENT_TEMPLATES } from '../app/type
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
 import { getStore, isExpert3dStore, isCenter3dPrintStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
+import { extractVideoEmbeds } from '../utils/video-manifest';
 
 // ── Standard full-schema instruction (Schema v3.0 §1–§9) ──────────────────
 
@@ -87,6 +88,30 @@ ${lines}
 Build src as {base}{brandFolder}/{modelFolder}/{filename}. ${example ? 'Example: ' + example : ''}`;
 }
 
+// ── Video-manifest helper ──────────────────────────────────────────────────
+
+/** Video gets the same COUNT=N treatment as images, for the same reason.
+ *
+ *  Before this block the only instruction about video was five lines in the master prompt, while
+ *  the image manifest appended a count-enforced HARD RULE that dominated the tail of the user
+ *  turn. Under the 28,000-char cap the model is told to compress, and the one element with no
+ *  manifest, no count and no section anchor is what it dropped — reproducibly, and only when
+ *  images were present to crowd it out (EXPERT3D XGRIDS L2 Pro, 2026-07-29).
+ *
+ *  Returns '' when the source has no embed, so the overwhelmingly common no-video case leaves
+ *  userContent byte-identical and the prompt cache unaffected. Consumables mode has no §3 and a
+ *  2,500-char ceiling, so it gets no video block either. */
+function buildVideoBlock(input: ProductInput, isConsumables: boolean): string {
+  if (isConsumables) return '';
+  const embeds = extractVideoEmbeds(input.description);
+  if (embeds.length === 0) return '';
+  const lines = embeds
+    .map((e, i) => `${i + 1}. ${e.src}${e.title ? ` — title: "${e.title}"` : ''}`)
+    .join('\n');
+  return `\n[VIDEO MANIFEST] — COUNT=${embeds.length}. HARD RULE: the output contains exactly ${embeds.length} <iframe> tag(s) — every src below appears exactly once, copied VERBATIM (never invent, rewrite, shorten, drop, or duplicate an embed). Introduce each with its own lead-in <p> in the body language, and place it in §3 FUNCTIONALITY, before §7. The lead-in must not restate the figcaption:
+${lines}`;
+}
+
 // ── Main prompt builder ────────────────────────────────────────────────────
 
 export function buildPromptA(input: ProductInput, baseLanguageOverride?: string): PromptPayload {
@@ -123,7 +148,7 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
 [Raw Description]: ${input.description}
 [Technical Specs]: ${input.specs}
 [Supplemental Content]: ${input.supplementalContent || 'None provided.'}
-${buildImageBlock(input, store.imageBaseUrl)}${template}${custom}${consumablesMode}
+${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input, isConsumables)}${template}${custom}${consumablesMode}
 
 Generate the description in ${baseLanguage}. Primary keyword "${input.name}" used ~1–2× per section.`;
 

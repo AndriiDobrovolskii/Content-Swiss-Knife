@@ -612,6 +612,72 @@ describe('runRepairGate — tiered repair ladder', () => {
     expect(produce).toHaveBeenCalledTimes(1); // no regeneration was spent on a warning
   });
 
+  it('states the measured shortfall on the second block rung, not the first', async () => {
+    // The two-rung ladder existed but both rungs sent the same words, so a model that had just
+    // missed the ceiling was asked again with no idea it had missed. EXPERT3D XGRIDS L2 Pro
+    // (2026-07-29) ran with both rungs and still shipped the warning.
+    const produce = vi.fn().mockResolvedValue('<p>довге</p>');
+    const repairBlocks = vi.fn()
+      .mockResolvedValueOnce('<p>трохи коротше</p>')   // applied, but still over the ceiling
+      .mockResolvedValue('<p>коротко</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([sentenceWarning()])                                        // 21 words
+      .mockReturnValueOnce([{ ...sentenceWarning(), measured: { actual: 23, limit: 20, unit: 'words' } }])
+      .mockReturnValue([]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).toHaveBeenCalledTimes(2);
+    // First rung: the validator's own detail, untouched.
+    expect(repairBlocks.mock.calls[0][1][0].detail).toBe(sentenceWarning().detail);
+    // Second rung: the deficit is named, and the arithmetic is the issue's own operands.
+    const retryDetail: string = repairBlocks.mock.calls[1][1][0].detail;
+    expect(retryDetail).toContain('THE PREVIOUS ATTEMPT DID NOT SATISFY THIS CONSTRAINT');
+    expect(retryDetail).toContain('still 23 words against a limit of 20');
+    expect(retryDetail).toContain('Remove at least 3 more words');
+  });
+
+  it('does not escalate a finding that carries no measured operands', async () => {
+    // Without operands there is no shortfall to state, so the instruction must go out unchanged
+    // rather than gain a sentence built from undefined.
+    const unmeasured = { ...sentenceWarning(), measured: undefined };
+    const produce = vi.fn().mockResolvedValue('<p>довге</p>');
+    const repairBlocks = vi.fn().mockResolvedValueOnce('<p>інше</p>').mockResolvedValue('<p>ще інше</p>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([unmeasured])
+      .mockReturnValueOnce([unmeasured])
+      .mockReturnValue([]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks).toHaveBeenCalledTimes(2);
+    expect(repairBlocks.mock.calls[1][1][0].detail).toBe(unmeasured.detail);
+  });
+
+  it('does not escalate when the retry finding is already within its limit', async () => {
+    // A stale-but-satisfied measurement must not produce "remove at least -1 more words".
+    const produce = vi.fn().mockResolvedValue('<p>довге</p>');
+    const repairBlocks = vi.fn().mockResolvedValueOnce('<p>інше</p>').mockResolvedValue('<p>ще інше</p>');
+    const satisfied = { ...sentenceWarning(), measured: { actual: 18, limit: 20, unit: 'words' as const } };
+    const validate = vi.fn()
+      .mockReturnValueOnce([sentenceWarning()])
+      .mockReturnValueOnce([satisfied])
+      .mockReturnValue([]);
+
+    await runRepairGate<string>({
+      label: 'HTML (base)', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairBlocks,
+    });
+
+    expect(repairBlocks.mock.calls[1][1][0].detail).toBe(satisfied.detail);
+  });
+
   it('never escalates a warning to full regeneration, even when the fix does not take', async () => {
     // A warning the cheap rungs cannot fix stays reported. Spending a whole-artifact rewrite on a
     // stylistic finding would trade a cosmetic problem for a correctness risk.

@@ -58,3 +58,34 @@ describe('MASTER_SYSTEM_PROMPT — §7 COMPLETENESS: Product Name row exclusion'
     expect(normalized).toMatch(/nothing changes: every remaining row counts/i);
   });
 });
+
+describe('MASTER_SYSTEM_PROMPT — [VIDEO]: a real anchor and a real obligation', () => {
+  it('no longer points the embed at "Deep Dive", a section that does not exist', () => {
+    // The §1–§9 schema never had a section by that name, so the one placement instruction for
+    // video addressed nowhere. This is the root of the dropped-iframe bug.
+    expect(normalized).not.toMatch(/Deep Dive/i);
+  });
+
+  it('anchors the iframe in §3 and keeps it ahead of §7', () => {
+    expect(normalized).toMatch(/place it in §3 FUNCTIONALITY/i);
+    expect(normalized).toMatch(/before\s+§7 TECHNICAL SPECIFICATIONS/i);
+  });
+
+  it('states that an embed in the input is mandatory in the output', () => {
+    expect(normalized).toMatch(/MANDATORY WHEN PRESENT/);
+    expect(normalized).toMatch(/never a way to save characters against the global cap/i);
+  });
+
+  it('lists the video in the OUTPUT CONTRACT, which claims to be complete', () => {
+    expect(normalized).toMatch(/VIDEO EMBED — conditional/i);
+  });
+
+  it('admits the attributes an iframe needs, despite the body whitelist', () => {
+    // "preserve verbatim" contradicted the whitelist, which excluded exactly the attributes
+    // without which a YouTube embed does not play.
+    expect(normalized).toMatch(/EXCEPTION — <iframe>/);
+    for (const attr of ['title', 'allow', 'allowfullscreen', 'referrerpolicy']) {
+      expect(normalized).toContain(attr);
+    }
+  });
+});
