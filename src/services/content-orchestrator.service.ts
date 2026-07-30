@@ -27,6 +27,13 @@ import { cyrillizeUnits } from '../utils/unit-cyrillize';
 import { validateProductNameConsistency, validateProductNameH1SlugAgreement } from '../utils/product-name-consistency';
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
+import { buildPromptADoc } from '../prompts/task-a-doc';
+import { usesDocPipeline } from '../prompt-core/doc-pipeline-flag';
+import { ProductDescriptionDocSchema } from '../domain/description-doc.schema';
+import { renderDescription } from '../render/render-description';
+import { normalizeDocProse } from '../render/doc-prose-transforms';
+import { renderContextFor } from '../prompt-core/store-render-rules';
+import type { ProductDescriptionDoc } from '../domain/description-doc';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
@@ -265,11 +272,40 @@ export class ContentOrchestratorService {
           buildMasterUaOverlay(input.website.name),
         ].filter(Boolean).join('\n\n'),
       };
-      const basePayloadA = buildPromptA(masterInput, 'Ukrainian (uk-UA)');
+      // ── Doc pipeline, per-store rollout ────────────────────────────────────────
+      // Opt-in and narrow on purpose: the live probe passed 4/4, but on ONE product, ONE store,
+      // ONE locale. That settles feasibility, not reliability. See doc-pipeline-flag.ts.
+      const useDocPipeline = usesDocPipeline(input.website.name, input.templateId);
+      const basePayloadA = useDocPipeline
+        ? buildPromptADoc(masterInput, 'Ukrainian (uk-UA)')
+        : buildPromptA(masterInput, 'Ukrainian (uk-UA)');
       // What the LAST produce call had to splice back. Read by the validate array below, which
       // runs against that same artifact, to surface automatic placement as a warning.
       let restoredVideos: SourceVideoEmbed[] = [];
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
+        // The Doc path returns HTML too — renderDescription() builds it — so the repair gate and
+        // every downstream validator below keep working unchanged. That is what keeps this switch
+        // contained to these few lines instead of rippling through the whole method.
+        if (useDocPipeline) {
+          const raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: 'Doc (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
+          // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
+          // rather than be rendered into plausible-looking wrong HTML.
+          //
+          // The return value is DISCARDED and `raw` is used instead. Without strictNullChecks —
+          // which this repo does not enable — zod's inferred type comes back all-optional and does
+          // not satisfy ProductDescriptionDoc. See the TSCONFIG NOTE at the foot of
+          // description-doc.schema.ts; this is the same workaround, not a new one. parse() still
+          // does the validating, so nothing is weakened.
+          ProductDescriptionDocSchema.parse(raw);
+          const doc = raw;
+          // Prose normalization moves here from the HTML chain below — same transforms, same order.
+          // stripCodeFences, wrapVideoFigures and wrapImageFigures have no job on this path: JSON
+          // parsing replaces the first, and the renderer emits canonical figures directly.
+          return renderDescription(
+            normalizeDocProse(doc, 'uk-UA'),
+            renderContextFor(input.website.name, input.brandFolder, input.modelFolder),
+          );
+        }
         let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
         html = stripCodeFences(html);
         // BEFORE wrapVideoFigures, so a restored embed goes through exactly the same figure and
@@ -354,7 +390,12 @@ export class ContentOrchestratorService {
         // Block-scoped rung. Runs BEFORE any full regeneration and is the only instrument a
         // warning can reach — see resolveLadder. Wired here rather than after the gate so a
         // translation inherits already-repaired prose from the master.
-        repairBlocks: this.blockRepairer('uk-UA', 'HTML (base)', input),
+        // Block-scoped repair slices and patches HTML. On the Doc path the HTML is a RENDERED
+        // artifact, so patching it would desync it from the Doc that produced it and the next
+        // regeneration would silently discard the fix. Full-regen repair (withFeedback) still
+        // applies there — it reuses basePayload.systemBlocks by reference, so the retry is still
+        // told to emit JSON.
+        repairBlocks: useDocPipeline ? undefined : this.blockRepairer('uk-UA', 'HTML (base)', input),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
