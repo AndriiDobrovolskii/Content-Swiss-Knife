@@ -10,7 +10,15 @@
  * ../render/render-description.ts. Neither concern belongs in this file.
  */
 
-/** Prose fields may contain <b>…</b> and nothing else. Enforced by the schema, sanitized by the renderer. */
+/**
+ * Prose fields may contain `<b>` and `<strong>`, and nothing else. Enforced by the schema,
+ * sanitized by the renderer.
+ *
+ * BOTH tags, because the master prompt distinguishes them deliberately: "Reserve <strong> for
+ * brands / main model / core USPs at a density of 2–3 per 500 characters maximum; use <b> for
+ * inline spec scannability" (§[FORMAT]). Admitting only `<b>` made every artifact that followed
+ * that instruction unrepresentable — roughly one in five of the exports surveyed.
+ */
 export type Prose = string;
 
 export interface KillerSpec {
@@ -36,6 +44,17 @@ export type Block =
   /** Index into ProductDescriptionDoc.videos — a SEPARATE manifest from figures. */
   | { kind: 'video'; ref: number };
 
+/**
+ * What §4 admits: prose and figures, nothing else.
+ *
+ * Narrower than Block on purpose, and narrowed in the TYPE as well as the schema. `bullets` would
+ * give §4 a second <ul> beside `items`, which is already its list; `video` appears in no artifact
+ * there. The subsection-depth cap keeps its type deliberately wide because recursion reads better
+ * that way — there is no such reason here, and a type wider than the schema would just be a lie
+ * the compile-time guard at the bottom of description-doc.schema.ts would catch anyway.
+ */
+export type ApplicationsBlock = Extract<Block, { kind: 'paragraph' } | { kind: 'figure' }>;
+
 export interface Subsection {
   /**
    * Rendered as <h2> at the top level and <h3> when nested one level deep. Localized by the model.
@@ -55,7 +74,15 @@ export interface Subsection {
 
 export interface SpecRow {
   label: string;
-  value: string;
+  /**
+   * A single value, or several.
+   *
+   * The two shapes are both real accepted output, not a convenience: EXPERT3D writes a
+   * multi-valued parameter as a nested list inside the cell — `<td><ul><li>ORTUR…</li>…</ul></td>`
+   * — while Center 3D Print writes the same information as one slash-separated string. Modelling
+   * only the string form made the EXPERT3D artifact unrenderable.
+   */
+  value: string | string[];
 }
 
 export interface SpecCategory {
@@ -106,10 +133,37 @@ export interface ProductDescriptionDoc {
   keyBenefits: Block[];
   /** §3 — one Subsection per H2. */
   functionality: Subsection[];
-  /** §4 */
-  applications: { heading: string; items: { scenario: string; text: Prose }[] };
+  /**
+   * §4.
+   *
+   * `blocks` renders BETWEEN the heading and the item list — a lead-in paragraph and, in every
+   * real artifact seen so far, one figure. `items` remains §4's own list mechanism; the schema
+   * keeps `bullets` out of `blocks` so the section can never grow a second, competing <ul>.
+   */
+  applications: {
+    heading: string;
+    blocks?: ApplicationsBlock[];
+    items: { scenario: string; text: Prose }[];
+  };
   /** §5 — conditional. */
   compatibility?: Subsection;
+  /**
+   * §5b — conditional, and store-specific: Center 3D Print's "Style B" operating-tips block.
+   *
+   * NOT a rename of `compatibility`, and not interchangeable with it. The master prompt scopes §5
+   * to "ONLY physical cross-compatibility" — compatible materials and hardware — and explicitly
+   * routes software, drivers, OS and connectivity out to §3. Operating tips are neither, so they
+   * had no slot at all; the first corpus artifact was modelled with them on `compatibility`
+   * because that field rendered in the right position, which reconciled while describing the
+   * document incorrectly.
+   *
+   * The block is first-class rather than ad-hoc: OPERATING_TIPS_H2_MARKERS in
+   * prompt-core/constants.ts is its single source of truth, and tov-second-person.ts matches
+   * against that same array so the prompt and the linter cannot drift.
+   *
+   * Renders in §5's slot, immediately after `compatibility` when both are present.
+   */
+  operatingTips?: Subsection;
   /** §6 — conditional. */
   packageContents?: { heading: string; items: string[] };
   /** §7 */
@@ -121,4 +175,33 @@ export interface ProductDescriptionDoc {
   figures: Figure[];
   /** Parallel manifest for video embeds, indexed independently of `figures`. */
   videos: VideoEmbed[];
+}
+
+/**
+ * Visits every Block in DOCUMENT order — the order renderDescription() emits them.
+ *
+ * Exists because three places need this traversal and two of them got it wrong the same way. The
+ * schema's ref check and the renderer's first-eager/rest-lazy positioning both walked keyBenefits,
+ * functionality and compatibility while skipping §4; the moment a corpus artifact put a figure in
+ * §4, one rejected a valid document and the other shipped an image without loading="lazy". Adding
+ * a section to the model now means adding it here, once.
+ *
+ * Pure and dependency-free, so it can live beside the types and be shared by the schema (which
+ * must not import the renderer) and the renderer alike.
+ */
+export function forEachBlockInOrder(
+  doc: ProductDescriptionDoc,
+  visit: (block: Block) => void,
+): void {
+  const walkBlocks = (blocks: Block[]): void => blocks.forEach(visit);
+  const walkSubsection = (s: Subsection): void => {
+    walkBlocks(s.blocks);
+    s.subsections?.forEach(walkSubsection);
+  };
+
+  walkBlocks(doc.keyBenefits);
+  doc.functionality.forEach(walkSubsection);
+  walkBlocks(doc.applications.blocks ?? []);
+  if (doc.compatibility) walkSubsection(doc.compatibility);
+  if (doc.operatingTips) walkSubsection(doc.operatingTips);
 }

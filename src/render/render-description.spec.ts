@@ -29,9 +29,9 @@ function fullDoc(): ProductDescriptionDoc {
       {
         kind: 'bullets',
         items: [
-          { lead: 'Змінний лазерний модуль', text: '— потужність підбирається під матеріал.' },
-          { lead: 'Чотири робочі модулі', text: '— лазер, ніж, чорнило та перо в одній каретці.' },
-          { lead: 'Ротаційна насадка RA2 Pro', text: '— циліндричні предмети до 99 мм.' },
+          { lead: 'Змінний лазерний модуль', text: ' — потужність підбирається під матеріал.' },
+          { lead: 'Чотири робочі модулі', text: ' — лазер, ніж, чорнило та перо в одній каретці.' },
+          { lead: 'Ротаційна насадка RA2 Pro', text: ' — циліндричні предмети до 99 мм.' },
         ],
       },
     ],
@@ -60,10 +60,10 @@ function fullDoc(): ProductDescriptionDoc {
     applications: {
       heading: 'Сфери застосування',
       items: [
-        { scenario: 'Сувенірне виробництво:', text: 'гравіювання на дереві та акрилі.' },
-        { scenario: 'Текстиль:', text: 'ножовий крій аплікацій і трафаретів.' },
-        { scenario: 'Прототипування:', text: 'швидкий розкрій макетів із картону.' },
-        { scenario: 'Освіта:', text: 'демонстрація адитивних і субтрактивних методів.' },
+        { scenario: 'Сувенірне виробництво:', text: ' гравіювання на дереві та акрилі.' },
+        { scenario: 'Текстиль:', text: ' ножовий крій аплікацій і трафаретів.' },
+        { scenario: 'Прототипування:', text: ' швидкий розкрій макетів із картону.' },
+        { scenario: 'Освіта:', text: ' демонстрація адитивних і субтрактивних методів.' },
       ],
     },
     compatibility: {
@@ -72,9 +72,9 @@ function fullDoc(): ProductDescriptionDoc {
         {
           kind: 'bullets',
           items: [
-            { lead: 'Матеріали', text: 'деревина, акрил, шкіра, папір.' },
-            { lead: 'Платформи', text: 'стільникова платформа, підставка-подовжувач.' },
-            { lead: 'Насадки', text: 'RA2 Pro, тримач пера.' },
+            { lead: 'Матеріали', text: ' деревина, акрил, шкіра, папір.' },
+            { lead: 'Платформи', text: ' стільникова платформа, підставка-подовжувач.' },
+            { lead: 'Насадки', text: ' RA2 Pro, тримач пера.' },
           ],
         },
         { kind: 'figure', ref: 2 },
@@ -572,11 +572,275 @@ describe('ProductDescriptionDocSchema', () => {
     expect(ProductDescriptionDocSchema.safeParse(d).success).toBe(false);
   });
 
-  it('rejects prose carrying any tag other than <b>', () => {
+  it('rejects prose carrying any tag other than <b> or <strong>', () => {
     const d = fullDoc();
     d.hook = 'Ось <i>курсив</i>.';
     const result = ProductDescriptionDocSchema.safeParse(d);
     expect(result.success).toBe(false);
-    expect(JSON.stringify(result.error!.issues)).toContain('only <b> tags');
+    expect(JSON.stringify(result.error!.issues)).toContain('only <b> and <strong> tags');
+  });
+});
+
+describe('§4 applications — blocks between the heading and the list', () => {
+  // Both committed corpus artifacts carry a lead-in paragraph and a figure between <h2> and <ul>
+  // in §4. The model had no slot for them, so reconciliation could not pass on either item — gap
+  // §5.5 of render-reconciliation.report.md, deferred there until a corpus item confirmed the
+  // shape. Two now do, from two different stores.
+  function docWithApplicationFigure(): ProductDescriptionDoc {
+    const doc = fullDoc();
+    doc.figures.push({ file: 'use-cases.jpg', alt: 'Приклади виробів', caption: '<b>Приклади:</b> дерево, акрил.' });
+    doc.applications.blocks = [
+      { kind: 'paragraph', text: 'Верстат охоплює творчі та комерційні сценарії.' },
+      { kind: 'figure', ref: doc.figures.length - 1 },
+    ];
+    return doc;
+  }
+
+  it('places the blocks after <h2> and before <ul>', () => {
+    const html = renderDescription(docWithApplicationFigure(), CTX);
+    const section = html.slice(html.indexOf('<h2>Сфери застосування</h2>'));
+    const heading = section.indexOf('<h2>');
+    const paragraph = section.indexOf('<p>Верстат охоплює');
+    const figure = section.indexOf('<figure');
+    const list = section.indexOf('<ul>');
+    expect(heading).toBeLessThan(paragraph);
+    expect(paragraph).toBeLessThan(figure);
+    expect(figure).toBeLessThan(list);
+  });
+
+  it('counts an applications figure in DOCUMENT order, so it is lazy', () => {
+    // figurePositions() walked keyBenefits, functionality and compatibility only. A figure it
+    // never saw resolves to position 0 — the LCP slot — and ships without loading="lazy", which
+    // output-validator flags as lcp-image-lazy. Silent until a §4 figure exists; both corpus
+    // items have one.
+    const html = renderDescription(docWithApplicationFigure(), CTX);
+    const applicationFigure = html.slice(html.indexOf('<h2>Сфери застосування</h2>'));
+    expect(applicationFigure).toContain('use-cases.jpg');
+    expect(applicationFigure.slice(applicationFigure.indexOf('use-cases.jpg') - 200)).toContain('loading="lazy"');
+  });
+
+  it('still renders exactly one <ul> in §4', () => {
+    // The items list is §4's own mechanism; blocks must not add a competing one.
+    const html = renderDescription(docWithApplicationFigure(), CTX);
+    // Bounded by the NEXT <h2>, not by the specs section — §5 and §6 sit in between and carry
+    // their own lists, which would make this assertion pass or fail for the wrong reason.
+    const start = html.indexOf('<h2>Сфери застосування</h2>');
+    const nextHeading = html.indexOf('<h2>', start + 1);
+    const section = html.slice(start, nextHeading === -1 ? undefined : nextHeading);
+    expect((section.match(/<ul>/g) ?? []).length).toBe(1);
+  });
+
+  it('renders exactly as before when blocks are absent', () => {
+    expect(renderDescription(fullDoc(), CTX)).toBe(renderDescription({ ...fullDoc(), applications: { ...fullDoc().applications } }, CTX));
+  });
+
+  describe('schema', () => {
+    it('accepts a paragraph and a figure', () => {
+      expect(ProductDescriptionDocSchema.safeParse(docWithApplicationFigure()).success).toBe(true);
+    });
+
+    it('rejects bullets, which would be a second competing list', () => {
+      const doc = docWithApplicationFigure();
+      // Cast deliberately: the TYPE already rejects this, which is the stronger guarantee. The
+      // runtime gate still has to hold, because a Doc arrives from the model as JSON that no
+      // compiler ever saw.
+      doc.applications.blocks = [{ kind: 'bullets', items: [
+        { lead: 'a', text: 'x' }, { lead: 'b', text: 'y' }, { lead: 'c', text: 'z' },
+      ] }] as unknown as ProductDescriptionDoc['applications']['blocks'];
+      expect(ProductDescriptionDocSchema.safeParse(doc).success).toBe(false);
+    });
+
+    it('rejects video, which no artifact shows in §4', () => {
+      const doc = docWithApplicationFigure();
+      doc.applications.blocks =
+        [{ kind: 'video', ref: 0 }] as unknown as ProductDescriptionDoc['applications']['blocks'];
+      expect(ProductDescriptionDocSchema.safeParse(doc).success).toBe(false);
+    });
+  });
+});
+
+describe('§7 spec values — a parameter may hold several values', () => {
+  // EXPERT3D writes a multi-valued parameter as a nested list inside the cell:
+  //   <td><ul><li>ORTUR (власний застосунок)</li><li>Lightburn</li><li>LaserGRBL</li></ul></td>
+  // Center 3D Print writes the same information as one slash-separated string. Both are real
+  // accepted output; a `value: string` models only the second.
+  function docWithListValue(): ProductDescriptionDoc {
+    const doc = fullDoc();
+    doc.specs.categories[0].rows.push({
+      label: 'Програмне забезпечення',
+      value: ['ORTUR (власний застосунок)', 'Lightburn', 'LaserGRBL'],
+    });
+    return doc;
+  }
+
+  it('renders an array value as a nested list in the cell', () => {
+    expect(render(docWithListValue())).toContain(
+      '<td>Програмне забезпечення</td><td><ul><li>ORTUR (власний застосунок)</li>'
+      + '<li>Lightburn</li><li>LaserGRBL</li></ul></td>',
+    );
+  });
+
+  it('still renders a plain string value as plain text', () => {
+    expect(render(fullDoc())).toContain('<td>Потужність</td><td>20 Вт</td>');
+  });
+
+  it('escapes list entries like any other cell text', () => {
+    const doc = fullDoc();
+    doc.specs.categories[0].rows.push({ label: 'Формат', value: ['<b>A</b> & B'] });
+    expect(render(doc)).toContain('<li>&lt;b&gt;A&lt;/b&gt; &amp; B</li>');
+  });
+
+  it('accepts both shapes in the schema, and rejects an empty list', () => {
+    expect(ProductDescriptionDocSchema.safeParse(docWithListValue()).success).toBe(true);
+    const empty = fullDoc();
+    empty.specs.categories[0].rows.push({ label: 'Порожньо', value: [] });
+    expect(ProductDescriptionDocSchema.safeParse(empty).success).toBe(false);
+  });
+});
+
+/**
+ * PROSE ADMITS <strong> AS WELL AS <b>.
+ *
+ * The model was wrong, not the artifacts. master-system-prompt.ts §[FORMAT] instructs:
+ * "Reserve <strong> for brands / main model / core USPs at a density of 2–3 per 500 characters
+ * maximum; use <b> for inline spec scannability." Two distinct tags, deliberately distinguished —
+ * and `Prose` admitted only one of them, so an artifact that followed the prompt's own instruction
+ * could not be represented.
+ *
+ * WHY THE FIRST TWO CORPUS ITEMS MISSED IT: both carry ZERO <strong>. A survey of 20 recent
+ * exports found 4 that use it (one with 6 instances), so roughly one artifact in five was
+ * unrepresentable. This is the clearest case yet for growing the corpus across PRODUCTS rather than
+ * stores — the gap was invisible to two artifacts of the same product and surfaced on the first
+ * genuinely different one.
+ */
+describe('Prose — <strong> alongside <b>', () => {
+  function docWithStrong(): ProductDescriptionDoc {
+    const d = fullDoc();
+    d.hook = 'Флагман <strong>Bambu Lab P2S</strong> друкує з <b>0,01 мм</b> точністю.';
+    return d;
+  }
+
+  it('accepts <strong> in a Prose field', () => {
+    expect(ProductDescriptionDocSchema.safeParse(docWithStrong()).success).toBe(true);
+  });
+
+  it('emits <strong> live rather than escaping it', () => {
+    expect(render(docWithStrong()))
+      .toContain('<p>Флагман <strong>Bambu Lab P2S</strong> друкує з <b>0,01 мм</b> точністю.</p>');
+  });
+
+  /**
+   * The security property that makes re-admitting a tag safe: the pattern has no attribute slot,
+   * so only the bare literals come back to life. Widening the allow-list must not widen that.
+   */
+  it('never re-admits an attribute on <strong>, so no handler can survive', () => {
+    const d = fullDoc();
+    d.hook = 'x <strong onclick="alert(1)">y</strong> z';
+    const html = render(d);
+
+    // The opening tag stays fully escaped — the handler is inert text, not an attribute.
+    expect(html).toContain('&lt;strong onclick=&quot;alert(1)&quot;&gt;');
+    // No LIVE <strong> carrying anything. The literal string "onclick" survives inside the escaped
+    // text, which is the point: it is displayed, not executed.
+    expect(html).not.toMatch(/<strong\s[^>]*>/);
+    // Same accepted edge case documented on prose(): the closing literal is re-admitted on its own
+    // and left as an orphan. An unmatched </strong> is inert in every browser.
+    expect(html).toContain('y</strong> z');
+  });
+
+  it('still rejects any other tag', () => {
+    const d = fullDoc();
+    d.hook = 'see <a href="/x">this</a>';
+    expect(ProductDescriptionDocSchema.safeParse(d).success).toBe(false);
+  });
+
+  it('still rejects <em>, which the prompt does not authorise', () => {
+    const d = fullDoc();
+    d.hook = 'an <em>emphasis</em> tag';
+    expect(ProductDescriptionDocSchema.safeParse(d).success).toBe(false);
+  });
+});
+
+/**
+ * §5b OPERATING TIPS — Center 3D Print's "Style B" block.
+ *
+ * WHY A SEPARATE SLOT AND NOT A RENAME. The corpus artifact maps
+ * "Поради щодо експлуатації Ortur H20 20 W" onto `compatibility`, and the report (§4.3) records
+ * that as "the wrong name for what it holds". It is not a naming quibble:
+ * master-system-prompt.ts scopes §5 to "ONLY physical cross-compatibility" and explicitly routes
+ * software, drivers, OS and connectivity OUT to §3. Operating tips are neither, so `compatibility`
+ * is correctly named and correctly scoped — what was missing is a sibling.
+ *
+ * The block is first-class, not ad-hoc: OPERATING_TIPS_H2_MARKERS in prompt-core/constants.ts is
+ * its single source of truth, and tov-second-person.ts matches against that same array so the
+ * prompt and the linter cannot drift.
+ */
+describe('renderDescription — §5b operating tips', () => {
+  /** The C3D shape: an operating-tips block and no compatibility section. */
+  function docWithTips(): ProductDescriptionDoc {
+    const d = fullDoc();
+    d.operatingTips = d.compatibility;
+    delete d.compatibility;
+    return d;
+  }
+
+  it('renders the block as a bare <h2> group, like every other conditional section', () => {
+    const html = render(docWithTips());
+    expect(html).toContain('<h2>Сумісність xTool M1 Ultra</h2>');
+    expect(html).not.toContain('<section class="operating-tips">');
+  });
+
+  /**
+   * The byte-identity that makes moving the corpus fixture safe. §5b occupies the same slot §5
+   * does, so a document carrying ONE of them renders exactly as it did when that content lived in
+   * the other field. Without this, the fixture move would be a silent reflow.
+   */
+  it('renders in §5\'s slot, so moving a block from compatibility changes nothing', () => {
+    expect(render(docWithTips())).toBe(render(fullDoc()));
+  });
+
+  it('renders compatibility first when a document carries both', () => {
+    const d = fullDoc();
+    d.operatingTips = { heading: 'Поради щодо експлуатації', blocks: [{ kind: 'paragraph', text: 'Порада.' }] };
+    const html = render(d);
+    expect(html.indexOf('<h2>Сумісність xTool M1 Ultra</h2>'))
+      .toBeLessThan(html.indexOf('<h2>Поради щодо експлуатації</h2>'));
+    // …and still before §6, which is the next conditional section in the fixed order.
+    expect(html.indexOf('<h2>Поради щодо експлуатації</h2>'))
+      .toBeLessThan(html.indexOf('<h2>Комплект постачання</h2>'));
+  });
+
+  /**
+   * THE REGRESSION THIS SECTION EXISTS TO PREVENT.
+   *
+   * forEachBlockInOrder was extracted because two hand-written copies of the traversal both skipped
+   * §4, which broke the schema's ref check and the renderer's first-eager/rest-lazy rule at the same
+   * time. Adding a section without registering it there reproduces that bug exactly: the figure
+   * would be invisible to the position map and render WITHOUT loading="lazy", claiming the LCP slot
+   * that belongs to the first image on the page.
+   */
+  it('counts a figure in operating tips for the first-eager/rest-lazy rule', () => {
+    const html = render(docWithTips());
+    const figureImgs = [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0]);
+
+    expect(figureImgs).toHaveLength(3);
+    expect(figureImgs[0]).not.toContain('loading="lazy"'); // LCP image stays eager
+    expect(figureImgs[1]).toContain('loading="lazy"');
+    // The operating-tips figure is the third in document order — it must be lazy, not eager.
+    expect(figureImgs[2]).toContain('loading="lazy"');
+  });
+
+  it('accepts the section in the schema and counts its figure ref exactly once', () => {
+    expect(ProductDescriptionDocSchema.safeParse(docWithTips()).success).toBe(true);
+  });
+
+  /**
+   * If the schema's ref check did not walk operatingTips, figure 2 would look unreferenced and a
+   * valid document would be rejected — the same failure mode §4 had.
+   */
+  it('does not report the operating-tips figure as unreferenced', () => {
+    const result = ProductDescriptionDocSchema.safeParse(docWithTips());
+    const messages = result.success ? [] : result.error.issues.map(i => i.message);
+    expect(messages.filter(m => /referenced exactly once/.test(m))).toEqual([]);
   });
 });
