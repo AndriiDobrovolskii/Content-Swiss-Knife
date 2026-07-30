@@ -26,6 +26,9 @@ import type {
 import { KILLER_SPECS_HEADERS } from '../prompt-core/constants';
 import { getRenderRules } from '../prompt-core/store-render-rules';
 import { ensureRel0 } from '../utils/video-url';
+// From video-title.ts, NOT video-figure.ts: that module calls new DOMParser(), and this one
+// must stay DOM-free so the BFF can share it. See this file's header.
+import { videoFallbackTitle } from '../utils/video-title';
 
 export interface RenderContext {
   /** From STORE_REGISTRY.imageBaseUrl. */
@@ -147,11 +150,20 @@ function renderFigure(f: Figure, position: number, ctx: RenderContext): string {
  * `src` is escaped AFTER ensureRel0(), which may append to a URL that already has a query string —
  * the resulting `&` has to serialize as `&amp;`. Production does the same thing via setAttribute +
  * innerHTML, so this matches rather than diverges.
+ *
+ * TITLE — ported from wrapVideoFigures(), which this renderer replaces. On the normal path the
+ * title is model-authored prose (task-a.ts instructs the model to write it in the body language)
+ * and the schema already requires it non-empty, so the fallback never fires. It is here for the
+ * same reason prose() re-escapes what the schema rejected: defence in depth. An empty `title=""` on
+ * an iframe is an accessibility regression NO validator rule catches, so the renderer makes one
+ * impossible by construction. restoreMissingVideos — which repairs a dropped embed with no model
+ * involved — is the other caller that keeps the fallback alive once wrapVideoFigures is deleted.
  */
-function renderVideo(v: VideoEmbed): string {
+function renderVideo(v: VideoEmbed, doc: ProductDescriptionDoc): string {
+  const title = v.title.trim() || videoFallbackTitle(doc.localizedName, doc.locale);
   return (
     `<figure style="${VIDEO_FIGURE_STYLE}">` +
-    `<iframe src="${esc(ensureRel0(v.src))}" style="${IFRAME_STYLE}" title="${esc(v.title)}"` +
+    `<iframe src="${esc(ensureRel0(v.src))}" style="${IFRAME_STYLE}" title="${esc(title)}"` +
     ` loading="lazy" allow="${VIDEO_ALLOW_VALUE}"` +
     ` referrerpolicy="${VIDEO_REFERRERPOLICY_VALUE}" allowfullscreen=""></iframe>` +
     `<figcaption style="${VIDEO_FIGCAPTION_STYLE}">${prose(v.caption)}</figcaption>` +
@@ -183,7 +195,7 @@ function renderBlock(b: Block, doc: ProductDescriptionDoc, positions: Map<number
     case 'figure':
       return renderFigure(doc.figures[b.ref], positions.get(b.ref) ?? 0, ctx);
     case 'video':
-      return renderVideo(doc.videos[b.ref]);
+      return renderVideo(doc.videos[b.ref], doc);
   }
 }
 
