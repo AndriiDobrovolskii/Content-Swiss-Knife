@@ -391,6 +391,9 @@ PLACEMENT — STRICT RULES:
   it stays image-free: weave all figures into §2–§5 prose.
 
 [FORMAT]
+SERIALIZATION IS SET BY THE ACTIVE [TASK] BLOCK. When that block specifies a different
+output format (for example a JSON document model), its contract wins over this section,
+and the rules below then describe only WHAT to express — not how to serialize it.
 Emit HTML only; render every structure that Markdown would express (emphasis, lists,
 headings) with its HTML tag. Create vertical spacing with block elements —
 <p>/<h2>/<h3>/<div>/<section> (replaces <br>); place <hr> after each </section>.
