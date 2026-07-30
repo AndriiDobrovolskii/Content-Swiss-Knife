@@ -294,3 +294,58 @@ describe('scaffoldDoc against the real corpus', () => {
     );
   });
 });
+
+/**
+ * §C CONSUMABLES ARTIFACTS — report §5 gap 4, and the answer is not the one PR-2 predicted.
+ *
+ * PR-2 §5.2 predicted that `ProductDescriptionDocSchema` "cleanly rejects" §C1–§C6 artifacts, and
+ * the report recorded that as untested because no consumables-mode export existed. One does now:
+ * `3ddevice_formlabs__fuse_1__30w_printer_120v_uptime_kit`, a third store and a genuinely different
+ * product from the two Ortur H20 items.
+ *
+ * The prediction turns out to describe the wrong gate. A §C artifact never reaches the schema —
+ * it cannot be expressed as a ProductDescriptionDoc in the first place, because the two MANDATORY
+ * fields have no source in it:
+ *
+ *   §2a killerSpecs — no `<thead>` table anywhere; §C has no killer-specs block at all
+ *   §7 specs       — no `<section class="specs">`; §C4 "Склад комплекту" is a bare
+ *                    `div.table-responsive` sitting inside an <h2> group, which is a position the
+ *                    Doc model has no slot for
+ *
+ * §C also ends its CTA as a bare `<p>` after the `<hr>` with NO `<h2>`, where §9 always has one.
+ *
+ * So the conclusion stands but the mechanism is different, and stronger: consumables need their own
+ * model, not a rejection path through this one. These tests pin that, so the day someone widens the
+ * schema to "just accept" a §C artifact, this fails and asks them to think again.
+ *
+ * Characterization tests — the behaviour was observed before they were written, not driven by them.
+ */
+describe('§C consumables artifacts cannot be modelled as a ProductDescriptionDoc', () => {
+  const html = readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      '..',
+      'fixtures',
+      'consumables',
+      '3ddevice-formlabs-fuse1-uptime-kit.uk-UA.html',
+    ),
+    'utf8',
+  );
+
+  it('has no §7 specs section, which the schema requires', () => {
+    expect(() => parseSpecs(html)).toThrow(/section class="specs"/i);
+  });
+
+  it('has no §2a killer-specs table, which the schema also requires', () => {
+    expect(() => parseKillerSpecs(html)).toThrow(/killer-specs table/i);
+  });
+
+  /**
+   * §C4 puts its kit-contents table directly inside an <h2> group. The nearest §1–§9 equivalent is
+   * §6 packageContents, which is a plain `items: string[]` list — not a table — so this is a real
+   * shape difference, not a formatting variant.
+   */
+  it('refuses at the §C4 kit-contents table rather than coercing it into a Block', () => {
+    expect(() => scaffoldDoc(html, { locale: 'uk-UA' })).toThrow(/<div> has no Block kind/i);
+  });
+});

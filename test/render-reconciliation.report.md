@@ -165,10 +165,27 @@ and it is the wrong name for what it holds.
 2. **Corpus is 2 items, not 6**, and both are the same product (Ortur H20 20 W) across two stores.
 3. **No `ProductInput`** for any artifact — `RenderContext` must be reconstructed by hand, or
    recovered from `localStorage` once fresh generations exist.
-4. **No consumables-mode artifact.** The filament exports run 24–29k visible characters, far over
-   the 2,500-char ceiling in `CONSUMABLES_SIMPLIFIED_SCHEMA`, so they were not generated in that
-   mode. PR-2 §5.2's prediction — that `ProductDescriptionDocSchema` cleanly rejects §C1–§C6
-   artifacts — therefore remains **untested**.
+4. ~~**No consumables-mode artifact.**~~ **CLOSED — and the prediction was aimed at the wrong gate.**
+   A §C export now exists: `3ddevice_formlabs__fuse_1__30w_printer_120v_uptime_kit` (2026-07-28),
+   a third store and a genuinely different product from the two Ortur H20 items. It runs 4,978
+   characters, well inside the `CONSUMABLES_SIMPLIFIED_SCHEMA` ceiling the filament exports blew
+   past.
+
+   PR-2 §5.2 predicted `ProductDescriptionDocSchema` would "cleanly reject" it. It never gets that
+   far. A §C artifact cannot be **expressed** as a `ProductDescriptionDoc` at all, because both
+   MANDATORY fields have no source in it:
+
+   | Required field | Why §C cannot supply it |
+   |---|---|
+   | §2a `killerSpecs` | no `<thead>` table anywhere — §C has no killer-specs block |
+   | §7 `specs` | no `<section class="specs">`; §C4 "Склад комплекту" is a bare `div.table-responsive` **inside an `<h2>` group**, a position the model has no slot for |
+
+   §C also closes with a bare `<p>` after the `<hr>` and **no `<h2>`**, where §9 always has one.
+
+   The conclusion survives and gets stronger: **consumables need their own model, not a rejection
+   path through this one.** Pinned by tests in `test/tools/scaffold-doc.spec.ts` against
+   `test/fixtures/consumables/`, so widening the schema to "just accept" a §C artifact now fails
+   loudly. The fixture is deliberately NOT in `fixtures/corpus/`, which the harness globs.
 5. ~~**`applications` has no figure slot.**~~ **CLOSED.** A corpus item confirmed the shape, so the
    schema was extended once rather than speculatively: `applications.blocks?: ApplicationsBlock[]`
    now renders between the heading and the item list. `blocks` is deliberately narrower than
