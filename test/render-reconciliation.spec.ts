@@ -51,16 +51,33 @@ const COUNTED_TAGS: Array<{ label: string; re: RegExp }> = [
 ];
 
 /**
+ * `&nbsp;` and a literal U+00A0 are the same character, differently serialized.
+ *
+ * Production writes the entity; the renderer writes the character. Neither is authored content:
+ * fixNumberFormatting inserts a real NBSP into prose, and the entity appears only because the
+ * current pipeline round-trips the HTML through the DOM (cleanHtmlStructure, table-finalize),
+ * where innerHTML serializes it that way. A pure string renderer has no DOM and cannot reproduce
+ * that artifact — which puts this squarely in the category this file already normalizes, alongside
+ * whitespace that is "an accident of string concatenation".
+ *
+ * Decoding rather than deleting matters: a renderer that DROPPED the character still fails, because
+ * "100 %" and "100%" remain different after the collapse below.
+ */
+function decodeNbsp(html: string): string {
+  return html.replace(/&nbsp;/g, ' ');
+}
+
+/**
  * Collapses inter-tag whitespace and runs of whitespace inside text. Deliberately does NOT sort
  * attributes, drop attributes, or change case — those differences are real failures, not noise.
  */
 function normalize(html: string): string {
-  return html.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
+  return decodeNbsp(html).replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
 }
 
 /** Visible text only, for content-loss detection that tag counts would miss. */
 function visibleText(html: string): string {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return decodeNbsp(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function countTag(html: string, re: RegExp): number {

@@ -13,6 +13,7 @@
  * order, wrapper strings) is copied from the code that produces that shape today: table-finalize.ts,
  * image-figure.ts, and real generator output in src/utils/__fixtures__/.
  */
+import { forEachBlockInOrder } from '../domain/description-doc';
 import type {
   Block,
   BulletItem,
@@ -22,7 +23,8 @@ import type {
   Subsection,
   VideoEmbed,
 } from '../domain/description-doc';
-import { KILLER_SPECS_HEADERS, getKillerSpecsHeaders } from '../prompt-core/constants';
+import { KILLER_SPECS_HEADERS } from '../prompt-core/constants';
+import { getRenderRules } from '../prompt-core/store-render-rules';
 import { ensureRel0 } from '../utils/video-url';
 
 export interface RenderContext {
@@ -65,12 +67,15 @@ function esc(s: string): string {
 }
 
 /**
- * Escape, then re-admit the single permitted inline tag. The schema already rejected anything else,
+ * Escape, then re-admit the two permitted inline tags. The schema already rejected anything else,
  * so this is defence in depth rather than the only line.
  *
- * The re-admit pattern has no attribute slot, so `<b onclick="…">` can never come back to life —
- * only the exact literals `<b>` and `</b>` do. `'` is deliberately left unescaped: every attribute
- * this module emits is double-quoted.
+ * `<strong>` is admitted alongside `<b>` because master-system-prompt.ts §[FORMAT] mandates both and
+ * gives them different jobs. Widening the allow-list does NOT widen the security property: the
+ * re-admit pattern still has no attribute slot, so `<b onclick="…">` and `<strong onclick="…">`
+ * alike can never come back to life — only the exact literals `<b>`, `</b>`, `<strong>` and
+ * `</strong>` do. `'` is deliberately left unescaped: every attribute this module emits is
+ * double-quoted.
  *
  * ACCEPTED EDGE CASE: because the two literals are re-admitted independently, input like
  * `<b onclick="x">y</b>` yields an escaped opening tag next to a live orphan `</b>`. That is
@@ -79,7 +84,7 @@ function esc(s: string): string {
  * parsing logic to a module whose whole value is that it has none.
  */
 function prose(s: string): string {
-  return esc(s).replace(/&lt;(\/?)b&gt;/g, '<$1b>');
+  return esc(s).replace(/&lt;(\/?)(b|strong)&gt;/g, '<$1$2>');
 }
 
 /**
@@ -104,18 +109,11 @@ function figureSrc(f: Figure, ctx: RenderContext): string {
  */
 function figurePositions(doc: ProductDescriptionDoc): Map<number, number> {
   const order: number[] = [];
-  const walkBlocks = (blocks: Block[]): void => {
-    for (const b of blocks) if (b.kind === 'figure') order.push(b.ref);
-  };
-  const walkSubsection = (s: Subsection): void => {
-    walkBlocks(s.blocks);
-    s.subsections?.forEach(walkSubsection);
-  };
-
-  walkBlocks(doc.keyBenefits);
-  doc.functionality.forEach(walkSubsection);
-  if (doc.compatibility) walkSubsection(doc.compatibility);
-
+  // Shared traversal — see forEachBlockInOrder. Writing the section order out here a second time
+  // is how §4 came to be missed, which put an applications figure in the LCP slot.
+  forEachBlockInOrder(doc, b => {
+    if (b.kind === 'figure') order.push(b.ref);
+  });
   return new Map(order.map((ref, position) => [ref, position]));
 }
 
@@ -161,9 +159,18 @@ function renderVideo(v: VideoEmbed): string {
   );
 }
 
-/** `<li><b>{lead}</b> {text}</li>` — exactly one space, no punctuation added. */
+/**
+ * `<li><b>{lead}</b>{text}</li>` — NO whitespace of the renderer's own between them.
+ *
+ * An earlier revision inserted a single space there. Two corpus artifacts show it cannot: Center
+ * 3D Print writes `<b>Складається за лічені хвилини. </b>Тришарова…`, with the space INSIDE the
+ * bold, while EXPERT3D writes `<b>Гравіювання деревини:</b> гравер…`, with it outside. One
+ * injected space reproduces neither. Whitespace between the label and the sentence is authored
+ * content — it belongs in `lead` or at the head of `text`, wherever the artifact puts it — and a
+ * renderer that guesses is wrong for half its stores.
+ */
 function renderBullets(items: BulletItem[]): string {
-  const lis = items.map(i => `<li><b>${esc(i.lead)}</b> ${prose(i.text)}</li>`).join('\n');
+  const lis = items.map(i => `<li><b>${esc(i.lead)}</b>${prose(i.text)}</li>`).join('\n');
   return `<ul>\n${lis}\n</ul>`;
 }
 
@@ -201,12 +208,21 @@ function renderSubsection(
 
 /**
  * §2a — the 2-column collapsed form. [VERBATIM from table-finalize.ts]: the first cell is
- * `${label}: ${value}` and the header pair comes from getKillerSpecsHeaders, which layers the
+ * `${label}: ${value}` and the header pair comes from the store's rules, which layer the
  * Center 3D Print override on top of KILLER_SPECS_HEADERS.
+ *
+ * Resolved through getRenderRules() rather than getKillerSpecsHeaders() directly, so every
+ * per-store rendering decision has one home — see store-render-rules.ts. The lookup it performs is
+ * identical; this is a change of address, not of behaviour.
+ *
+ * The `?? KILLER_SPECS_HEADERS['en-gb']` fallback stays HERE rather than moving into the rules
+ * object. `killerSpecsHeaders` returns undefined deliberately, because table-finalize.ts uses that
+ * signal to reuse the header the model already wrote; a renderer has no such second source and must
+ * emit something, so the default belongs at this call site and nowhere else.
  */
 function renderKillerSpecs(doc: ProductDescriptionDoc, ctx: RenderContext): string {
   const [paramHeader, benefitHeader] =
-    getKillerSpecsHeaders(doc.locale, ctx.storeName ?? '') ?? KILLER_SPECS_HEADERS['en-gb'];
+    getRenderRules(ctx.storeName ?? '').killerSpecsHeaders(doc.locale) ?? KILLER_SPECS_HEADERS['en-gb'];
   const rows = doc.killerSpecs
     .map(s => `<tr><td>${esc(s.label)}: ${esc(s.value)}</td><td>${prose(s.why)}</td></tr>`)
     .join('\n');
@@ -229,7 +245,13 @@ function renderSpecs(heading: string, categories: SpecCategory[]): string {
   for (const c of categories) {
     rowsHtml.push(`<tr><th colspan="2" style="${CATEGORY_HEADER_STYLE}">${esc(c.title)}</th></tr>`);
     for (const r of c.rows) {
-      rowsHtml.push(`<tr><td>${esc(r.label)}</td><td>${esc(r.value)}</td></tr>`);
+      // A multi-valued parameter renders as a nested list inside the cell, exactly as EXPERT3D
+      // ships it — no whitespace between the tags, since that is how the artifact reads and the
+      // renderer has no reason to add any.
+      const value = Array.isArray(r.value)
+        ? `<ul>${r.value.map(v => `<li>${esc(v)}</li>`).join('')}</ul>`
+        : esc(r.value);
+      rowsHtml.push(`<tr><td>${esc(r.label)}</td><td>${value}</td></tr>`);
     }
   }
   return (
@@ -267,15 +289,29 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
     ...doc.functionality.map(s => renderSubsection(s, doc, positions, ctx)),
   ];
 
-  // §4 Applications — same <li><b>lead</b> text</li> shape as key benefits; the model supplies its
-  // own punctuation after the scenario label.
+  // §4 Applications — heading, then any lead-in blocks, then the item list. Real artifacts put a
+  // paragraph and a figure between the <h2> and the <ul>; the list itself keeps the same
+  // <li><b>lead</b> text</li> shape as key benefits, with the model supplying its own punctuation
+  // after the scenario label.
   const applicationItems = doc.applications.items
-    .map(i => `<li><b>${esc(i.scenario)}</b> ${prose(i.text)}</li>`)
+    // Same rule as renderBullets: no injected whitespace — see its comment.
+    .map(i => `<li><b>${esc(i.scenario)}</b>${prose(i.text)}</li>`)
     .join('\n');
-  parts.push(`<h2>${esc(doc.applications.heading)}</h2>\n<ul>\n${applicationItems}\n</ul>`);
+  parts.push([
+    `<h2>${esc(doc.applications.heading)}</h2>`,
+    ...(doc.applications.blocks ?? []).map(block),
+    `<ul>\n${applicationItems}\n</ul>`,
+  ].join('\n'));
 
   if (doc.compatibility) {
     parts.push(renderSubsection(doc.compatibility, doc, positions, ctx));
+  }
+
+  // §5b — Center 3D Print's Style B operating-tips block, in §5's slot. A document carrying only
+  // one of the two renders identically either way, which is what makes it safe to move a block off
+  // `compatibility` onto its correct field without reflowing the artifact.
+  if (doc.operatingTips) {
+    parts.push(renderSubsection(doc.operatingTips, doc, positions, ctx));
   }
 
   if (doc.packageContents) {

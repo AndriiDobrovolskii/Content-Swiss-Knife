@@ -6,12 +6,19 @@
  * that module dependency-free and portable to the BFF.
  */
 import { z } from 'zod';
-import type { Block, ProductDescriptionDoc, Subsection } from './description-doc';
+import { forEachBlockInOrder } from './description-doc';
+import type { ProductDescriptionDoc } from './description-doc';
 
-/** Prose allows only <b>…</b>. Any other tag is a schema error, not something to sanitize away. */
-const PROSE_FORBIDDEN = /<(?!\/?b\s*>)[^>]+>/;
+/**
+ * Prose allows `<b>` and `<strong>`. Any other tag is a schema error, not something to sanitize away.
+ *
+ * Both, because master-system-prompt.ts §[FORMAT] mandates both and gives them different jobs —
+ * `<strong>` for brands/model/USPs, `<b>` for inline spec scannability. The allow-list is still an
+ * allow-list: `<em>`, `<a>` and everything else remain errors.
+ */
+const PROSE_FORBIDDEN = /<(?!\/?(?:b|strong)\s*>)[^>]+>/;
 const Prose = z.string().min(1).refine(s => !PROSE_FORBIDDEN.test(s), {
-  message: 'Prose fields may contain only <b> tags; no other HTML is permitted.',
+  message: 'Prose fields may contain only <b> and <strong> tags; no other HTML is permitted.',
 });
 
 const NonEmpty = z.string().min(1);
@@ -29,6 +36,12 @@ const BlockSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('video'), ref: z.number().int().nonnegative() }),
 ]);
 
+/** §4 admits prose and figures only — see the note on `applications.blocks`. */
+const ApplicationsBlockSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('paragraph'), text: Prose }),
+  z.object({ kind: z.literal('figure'), ref: z.number().int().nonnegative() }),
+]);
+
 /**
  * Depth 2 — a leaf subsection, rendered as <h3>. It has no `subsections` key, so the two-level cap
  * is enforced by the SHAPE of the schema rather than by a depth-counting refinement. That is why
@@ -41,13 +54,24 @@ const BlockSchema = z.discriminatedUnion('kind', [
  */
 const LeafSubsectionSchema = z.object({
   heading: NonEmpty,
-  blocks: z.array(BlockSchema).min(1),
+  blocks: z.array(BlockSchema),
 }).strict();
 
-/** Depth 1 — rendered as <h2>; its children render as <h3>. */
+/**
+ * Depth 1 — rendered as <h2>; its children render as <h3>.
+ *
+ * `blocks` may be EMPTY when the section exists only to introduce its <h3> children. A corpus
+ * artifact does exactly that: "Безпечна експлуатація Ortur H20 20 W" carries no prose of its own,
+ * just two subsections. The old `.min(1)` on blocks would have rejected a real, accepted document.
+ * What must never be empty is BOTH at once — a heading with no content under it is a defect, and
+ * the refinement below says so.
+ */
 const SubsectionSchema = LeafSubsectionSchema.extend({
   subsections: z.array(LeafSubsectionSchema).optional(),
-});
+}).refine(
+  s => s.blocks.length > 0 || (s.subsections?.length ?? 0) > 0,
+  { message: 'A subsection needs at least one block or at least one nested subsection.' },
+);
 
 export const ProductDescriptionDocSchema = z.object({
   schemaVersion: z.literal('3.0'),
@@ -60,13 +84,33 @@ export const ProductDescriptionDocSchema = z.object({
   functionality: z.array(SubsectionSchema).min(1),
   applications: z.object({
     heading: NonEmpty,
+    // Narrower than BlockSchema on purpose. `bullets` would give §4 a second <ul> alongside
+    // `items`, which already is its list — two competing mechanisms in one section, and no
+    // artifact shows it. `video` is excluded on the same evidence rule: the renderer supports it,
+    // but nothing in the corpus puts one here, and this schema describes what is proven.
+    //
+    // Same technique the subsection depth cap uses: the TS type stays the wider shape so the
+    // renderer needs no special case, and the schema is the gate.
+    blocks: z.array(ApplicationsBlockSchema).optional(),
     items: z.array(z.object({ scenario: NonEmpty, text: Prose })).min(4).max(8),
   }),
   compatibility: SubsectionSchema.optional(),
+  // §5b — same shape as §5, deliberately a separate field. See the note on ProductDescriptionDoc
+  // .operatingTips for why this is a missing slot rather than a rename of `compatibility`.
+  operatingTips: SubsectionSchema.optional(),
   packageContents: z.object({ heading: NonEmpty, items: z.array(NonEmpty).min(1) }).optional(),
   specs: z.object({
     heading: NonEmpty,
-    categories: z.array(z.object({ title: NonEmpty, rows: z.array(z.object({ label: NonEmpty, value: NonEmpty })).min(1) })).min(1),
+    categories: z.array(z.object({
+      title: NonEmpty,
+      // A value is one string or a non-empty list of them — see SpecRow. An EMPTY list is rejected
+      // rather than rendered as a bare <ul></ul>: a parameter with no value is a defect, and the
+      // string branch already covers "one value".
+      rows: z.array(z.object({
+        label: NonEmpty,
+        value: z.union([NonEmpty, z.array(NonEmpty).min(1)]),
+      })).min(1),
+    })).min(1),
   }),
   cta: z.object({ heading: NonEmpty, text: Prose }),
 
@@ -84,21 +128,12 @@ export const ProductDescriptionDocSchema = z.object({
   // and silently drops media at render time.
   const figureRefs: number[] = [];
   const videoRefs: number[] = [];
-  const walk = (blocks: Block[]) => {
-    for (const b of blocks) {
-      if (b.kind === 'figure') figureRefs.push(b.ref);
-      else if (b.kind === 'video') videoRefs.push(b.ref);
-    }
-  };
-  // Must mirror the renderer's traversal exactly — media nested inside a subsection is still
-  // referenced, and missing it here would fail a perfectly valid document.
-  const walkSubsection = (s: Subsection) => {
-    walk(s.blocks);
-    s.subsections?.forEach(walkSubsection);
-  };
-  walk(doc.keyBenefits);
-  doc.functionality.forEach(walkSubsection);
-  if (doc.compatibility) walkSubsection(doc.compatibility);
+  // Traversal is shared with the renderer via forEachBlockInOrder — see its doc comment for why
+  // this is not written out a second time here.
+  forEachBlockInOrder(doc, b => {
+    if (b.kind === 'figure') figureRefs.push(b.ref);
+    else if (b.kind === 'video') videoRefs.push(b.ref);
+  });
 
   /** Each manifest entry referenced exactly once, no gaps, no strays. */
   const checkRefs = (refs: number[], manifestLength: number, field: 'figures' | 'videos') => {
