@@ -34,6 +34,7 @@ import { renderDescription } from '../render/render-description';
 import { normalizeDocProse } from '../render/doc-prose-transforms';
 import { renderContextFor } from '../prompt-core/store-render-rules';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
+import { docSchemaIssues, assertDocRendered } from '../render/doc-schema-issues';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
@@ -282,11 +283,17 @@ export class ContentOrchestratorService {
       // What the LAST produce call had to splice back. Read by the validate array below, which
       // runs against that same artifact, to surface automatic placement as a warning.
       let restoredVideos: SourceVideoEmbed[] = [];
+      // Doc-path failures from the LAST produce call, read by the validate array below — same
+      // closure-stash pattern as restoredVideos above. Without this a rejected Doc would throw out
+      // of produce(), and runRepairGate does not catch (repair-gate.ts:112, :339).
+      let docIssues: ValidationIssue[] = [];
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
         // The Doc path returns HTML too — renderDescription() builds it — so the repair gate and
         // every downstream validator below keep working unchanged. That is what keeps this switch
         // contained to these few lines instead of rippling through the whole method.
         if (useDocPipeline) {
+          docIssues = [];
+          try {
           const raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: 'Doc (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
           // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
           // rather than be rendered into plausible-looking wrong HTML.
@@ -305,6 +312,14 @@ export class ContentOrchestratorService {
             normalizeDocProse(doc, 'uk-UA'),
             renderContextFor(input.website.name, input.brandFolder, input.modelFolder),
           );
+          } catch (err) {
+            // Convert, do not rethrow: an empty artifact plus real issues lets the gate spend a
+            // repair attempt, and appendRepairFeedback then tells the model WHICH FIELD failed
+            // rather than "empty-output". assertDocRendered below refuses to ship the '' if every
+            // attempt fails.
+            docIssues = docSchemaIssues(err, 'HTML (base)');
+            return '';
+          }
         }
         let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
         html = stripCodeFences(html);
@@ -338,6 +353,9 @@ export class ContentOrchestratorService {
         basePayload: basePayloadA,
         produce: produceHtmlA,
         validate: html => [
+          // First, so a rejected Doc reads as the cause rather than as the empty-output symptom
+          // every other rule would report against ''.
+          ...docIssues,
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
           // Trusted exactly when the model was given this same text (see masterInput.specs). If
           // grounding fell back to the English sheet, a label mismatch says nothing about the row
@@ -399,6 +417,9 @@ export class ContentOrchestratorService {
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
+      // Every attempt failed the schema → the gate's best result is ''. Saving that would be a
+      // silent data loss; fail loudly instead. Inert on the HTML path, which cannot produce ''.
+      if (useDocPipeline) assertDocRendered(htmlAResult.artifact, 'HTML (base)', htmlAResult.finalIssues);
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlAResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult, this.blockPatchTally.get('HTML (base)'))]);
