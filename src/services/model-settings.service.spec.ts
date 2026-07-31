@@ -17,9 +17,8 @@ describe('ModelSettingsService defaults', () => {
   // pipeline must behave exactly as it did before runtime settings existed.
   it('reproduces the pre-settings Anthropic configuration', () => {
     expect(boot().snapshot()).toEqual({
-      provider: 'anthropic',
-      deep: { model: 'claude-sonnet-5', level: 'medium' },
-      fast: { model: 'claude-haiku-4-5', level: 'disabled' },
+      deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
+      fast: { provider: 'anthropic', model: 'claude-haiku-4-5', level: 'disabled' },
     });
   });
 
@@ -28,16 +27,69 @@ describe('ModelSettingsService defaults', () => {
   });
 });
 
+describe('ModelSettingsService mixed providers', () => {
+  beforeEach(() => localStorage.clear());
+
+  // The point of the feature: Task A on Claude, translations on Gemini, one run.
+  it('runs the two slots on different providers', () => {
+    const s = boot();
+    s.setFastProvider('gemini');
+
+    expect(s.snapshot()).toEqual({
+      deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
+      fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'medium' },
+    });
+  });
+
+  it('leaves the other slot untouched when one slot switches provider', () => {
+    const s = boot();
+    s.setDeepModel('claude-opus-4-8');
+    s.setFastProvider('gemini');
+
+    expect(s.deepProvider()).toBe('anthropic');
+    expect(s.deepModel()).toBe('claude-opus-4-8');
+  });
+
+  it('lands a provider switch on a model of the slot own tier', () => {
+    const s = boot();
+    s.setDeepProvider('gemini');
+    s.setFastProvider('gemini');
+
+    expect(s.deepModel()).toBe('gemini-3.1-pro-preview');
+    expect(s.fastModel()).toBe('gemini-3.6-flash');
+  });
+
+  it('offers each slot only its own provider models', () => {
+    const s = boot();
+    s.setFastProvider('gemini');
+
+    expect(s.deepModels().map(m => m.id)).toContain('claude-sonnet-5');
+    expect(s.fastModels().map(m => m.id)).toEqual(['gemini-3.1-pro-preview', 'gemini-3.6-flash']);
+  });
+
+  it('ignores a model that does not belong to that slot provider', () => {
+    const s = boot();
+    s.setDeepModel('gemini-3.6-flash');
+    expect(s.deepModel()).toBe('claude-sonnet-5');
+  });
+
+  it('ignores an unknown provider', () => {
+    const s = boot();
+    s.setDeepProvider('skynet' as never);
+    expect(s.deepProvider()).toBe('anthropic');
+  });
+});
+
 describe('ModelSettingsService persistence', () => {
   beforeEach(() => localStorage.clear());
 
-  it('round-trips a Gemini configuration', () => {
+  it('round-trips a mixed-provider configuration', () => {
     const a = boot();
-    a.setProvider('gemini');
+    a.setDeepProvider('gemini');
     a.setDeepModel('gemini-3.1-pro-preview');
     a.setDeepLevel('high');
-    a.setFastModel('gemini-3.6-flash');
-    a.setFastLevel('minimal');
+    a.setFastProvider('anthropic');
+    a.setFastLevel('disabled');
 
     expect(new ModelSettingsService().snapshot()).toEqual(a.snapshot());
   });
@@ -51,14 +103,15 @@ describe('ModelSettingsService persistence', () => {
   });
 
   it('falls back to defaults for an unknown provider', () => {
-    expect(boot({ provider: 'skynet', deep: {}, fast: {} }).provider()).toBe('anthropic');
+    const s = boot({ deep: { provider: 'skynet' }, fast: { provider: 'skynet' } });
+    expect(s.deepProvider()).toBe('anthropic');
+    expect(s.fastProvider()).toBe('anthropic');
   });
 
   it('falls back to a catalog model when the stored model is gone', () => {
     const s = boot({
-      provider: 'anthropic',
-      deep: { model: 'claude-retired-9', level: 'high' },
-      fast: { model: 'claude-haiku-4-5', level: 'disabled' },
+      deep: { provider: 'anthropic', model: 'claude-retired-9', level: 'high' },
+      fast: { provider: 'anthropic', model: 'claude-haiku-4-5', level: 'disabled' },
     });
     expect(s.deepSpec()).toBeDefined();
     expect(s.deepLevel()).toBe('high');
@@ -67,12 +120,49 @@ describe('ModelSettingsService persistence', () => {
   // The scenario the catalog exists for: a level the newly-selected model cannot accept.
   it('clamps a stored level the model no longer accepts', () => {
     const s = boot({
-      provider: 'gemini',
-      deep: { model: 'gemini-3.1-pro-preview', level: 'minimal' },
-      fast: { model: 'gemini-3.6-flash', level: 'minimal' },
+      deep: { provider: 'gemini', model: 'gemini-3.1-pro-preview', level: 'minimal' },
+      fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
     });
     expect(s.deepLevel()).toBe('low');      // Pro has no 'minimal'
     expect(s.fastLevel()).toBe('minimal');  // Flash does
+  });
+});
+
+describe('ModelSettingsService legacy storage', () => {
+  beforeEach(() => localStorage.clear());
+
+  // Written by the version that had one provider for both slots. Silently reverting such a
+  // user to Anthropic would look like the settings menu forgot their choice.
+  it('reads a single top-level provider as the provider of both slots', () => {
+    const s = boot({
+      provider: 'gemini',
+      deep: { model: 'gemini-3.1-pro-preview', level: 'high' },
+      fast: { model: 'gemini-3.6-flash', level: 'minimal' },
+    });
+
+    expect(s.snapshot()).toEqual({
+      deep: { provider: 'gemini', model: 'gemini-3.1-pro-preview', level: 'high' },
+      fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
+    });
+  });
+
+  it('falls back to defaults when the legacy provider is unknown', () => {
+    const s = boot({ provider: 'skynet', deep: {}, fast: {} });
+    expect(s.deepProvider()).toBe('anthropic');
+    expect(s.deepModel()).toBe('claude-sonnet-5');
+    expect(s.fastModel()).toBe('claude-haiku-4-5');
+  });
+
+  // A per-slot provider is the newer, more specific statement of intent.
+  it('prefers a per-slot provider over the legacy top-level one', () => {
+    const s = boot({
+      provider: 'gemini',
+      deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
+      fast: { model: 'gemini-3.6-flash', level: 'minimal' },
+    });
+
+    expect(s.deepProvider()).toBe('anthropic');
+    expect(s.fastProvider()).toBe('gemini');
   });
 });
 
@@ -86,8 +176,8 @@ describe('ModelSettingsService storage failures', () => {
     const s = boot();
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceeded'); });
 
-    expect(() => s.setProvider('gemini')).not.toThrow();
-    expect(s.provider()).toBe('gemini');
+    expect(() => s.setDeepProvider('gemini')).not.toThrow();
+    expect(s.deepProvider()).toBe('gemini');
     expect(s.snapshot().deep.model).toBe('gemini-3.1-pro-preview');
   });
 
@@ -100,19 +190,9 @@ describe('ModelSettingsService storage failures', () => {
 describe('ModelSettingsService slot changes', () => {
   beforeEach(() => localStorage.clear());
 
-  it('resets both slots when the provider changes', () => {
-    const s = boot();
-    s.setProvider('gemini');
-    expect(s.snapshot()).toEqual({
-      provider: 'gemini',
-      deep: { model: 'gemini-3.1-pro-preview', level: 'medium' },
-      fast: { model: 'gemini-3.6-flash', level: 'medium' },
-    });
-  });
-
   it('carries the level across a model change when the new model accepts it', () => {
     const s = boot();
-    s.setProvider('gemini');
+    s.setFastProvider('gemini');
     s.setFastLevel('minimal');
     s.setFastModel('gemini-3.1-pro-preview');
     expect(s.fastLevel()).toBe('low'); // Pro has no minimal → nearest
@@ -120,22 +200,10 @@ describe('ModelSettingsService slot changes', () => {
     expect(s.fastLevel()).toBe('low'); // Flash does have low → unchanged
   });
 
-  it('ignores a model that does not belong to the current provider', () => {
-    const s = boot();
-    s.setDeepModel('gemini-3.6-flash');
-    expect(s.deepModel()).toBe('claude-sonnet-5');
-  });
-
-  it('exposes only the current provider models', () => {
-    const s = boot();
-    expect(s.models().map(m => m.id)).toContain('claude-sonnet-5');
-    s.setProvider('gemini');
-    expect(s.models().map(m => m.id)).toEqual(['gemini-3.1-pro-preview', 'gemini-3.6-flash']);
-  });
-
   it('reset() restores the defaults and clears storage', () => {
     const s = boot();
-    s.setProvider('gemini');
+    s.setDeepProvider('gemini');
+    s.setFastProvider('gemini');
     expect(localStorage.getItem(KEY)).not.toBeNull();
 
     s.reset();
