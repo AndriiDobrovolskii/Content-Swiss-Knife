@@ -844,3 +844,66 @@ describe('renderDescription — §5b operating tips', () => {
     expect(messages.filter(m => /referenced exactly once/.test(m))).toEqual([]);
   });
 });
+
+/**
+ * VIDEO TITLE FALLBACK — ported from wrapVideoFigures(), which PR-3 deletes.
+ *
+ * Under the Doc pipeline the title is model-authored prose: task-a.ts instructs the model to write
+ * it in the body language, and it lands in VideoEmbed.title. The schema requires it non-empty, so
+ * on the normal path this fallback never fires.
+ *
+ * It is ported anyway, for the same reason prose() re-escapes what the schema already rejected:
+ * defence in depth. An empty title="" on an iframe is an accessibility regression that NO existing
+ * check catches — the validator has no rule for it — so the renderer guarantees by construction
+ * that one can never ship. `restoreMissingVideos` repairs a dropped embed with no model involved
+ * and is the other caller that keeps this alive after wrapVideoFigures dies.
+ */
+describe('renderVideo — the iframe title can never be empty', () => {
+  function docWithVideoTitle(title: string): ProductDescriptionDoc {
+    const d = docWithVideo();
+    d.videos[0].title = title;
+    return d;
+  }
+
+  it('uses the model-authored title when there is one', () => {
+    expect(render(docWithVideoTitle('Огляд xTool M1 Ultra')))
+      .toContain('title="Огляд xTool M1 Ultra"');
+  });
+
+  it('falls back to a localized title rather than emitting title=""', () => {
+    const html = render(docWithVideoTitle(''));
+    expect(html).not.toContain('title=""');
+    // uk-UA document → the Ukrainian fallback, built from the localized product name.
+    expect(html).toContain('title="Відео: xTool M1 Ultra"');
+  });
+
+  it('falls back for a whitespace-only title too', () => {
+    expect(render(docWithVideoTitle('   '))).toContain('title="Відео: xTool M1 Ultra"');
+  });
+
+  it('picks the fallback language from the document locale, not a hardcoded default', () => {
+    const d = docWithVideoTitle('');
+    d.locale = 'pl-PL';
+    expect(render(d)).toContain('title="Wideo: xTool M1 Ultra"');
+  });
+
+  /**
+   * The renderer must stay DOM-free so the BFF can share it — see this module's header.
+   *
+   * video-figure.ts calls `new DOMParser()`, so pulling the fallback from there would have broken
+   * that guarantee for the sake of a lookup table. The map lives in video-title.ts instead, and
+   * this test is what stops someone "simplifying" the import back.
+   */
+  it('reaches the fallback without importing anything that touches the DOM', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('src/render/render-description.ts', 'utf8');
+
+    expect(src).toMatch(/from '\.\.\/utils\/video-title'/);
+    expect(src).not.toMatch(/from '\.\.\/utils\/video-figure'/);
+
+    // Comments are stripped first. This file EXPLAINS why it avoids DOMParser, so a naive scan of
+    // the raw text matches its own rationale — the check has to look at code, not prose.
+    const code = src.replace(/\/\*[^]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code).not.toMatch(/DOMParser|XMLSerializer|\bdocument\./);
+  });
+});

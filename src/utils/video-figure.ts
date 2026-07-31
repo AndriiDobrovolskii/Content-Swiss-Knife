@@ -59,33 +59,14 @@ export function videoFigcaption(productName: string, locale?: string): string {
 }
 
 /**
- * Fallback `<iframe title>` per language — used ONLY when the model wrote no title of its own
- * (or when restoreMissingVideos had to repair a dropped embed, where no model is involved).
- * On the normal path the title is model-authored prose, translated per language.
+ * Re-exported so existing callers and tests keep their import path.
  *
- * Deliberately shorter than, and textually distinct from, FIGCAPTION_TEMPLATES above: the
- * title is the frame's accessible name and the figcaption is visible text beside it, so
- * assistive tech reads both. Identical strings make it announce the same sentence twice.
- *
- * Third parallel locale map for video — see also LEAD_IN_TEMPLATES in video-manifest.ts.
- * Adding a language means adding it in all three. Same primary-subtag keying and same
- * English fallback as FIGCAPTION_TEMPLATES.
+ * The map itself moved to video-title.ts because render-description.ts needs it and this module
+ * calls `new DOMParser()` — importing it from the renderer would break that module's zero-DOM
+ * guarantee for the sake of a lookup table. See video-title.ts.
  */
-const VIDEO_TITLE_FALLBACKS: Readonly<Record<string, (product: string) => string>> = {
-  en: p => `Video: ${p}`,
-  uk: p => `Відео: ${p}`,
-  ru: p => `Видео: ${p}`,
-  pl: p => `Wideo: ${p}`,
-  de: p => `Video: ${p}`,
-  es: p => `Vídeo: ${p}`,
-  pt: p => `Vídeo: ${p}`,
-};
-
-/** The fallback iframe title for one product in one locale. Exported for the spec. */
-export function videoFallbackTitle(productName: string, locale?: string): string {
-  const lang = (locale ?? '').toLowerCase().split('-')[0];
-  return (VIDEO_TITLE_FALLBACKS[lang] ?? VIDEO_TITLE_FALLBACKS['en'])(productName);
-}
+export { videoFallbackTitle } from './video-title';
+import { videoFallbackTitle } from './video-title';
 
 /**
  * Is this iframe a YouTube/Vimeo video embed (as opposed to a map or a widget)?
