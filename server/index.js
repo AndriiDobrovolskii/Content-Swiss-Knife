@@ -5,7 +5,7 @@ import { resolveRequest as resolveLlmRequest, slotFor } from './llm-request.js';
 import { SerperRetrieval } from './retrieval/serper.js';
 import { fetchUrl } from './retrieval/fetcher.js';
 import { computeCost } from './usage/pricing.js';
-import { insertUsage, queryUsage } from './usage/store.js';
+import { insertUsage, queryUsage, insertGeneration, queryGenerations } from './usage/store.js';
 
 config();
 
@@ -95,6 +95,33 @@ app.get('/api/usage', (req, res) => {
     res.json({ rows });
   } catch (error) {
     console.error('[Usage] query error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// One row per GENERATION, not per LLM call — see the generation_log comment in usage/store.js.
+// The client is the only party that knows how a whole generation ended (the server sees individual
+// calls), so it reports the outcome here.
+app.post('/api/usage/generation', (req, res) => {
+  try {
+    const { store, locale, productName, pipeline, outcome, repairsUsed } = req.body ?? {};
+    if (!pipeline || !outcome) {
+      return res.status(400).json({ error: 'pipeline and outcome are required' });
+    }
+    insertGeneration({ store, locale, productName, pipeline, outcome, repairsUsed });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[Usage] generation insert error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/usage/generations', (req, res) => {
+  try {
+    const { from, to, store, outcome, pipeline } = req.query;
+    res.json({ rows: queryGenerations({ from, to, store, outcome, pipeline }) });
+  } catch (error) {
+    console.error('[Usage] generation query error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

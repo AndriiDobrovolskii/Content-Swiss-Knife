@@ -35,6 +35,31 @@ export class LlmService implements LlmProvider {
     return this.generate<string>(toPayload(input), useThinking ? 'creative' : 'text', meta);
   }
 
+  /**
+   * Reports how a whole generation ended, for the failure-rate metric.
+   *
+   * The SERVER records usage per LLM call and cannot see the shape of a generation; only the
+   * orchestrator knows whether the product came out, needed repairs, or never validated. Hence a
+   * client-side report rather than server-side inference.
+   *
+   * FIRE-AND-FORGET BY DESIGN: telemetry must never be able to fail a generation that otherwise
+   * succeeded. A rejected promise here is swallowed on purpose.
+   */
+  async recordGeneration(record: {
+    store?: string;
+    locale?: string;
+    productName?: string;
+    pipeline: 'doc' | 'html';
+    outcome: 'ok' | 'repaired' | 'failed-schema' | 'failed-json-syntax';
+    repairsUsed?: number;
+  }): Promise<void> {
+    try {
+      await firstValueFrom(this.http.post('/api/usage/generation', record));
+    } catch {
+      // Deliberately silent — see above.
+    }
+  }
+
   async generateJson<T = any>(input: PromptPayload | string, useThinking = false, meta?: UsageMeta): Promise<T> {
     return this.generate<T>(toPayload(input), useThinking ? 'creative-json' : 'json', meta);
   }

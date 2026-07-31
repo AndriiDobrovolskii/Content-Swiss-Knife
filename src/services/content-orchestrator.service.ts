@@ -417,6 +417,20 @@ export class ContentOrchestratorService {
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
+      // Outcome is recorded BEFORE the guard below, so a generation that never validated is
+      // counted rather than lost with the exception. Fire-and-forget — telemetry must not be able
+      // to fail a generation that otherwise succeeded.
+      void this.llm.recordGeneration({
+        store: input.website.name,
+        locale: 'uk-UA',
+        productName: input.name,
+        pipeline: useDocPipeline ? 'doc' : 'html',
+        outcome: !htmlAResult.artifact.trim() ? 'failed-schema'
+          : htmlAResult.repairsUsed > 0 ? 'repaired'
+          : 'ok',
+        repairsUsed: htmlAResult.repairsUsed,
+      });
+
       // Every attempt failed the schema → the gate's best result is ''. Saving that would be a
       // silent data loss; fail loudly instead. Inert on the HTML path, which cannot produce ''.
       if (useDocPipeline) assertDocRendered(htmlAResult.artifact, 'HTML (base)', htmlAResult.finalIssues);
