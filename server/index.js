@@ -123,6 +123,32 @@ app.post('/api/retrieval/search', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`[Server] Running on http://localhost:${PORT} (provider: ${process.env.LLM_PROVIDER || 'openai'})`);
+// A failed bind used to be near-silent: an older instance keeps the port, the Angular proxy
+// keeps reaching *it*, and it answers every /api call from the .env snapshot it read at its
+// own boot — so an edited API key looks like it was ignored, and the terminal you are
+// watching prints nothing at all. Exiting non-zero also makes `concurrently` tear the whole
+// `npm run dev` down instead of leaving the frontend talking to a stranger's backend.
+let bindFailed = false;
+
+const server = app.listen(PORT, () => {
+  // The dual-stack bind emits 'listening' for one socket *before* the other one's
+  // EADDRINUSE arrives, so logging success synchronously here would print a reassuring
+  // line on a conflict. One tick of delay lets the error land first and suppress it.
+  setImmediate(() => {
+    if (bindFailed) return;
+    console.log(`[Server] Running on http://localhost:${PORT} (provider: ${process.env.LLM_PROVIDER || 'openai'})`);
+  });
+});
+
+server.on('error', (error) => {
+  bindFailed = true;
+  if (error.code === 'EADDRINUSE') {
+    console.error(
+      `[Server] Port ${PORT} is already in use. Another server/index.js is still running and ` +
+      `will serve /api with ITS OWN .env snapshot — stop that process first.`
+    );
+  } else {
+    console.error('[Server] listen error:', error.message);
+  }
+  process.exit(1);
 });
