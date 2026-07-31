@@ -69,7 +69,8 @@ export class ModelSettingsComponent {
       : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
   }
 
-  setProvider(id: ProviderId) { this.settings.setProvider(id); }
+  setDeepProvider(id: ProviderId) { this.settings.setDeepProvider(id); }
+  setFastProvider(id: ProviderId) { this.settings.setFastProvider(id); }
 
   /** The slider works on indices into the model's own `levels`, so it auto-sizes: 4 steps for
    *  Gemini 3.6 Flash, 3 for Gemini 3.1 Pro (which has no Minimal), 1 for Haiku. */

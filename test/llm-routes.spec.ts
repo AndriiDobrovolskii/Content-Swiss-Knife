@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * The untrusted-input boundary: the settings menu sends { provider, deep, fast } with every
- * request, and the server must validate it against the catalog before it reaches an SDK.
+ * The untrusted-input boundary: the settings menu sends { deep, fast } with every request,
+ * each slot naming its own provider, and the server must validate it against the catalog
+ * before it reaches an SDK.
  *
  * Tests the real server/llm-request.js. A stub `getProvider` is injected so no API keys or
  * SDK clients are needed — everything else is production code.
@@ -16,6 +17,12 @@ const stubProvider = (name: string) => { made.push(name); return { name }; };
 const resolve = (body: any, slot: string) => resolveRequest(body, slot, ENV_PROVIDER, stubProvider);
 
 const GEMINI_BODY = {
+  deep: { provider: 'gemini', model: 'gemini-3.1-pro-preview', level: 'high' },
+  fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
+};
+
+/** What a browser on an older bundle still sends: one provider for both slots. */
+const LEGACY_BODY = {
   provider: 'gemini',
   deep: { model: 'gemini-3.1-pro-preview', level: 'high' },
   fast: { model: 'gemini-3.6-flash', level: 'minimal' },
@@ -45,6 +52,43 @@ describe('slot resolution', () => {
     // OpenAI is reachable only via LLM_PROVIDER and has no thinking levels.
     expect(resolve({}, 'fast', ).slot).not.toBeNull();
     expect(resolveRequest({}, 'fast', 'openai', stubProvider).slot).toBeNull();
+  });
+});
+
+describe('per-slot providers', () => {
+  // The whole point: one run, Task A on Claude and the translations on Gemini.
+  const MIXED_BODY = {
+    deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
+    fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
+  };
+
+  it('serves each slot from the provider that slot names', () => {
+    expect(resolve(MIXED_BODY, 'deep').provider).toBe('anthropic');
+    expect(resolve(MIXED_BODY, 'fast').provider).toBe('gemini');
+  });
+
+  it('resolves each slot against its own provider catalog', () => {
+    expect(resolve(MIXED_BODY, 'deep').slot)
+      .toEqual({ model: 'claude-sonnet-5', level: 'medium', maxOutputTokens: 64000 });
+    expect(resolve(MIXED_BODY, 'fast').slot)
+      .toEqual({ model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 65536 });
+  });
+
+  it('rejects an unknown provider on the slot being resolved', () => {
+    expect(() => resolve({ deep: { provider: 'skynet' } }, 'deep')).toThrow(BadRequest);
+  });
+
+  // A stale client sends one provider for both slots; it must keep working.
+  it('honours the legacy top-level provider when the slot names none', () => {
+    expect(resolve(LEGACY_BODY, 'deep').provider).toBe('gemini');
+    expect(resolve(LEGACY_BODY, 'fast').slot)
+      .toEqual({ model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 65536 });
+  });
+
+  it('lets the slot provider win over the legacy top-level one', () => {
+    const body = { provider: 'gemini', deep: { provider: 'anthropic', model: 'claude-sonnet-5' } };
+    expect(resolve(body, 'deep').provider).toBe('anthropic');
+    expect(resolve(body, 'fast').provider).toBe('gemini');
   });
 });
 
