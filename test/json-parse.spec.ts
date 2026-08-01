@@ -29,6 +29,45 @@ describe('parseJsonResponse — the happy path is untouched', () => {
   });
 });
 
+/**
+ * THE DEFECT THAT ACTUALLY HAPPENS.
+ *
+ * Both production failures carried the signature `Expected ',' or '}' after property value … column
+ * 1` — the model ended a value and omitted the separator before the next line. The first repair
+ * implementation handled trailing commas and control characters, neither of which has ever been
+ * observed here, and threw on this. That is why the hand-rolled version was replaced.
+ */
+describe('parseJsonResponse — the defects models actually emit', () => {
+  it('recovers a MISSING comma between properties — the observed production error', () => {
+    expect(parseJsonResponse('{\n  "a": 1\n  "b": 2\n}')).toEqual({ a: 1, b: 2 });
+  });
+
+  it('recovers a missing comma between array elements', () => {
+    expect(parseJsonResponse('{"a":[1\n2]}')).toEqual({ a: [1, 2] });
+  });
+
+  it('recovers single-quoted strings', () => {
+    expect(parseJsonResponse("{'hook': 'Опис'}")).toEqual({ hook: 'Опис' });
+  });
+
+  it('recovers unquoted keys', () => {
+    expect(parseJsonResponse('{hook: "Опис"}')).toEqual({ hook: 'Опис' });
+  });
+
+  it('recovers typographic quote characters', () => {
+    expect(parseJsonResponse('{“hook”: “Опис”}')).toEqual({ hook: 'Опис' });
+  });
+
+  it('recovers Python constants', () => {
+    expect(parseJsonResponse('{"a": None, "b": True, "c": False}'))
+      .toEqual({ a: null, b: true, c: false });
+  });
+
+  it('strips a trailing comment', () => {
+    expect(parseJsonResponse('{"a": 1} // done')).toEqual({ a: 1 });
+  });
+});
+
 describe('parseJsonResponse — repair', () => {
   it('recovers a trailing comma before }', () => {
     expect(parseJsonResponse('{"a":1,}')).toEqual({ a: 1 });
@@ -76,29 +115,56 @@ describe('parseJsonResponse — repair', () => {
 
 describe('parseJsonResponse — what it refuses to do', () => {
   /**
-   * TRUNCATION MUST STAY FATAL. An earlier implementation appended missing closers, which turned a
-   * cut-off response into a structurally valid object with fields simply gone — a quiet wrong
-   * answer in place of a loud failure.
+   * TRUNCATION MUST STAY FATAL — AND THIS IS NOW LOAD-BEARING.
    *
-   * All three providers now throw on truncation BEFORE parsing (anthropic.js, gemini.js and — as of
-   * this change — openai.js), so nothing legitimate reaches here truncated. If something does, it
-   * is a bug worth surfacing, not completing.
+   * `jsonrepair` lists "Add missing closing brackets" and "Repair truncated JSON" among its
+   * features. That is exactly the `balanceClosers` behaviour deleted earlier, and it is wrong for
+   * this codebase: it turns a cut-off response into a structurally valid object with fields simply
+   * gone — a quiet wrong answer in place of a loud failure. On the Doc path zod would catch it;
+   * SEO metadata, slugs and keywords have no schema gate and would ship the partial.
+   *
+   * `assertNotTruncated` runs BEFORE the library for precisely this reason. Delete it and these
+   * tests go red, which is the point.
+   *
+   * All three providers also guard `finish_reason` upstream, but those guards depend on the
+   * provider reporting it — a cut stream or a proxy timeout sets nothing.
    */
   it('does not silently complete a document truncated at a field boundary', () => {
     const truncated = '{"schemaVersion":"3.0","locale":"uk-UA","hook":"A hook."';
-    expect(() => parseJsonResponse(truncated)).toThrow();
+    expect(() => parseJsonResponse(truncated)).toThrow(/truncated/i);
   });
 
   it('does not complete a truncated array', () => {
-    expect(() => parseJsonResponse('{"a":[1,2')).toThrow();
+    expect(() => parseJsonResponse('{"a":[1,2')).toThrow(/truncated/i);
+  });
+
+  it('does not complete a document truncated in the middle of a string', () => {
+    expect(() => parseJsonResponse('{"hook":"половина речен'))
+      .toThrow(/truncated/i);
+  });
+
+  it('names the depth it was left at, so the failure is diagnosable', () => {
+    expect(() => parseJsonResponse('{"a":{"b":[1'))
+      .toThrow(/truncated/i);
+  });
+
+  /**
+   * A SURPLUS closer is not truncation — it is a repairable syntax error, and the detector must
+   * stay out of jsonrepair's way rather than claiming the document was cut off.
+   */
+  it('does not misreport an extra closing brace as truncation', () => {
+    expect(parseJsonResponse('{"a":1}}')).toEqual({ a: 1 });
   });
 
   /**
    * The error must describe the text the MODEL produced. An error thrown from the repaired copy
    * would cite positions that exist in no artifact anyone can inspect.
+   *
+   * (The example used to be `{"a": @@@ }`, which jsonrepair now legitimately repairs to
+   * `{"a": "@@@"}`. Swapped for input that must never parse — see the test below.)
    */
   it('throws the ORIGINAL error, not one from the repaired copy', () => {
-    const bad = '{"a": @@@ }';
+    const bad = 'I could not complete that request.';
     let fromParse = '';
     let fromHelper = '';
     try { JSON.parse(bad); } catch (e) { fromParse = (e as Error).message; }
@@ -106,7 +172,27 @@ describe('parseJsonResponse — what it refuses to do', () => {
     expect(fromHelper).toBe(fromParse);
   });
 
+  /**
+   * A MODEL REFUSAL MUST NOT BECOME DATA.
+   *
+   * jsonrepair quotes arbitrary prose into a valid JSON string — `I could not complete that
+   * request.` repairs to `"I could not complete that request."`, which parses cleanly. That is a
+   * refusal, a proxy error page or a stray apology, never a description. Callers with no schema
+   * (SEO metadata, slugs, keywords) would carry the string forward as if it were an object.
+   *
+   * Hence the shape guard: a repaired top-level scalar is treated as a failed repair.
+   */
   it('still throws on input that is not JSON at all', () => {
     expect(() => parseJsonResponse('I could not complete that request.')).toThrow();
+  });
+
+  it('rejects a repaired top-level scalar rather than returning it as data', () => {
+    expect(() => parseJsonResponse('Вибачте, не можу згенерувати опис.')).toThrow();
+    expect(() => parseJsonResponse('Sorry!')).toThrow();
+  });
+
+  /** But a legitimate top-level array is still a valid artifact — keywords come back as one. */
+  it('accepts a repaired top-level array', () => {
+    expect(parseJsonResponse("['друк', 'сканування',]")).toEqual(['друк', 'сканування']);
   });
 });
