@@ -41,7 +41,7 @@ import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
-import { validateStructuralParity } from '../utils/structural-parity';
+import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { buildOptimizerPrompt } from '../prompts/optimizer';
@@ -526,6 +526,9 @@ export class ContentOrchestratorService {
           { localizedName: localizedNames?.[locale], sourceLocale: 'uk-UA' },
         );
 
+        // How many media srcs the LAST produce call had to put back — read by validate below, the
+        // same closure-stash pattern restoredVideos uses on the master path.
+        let restoredSrcs = 0;
         const htmlLangResult = await runRepairGate<string>({
           label: `HTML (${lang})`,
           maxRepairs: repairBudget,
@@ -539,11 +542,29 @@ export class ContentOrchestratorService {
             }
             // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
             html = normalizeTerminology(cyrillizeUnits(restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(html), locale), locale), locale), locale);
-            return canonicalizeMultiInOne(html, locale);
+            html = canonicalizeMultiInOne(html, locale);
+            // TIER 0 — deterministic, no LLM. A real es-ES artifact shipped with all seven image
+            // URLs broken because the model rewrote the folder's ASCII hyphen as an EN DASH
+            // (U+2013), Spanish typography applied inside a URL. Detection worked; the repair gate
+            // then spent its whole budget and the model never fixed it, because re-prompting in
+            // Spanish reproduces the same substitution. The master's src list is known, so the
+            // right value never has to be asked for.
+            const restoration = restoreMediaSrcs(html, finalMasterHtml);
+            restoredSrcs = restoration.restored;
+            return restoration.html;
           },
           validate: (html) => [
             ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId, imageManifest: masterImageManifest }),
             ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
+            // Surfaced as a WARNING, not silently. The artifact is correct now, but a model that
+            // keeps rewriting URLs is a real signal — swallowing the fix would hide it and make the
+            // next regression invisible.
+            ...(restoredSrcs > 0 ? [{
+              severity: 'warning' as const,
+              rule: 'media-src-restored',
+              detail: `${restoredSrcs} media src(s) diverged from the uk-UA master and were restored deterministically. The translation model altered a URL — check for typographic substitution (e.g. an EN DASH for a hyphen).`,
+              context: `HTML (${lang})`,
+            }] : []),
           ],
           withFeedback: appendRepairFeedback,
           // Safe against structural parity: validateStructuralParity counts tags, and a rewrite
