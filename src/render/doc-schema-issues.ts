@@ -63,9 +63,14 @@ export function docSchemaIssues(error: unknown, context: string): ValidationIssu
   }
 
   // Not a zod error — JSON that never parsed, or any other throw. Still an error, still reportable.
+  // Duck-type: Angular's HttpErrorResponse does NOT extend Error, so `instanceof Error` is false
+  // even though it carries a `message` property. Without this branch, a server 500 reaches the
+  // repair gate as the generic fallback below — useless for the model and invisible in the log.
   const message =
     error instanceof Error ? error.message
     : typeof error === 'string' ? error
+    : (typeof error === 'object' && error !== null && 'message' in error && typeof (error as Record<string, unknown>).message === 'string')
+      ? (error as Record<string, unknown>).message as string
     : 'The model did not return a usable ProductDescriptionDoc.';
 
   return [{
