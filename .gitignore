@@ -27,6 +27,9 @@ server/usage/*.db-*
 # Angular build cache
 .angular/
 
+# Node fatal-error diagnostic reports (see .npmrc) — machine-specific crash forensics
+.diagnostics/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

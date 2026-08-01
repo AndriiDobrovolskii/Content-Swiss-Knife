@@ -154,7 +154,10 @@ app.post('/api/retrieval/search', async (req, res) => {
 // keeps reaching *it*, and it answers every /api call from the .env snapshot it read at its
 // own boot — so an edited API key looks like it was ignored, and the terminal you are
 // watching prints nothing at all. Exiting non-zero also makes `concurrently` tear the whole
-// `npm run dev` down instead of leaving the frontend talking to a stranger's backend.
+// `npm run dev` down instead of leaving the frontend talking to a stranger's backend — but
+// only because the `dev` script passes `-k`. Without that flag concurrently just reports the
+// dead child and lets its siblings run on, which is how half-stacks outlive their terminal
+// and turn into orphans still holding a port.
 let bindFailed = false;
 
 const server = app.listen(PORT, () => {
