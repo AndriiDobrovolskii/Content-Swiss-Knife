@@ -4,6 +4,7 @@ import { normalizePayload } from '../utils/payload.js';
 import { parseJsonResponse } from '../utils/json-parse.js';
 import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
 import { clampLevel, resolveSlot } from './model-support.js';
+import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
 
 // Used when a caller doesn't pass a slot (direct unit-test calls, or a request that
 // predates the settings menu). Gemini 3.1 Pro cannot disable thinking at all.
@@ -12,7 +13,17 @@ const FALLBACK_FAST = () => resolveSlot('gemini', { model: 'gemini-3.6-flash', l
 
 export class GeminiProvider {
   constructor(apiKey) {
-    this.ai = new GoogleGenAI({ apiKey });
+    this.ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        // `attempts` "default to 5" per the SDK's own typings, and withRetry already attempts 3 —
+        // one stuck request could be issued 15 times. Retry policy belongs in withRetry alone
+        // (architecture rule #5); 1 means "no retries", not "one retry".
+        retryOptions: { attempts: 1 },
+        // Client-level floor. Per-call config overrides it with the mode-appropriate value.
+        timeout: DEEP_TIMEOUT_MS,
+      },
+    });
   }
 
   /**
@@ -69,6 +80,7 @@ export class GeminiProvider {
           // breakpoints pay off here the way they do on Anthropic.
           systemInstruction: systemBlocks.filter(b => b?.text).map(b => b.text).join('\n\n') || undefined,
           maxOutputTokens,
+          httpOptions: { timeout: timeoutForMode(mode) },
           thinkingConfig: { thinkingLevel: level },
           ...(isJson ? { responseMimeType: 'application/json' } : {}),
         },
@@ -98,6 +110,7 @@ export class GeminiProvider {
         config: {
           // The caption is <= 20 words, but thinking tokens draw from the same budget.
           maxOutputTokens: Math.min(8000, maxOutputTokens),
+          httpOptions: { timeout: useThinking ? DEEP_TIMEOUT_MS : FAST_TIMEOUT_MS },
           thinkingConfig: { thinkingLevel: level },
         },
       });
@@ -119,6 +132,7 @@ export class GeminiProvider {
         },
         config: {
           maxOutputTokens: 8192,
+          httpOptions: { timeout: FAST_TIMEOUT_MS },
           // Mechanical transcription — the cheapest depth this model allows. Clamped, because
           // Gemini 3.1 Pro rejects 'minimal' outright (its floor is 'low').
           thinkingConfig: { thinkingLevel: clampLevel('gemini', model, 'minimal') },

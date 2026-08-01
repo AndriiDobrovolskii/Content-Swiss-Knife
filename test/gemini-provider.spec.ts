@@ -4,8 +4,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const calls: any[] = [];
 let nextResponse: any;
 
+/** Constructor options, so the client-level timeout and retry settings can be asserted. */
+const ctorArgs: any[] = [];
+
 vi.mock('@google/genai', () => ({
   GoogleGenAI: class {
+    constructor(opts: any) { ctorArgs.push(opts); }
     models = {
       generateContent: async (req: any) => {
         calls.push(req);
@@ -158,5 +162,42 @@ describe('GeminiProvider vision and pdf', () => {
 
     await p.extractFromPdf('PDF64', { model: 'gemini-3.1-pro-preview', level: 'medium', maxOutputTokens: 65536 });
     expect(calls[1].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+  });
+});
+
+/**
+ * A hung provider call used to be unbounded in practice. Two multipliers stacked:
+ * `withRetry` attempts a call 3 times, and the Gemini SDK's own `retryOptions.attempts`
+ * "default to 5" — so one stuck request could be issued up to 15 times, each waiting on the SDK's
+ * own timeout. Retry policy belongs in exactly one provider-independent place (architecture
+ * rule #5), so the SDK's own retry loop is switched off and the timeout is made explicit.
+ *
+ * The values are asserted as literals rather than against the shared constant: a test that reads
+ * the same constant as the code proves only that the constant equals itself.
+ */
+describe('GeminiProvider request bounds', () => {
+  beforeEach(() => { calls.length = 0; ctorArgs.length = 0; nextResponse = reply('<p>ok</p>'); });
+
+  it('disables the SDK retry loop and sets a client-level timeout', () => {
+    new GeminiProvider('test-key');
+    expect(ctorArgs[0].httpOptions.retryOptions).toEqual({ attempts: 1 });
+    expect(ctorArgs[0].httpOptions.timeout).toBe(600_000);
+  });
+
+  /**
+   * The deep slot must stay generous. The 2026-08-01 run emitted 17,940 output tokens in a single
+   * `creative-json` call — minutes of work — so a short cap would abort legitimate generations.
+   */
+  it('gives a deep call the long timeout', async () => {
+    nextResponse = reply('{"ok":1}');   // creative-json parses its reply
+    await new GeminiProvider('k')
+      .generate(PAYLOAD, 'creative-json', { model: 'gemini-3.1-pro-preview', level: 'high', maxOutputTokens: 65536 });
+    expect(calls[0].config.httpOptions.timeout).toBe(600_000);
+  });
+
+  it('gives a fast call the short timeout', async () => {
+    await new GeminiProvider('k')
+      .generate(PAYLOAD, 'text', { model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 8192 });
+    expect(calls[0].config.httpOptions.timeout).toBe(120_000);
   });
 });

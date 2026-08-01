@@ -4,6 +4,7 @@ import { normalizePayload } from '../utils/payload.js';
 import { parseJsonResponse } from '../utils/json-parse.js';
 import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
 import { resolveSlot } from './model-support.js';
+import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
 
 // Fallback slot used when a caller doesn't pass one (direct unit-test calls, a request that
 // predates the settings menu). Mirrors the historical env-driven defaults.
@@ -18,7 +19,16 @@ const FALLBACK_FAST = () => resolveSlot('anthropic', {
 
 export class AnthropicProvider {
   constructor(apiKey) {
-    this.client = new Anthropic({ apiKey });
+    this.client = new Anthropic({
+      apiKey,
+      // The SDK retries twice by default and its own docs warn that "request timeouts are retried
+      // by default, so in a worst-case scenario you may wait much longer than this timeout."
+      // Stacked on withRetry's 3 attempts that is up to 9 issues of one request. Retry policy
+      // lives in withRetry alone — architecture rule #5.
+      maxRetries: 0,
+      // Client-level floor; each call passes the mode-appropriate value in its request options.
+      timeout: DEEP_TIMEOUT_MS,
+    });
   }
 
   // Turn our blocks into a cacheable Anthropic system array.
@@ -62,9 +72,10 @@ export class AnthropicProvider {
       };
 
       const hasCacheBlocks = systemBlocks.some(b => b?.cache);
+      const options = { timeout: timeoutForMode(mode) };
       const stream = hasCacheBlocks
-        ? this.client.beta.messages.stream({ betas: ['extended-cache-ttl-2025-04-11'], ...config })
-        : this.client.messages.stream(config);
+        ? this.client.beta.messages.stream({ betas: ['extended-cache-ttl-2025-04-11'], ...config }, options)
+        : this.client.messages.stream(config, options);
       const response = await stream.finalMessage();
 
       // Fail loudly. A truncated or refused response must never reach the validator
@@ -119,7 +130,9 @@ export class AnthropicProvider {
         ...thinking,
       };
 
-      const response = await this.client.messages.create(config);
+      const response = await this.client.messages.create(config, {
+        timeout: useThinking ? DEEP_TIMEOUT_MS : FAST_TIMEOUT_MS,
+      });
 
       // Same fail-loud contract as generate(): a truncated or refused caption must never reach
       // the manifest as if valid. On a throw the client falls back to filename-derived alt text.
@@ -159,7 +172,7 @@ export class AnthropicProvider {
             { type: 'text', text: PDF_EXTRACT_PROMPT }
           ]
         }]
-      });
+      }, { timeout: FAST_TIMEOUT_MS });
       return response.content.find(b => b.type === 'text')?.text || '';
     });
   }

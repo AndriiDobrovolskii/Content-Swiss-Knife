@@ -13,15 +13,19 @@ function message(text: string, extra: Record<string, any> = {}) {
   };
 }
 
+/** Constructor options, so the client-level timeout and retry settings can be asserted. */
+const ctorArgs: any[] = [];
+
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class {
+    constructor(opts: any) { ctorArgs.push(opts); }
     messages = {
-      stream: (config: any) => { streamCalls.push({ config, beta: false }); return { finalMessage: async () => nextMessage }; },
-      create: async (config: any) => { createCalls.push(config); return nextMessage; },
+      stream: (config: any, options?: any) => { streamCalls.push({ config, options, beta: false }); return { finalMessage: async () => nextMessage }; },
+      create: async (config: any, options?: any) => { createCalls.push({ config, options }); return nextMessage; },
     };
     beta = {
       messages: {
-        stream: (config: any) => { streamCalls.push({ config, beta: true }); return { finalMessage: async () => nextMessage }; },
+        stream: (config: any, options?: any) => { streamCalls.push({ config, options, beta: true }); return { finalMessage: async () => nextMessage }; },
       },
     };
   },
@@ -133,12 +137,12 @@ describe('AnthropicProvider vision and pdf', () => {
     const p = new AnthropicProvider('k');
 
     await p.analyzeImage('B64', 'image/jpeg', 'Describe', true, DEEP);
-    expect(createCalls[0].max_tokens).toBe(8000);
-    expect(createCalls[0].thinking).toEqual({ type: 'adaptive' });
+    expect(createCalls[0].config.max_tokens).toBe(8000);
+    expect(createCalls[0].config.thinking).toEqual({ type: 'adaptive' });
 
     await p.analyzeImage('B64', 'image/jpeg', 'Describe', false, FAST);
-    expect(createCalls[1].max_tokens).toBe(1000);
-    expect(createCalls[1].thinking).toEqual({ type: 'disabled' });
+    expect(createCalls[1].config.max_tokens).toBe(1000);
+    expect(createCalls[1].config.thinking).toEqual({ type: 'disabled' });
   });
 
   it('returns only visible text, never a thinking block', async () => {
@@ -155,7 +159,36 @@ describe('AnthropicProvider vision and pdf', () => {
   // is omitted, which would eat that budget if it is assigned to the Fast slot.
   it('pins thinking off for pdf extraction', async () => {
     await new AnthropicProvider('k').extractFromPdf('PDF64', { model: 'claude-sonnet-5', level: 'high', maxOutputTokens: 64000 });
-    expect(createCalls[0].thinking).toEqual({ type: 'disabled' });
-    expect(createCalls[0].max_tokens).toBe(4096);
+    expect(createCalls[0].config.thinking).toEqual({ type: 'disabled' });
+    expect(createCalls[0].config.max_tokens).toBe(4096);
+  });
+});
+
+/**
+ * See server/utils/timeouts.js. The SDK defaults to a 10-minute timeout AND `maxRetries: 2`, and
+ * its own docs warn that "request timeouts are retried by default, so in a worst-case scenario you
+ * may wait much longer than this timeout." Stacked on withRetry's 3 attempts, a hung call was
+ * effectively unbounded. Retry policy belongs in withRetry alone (architecture rule #5).
+ *
+ * Literals, not the shared constant: a test that reads the same constant as the code proves only
+ * that the constant equals itself.
+ */
+describe('AnthropicProvider request bounds', () => {
+  beforeEach(() => { streamCalls.length = 0; createCalls.length = 0; ctorArgs.length = 0; nextMessage = message('<p>ok</p>'); });
+
+  it('disables the SDK retry loop and sets a client-level timeout', () => {
+    new AnthropicProvider('k');
+    expect(ctorArgs[0].maxRetries).toBe(0);
+    expect(ctorArgs[0].timeout).toBe(600_000);
+  });
+
+  it('gives a deep call the long timeout', async () => {
+    await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'creative', DEEP);
+    expect(streamCalls[0].options.timeout).toBe(600_000);
+  });
+
+  it('gives a fast call the short timeout', async () => {
+    await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'text', FAST);
+    expect(streamCalls[0].options.timeout).toBe(120_000);
   });
 });

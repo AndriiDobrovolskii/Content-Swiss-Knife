@@ -6,6 +6,7 @@ import { SerperRetrieval } from './retrieval/serper.js';
 import { fetchUrl } from './retrieval/fetcher.js';
 import { computeCost } from './usage/pricing.js';
 import { insertUsage, queryUsage, insertGeneration, queryGenerations } from './usage/store.js';
+import { describeError } from './utils/describe-error.js';
 
 config();
 
@@ -23,10 +24,15 @@ const serper = new SerperRetrieval(process.env.SERPER_API_KEY);
 // tested without booting Express or holding API keys.
 const resolveRequest = (body, slotName) => resolveLlmRequest(body, slotName, LLM_PROVIDER);
 
+// `error.message` alone is not enough. A transport failure arrives as a bare `fetch failed`, with
+// the actual reason (ECONNRESET, ENOTFOUND, a socket timeout) on `error.cause` — so every network
+// fault used to produce the same opaque 24-byte body and the same useless log line. describeError
+// flattens the cause chain; see server/utils/describe-error.js.
 function sendError(res, error, tag) {
   const status = error.status || 500;
-  console.error(`[${tag}] error:`, error.message);
-  res.status(status).json({ error: error.message });
+  const detail = describeError(error);
+  console.error(`[${tag}] error:`, detail);
+  res.status(status).json({ error: detail });
 }
 
 // ── LLM routes ─────────────────────────────────────────────────────────────

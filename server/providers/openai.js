@@ -3,6 +3,7 @@ import { pdfToText } from '../utils/pdf.js';
 import { withRetry } from '../utils/retry.js';
 import { normalizePayload } from '../utils/payload.js';
 import { parseJsonResponse } from '../utils/json-parse.js';
+import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
 
 export class OpenAiProvider {
   constructor(apiKey, model = 'gpt-4o') {
@@ -12,7 +13,17 @@ export class OpenAiProvider {
   }
 
   get client() {
-    if (!this._client) this._client = new OpenAI({ apiKey: this._apiKey });
+    if (!this._client) {
+      this._client = new OpenAI({
+        apiKey: this._apiKey,
+        // The SDK retries internally by default, which multiplies with withRetry's 3 attempts.
+        // Retry policy lives in withRetry alone — architecture rule #5.
+        maxRetries: 0,
+        // Client-level floor (the SDK's own default is 10 minutes); each call passes the
+        // mode-appropriate value in its request options.
+        timeout: DEEP_TIMEOUT_MS,
+      });
+    }
     return this._client;
   }
 
@@ -39,7 +50,9 @@ export class OpenAiProvider {
         config.max_tokens = 8192;
       }
 
-      const response = await this.client.chat.completions.create(config);
+      const response = await this.client.chat.completions.create(config, {
+        timeout: timeoutForMode(mode),
+      });
 
       // Fail loudly on truncation — the same contract AnthropicProvider and GeminiProvider honour.
       // This provider was the odd one out: it handed a cut-off response straight to
@@ -76,7 +89,7 @@ export class OpenAiProvider {
           ]
         }],
         max_tokens: 300,
-      });
+      }, { timeout: FAST_TIMEOUT_MS });
       return response.choices[0].message.content || '';
     });
   }
@@ -92,7 +105,7 @@ export class OpenAiProvider {
           content: `Extract the full product description and technical specifications from the following PDF text. Return them as clean plain text.\n\n${rawText.substring(0, 12000)}`
         }],
         max_tokens: 4096,
-      });
+      }, { timeout: FAST_TIMEOUT_MS });
       return response.choices[0].message.content || rawText;
     });
   }
