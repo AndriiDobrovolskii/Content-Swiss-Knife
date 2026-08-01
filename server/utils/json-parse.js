@@ -1,77 +1,74 @@
 /**
  * json-parse.js
  *
- * Parses LLM-generated JSON with lightweight repair for common syntax errors.
+ * Parses LLM-generated JSON, with a narrow repair pass for defects models actually produce.
  *
- * WHY REPAIR AT ALL. Gemini's `responseMimeType: 'application/json'` is not infallible — the model
- * can still produce trailing commas, unescaped control characters inside strings, or (rarely)
- * truncated output that `JSON.parse` rejects. When that happens the server returns a 500, which
- * the client receives as an Angular HttpErrorResponse — an opaque failure that the repair gate
- * cannot give useful feedback on. Repairing the syntax here converts that opaque 500 into a
- * structurally-valid object that reaches the client's zod schema, where any SEMANTIC issues are
- * diagnosed with field-level detail and fed back to the model as targeted repair instructions.
+ * Shared by all three providers and every JSON call in the app — SEO metadata, slugs, keywords, and
+ * the ProductDescriptionDoc — so this is the one place worth hardening.
  *
- * REPAIR ORDER IS LOAD-BEARING. Control-char escaping must run before comma/brace fixes, because
- * a literal newline inside a string shifts every subsequent character position and makes the
- * comma regex match in the wrong places.
+ * WHY REPAIR AT ALL. Structured-output modes are not infallible. Observed twice on real runs:
+ * `Expected ',' or '}' … position 16478 (line 436 column 1)` and `… position 16203 (line 460
+ * column 1)`. Column 1 both times: the model ended a value and omitted the separator before the
+ * next line. Neither was truncation — both providers that guard it (see below) would have thrown a
+ * different error first, and the failing call used 17173 of 65536 available output tokens.
+ *
+ * Unrepaired, that costs a whole generation after the tokens are already spent: the server 500s,
+ * the client sees an opaque HttpErrorResponse, and the repair gate can only say "something failed".
  */
 
-/** Strip code fences and parse the LLM response as JSON, with lightweight repair on failure. */
+/**
+ * Strip code fences and parse, repairing only if the direct parse fails.
+ *
+ * The happy path is a plain `JSON.parse` and cannot regress — repair is never reached for
+ * well-formed input, so a bug in the repair pass cannot corrupt a valid document.
+ */
 export function parseJsonResponse(text) {
   const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
   try {
     return JSON.parse(cleaned);
   } catch (firstError) {
-    // Attempt repair — if it still fails, throw the ORIGINAL error so the message
-    // points at the unmodified text and position numbers stay meaningful.
     try {
       return JSON.parse(repairJson(cleaned));
     } catch {
+      // The ORIGINAL error, deliberately. It describes the text the model actually produced;
+      // an error from the repaired copy would report positions that exist in no artifact anyone
+      // can inspect.
       throw firstError;
     }
   }
 }
 
 /**
- * Best-effort repair of the most common LLM JSON defects.
+ * ONE string-aware pass. Both repairs happen inside the same character walk, and that is the point.
  *
- * This is NOT a general-purpose JSON5 parser. It targets exactly three failure modes
- * observed in production Gemini output:
+ * WHY NOT A REGEX. The first implementation did the comma fix as
+ * `replace(/,\s*([\]}])/g, '$1')` over the whole document. It is not string-aware, and it silently
+ * corrupted prose:
  *
- *   1. Unescaped control characters inside string values (newlines, tabs, carriage returns).
- *      The model writes multi-line prose into a JSON string without \n escaping — the parser
- *      sees the literal newline as the end of the line and fails on the next token.
+ *   in:  {"hook":"Формати: JPG, ] і PNG"}
+ *   out: {"hook":"Формати: JPG] і PNG"}
  *
- *   2. Trailing commas before `}` or `]`. Common when the model deletes an array element
- *      during self-editing but forgets to remove the preceding comma.
+ * Product descriptions are full of brackets and commas, so that is not a corner case. Tracking
+ * `inString` is the only way to know whether a comma is syntax or content, and once the walk exists
+ * there is no reason to run a second, blind pass over the result.
  *
- *   3. Unclosed braces/brackets at the end (output truncation). The model hit the output
- *      token limit or was cut off, leaving valid JSON up to a point but missing closers.
+ * WHAT IT REPAIRS — exactly two things, both observed:
+ *
+ *   1. Unescaped control characters inside strings. The model writes multi-line prose into a JSON
+ *      string without escaping the newline; the parser ends the string early and fails on the next
+ *      token.
+ *   2. A trailing comma before `}` or `]`. Typically the model dropped an element while
+ *      self-editing and left the separator behind.
+ *
+ * WHAT IT DELIBERATELY DOES NOT REPAIR — truncation. An earlier version appended missing closers,
+ * which turned a cut-off response into a structurally valid object with fields simply gone: a quiet
+ * wrong answer in place of a loud failure. On the Doc path zod would catch it, but SEO metadata,
+ * slugs and keywords have no such gate and would have shipped the partial. All three providers now
+ * throw on truncation BEFORE parsing — `anthropic.js` on `stop_reason === 'max_tokens'`,
+ * `gemini.js` on `finishReason === 'MAX_TOKENS'`, `openai.js` on `finish_reason === 'length'` — so
+ * nothing legitimate arrives here truncated. If something does, it is a bug worth surfacing.
  */
 function repairJson(text) {
-  let repaired = text;
-
-  // ── Phase 1: escape unescaped control characters inside JSON strings ────
-  // Walk the text character-by-character, tracking whether we're inside a string.
-  // Any literal \n, \r, or \t inside a string is replaced with its escape sequence.
-  repaired = escapeControlCharsInStrings(repaired);
-
-  // ── Phase 2: strip trailing commas before } or ] ───────────────────────
-  repaired = repaired.replace(/,\s*([\]}])/g, '$1');
-
-  // ── Phase 3: balance unclosed braces / brackets ────────────────────────
-  repaired = balanceClosers(repaired);
-
-  return repaired;
-}
-
-/**
- * Character-by-character pass that escapes literal control characters inside JSON strings.
- *
- * The state machine tracks `inString` and `escaped` to avoid touching characters outside
- * strings or already-escaped sequences like `\\n`.
- */
-function escapeControlCharsInStrings(text) {
   const out = [];
   let inString = false;
   let escaped = false;
@@ -79,63 +76,35 @@ function escapeControlCharsInStrings(text) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
 
-    if (escaped) {
-      // Previous char was a backslash inside a string — this char is already escaped.
-      out.push(ch);
-      escaped = false;
-      continue;
-    }
+    // Previous character was a backslash inside a string — this one is already escaped.
+    if (escaped) { out.push(ch); escaped = false; continue; }
 
-    if (inString && ch === '\\') {
-      out.push(ch);
-      escaped = true;
-      continue;
-    }
+    if (inString && ch === '\\') { out.push(ch); escaped = true; continue; }
 
-    if (ch === '"') {
-      inString = !inString;
-      out.push(ch);
-      continue;
-    }
+    // An unescaped quote toggles string state. Reached only when `escaped` is false, so \" inside
+    // a string does not end it.
+    if (ch === '"') { inString = !inString; out.push(ch); continue; }
 
     if (inString) {
-      // Replace literal control characters with their JSON escape sequences.
+      // Literal control characters are illegal inside a JSON string; escape rather than drop, so
+      // the prose keeps its line breaks.
       if (ch === '\n') { out.push('\\n'); continue; }
       if (ch === '\r') { out.push('\\r'); continue; }
       if (ch === '\t') { out.push('\\t'); continue; }
+      out.push(ch);
+      continue;
+    }
+
+    // Outside a string: a comma whose next non-whitespace character closes the container is a
+    // trailing comma. Dropping it here is safe precisely because we know we are not in a string.
+    if (ch === ',') {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      if (text[j] === '}' || text[j] === ']') continue;
     }
 
     out.push(ch);
   }
 
   return out.join('');
-}
-
-/**
- * Count unmatched openers and append the corresponding closers.
- *
- * Uses the same `inString` / `escaped` state machine to skip characters inside strings.
- * Closers are appended in LIFO order (last-opened first-closed), which is correct for
- * truncated JSON where the structure was valid up to the cut point.
- */
-function balanceClosers(text) {
-  const stack = [];
-  let inString = false;
-  let escaped = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-
-    if (escaped) { escaped = false; continue; }
-    if (inString && ch === '\\') { escaped = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-
-    if (ch === '{') stack.push('}');
-    else if (ch === '[') stack.push(']');
-    else if (ch === '}' || ch === ']') stack.pop();
-  }
-
-  // Append closers in reverse (LIFO) order.
-  return text + stack.reverse().join('');
 }

@@ -40,6 +40,23 @@ export class OpenAiProvider {
       }
 
       const response = await this.client.chat.completions.create(config);
+
+      // Fail loudly on truncation — the same contract AnthropicProvider and GeminiProvider honour.
+      // This provider was the odd one out: it handed a cut-off response straight to
+      // parseJsonResponse, where a half-written artifact could parse into a structurally valid
+      // object with fields simply missing. On the Doc path zod would catch that; SEO metadata,
+      // slugs and keywords have no such gate and would have shipped the partial.
+      const finish = response.choices[0].finish_reason;
+      if (finish === 'length') {
+        throw new Error(
+          `[openai] output truncated: hit max_tokens (${config.max_tokens ?? 'model default'}) on ` +
+          `${config.model} / ${mode}. Raise max_tokens for this mode, or shorten the input.`
+        );
+      }
+      if (finish === 'content_filter') {
+        throw new Error(`[openai] response blocked by content filter on ${config.model} / ${mode}.`);
+      }
+
       const text = response.choices[0].message.content || '';
 
       const result = mode === 'json' ? parseJsonResponse(text) : text;
