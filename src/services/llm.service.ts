@@ -43,7 +43,13 @@ export class LlmService implements LlmProvider {
    * client-side report rather than server-side inference.
    *
    * FIRE-AND-FORGET BY DESIGN: telemetry must never be able to fail a generation that otherwise
-   * succeeded. A rejected promise here is swallowed on purpose.
+   * succeeded. A rejected promise here is swallowed on purpose — but NOT silently.
+   *
+   * WHY IT WARNS. This used to be a bare `catch {}`. On 2026-08-01 a full four-locale EXPERT3D run
+   * wrote its artifacts and left ZERO rows in generation_log, and there was no way to tell whether
+   * the report was never sent or sent and rejected — an empty table looks exactly like a table
+   * nobody wrote to. Since this metric is what gates widening the Doc pipeline to more stores, a
+   * silently lost row is worse than a noisy one: it biases the rate without anyone knowing.
    */
   async recordGeneration(record: {
     store?: string;
@@ -55,8 +61,13 @@ export class LlmService implements LlmProvider {
   }): Promise<void> {
     try {
       await firstValueFrom(this.http.post('/api/usage/generation', record));
-    } catch {
-      // Deliberately silent — see above.
+    } catch (e) {
+      // Swallowed so the generation still succeeds, but reported so a hole in the metric is
+      // visible rather than indistinguishable from "no generations ran".
+      console.warn(
+        `[usage] generation_log row LOST for ${record.store ?? '?'}/${record.locale ?? '?'} `
+        + `(${record.pipeline}, ${record.outcome}): ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   }
 
