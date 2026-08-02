@@ -35,7 +35,12 @@
   },
   "include": [
     "index.ts",
-    "src/**/*"
+    "src/**/*",
+    // `test/**` was invisible to `npm run lint` until now: vitest transpiles without typechecking,
+    // so a type error in a spec surfaced as nothing at all — a mis-asserted test that still ran.
+    // Adding it here depends on the outDir above: these specs import server .js files, which
+    // allowJs pulls in as program inputs, which is exactly what TS5055 fires on without one.
+    "test/**/*"
   ],
   "angularCompilerOptions": {
     "disableTypeScriptVersionCheck": true

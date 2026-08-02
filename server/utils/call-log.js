@@ -51,13 +51,40 @@ function target(provider, slot) {
     : `${provider}/${slot.model}`;
 }
 
-/** `[LLM] Task A · uk-UA · creative → deep: anthropic/claude-sonnet-5 (medium)` */
+/**
+ * `[LLM] Task A · uk-UA · creative → deep: anthropic/claude-sonnet-5 (medium)`
+ *
+ * Most fields are genuinely optional and the formatter is built for it — `filter(Boolean)` drops
+ * whatever is absent. The vision route has no `mode`, the PDF route has neither `taskLabel` nor
+ * `lang`, and `provider`/`slot` are unbound when resolveRequest() threw. Annotated because
+ * without it TS infers every destructured field as required from the call sites.
+ *
+ * @param {object}  o
+ * @param {string}  o.route
+ * @param {string}  o.slotName
+ * @param {string}  [o.taskLabel]
+ * @param {string}  [o.lang]
+ * @param {string}  [o.mode]
+ * @param {string}  [o.provider]
+ * @param {{ model?: string, level?: string, maxOutputTokens?: number } | null} [o.slot]
+ */
 export function formatCallStart({ route, taskLabel, lang, mode, slotName, provider, slot }) {
   const head = [label({ taskLabel, route }), lang, mode].filter(Boolean).join(' · ');
   return `${PREFIX} ${head} → ${slotName}: ${target(provider, slot)}`;
 }
 
-/** `[LLM] Task A done in 47.2s — in 8,431 (cache r/w 7,900/0) out 5,204 — $0.0912` */
+/**
+ * `[LLM] Task A done in 47.2s — in 8,431 (cache r/w 7,900/0) out 5,204 — $0.0912`
+ *
+ * @param {object}  o
+ * @param {string}  o.route
+ * @param {number}  o.ms
+ * @param {string}  [o.taskLabel]
+ * @param {{ inputTokens?: number, outputTokens?: number,
+ *           cacheReadTokens?: number, cacheWriteTokens?: number }} [o.usage]
+ * @param {number}  [o.costUsd] omitted when pricing has no entry for the model — the cost clause
+ *                              is then suppressed rather than printed as `$NaN`.
+ */
 export function formatCallDone({ route, taskLabel, ms, usage = {}, costUsd }) {
   const read = count(usage.cacheReadTokens);
   const write = count(usage.cacheWriteTokens);
@@ -79,6 +106,16 @@ export function formatCallDone({ route, taskLabel, ms, usage = {}, costUsd }) {
  *
  * `provider` and `slot` are undefined when resolveRequest() itself threw (an unknown provider is
  * rejected before either is bound), so neither may be assumed present.
+ *
+ * @param {object}  o
+ * @param {string}  o.route
+ * @param {number}  o.ms
+ * @param {string}  [o.taskLabel]
+ * @param {string}  [o.lang]
+ * @param {string}  [o.slotName]
+ * @param {string}  [o.provider]
+ * @param {{ model?: string, level?: string, maxOutputTokens?: number } | null} [o.slot]
+ * @param {string}  [o.detail] falls back to 'unknown error'
  */
 export function formatCallError({ route, taskLabel, lang, slotName, provider, slot, ms, detail }) {
   const head = [label({ taskLabel, route }), lang].filter(Boolean).join(' · ');
