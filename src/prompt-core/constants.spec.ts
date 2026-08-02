@@ -20,6 +20,7 @@ import {
   NUMERIC_SOURCE_FIDELITY_RULES, NUMBER_FORMAT_RULES,
   FUNCTIONAL_H2_OPENERS, MANDATED_NOMINAL_H2,
   SENTENCE_LENGTH_BANDS, SENTENCE_LENGTH_RULES,
+  currencySymbolFor,
 } from './constants';
 import { MASTER_SYSTEM_PROMPT } from './master-system-prompt';
 
@@ -496,5 +497,40 @@ describe('buildMasterUaOverlay', () => {
     const overlay = buildMasterUaOverlay('3DDevice');
     expect(overlay).toContain('UKRAINIAN MASTER OUTPUT');
     expect(overlay).not.toContain(EXPERT3D_UK_LOCALE_TOV);
+  });
+});
+
+/**
+ * `meta-description-currency` had never fired in production: all six validateSeoMetadata call
+ * sites in content-orchestrator.service.ts passed `''`, and output-validator.ts short-circuits on
+ * a falsy symbol. Both 2026-08-02 EXPERT3D runs shipped meta_descriptions with no `€` in any
+ * locale — a CLAUDE.md acceptance criterion — and nothing reported it.
+ *
+ * This helper exists so the resolution lives in ONE place rather than six copies of a subtle
+ * expression, which is exactly how it would drift back to `''`.
+ */
+describe('currencySymbolFor', () => {
+  it('resolves each group to its registry symbol', () => {
+    expect(currencySymbolFor('EXPERT3D')).toBe('€');
+    expect(currencySymbolFor('3DDevice')).toBe('₴');
+    expect(currencySymbolFor('Drukarka 3D')).toBe('zł');
+    expect(currencySymbolFor('Expert-3DPrinter')).toBe('$');
+  });
+
+  /**
+   * DELIBERATELY NOT getStore(), which is non-nullable and falls back to a default profile
+   * carrying `€`. That would assert the WRONG currency for an unrecognised Ukrainian or Polish
+   * store and emit a misleading warning. Returning '' disables the check instead — the current
+   * behaviour, so an unknown store cannot regress. No warning beats a wrong warning.
+   */
+  it('returns "" for an unknown store rather than defaulting to €', () => {
+    expect(currencySymbolFor('Not A Real Store')).toBe('');
+    expect(currencySymbolFor('')).toBe('');
+  });
+
+  it('covers every registry entry — a new store cannot arrive symbol-less', () => {
+    for (const name of Object.keys(STORE_REGISTRY)) {
+      expect(currencySymbolFor(name), name).toBeTruthy();
+    }
   });
 });

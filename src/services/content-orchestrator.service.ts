@@ -39,7 +39,7 @@ import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
-import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor } from '../prompt-core/constants';
+import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor, currencySymbolFor } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
@@ -493,7 +493,7 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
-        validate: (json) => validateSeoMetadata(json, ''),
+        validate: (json) => validateSeoMetadata(json, currencySymbolFor(input.website.name)),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -846,7 +846,7 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO })),
-        validate: (json) => validateSeoMetadata(json, ''),
+        validate: (json) => validateSeoMetadata(json, currencySymbolFor(input.website.name)),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -943,7 +943,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
-        validate: (json) => validateSeoMetadata(json, ''),
+        validate: (json) => validateSeoMetadata(json, currencySymbolFor(input.website.name)),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -953,7 +953,7 @@ export class ContentOrchestratorService {
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      this.validationIssues.set(validateSeoMetadata(this.content().seoData, ''));
+      this.validationIssues.set(validateSeoMetadata(this.content().seoData, currencySymbolFor(input.website.name)));
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('SEO Generation Done!');
@@ -1144,7 +1144,7 @@ export class ContentOrchestratorService {
       ...validateHeadingStyle(c.mainHtmlUa, masterLocale, storeName),
       ...validateSentenceLength(c.mainHtmlUa, masterLocale, `HTML (${masterLocale})`),
       ...validateProductNameConsistency(c.mainHtmlUa, localizedNames?.[masterLocale], masterLocale, `HTML (${masterLocale})`),
-      ...validateSeoMetadata(c.seoData, ''),
+      ...validateSeoMetadata(c.seoData, currencySymbolFor(storeName)),
       ...validateSlugs(c.slugData ?? null),
       ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
     ];
