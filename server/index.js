@@ -7,6 +7,8 @@ import { fetchUrl } from './retrieval/fetcher.js';
 import { computeCost } from './usage/pricing.js';
 import { insertUsage, queryUsage, insertGeneration, queryGenerations } from './usage/store.js';
 import { describeError } from './utils/describe-error.js';
+import { formatCallStart, formatCallDone, formatCallError } from './utils/call-log.js';
+import { warmProviders } from './providers/factory.js';
 
 config();
 
@@ -26,24 +28,35 @@ const resolveRequest = (body, slotName) => resolveLlmRequest(body, slotName, LLM
 
 // `error.message` alone is not enough. A transport failure arrives as a bare `fetch failed`, with
 // the actual reason (ECONNRESET, ENOTFOUND, a socket timeout) on `error.cause` — so every network
-// fault used to produce the same opaque 24-byte body and the same useless log line. describeError
-// flattens the cause chain; see server/utils/describe-error.js.
-function sendError(res, error, tag) {
-  const status = error.status || 500;
-  const detail = describeError(error);
-  console.error(`[${tag}] error:`, detail);
-  res.status(status).json({ error: detail });
+// fault used to produce the same opaque 24-byte body. describeError flattens the cause chain; see
+// server/utils/describe-error.js.
+//
+// This sends, it no longer logs: every caller now prints a formatCallError line first, which says
+// the same thing plus the slot, provider, model and elapsed time. Logging here too would just
+// print each failure twice.
+function sendError(res, error) {
+  res.status(error.status || 500).json({ error: describeError(error) });
 }
 
 // ── LLM routes ─────────────────────────────────────────────────────────────
 
 app.post('/api/llm/generate', async (req, res) => {
+  const { systemBlocks = [], userContent = '', mode = 'text', taskLabel, productName, store, lang } = req.body;
+  const slotName = slotFor(mode);
+  const started = Date.now();
+  // Declared out here so the catch can name what failed. resolveRequest() rejects an unknown
+  // provider before either is bound, so neither may be assumed present down there.
+  let provider, slot;
+
   try {
-    const { systemBlocks = [], userContent = '', mode = 'text', taskLabel, productName, store, lang } = req.body;
-    const { provider, instance, slot } = resolveRequest(req.body, slotFor(mode));
-    const { result, usage } = await instance.generate({ systemBlocks, userContent }, mode, slot);
+    const resolved = resolveRequest(req.body, slotName);
+    ({ provider, slot } = resolved);
+    console.log(formatCallStart({ route: 'generate', taskLabel, lang, mode, slotName, provider, slot }));
+
+    const { result, usage } = await resolved.instance.generate({ systemBlocks, userContent }, mode, slot);
 
     if (usage) {
+      const costUsd = computeCost(usage.model, usage);
       try {
         insertUsage({
           // The provider that actually served THIS request — not the boot-time env value,
@@ -56,41 +69,69 @@ app.post('/api/llm/generate', async (req, res) => {
           outputTokens: usage.outputTokens,
           cacheWriteTokens: usage.cacheWriteTokens,
           cacheReadTokens: usage.cacheReadTokens,
-          costUsd: computeCost(usage.model, usage),
+          costUsd,
         });
       } catch (usageError) {
         // Persistence must never fail the actual generation response to the caller.
         console.error('[Usage] failed to record usage:', usageError.message);
       }
+      // Outside the try above on purpose: a logging failure must not be mistaken for — or
+      // silently swallowed by — the usage-persistence handler.
+      console.log(formatCallDone({ route: 'generate', taskLabel, ms: Date.now() - started, usage, costUsd }));
     }
 
     res.json({ result });
   } catch (error) {
-    sendError(res, error, 'LLM generate');
+    console.error(formatCallError({
+      route: 'generate', taskLabel, lang, slotName, provider, slot,
+      ms: Date.now() - started, detail: describeError(error),
+    }));
+    sendError(res, error);
   }
 });
 
 app.post('/api/llm/vision', async (req, res) => {
+  const { base64Data, mimeType, prompt, useThinking = false } = req.body;
+  // Vision has no `mode`, so Deep Thinking Mode picks the slot directly.
+  const slotName = useThinking ? 'deep' : 'fast';
+  const started = Date.now();
+  let provider, slot;
+
   try {
-    const { base64Data, mimeType, prompt, useThinking = false } = req.body;
-    // Vision has no `mode`, so Deep Thinking Mode picks the slot directly.
-    const { instance, slot } = resolveRequest(req.body, useThinking ? 'deep' : 'fast');
-    const result = await instance.analyzeImage(base64Data, mimeType, prompt, useThinking, slot);
+    const resolved = resolveRequest(req.body, slotName);
+    ({ provider, slot } = resolved);
+    console.log(formatCallStart({ route: 'vision', slotName, provider, slot }));
+
+    const result = await resolved.instance.analyzeImage(base64Data, mimeType, prompt, useThinking, slot);
     res.json({ result });
   } catch (error) {
-    sendError(res, error, 'LLM vision');
+    console.error(formatCallError({
+      route: 'vision', slotName, provider, slot,
+      ms: Date.now() - started, detail: describeError(error),
+    }));
+    sendError(res, error);
   }
 });
 
 app.post('/api/llm/pdf', async (req, res) => {
+  const { base64Data } = req.body;
+  const started = Date.now();
+  let provider, slot;
+
   try {
-    const { base64Data } = req.body;
     // Extraction is mechanical transcription — always the cheap slot.
-    const { instance, slot } = resolveRequest(req.body, 'fast');
-    const result = await instance.extractFromPdf(base64Data, slot);
+    const resolved = resolveRequest(req.body, 'fast');
+    ({ provider, slot } = resolved);
+    console.log(formatCallStart({ route: 'pdf', slotName: 'fast', provider, slot }));
+
+    const result = await resolved.instance.extractFromPdf(base64Data, slot);
     res.json({ result });
   } catch (error) {
-    sendError(res, error, 'LLM pdf');
+    console.error(formatCallError({
+      route: 'pdf', slotName: 'fast', provider, slot,
+      ms: Date.now() - started, detail: describeError(error),
+    }));
+    sendError(res, error);
   }
 });
 
@@ -172,7 +213,21 @@ const server = app.listen(PORT, () => {
   // line on a conflict. One tick of delay lets the error land first and suppress it.
   setImmediate(() => {
     if (bindFailed) return;
-    console.log(`[Server] Running on http://localhost:${PORT} (provider: ${process.env.LLM_PROVIDER || 'openai'})`);
+    console.log(`[Server] Running on http://localhost:${PORT}`);
+
+    // The old line here printed LLM_PROVIDER and called it "provider", which has been wrong
+    // since the settings menu landed: it is the fallback for a request that carries no
+    // settings, not what serves your calls. A terminal reading `(provider: gemini)` while every
+    // Deep call went to Claude was correct output that looked like a broken configuration.
+    const inventory = warmProviders();
+    const summary = inventory
+      .map(p => p.ready ? `${p.id} ✓ ready`
+        : p.hasKey ? `${p.id} ✗ ${p.error}`
+        : `${p.id} ✗ no ${p.envVar}`)
+      .join(' | ');
+    console.log(`[Server] Providers: ${summary}`);
+    console.log(`[Server] Fallback for requests that carry no settings: ${LLM_PROVIDER} (LLM_PROVIDER). `
+      + `Each request picks its own provider per slot — see the [LLM] lines below.`);
   });
 });
 

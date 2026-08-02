@@ -87,9 +87,9 @@ export class GeminiProvider {
       });
 
       const text = this.#readText(response, model, mode);
+      // No logging here — the route prints one line per call for every provider and every path,
+      // with the task label, slot and elapsed time this scope cannot see. See utils/call-log.js.
       const usage = this.#usage(response, model, mode);
-      console.log('[gemini]', model, mode, `thinking=${level}`,
-        { in: usage.inputTokens, out: usage.outputTokens, cr: usage.cacheReadTokens });
 
       return { result: isJson ? parseJsonResponse(text || '{}') : text, usage };
     });

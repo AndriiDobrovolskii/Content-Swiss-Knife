@@ -90,9 +90,10 @@ export class AnthropicProvider {
         throw new Error(`[anthropic] request refused by safety classifier on ${model} / ${mode}.`);
       }
 
+      // No logging here. The route in server/index.js prints one line per call for every
+      // provider and every path, and it knows the task label, slot and elapsed time that this
+      // scope cannot see. See server/utils/call-log.js.
       const u = response.usage || {};
-      console.log('[anthropic]', model, mode, `thinking=${level}`,
-        { in: u.input_tokens, out: u.output_tokens, cw: u.cache_creation_input_tokens, cr: u.cache_read_input_tokens });
 
       const usage = {
         model,

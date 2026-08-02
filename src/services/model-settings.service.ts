@@ -25,13 +25,22 @@ interface LegacySettings {
 }
 
 /**
- * Defaults reproduce the pre-settings behaviour exactly: Anthropic, Sonnet 5 with
- * 'medium' effort on the Deep Thinking path, Haiku 4.5 with thinking off on the fast
- * path. Anyone who never opens the settings menu sees no change at all.
+ * The mixed configuration the pipeline is shaped for: the judgment work (Task A, the master
+ * uk-UA artifact) on Sonnet 5, the mechanical work (translations, PDF extraction) on Gemini
+ * Flash. Deep stays on Anthropic because the whole artifact is written there and the prompt
+ * text is calibrated against it; Fast moves to Gemini because per-language translation is the
+ * bulk of the token spend and the cheapest place to pay it.
+ *
+ * `level: 'minimal'` rather than the catalog's `defaultLevel: 'medium'` — the Fast slot's job
+ * is transcription, not reasoning, and this matches FALLBACK_FAST in server/providers/gemini.js
+ * so a request carrying settings and one carrying none route identically.
+ *
+ * Only a browser with no stored settings lands here: restore() honours an existing choice, so
+ * changing this never moves a user who already picked something.
  */
 const DEFAULTS: ModelSettings = {
   deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
-  fast: { provider: 'anthropic', model: 'claude-haiku-4-5', level: 'disabled' },
+  fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
 };
 
 /**
