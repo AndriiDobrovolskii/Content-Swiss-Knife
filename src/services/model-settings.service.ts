@@ -1,19 +1,27 @@
 import { Injectable, computed, signal } from '@angular/core';
 import {
   MODEL_CATALOG, ModelSpec, ProviderId, ThinkingLevel,
-  clampLevel, defaultModel, findModel, findProvider,
+  clampLevel, findModel, findProvider,
 } from '../prompt-core/model-catalog';
 
 const STORAGE_KEY = 'seo_gen_model_settings';
 
-/** One slot's resolved configuration, as sent to the server. */
-export interface SlotSettings { model: string; level: ThinkingLevel; }
+/** One slot's resolved configuration, as sent to the server. Each slot names its own
+ *  provider: Deep on Claude and Fast on Gemini in the same run is a supported setup. */
+export interface SlotSettings { provider: ProviderId; model: string; level: ThinkingLevel; }
 
 /** What LlmService merges into every /api/llm/* request body. */
 export interface ModelSettings {
-  provider: ProviderId;
   deep: SlotSettings;
   fast: SlotSettings;
+}
+
+/** The shape written by the versions that had one provider for both slots. Still read on
+ *  restore so a returning user keeps their configuration instead of silently reverting. */
+interface LegacySettings {
+  provider?: string;
+  deep?: Partial<SlotSettings>;
+  fast?: Partial<SlotSettings>;
 }
 
 /**
@@ -22,9 +30,8 @@ export interface ModelSettings {
  * path. Anyone who never opens the settings menu sees no change at all.
  */
 const DEFAULTS: ModelSettings = {
-  provider: 'anthropic',
-  deep: { model: 'claude-sonnet-5', level: 'medium' },
-  fast: { model: 'claude-haiku-4-5', level: 'disabled' },
+  deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
+  fast: { provider: 'anthropic', model: 'claude-haiku-4-5', level: 'disabled' },
 };
 
 /**
@@ -39,17 +46,19 @@ const DEFAULTS: ModelSettings = {
 export class ModelSettingsService {
   readonly catalog = MODEL_CATALOG;
 
-  provider = signal<ProviderId>(DEFAULTS.provider);
+  deepProvider = signal<ProviderId>(DEFAULTS.deep.provider);
   deepModel = signal<string>(DEFAULTS.deep.model);
   deepLevel = signal<ThinkingLevel>(DEFAULTS.deep.level);
+  fastProvider = signal<ProviderId>(DEFAULTS.fast.provider);
   fastModel = signal<string>(DEFAULTS.fast.model);
   fastLevel = signal<ThinkingLevel>(DEFAULTS.fast.level);
 
-  /** Models offered for the current provider. */
-  models = computed<ModelSpec[]>(() => findProvider(this.provider())?.models ?? []);
+  /** Models offered for each slot — the two lists are independent now. */
+  deepModels = computed<ModelSpec[]>(() => findProvider(this.deepProvider())?.models ?? []);
+  fastModels = computed<ModelSpec[]>(() => findProvider(this.fastProvider())?.models ?? []);
 
-  deepSpec = computed<ModelSpec | undefined>(() => findModel(this.provider(), this.deepModel()));
-  fastSpec = computed<ModelSpec | undefined>(() => findModel(this.provider(), this.fastModel()));
+  deepSpec = computed<ModelSpec | undefined>(() => findModel(this.deepProvider(), this.deepModel()));
+  fastSpec = computed<ModelSpec | undefined>(() => findModel(this.fastProvider(), this.fastModel()));
 
   constructor() {
     this.restore();
@@ -57,64 +66,61 @@ export class ModelSettingsService {
 
   snapshot(): ModelSettings {
     return {
-      provider: this.provider(),
-      deep: { model: this.deepModel(), level: this.deepLevel() },
-      fast: { model: this.fastModel(), level: this.fastLevel() },
+      deep: { provider: this.deepProvider(), model: this.deepModel(), level: this.deepLevel() },
+      fast: { provider: this.fastProvider(), model: this.fastModel(), level: this.fastLevel() },
     };
   }
 
-  /** Switching provider resets both slots — a Claude model id is meaningless to Gemini. */
-  setProvider(provider: ProviderId) {
+  /** Switching a slot's provider resets that slot only — a Claude model id is meaningless
+   *  to Gemini, but the other slot's choice is none of this one's business. */
+  setDeepProvider(provider: ProviderId) {
     if (!findProvider(provider)) return;
-    this.provider.set(provider);
+    const spec = this.pick(provider, 'premium');
+    this.deepProvider.set(provider);
+    this.deepModel.set(spec.id);
+    this.deepLevel.set(spec.defaultLevel);
+    this.persist();
+  }
 
-    const [first, second] = findProvider(provider)!.models;
-    const deep = first;
-    // Prefer a distinct 'fast'-tier model for the fast slot; fall back to the same model
-    // when a provider only registers one.
-    const fast = findProvider(provider)!.models.find(m => m.tier === 'fast') ?? second ?? first;
-
-    this.deepModel.set(deep.id);
-    this.deepLevel.set(deep.defaultLevel);
-    this.fastModel.set(fast.id);
-    this.fastLevel.set(fast.defaultLevel);
+  setFastProvider(provider: ProviderId) {
+    if (!findProvider(provider)) return;
+    const spec = this.pick(provider, 'fast');
+    this.fastProvider.set(provider);
+    this.fastModel.set(spec.id);
+    this.fastLevel.set(spec.defaultLevel);
     this.persist();
   }
 
   setDeepModel(modelId: string) {
-    const spec = findModel(this.provider(), modelId);
+    const spec = findModel(this.deepProvider(), modelId);
     if (!spec) return;
     this.deepModel.set(spec.id);
     // Carry the current level across if the new model accepts it, else snap to the nearest.
-    this.deepLevel.set(clampLevel(this.provider(), spec.id, this.deepLevel()));
+    this.deepLevel.set(clampLevel(this.deepProvider(), spec.id, this.deepLevel()));
     this.persist();
   }
 
   setFastModel(modelId: string) {
-    const spec = findModel(this.provider(), modelId);
+    const spec = findModel(this.fastProvider(), modelId);
     if (!spec) return;
     this.fastModel.set(spec.id);
-    this.fastLevel.set(clampLevel(this.provider(), spec.id, this.fastLevel()));
+    this.fastLevel.set(clampLevel(this.fastProvider(), spec.id, this.fastLevel()));
     this.persist();
   }
 
   setDeepLevel(level: ThinkingLevel) {
-    this.deepLevel.set(clampLevel(this.provider(), this.deepModel(), level));
+    this.deepLevel.set(clampLevel(this.deepProvider(), this.deepModel(), level));
     this.persist();
   }
 
   setFastLevel(level: ThinkingLevel) {
-    this.fastLevel.set(clampLevel(this.provider(), this.fastModel(), level));
+    this.fastLevel.set(clampLevel(this.fastProvider(), this.fastModel(), level));
     this.persist();
   }
 
   /** Back to the Anthropic Sonnet/Haiku config, and drop the stored override entirely. */
   reset() {
-    this.provider.set(DEFAULTS.provider);
-    this.deepModel.set(DEFAULTS.deep.model);
-    this.deepLevel.set(DEFAULTS.deep.level);
-    this.fastModel.set(DEFAULTS.fast.model);
-    this.fastLevel.set(DEFAULTS.fast.level);
+    this.apply(DEFAULTS);
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -124,16 +130,33 @@ export class ModelSettingsService {
 
   isDefault(): boolean {
     const s = this.snapshot();
-    return s.provider === DEFAULTS.provider
-      && s.deep.model === DEFAULTS.deep.model && s.deep.level === DEFAULTS.deep.level
-      && s.fast.model === DEFAULTS.fast.model && s.fast.level === DEFAULTS.fast.level;
+    return sameSlot(s.deep, DEFAULTS.deep) && sameSlot(s.fast, DEFAULTS.fast);
+  }
+
+  /** The model a slot lands on when its provider changes: prefer a model of the slot's own
+   *  tier, so a provider switch never quietly puts translations on a premium model. */
+  private pick(provider: ProviderId, preferTier: ModelSpec['tier']): ModelSpec {
+    const models = findProvider(provider)!.models;
+    return models.find(m => m.tier === preferTier) ?? models[0];
+  }
+
+  private apply(settings: ModelSettings) {
+    this.deepProvider.set(settings.deep.provider);
+    this.deepModel.set(settings.deep.model);
+    this.deepLevel.set(settings.deep.level);
+    this.fastProvider.set(settings.fast.provider);
+    this.fastModel.set(settings.fast.model);
+    this.fastLevel.set(settings.fast.level);
   }
 
   /**
    * Read the stored settings back, validating every field against the catalog. A model that
-   * has since been removed falls back to the provider's first entry, and a level the model
+   * has since been removed falls back to a model of the slot's tier, and a level the model
    * no longer accepts snaps to the nearest one — so a catalog edit can never leave a user
    * stuck sending a request the API will reject.
+   *
+   * A payload written before providers went per-slot carries one top-level `provider`; it is
+   * read as the provider of both slots, which is exactly what that user had configured.
    */
   private restore() {
     let raw: string | null = null;
@@ -145,31 +168,34 @@ export class ModelSettingsService {
     }
     if (!raw) return;
 
-    let stored: Partial<ModelSettings>;
+    let stored: LegacySettings;
     try {
       stored = JSON.parse(raw);
     } catch {
       return;
     }
 
-    const provider: ProviderId = findProvider(stored.provider as string)
-      ? (stored.provider as ProviderId)
-      : DEFAULTS.provider;
-    this.provider.set(provider);
-
-    const deep = this.validateSlot(provider, stored.deep, 'premium');
-    const fast = this.validateSlot(provider, stored.fast, 'fast');
-    this.deepModel.set(deep.model);
-    this.deepLevel.set(deep.level);
-    this.fastModel.set(fast.model);
-    this.fastLevel.set(fast.level);
+    this.apply({
+      deep: this.validateSlot(stored.deep, stored.provider, DEFAULTS.deep, 'premium'),
+      fast: this.validateSlot(stored.fast, stored.provider, DEFAULTS.fast, 'fast'),
+    });
   }
 
-  private validateSlot(provider: ProviderId, slot: SlotSettings | undefined, preferTier: ModelSpec['tier']): SlotSettings {
-    const spec = findModel(provider, slot?.model ?? '')
-      ?? findProvider(provider)?.models.find(m => m.tier === preferTier)
-      ?? defaultModel(provider)!;
-    return { model: spec.id, level: clampLevel(provider, spec.id, slot?.level ?? spec.defaultLevel) };
+  private validateSlot(
+    slot: Partial<SlotSettings> | undefined,
+    legacyProvider: string | undefined,
+    fallback: SlotSettings,
+    preferTier: ModelSpec['tier'],
+  ): SlotSettings {
+    const provider = findProvider(slot?.provider as string)?.id
+      ?? findProvider(legacyProvider as string)?.id
+      ?? fallback.provider;
+    const spec = findModel(provider, slot?.model ?? '') ?? this.pick(provider, preferTier);
+    return {
+      provider,
+      model: spec.id,
+      level: clampLevel(provider, spec.id, slot?.level ?? spec.defaultLevel),
+    };
   }
 
   private persist() {
@@ -180,4 +206,8 @@ export class ModelSettingsService {
       // Never let a persistence failure surface as an error mid-generation.
     }
   }
+}
+
+function sameSlot(a: SlotSettings, b: SlotSettings): boolean {
+  return a.provider === b.provider && a.model === b.model && a.level === b.level;
 }
