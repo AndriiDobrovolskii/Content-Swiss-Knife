@@ -25,7 +25,9 @@ describe('usesDocPipeline', () => {
 
   it('leaves every other store on the HTML path', () => {
     const enabled = Object.keys(STORE_REGISTRY).filter(s => usesDocPipeline(s));
-    expect(enabled).toEqual(['3DDevice', '3DPrinter', '3DScanner', 'Center 3D Print', 'EXPERT3D']);
+    expect(enabled).toEqual([
+      '3DDevice', '3DPrinter', '3DScanner', 'Center 3D Print', 'Drukarka 3D', 'EXPERT3D',
+    ]);
   });
 
   /**
@@ -34,10 +36,14 @@ describe('usesDocPipeline', () => {
    * inventing an h2, and the resolution — populate `operatingTips` — was stated nowhere. Fixed in
    * TASK_A_DOC_INSTRUCTION, so the store is now eligible.
    *
-   * Drukarka 3D is simply next in line: 2 locales, default voice, nothing store-specific.
+   * Drukarka 3D followed with no code change at all: 2 locales, default voice, no override.
    */
-  it('has not yet enrolled Drukarka 3D', () => {
-    expect(usesDocPipeline('Drukarka 3D')).toBe(false);
+  it('covers every live store, leaving only the one that cannot render', () => {
+    const off = Object.keys(STORE_REGISTRY).filter(s => !usesDocPipeline(s));
+    // Expert-3DPrinter is a placeholder, not yet trading: imageBaseUrl is '', so
+    // renderContextFor() refuses it by design. It must NOT borrow another store's domain.
+    expect(off).toEqual(['Expert-3DPrinter']);
+    expect(STORE_REGISTRY['Expert-3DPrinter'].imageBaseUrl).toBe('');
   });
 
   /** The §5b slot is what made this store the hard one, and it is C3D's alone. */

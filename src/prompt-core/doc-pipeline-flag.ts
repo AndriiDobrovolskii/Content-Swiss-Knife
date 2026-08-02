@@ -39,13 +39,22 @@ import { STORE_REGISTRY } from './constants';
  * `TASK_A_DOC_INSTRUCTION`, whose §5b clause interpolates `OPERATING_TIPS_H2_MARKERS` so the
  * heading stays detectable by `tov-second-person.ts`.
  *
- * NOT YET: `Drukarka 3D` — nothing store-specific about it (2 locales, default voice), it is
- * simply next in line for a real run.
+ * `Drukarka 3D` needed no code at all — 2 locales, default voice, no override, no §5b — and
+ * completes the rollout.
+ *
+ * EVERY LIVE STORE IS NOW ON THIS LIST. The one absentee is `Expert-3DPrinter`, a placeholder that
+ * is not yet trading: its `imageBaseUrl` is `''`, so `renderContextFor()` refuses it by design
+ * rather than emitting relative `<img src>`. It joins when it has its own CDN path — it must NOT
+ * borrow the Spanish store's domain.
+ *
+ * The list stays OPT-IN even now that it is complete: a store added to STORE_REGISTRY must be
+ * named here too, so a new storefront cannot be enrolled in the Doc pipeline by accident.
  */
 export const DOC_PIPELINE_STORES: readonly string[] = [
   'EXPERT3D',
   '3DDevice', '3DPrinter', '3DScanner',
   'Center 3D Print',
+  'Drukarka 3D',
 ];
 
 /**
