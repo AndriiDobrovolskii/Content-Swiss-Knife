@@ -148,19 +148,19 @@ describe('conformance matrix — coverage', () => {
    * go uncovered.
    */
   it('enumerates every store in the registry', () => {
-    expect(Object.keys(STORE_REGISTRY)).toHaveLength(8);
-    expect(new Set(CASES.map(c => c.storeName)).size).toBe(8);
+    expect(Object.keys(STORE_REGISTRY)).toHaveLength(7);
+    expect(new Set(CASES.map(c => c.storeName)).size).toBe(7);
   });
 
   it('enumerates one case per store × published locale', () => {
     const expected = Object.values(STORE_REGISTRY).reduce((n, p) => n + p.languages.length, 0);
     expect(CASES).toHaveLength(expected);
-    expect(CASES).toHaveLength(27);
+    expect(CASES).toHaveLength(23);
   });
 
   it('records exactly one store blocked by a missing image base URL', () => {
     expect([...new Set(UNRENDERABLE.map(c => c.storeName))]).toEqual(['Expert-3DPrinter']);
-    expect(RENDERABLE).toHaveLength(24);
+    expect(RENDERABLE).toHaveLength(20);
   });
 });
 

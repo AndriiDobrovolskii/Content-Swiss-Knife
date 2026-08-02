@@ -50,7 +50,7 @@ Store facts live in a single canonical registry (`prompt-core/constants.ts`), wh
 | 3DScanner | UA | Ukraine | en‑GB, uk‑UA, ru‑UA |
 | Center 3D Print | EU | Poland & EU | pl‑PL, en‑GB, de‑DE, uk‑UA, ru‑UA |
 | Drukarka 3D | EU | Poland (Kraków) | pl‑PL, uk‑UA |
-| EXPERT3D / Impresora‑3D | ES | Valencia, Spain | en‑ES, es‑ES, uk‑UA |
+| EXPERT3D | ES | Valencia, Spain | en‑ES, es‑ES, pt‑PT, uk‑UA |
 | Expert‑3DPrinter | US | Houston, TX | en‑US, es‑MX, uk‑UA |
 
 Each group carries its own tone, currency, measurement rules (e.g. imperial conversions for the US group), and language priority. Target languages for both SEO metadata and translations are derived automatically from the store registry — there is no per‑group hardcoding to keep in sync.

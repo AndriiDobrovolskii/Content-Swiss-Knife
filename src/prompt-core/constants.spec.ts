@@ -422,18 +422,8 @@ describe('pt-PT locale wiring', () => {
     expect(transLangs).toEqual(['European English', 'ES', 'PT']);
   });
 
-  it('getLangsForStore("Impresora-3D") includes pt-PT in seoLangs and European English/ES/PT in transLangs', () => {
-    const { seoLangs, transLangs } = getLangsForStore('Impresora-3D');
-    expect(seoLangs).toContain('pt-PT');
-    expect(transLangs).toEqual(['European English', 'ES', 'PT']);
-  });
-
   it('taskLangToIso("PT", "EXPERT3D") resolves to "pt-PT"', () => {
     expect(taskLangToIso('PT', 'EXPERT3D')).toBe('pt-PT');
-  });
-
-  it('taskLangToIso("PT", "Impresora-3D") resolves to "pt-PT"', () => {
-    expect(taskLangToIso('PT', 'Impresora-3D')).toBe('pt-PT');
   });
 
   it('isoToHumanLang("pt-PT") returns "European Portuguese"', () => {

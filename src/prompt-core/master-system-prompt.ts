@@ -66,7 +66,7 @@ absent, proceed directly to the next section — the fixed order stays intact.
 - "3DDevice" | "3DPrinter" | "3DScanner" → Ukraine, UAH (₴), languages en-GB, uk-UA, ru-UA.
 - "Center 3D Print" → Poland & EU, PLN (zł) / EUR (€), languages pl-PL, en-GB, de-DE, uk-UA, ru-UA.
 - "Drukarka 3D" → Poland (Kraków), PLN (zł), languages pl-PL, uk-UA. Site suffix "Drukarka 3D".
-- "EXPERT3D" | "Impresora-3D" → Valencia (Spain), EUR (€), languages en-ES, es-ES, uk-UA. Site suffix "EXPERT3D".
+- "EXPERT3D" → Valencia (Spain), EUR (€), languages en-ES, es-ES, pt-PT, uk-UA. Site suffix "EXPERT3D".
 - "Expert-3DPrinter" → USA (Houston, TX), USD ($), languages en-US, es-MX, uk-UA.
 - Otherwise → Global/EU, EUR (€).
 
@@ -298,7 +298,7 @@ ending at §9.
    delivery across [Region] (per [COMMERCIAL CLAIMS]); post-sale support & operator
    training; financing / leasing; consumables & spare parts in stock; in-showroom demo & test.
    SHOWROOM SCOPE: offer "in-showroom demo & test" only for stores with a physical
-   showroom; for EXPERT3D and Impresora-3D (no showroom) substitute that slot with another
+   showroom; for EXPERT3D (no showroom) substitute that slot with another
    trust point from the list, e.g. "consumables & spare parts in stock".
    BRAND LOGIC PRESERVED: if [Product] contains an applicable brand, still include the
    localized: "${BRAND_GUARANTEE_EN}"

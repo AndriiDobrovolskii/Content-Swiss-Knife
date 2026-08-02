@@ -127,11 +127,12 @@ Input product: "Bambu Lab Hardened Steel Nozzle 0.4 mm"
 Note: non-English = category-first, English = brand-first; German umlauts EXPANDED in the slug
 (Düse→duese, gehärteter→gehaerteter); dimension kept with a dot decimal; мм→mm in the slug.
 
-══════════ WORKED EXAMPLE 2 (store "EXPERT3D" → en-ES, es-ES, uk-UA) ══════════
+══════════ WORKED EXAMPLE 2 (store "EXPERT3D" → en-ES, es-ES, pt-PT, uk-UA) ══════════
 Input product: "Bambu Lab PLA Basic Filament 1.75 mm 1 kg x4 With Spool CMYK"
 {"site_name":"EXPERT3D","slugs":[
  {"language":"en-ES","name":"Bambu Lab PLA Basic Filament 1.75 mm 1 kg x4 With Spool CMYK","slug":"bambu-lab-pla-basic-filament-1.75-mm-1-kg-x4-spool-cmyk"},
  {"language":"es-ES","name":"Filamento Bambu Lab PLA Basic 1,75 mm 1 kg x4 Con Bobina CMYK","slug":"filamento-bambu-lab-pla-basic-1.75-mm-1-kg-x4-bobina-cmyk"},
+ {"language":"pt-PT","name":"Filamento Bambu Lab PLA Basic 1,75 mm 1 kg x4 Com Bobina CMYK","slug":"filamento-bambu-lab-pla-basic-1.75-mm-1-kg-x4-bobina-cmyk"},
  {"language":"uk-UA","name":"Філамент Bambu Lab PLA Basic 1,75 мм 1 кг x4 з котушкою CMYK","slug":"filament-bambu-lab-pla-basic-1.75-mm-1-kg-x4-kotushkoyu-cmyk"}
 ]}
 Note: head noun rendered once, fully localized (Filament→Filamento→Філамент); linking preposition
