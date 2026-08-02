@@ -113,6 +113,31 @@ describe('withRetry — transport failures are retried', () => {
     await expect(withRetry(operation, FAST.maxRetries, FAST.baseDelayMs)).resolves.toBe('ok');
     expect(attempts()).toBe(2);
   });
+
+  /**
+   * THE 2026-08-02 REGRESSION. A real EXPERT3D run lost its specs-grounding call to
+   * `Retryable HTTP Error: Gateway Timeout` after 119.4s, with no `[Retry]` line — one attempt.
+   *
+   * This is `@google/genai`'s own wording, and the shape is the whole problem: the SDK converts a
+   * retryable HTTP status into a BARE `Error` (no `status`, no `code`, `name === 'Error'`) *before*
+   * its `throwErrorIfNotOK` can build the real `ApiError`. Every signal the classifier looks for is
+   * stripped, so the `status === 504` branch never fires.
+   *
+   * The provider fix is to stop opting into that wrapper at all (see gemini-provider.spec.ts), but
+   * the classifier must also recognise the message on its own — otherwise re-enabling the SDK's
+   * retry loop silently un-retries every gateway failure again, exactly as it did here.
+   */
+  it('retries the Gemini SDK`s status-stripped `Retryable HTTP Error`', async () => {
+    const err = new Error('Retryable HTTP Error: Gateway Timeout');
+    expect((err as any).status).toBeUndefined();   // the point: nothing else identifies it
+    expect((err as any).code).toBeUndefined();
+
+    const { operation, attempts } = failingTimes(1, err);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(withRetry(operation, FAST.maxRetries, FAST.baseDelayMs)).resolves.toBe('ok');
+    expect(attempts()).toBe(2);
+  });
 });
 
 describe('withRetry — policy failures still retried (regression)', () => {

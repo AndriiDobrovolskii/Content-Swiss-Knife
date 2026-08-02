@@ -71,6 +71,12 @@ function isTransportFailure(error) {
     // application errors that merely mention one.
     if (message.includes('fetch failed')) return true;
     if (/timed out|socket hang up|network error/i.test(message)) return true;
+    // `@google/genai`'s own wording, matched exactly because the error carries nothing else: its
+    // retry wrapper strips `status` and `code` before rethrowing (see the warning in
+    // server/providers/gemini.js). We no longer engage that wrapper, so this should be
+    // unreachable — it stays as a backstop, because the failure mode it guards against is silent:
+    // gateway errors simply stop being retried, with nothing in the log to say so.
+    if (message.includes('Retryable HTTP Error')) return true;
 
     current = current.cause;
     depth++;

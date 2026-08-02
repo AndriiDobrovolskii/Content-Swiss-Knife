@@ -16,10 +16,21 @@ export class GeminiProvider {
     this.ai = new GoogleGenAI({
       apiKey,
       httpOptions: {
-        // `attempts` "default to 5" per the SDK's own typings, and withRetry already attempts 3 —
-        // one stuck request could be issued 15 times. Retry policy belongs in withRetry alone
-        // (architecture rule #5); 1 means "no retries", not "one retry".
-        retryOptions: { attempts: 1 },
+        // ⚠ DO NOT ADD `retryOptions` HERE. It looks like the way to disable the SDK's retry loop;
+        // it is the way to ENABLE it. `apiCall` (dist/node/index.mjs:13305) reads:
+        //
+        //     if (!httpOptions || !httpOptions.retryOptions) return fetch(url, requestInit);
+        //
+        // so the loop is dormant unless the option exists — the typings' "attempts default to 5"
+        // is unreachable, and there was never a 15-attempt multiplier with withRetry's 3. Setting
+        // `{ attempts: 1 }` opted in, and inside the wrapper a retryable status becomes
+        // `throw new Error('Retryable HTTP Error: ' + statusText)` — a bare Error stripped of
+        // `status`, thrown before `throwErrorIfNotOK` can build the real ApiError. withRetry's
+        // `status === 504` branch then never fires. That silently un-retried a Gateway Timeout on
+        // 2026-08-02 and cost a live generation its specs grounding. Omitting the option keeps the
+        // loop off (architecture rule #5) AND preserves the status for the classifier and the
+        // error body the browser sees.
+        //
         // Client-level floor. Per-call config overrides it with the mode-appropriate value.
         timeout: DEEP_TIMEOUT_MS,
       },
