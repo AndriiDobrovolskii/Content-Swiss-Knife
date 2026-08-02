@@ -34,9 +34,13 @@ function docWithEveryField(): ProductDescriptionDoc {
       {
         kind: 'bullets',
         items: [
-          { lead: 'kb-lead-1', text: 'kb-text-1' },
-          { lead: 'kb-lead-2', text: 'kb-text-2' },
-          { lead: 'kb-lead-3', text: 'kb-text-3' },
+          // The trailing colons are load-bearing, not decoration. The renderer joins
+          // `<b>{lead}</b>{text}` with nothing of its own, so the schema rejects a pair where
+          // NEITHER side carries a separator — `kb-lead-1` + `kb-text-1` rendered as
+          // `<b>kb-lead-1</b>kb-text-1`. Real artifacts always carry one; this fixture did not.
+          { lead: 'kb-lead-1:', text: 'kb-text-1' },
+          { lead: 'kb-lead-2:', text: 'kb-text-2' },
+          { lead: 'kb-lead-3:', text: 'kb-text-3' },
         ],
       },
     ],
