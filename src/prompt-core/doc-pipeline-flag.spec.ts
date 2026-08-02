@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 
 import { DOC_PIPELINE_STORES, usesDocPipeline } from './doc-pipeline-flag';
 import { STORE_REGISTRY } from './constants';
+import { getRenderRules } from './store-render-rules';
 
 describe('usesDocPipeline', () => {
   it('enables the store the live probe actually exercised', () => {
@@ -24,17 +25,25 @@ describe('usesDocPipeline', () => {
 
   it('leaves every other store on the HTML path', () => {
     const enabled = Object.keys(STORE_REGISTRY).filter(s => usesDocPipeline(s));
-    expect(enabled).toEqual(['3DDevice', '3DPrinter', '3DScanner', 'EXPERT3D']);
+    expect(enabled).toEqual(['3DDevice', '3DPrinter', '3DScanner', 'Center 3D Print', 'EXPERT3D']);
   });
 
   /**
-   * Center 3D Print is deliberately LAST in the rollout: it is the only store with a ToV override
-   * (KILLER_SPECS_HEADERS_C3D) and the only one using the §5b operatingTips slot, so it has the
-   * most store-specific renderer behaviour to get wrong. Drukarka 3D follows the UA group.
+   * Center 3D Print was the last store to need code before it could be enrolled: its ToV overlay
+   * tells the model to "Emit an H2 'Tips for operating [Product]'" while the Doc contract forbids
+   * inventing an h2, and the resolution — populate `operatingTips` — was stated nowhere. Fixed in
+   * TASK_A_DOC_INSTRUCTION, so the store is now eligible.
+   *
+   * Drukarka 3D is simply next in line: 2 locales, default voice, nothing store-specific.
    */
-  it('has not yet enrolled the stores with the most store-specific behaviour', () => {
-    expect(usesDocPipeline('Center 3D Print')).toBe(false);
+  it('has not yet enrolled Drukarka 3D', () => {
     expect(usesDocPipeline('Drukarka 3D')).toBe(false);
+  });
+
+  /** The §5b slot is what made this store the hard one, and it is C3D's alone. */
+  it('enrols the only store that uses the §5b operating-tips slot', () => {
+    expect(usesDocPipeline('Center 3D Print')).toBe(true);
+    expect(getRenderRules('Center 3D Print').admitsOperatingTips).toBe(true);
   });
 
   /**

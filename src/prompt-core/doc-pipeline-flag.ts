@@ -31,12 +31,21 @@ import { STORE_REGISTRY } from './constants';
  * never rendered through the Doc pipeline, and these stores take the DEFAULT Tone of Voice
  * (neither isExpert3dStore nor isCenter3dPrintStore), which the Doc pipeline has never exercised.
  *
- * NOT YET: `Drukarka 3D`, then `Center 3D Print` LAST — it is the only store with a ToV override
- * and the only one using the §5b operatingTips slot, so it has the most to get wrong.
+ * Center 3D Print came next, and it was the last store that needed CODE before it could be
+ * enrolled rather than just evidence. It is the only store with a ToV override
+ * (`KILLER_SPECS_HEADERS_C3D`) and the only user of the §5b `operatingTips` slot, and its overlay
+ * instructs the model to "Emit an H2 'Tips for operating [Product]'" — which the Doc contract
+ * forbids, while the correct action (populate `operatingTips`) was stated nowhere. Resolved in
+ * `TASK_A_DOC_INSTRUCTION`, whose §5b clause interpolates `OPERATING_TIPS_H2_MARKERS` so the
+ * heading stays detectable by `tov-second-person.ts`.
+ *
+ * NOT YET: `Drukarka 3D` — nothing store-specific about it (2 locales, default voice), it is
+ * simply next in line for a real run.
  */
 export const DOC_PIPELINE_STORES: readonly string[] = [
   'EXPERT3D',
   '3DDevice', '3DPrinter', '3DScanner',
+  'Center 3D Print',
 ];
 
 /**
