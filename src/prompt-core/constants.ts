@@ -22,24 +22,6 @@ export const STORE_REGISTRY: Record<string, StoreProfile> = {
   'Expert-3DPrinter': { group: 'US', region: 'Houston, TX 🇺🇸', currency: 'USD ($)', currencySymbol: '$', languages: ['en-US', 'es-MX', 'uk-UA'], imageBaseUrl: '', siteSuffix: 'Expert-3DPrinter' },
 };
 
-/**
- * The currency symbol `validateSeoMetadata` should check meta_description against, or `''` to skip
- * the check entirely.
- *
- * DELIBERATELY NOT `getStore(name).currencySymbol`. getStore is non-nullable — it falls back to a
- * default profile carrying `€` — so an unrecognised store would silently assert the WRONG currency
- * and emit a misleading warning on a Ukrainian or Polish storefront. Indexing the registry lets an
- * unknown name resolve to `''`, which disables the rule instead. No warning beats a wrong warning,
- * and `''` is the behaviour every call site had before this was wired up, so nothing can regress.
- *
- * One named function rather than six copies of `STORE_REGISTRY[x]?.currencySymbol ?? ''` at the
- * call sites: the rule sat dead for months precisely because `''` is a legal argument, and six
- * repetitions of a subtle expression is how it would quietly become `''` again.
- */
-export function currencySymbolFor(storeName: string): string {
-  return STORE_REGISTRY[storeName]?.currencySymbol ?? '';
-}
-
 export function getStore(name: string): StoreProfile {
   return STORE_REGISTRY[name] ?? {
     group: 'EU', region: 'Global/EU', currency: 'EUR (€)', currencySymbol: '€',

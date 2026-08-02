@@ -39,7 +39,7 @@ import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
-import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor, currencySymbolFor } from '../prompt-core/constants';
+import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
@@ -58,6 +58,26 @@ import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
 import { validateSpecCategoryShape } from '../utils/spec-category-shape';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
 import { validateLanguageConsistency } from '../utils/language-consistency';
+
+/**
+ * Disables `meta-description-currency` at every validateSeoMetadata call site — and says so, rather
+ * than leaving a bare `''` that reads like an oversight. It was read as exactly that once, and
+ * "fixed" by wiring the store's real symbol through; the rule then demanded something no model can
+ * produce. Three facts, each sufficient on its own:
+ *
+ *   1. task-b.ts:61 (FROZEN) instructs the opposite — "Do NOT invent prices, discounts, currency
+ *      values, or availability — not provided here; those are emitted separately via Schema.org
+ *      Offer."
+ *   2. task-b.ts's own resolveCurrencySymbol is @deprecated and unused: "Currency is no longer
+ *      injected into the Task B prompt. Price is not available at this pipeline stage."
+ *   3. ProductInput (app/types.ts) carries no price field at all, so there is no source for a
+ *      figure to put a symbol next to.
+ *
+ * The rule in output-validator.ts is not broken and needs no change — it simply has no input on
+ * this pipeline. See src/services/seo-currency-wiring.spec.ts, which fails if this is re-wired.
+ */
+const NO_CURRENCY_CHECK = '';
+
 // ── Orchestrator ────────────────────────────────────────────────────────────
 
 @Injectable({
@@ -493,7 +513,7 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
-        validate: (json) => validateSeoMetadata(json, currencySymbolFor(input.website.name)),
+        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -846,7 +866,7 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO })),
-        validate: (json) => validateSeoMetadata(json, currencySymbolFor(input.website.name)),
+        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -943,7 +963,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
-        validate: (json) => validateSeoMetadata(json, currencySymbolFor(input.website.name)),
+        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -953,7 +973,7 @@ export class ContentOrchestratorService {
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      this.validationIssues.set(validateSeoMetadata(this.content().seoData, currencySymbolFor(input.website.name)));
+      this.validationIssues.set(validateSeoMetadata(this.content().seoData, NO_CURRENCY_CHECK));
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('SEO Generation Done!');
@@ -1144,7 +1164,7 @@ export class ContentOrchestratorService {
       ...validateHeadingStyle(c.mainHtmlUa, masterLocale, storeName),
       ...validateSentenceLength(c.mainHtmlUa, masterLocale, `HTML (${masterLocale})`),
       ...validateProductNameConsistency(c.mainHtmlUa, localizedNames?.[masterLocale], masterLocale, `HTML (${masterLocale})`),
-      ...validateSeoMetadata(c.seoData, currencySymbolFor(storeName)),
+      ...validateSeoMetadata(c.seoData, NO_CURRENCY_CHECK),
       ...validateSlugs(c.slugData ?? null),
       ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
     ];
