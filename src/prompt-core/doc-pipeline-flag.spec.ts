@@ -24,7 +24,17 @@ describe('usesDocPipeline', () => {
 
   it('leaves every other store on the HTML path', () => {
     const enabled = Object.keys(STORE_REGISTRY).filter(s => usesDocPipeline(s));
-    expect(enabled).toEqual(['EXPERT3D']);
+    expect(enabled).toEqual(['3DDevice', '3DPrinter', '3DScanner', 'EXPERT3D']);
+  });
+
+  /**
+   * Center 3D Print is deliberately LAST in the rollout: it is the only store with a ToV override
+   * (KILLER_SPECS_HEADERS_C3D) and the only one using the §5b operatingTips slot, so it has the
+   * most store-specific renderer behaviour to get wrong. Drukarka 3D follows the UA group.
+   */
+  it('has not yet enrolled the stores with the most store-specific behaviour', () => {
+    expect(usesDocPipeline('Center 3D Print')).toBe(false);
+    expect(usesDocPipeline('Drukarka 3D')).toBe(false);
   });
 
   /**

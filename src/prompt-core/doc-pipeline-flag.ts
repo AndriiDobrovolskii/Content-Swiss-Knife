@@ -16,10 +16,28 @@
 import { STORE_REGISTRY } from './constants';
 
 /**
- * EXPERT3D is the store the live probe exercised, so it is the only one with direct evidence
- * behind it. Add a store here only after a probe run for it looks right.
+ * Add a store here only after the evidence supports it.
+ *
+ * EXPERT3D came first — the live probe exercised it, and by 2026-08-02 it had a clean run
+ * (`generation_log`: one `ok` with zero repairs, one `repaired`, no `failed-schema`) whose four
+ * locales passed every acceptance criterion by inspection.
+ *
+ * The UA group followed. Their readiness was verified rather than assumed: `KILLER_SPECS_HEADERS`
+ * (§2a), `SPEC_TABLE_HEADERS` (§7) and `FIGCAPTION_TEMPLATES` (video) all cover `uk-ua`, `ru-ua`
+ * and `en-gb`; all three stores have a real `imageBaseUrl`; and `masterScriptFor` is 'Cyrillic',
+ * the same as EXPERT3D.
+ *
+ * Two things are genuinely first-time on this path, so watch the first run of each: `ru-UA` has
+ * never rendered through the Doc pipeline, and these stores take the DEFAULT Tone of Voice
+ * (neither isExpert3dStore nor isCenter3dPrintStore), which the Doc pipeline has never exercised.
+ *
+ * NOT YET: `Drukarka 3D`, then `Center 3D Print` LAST — it is the only store with a ToV override
+ * and the only one using the §5b operatingTips slot, so it has the most to get wrong.
  */
-export const DOC_PIPELINE_STORES: readonly string[] = ['EXPERT3D'];
+export const DOC_PIPELINE_STORES: readonly string[] = [
+  'EXPERT3D',
+  '3DDevice', '3DPrinter', '3DScanner',
+];
 
 /**
  * Consumables are excluded unconditionally, and this is a proven impossibility rather than caution.
