@@ -164,23 +164,35 @@ describe('Center 3D Print ToV — §3 functional H2s (OVERRIDE #7)', () => {
     expect(C3D_TOV_BASE_OVERLAY).toMatch(/§3\/§7 <h3> stay nominal labels/);
   });
 
-  it('the uk block drops the ambiguous noun-and-noun pattern and names the observed regressions', () => {
-    expect(C3D_UK_LOCALE_TOV).toMatch(/«\[Функція\] та \[функція\]» БІЛЬШЕ НЕ Є зразком/);
-    expect(C3D_UK_LOCALE_TOV).toContain('«Як працює [Product]»');
-    expect(C3D_UK_LOCALE_TOV).toContain('«Яке ПЗ підтримує [Product]»');
-    for (const bad of ['Лазерний модуль потужністю 20 Вт', 'ПЗ та автоматизація', 'Безпека під час\nроботи']) {
+  it('the uk block names the observed §3 regressions and uses the SHORT product form', () => {
+    // Only the first §3 heading may name the product, and only as [Product-short]; the rest
+    // switched to a generic noun when [HEADING FORM] landed.
+    expect(C3D_UK_LOCALE_TOV).toContain('«Як працює [Product-short]»');
+    expect(C3D_UK_LOCALE_TOV).toContain('«Яке програмне забезпечення підтримує пристрій»');
+    expect(C3D_UK_LOCALE_TOV).not.toContain('«Як працює [Product]»');
+    for (const bad of ['Лазерний модуль потужністю 20 Вт', 'ПЗ та автоматизація']) {
       expect(C3D_UK_LOCALE_TOV, bad).toContain(bad);
     }
   });
 
-  it('the uk block keeps both carve-outs so §7 cannot collapse', () => {
-    expect(C3D_UK_LOCALE_TOV).toContain('ВИНЯТОК 1 (<h3>)');
-    expect(C3D_UK_LOCALE_TOV).toContain('ВИНЯТОК 2');
+  it('the uk block keeps the <h3> carve-out so §7 cannot collapse', () => {
+    expect(C3D_UK_LOCALE_TOV).toContain('ВИНЯТОК (<h3>)');
+    expect(C3D_UK_LOCALE_TOV).toMatch(/жодного <h3> не можна прибрати чи об'єднати/);
   });
 
-  it('the pl block drops its equivalent ambiguous pattern', () => {
-    expect(C3D_PL_LOCALE_TOV).toMatch(/«\[Funkcja\] i \[funkcja\]» NIE jest już dozwolony/);
-    expect(C3D_PL_LOCALE_TOV).toContain('Jakie oprogramowanie obsługuje');
+  it('the uk block scopes the functional-heading rule to §3 and mandates nominal §4-§7', () => {
+    expect(C3D_UK_LOCALE_TOV).toMatch(/HEADING PATTERNS для <h2> — ЛИШЕ §3/);
+    expect(C3D_UK_LOCALE_TOV).toContain('Сфери застосування лідар-сканера');
+    expect(C3D_UK_LOCALE_TOV).toContain('Технічні характеристики');
+  });
+
+  it('the pl block scopes the same rule to §3 and keeps nominal §4-§7', () => {
+    expect(C3D_PL_LOCALE_TOV).toMatch(/HEADING PATTERNS dla <h2> — TYLKO §3/);
+    expect(C3D_PL_LOCALE_TOV).toContain('Jakie oprogramowanie obsługuje urządzenie');
+    expect(C3D_PL_LOCALE_TOV).toContain('Dane techniczne');
+    // The old "Gdzie stosuje się [Product]" mandate put the full product name in a §4 heading.
+    // It is still NAMED in the overlay, explicitly as withdrawn, so the model cannot re-derive it.
+    expect(C3D_PL_LOCALE_TOV).toMatch(/«Gdzie stosuje się \[Product\]» został WYCOFANY/);
   });
 
   it('the translation overlay keeps §3 question headings from re-nominalizing', () => {
@@ -380,7 +392,8 @@ describe('Center 3D Print ToV — store scoping', () => {
    * entirely — 0 <h3> in the C3D artifact vs 13 in EXPERT3D's.
    */
   it('the base overlay scopes the nominal-heading ban to section headings only', () => {
-    expect(C3D_TOV_BASE_OVERLAY).toContain('SECTION HEADINGS ONLY');
+    expect(C3D_TOV_BASE_OVERLAY).toContain('§3 <h2> ONLY');
+    expect(C3D_TOV_BASE_OVERLAY).toMatch(/A nominal heading in those sections is CORRECT/);
     expect(C3D_TOV_BASE_OVERLAY).toMatch(/<h3>\) in the specifications section \(§7\)/);
     expect(C3D_TOV_BASE_OVERLAY).toMatch(/MUST be CONCISE NOMINAL PHRASES/);
   });
@@ -398,7 +411,7 @@ describe('Center 3D Print ToV — store scoping', () => {
   });
 
   it('the translation overlay exempts <h3> sub-headings too', () => {
-    expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('SECTION HEADINGS ONLY');
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toMatch(/NEVER ADD A PRODUCT NAME A SOURCE HEADING DOES NOT HAVE/);
     expect(C3D_TOV_TRANSLATION_OVERLAY).toMatch(/are\s+EXEMPT/);
     expect(C3D_TOV_TRANSLATION_OVERLAY).toMatch(/never drop, merge or convert a spec category/i);
   });

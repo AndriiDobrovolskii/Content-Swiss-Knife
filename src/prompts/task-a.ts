@@ -2,6 +2,7 @@ import { ProductInput, ImageManifestEntry, CONTENT_TEMPLATES } from '../app/type
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
 import { getStore, isExpert3dStore, isCenter3dPrintStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
+import { productShort } from '../prompt-core/product-name-core';
 import { extractVideoEmbeds } from '../utils/video-manifest';
 
 // ── Standard full-schema instruction (Schema v3.0 §1–§9) ──────────────────
@@ -150,10 +151,11 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
 [Product Name]: ${input.name}
 [Raw Description]: ${input.description}
 [Technical Specs]: ${input.specs}
+[Product-short]: ${productShort(input.name)}
 [Supplemental Content]: ${input.supplementalContent || 'None provided.'}
 ${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input, isConsumables)}${template}${custom}${consumablesMode}
 
-Generate the description in ${baseLanguage}. Primary keyword "${input.name}" used ~1–2× per section.`;
+Generate the description in ${baseLanguage}. Primary keyword "${input.name}" appears ~1× per section in BODY PROSE only — headings are excluded from that count and follow [HEADING FORM], which forbids the full name outright.`;
 
   return {
     systemBlocks: [

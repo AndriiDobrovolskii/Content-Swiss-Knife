@@ -488,9 +488,12 @@ Normalize spacing even if the source omits it ("10W" → "10 W").`;
  * brand-first order. Count abbreviation split: es-ES "uds" vs es-MX "pzas".
  */
 export const PRODUCT_NAME_LOCALIZATION = `[PRODUCT NAME LOCALIZATION — localize the Product Name in EVERY place it appears]
-The Product Name recurs in the hook <p>, the §2 killer-specs table heading, spec-table <h2>/<h3>,
-the §7 "Technical specifications of the [Product Name]" header, figure captions, and the §9
-commercial-closing H2 — render it in ONE consistent localized form across all of them.
+The Product Name recurs in the hook <p>, body prose and figure captions — render it in ONE
+consistent localized form across all of them.
+HEADINGS ARE THE EXCEPTION, and [HEADING FORM] governs them: the §7 header is a bare
+"Technical specifications", no <h3> carries the name at all, and only two <h2> in the document
+carry it — in the SHORT brand+model form. The rules below describe HOW to localize the name
+wherever it does appear; they never license putting it in a heading.
 
 Split the Product Name into three parts and treat each differently:
 1. GENERIC DESCRIPTIVE CATEGORY — the common noun(s) naming WHAT the product is
@@ -934,15 +937,22 @@ ANTI-PATTERN — NEVER WRITE LIKE THIS HERE ("Style A", the old voice — banned
   BAD  "...SLS needs no support structures - which opens up the possibility of..."    dash "reveal"
 Rewrite such content as a verb-led bullet and SPLIT the dash into two sentences.
 
-SIGNATURE MOVE #2 — FUNCTIONAL / QUESTION HEADINGS (SECTION HEADINGS ONLY).
-MAIN SECTION HEADINGS (<h2> in §1-§6 and §9) describe a FUNCTION or answer a user query — they are
-never bare nouns.
-  GOOD: "How selective laser sintering works" - "Where [Product] is used" -
-        "Build module and work between cycles" - "Tips for operating [Product]" -
-        "Materials and compatible equipment"
-  BAD:  "SLS technology and operating principle" - "Areas of application"
-Reusable patterns: "How ... works", "Where ... is used", "How to [action]",
-"[Function] and [function]", "Tips for operating ...". Mirror the pattern in every language.
+SIGNATURE MOVE #2 — FUNCTIONAL / QUESTION HEADINGS (§3 <h2> ONLY).
+SCOPE NARROWED: this applies to the FUNCTIONALITY section's <h2> and nowhere else. §4, §5, §6,
+§7 and the operating-tips block take SHORT NOMINAL labels («Сфери застосування лідар-сканера»,
+«Сумісні аксесуари та кріплення», «Поради щодо експлуатації», «Технічні характеристики»).
+A nominal heading in those sections is CORRECT, not a Style A regression.
+Inside §3, describe a FUNCTION or answer a user query rather than naming a bare topic:
+  GOOD: "How selective laser sintering works" - "What software drives the device" -
+        "How the lift platform and the camera raise accuracy"
+  BAD:  "SLS technology and operating principle"
+Reusable patterns: "How ... works", "What ... drives/uses", "How to [action]".
+Mirror the pattern in every language.
+EXCEPTION inside §3: a safety/protection heading may be nominal when that reads more naturally
+(«Механізми безпеки та захисту»).
+[HEADING FORM] in the master prompt governs WHICH of these headings may name the product, and
+overrides any example above that shows a product name — at most two <h2> in the document carry
+[Product-short], and no heading ever carries the full name.
 HOWEVER, SUB-HEADINGS (<h3>) in the specifications section (§7) and in the functionality section
 (§3) MUST be CONCISE NOMINAL PHRASES — "Лазерний модуль", "Безпека", "Електроніка та підключення".
 The functional-heading rule above does NOT apply to them: a §7 spec category is a label, not a
@@ -953,7 +963,8 @@ LEAST 3 rows each, naming every category in the target output language.
 
 SIGNATURE MOVE #3 — "TIPS FOR OPERATING [Product]" ADVISORY BLOCK (register shift).
 This is the ONLY place that addresses the operator directly.
-- Emit an H2 "Tips for operating [Product]" IMMEDIATELY BEFORE the final commercial-closing
+- Emit an H2 "Tips for operating" (no product name, per [HEADING FORM]) IMMEDIATELY BEFORE
+  the final commercial-closing
   section, WHEN the product is production hardware with real handling/safety considerations
   (printers, post-processing, powder, resin). Skip it for products with none.
 - 3-5 bullets, each = BOLD IMPERATIVE OPENER ending with a period + supporting instruction.
@@ -1003,8 +1014,10 @@ only. The master rule named on the left is REPLACED by the form on the right:
    BAD:  <li><b>Advertising:</b> cuts acrylic signage.</li>                          noun + colon
    BAD:  <p>Branding and marking: applies logos...; decorative engraving: reproduces
          patterns...</p>                                    run-in semicolon list — banned here
-2. APPLICATIONS H2 (the localized "Areas of application" template): REPLACED by the functional
-   form "Where [Product] is used".
+2. APPLICATIONS H2: the master's localized nominal template STANDS — «Сфери застосування
+   [category noun]» / "Areas of application". The functional "Where [Product] is used" form this
+   override used to mandate is WITHDRAWN: §4 is outside SIGNATURE MOVE #2's narrowed scope, and
+   the form put the full product name in a heading, which [HEADING FORM] forbids.
 3. COMPATIBILITY list "<li><b>[Aspect label]</b> [values]": REPLACED by a verb-led opener ending
    in a period, per SIGNATURE MOVE #1.
 4. COMMERCIAL-CLOSING H2: REPLACED by the soft-"worth it" phrasing naming the store, e.g.
@@ -1019,13 +1032,17 @@ only. The master rule named on the left is REPLACED by the form on the right:
    "Certification & compliance"): those five strings name the TOPIC each §3 <h2> must COVER.
    They are NOT the heading to emit — emitting them as written produces exactly the bare nominal
    heading SIGNATURE MOVE #2 forbids. REPLACE each with the functional form:
-     Technology / Operating principle  ->  "How [Product] works"
+     Technology / Operating principle  ->  "How [Product-short] works"   <- the ONE §3 heading
+                                           allowed to name the product, and in SHORT form only
      Construction & hardware           ->  "How [named assembly] [raises / holds / delivers X]"
                                            (name the real assembly, e.g. "How the lift platform
                                            and the camera raise accuracy")
-     Software & automation             ->  "What software drives [Product]"
-     Safety                            ->  "What safety mechanisms [Product] uses"
-     Certification & compliance        ->  "Which standards [Product] complies with"
+     Software & automation             ->  "What software drives the device"
+     Safety                            ->  "What safety mechanisms the device uses", or the
+                                           nominal «Механізми безпеки та захисту»
+     Certification & compliance        ->  "Which standards the device complies with"
+   Note the generic noun in four of the five: per [HEADING FORM] only the first §3 heading and
+   the §9 closing may name the product at all.
    REWORDING ONLY: same topics, same count, same order (source order still wins per [NARRATIVE
    FIDELITY]), same §3 depth and word budget. NEVER drop or merge a §3 topic to avoid writing a
    functional heading — a missing topic is a far worse error than a clumsy heading.
@@ -1106,18 +1123,22 @@ VERB STARTERS to reuse (3rd-person present):
   EN: Fits, Delivers, Keeps, Prints, Monitors, Automates, Cuts, Speeds up, Simplifies
   RU: Вмещает, Обеспечивает, Держит, Печатает, Контролирует, Автоматизирует, Ускоряет, Снижает
 
-FUNCTIONAL HEADINGS (SECTION HEADINGS ONLY): keep the main <h2> section headings functional/
-question-style; do not flatten them into bare nouns. Mirror the source pattern: "How … works"
-(pl "Jak działa …", de "So funktioniert …", ru «Как работает …»), "Where … is used"
-(pl "Gdzie stosuje się …", de "Wo … eingesetzt wird", ru «Где применяют …»).
-§3 in particular arrives with question-form headings and must KEEP them — collapsing one back to
-a topic label is the same failure as re-nominalizing a bullet:
-  «Яке ПЗ підтримує …»            pl "Jakie oprogramowanie obsługuje …",
-                                  de "Welche Software … steuert", ru «Какое ПО поддерживает …»
-  «Які механізми безпеки …»       pl "Jakie mechanizmy bezpieczeństwa …",
-                                  de "Welche Sicherheitsmechanismen …", ru «Какие механизмы …»
-  BAD: pl "Oprogramowanie i automatyzacja" · de "Software und Automatisierung" ·
-       ru «ПО и автоматизация» — bare noun topics, the banned form.
+HEADINGS — TRANSLATE THE FORM THAT ARRIVES, AND ONLY THAT FORM.
+1. NEVER ADD A PRODUCT NAME A SOURCE HEADING DOES NOT HAVE. This is the single most common
+   heading regression in translation: the source says «Технічні характеристики» and the target
+   comes back "Technische Daten des 3D-Scanners XGRIDS L2 Pro 32/300 Standard Package". At most
+   TWO <h2> in the document name the product, they are already the two that do in the source,
+   and they use the short brand+model form. No <h3> names it at all.
+2. §3 arrives with question-form headings and must KEEP them — collapsing one back to a topic
+   label is the same failure as re-nominalizing a bullet:
+     «Яке програмне забезпечення підтримує пристрій»
+        pl "Jakie oprogramowanie obsługuje urządzenie" ·
+        de "Welche Software das Gerät steuert" · ru «Какое ПО поддерживает устройство»
+     BAD: pl "Oprogramowanie i automatyzacja" · de "Software und Automatisierung" ·
+          ru «ПО и автоматизация» — bare noun topics inside §3, the banned form.
+3. §4-§7 and the operating-tips block arrive NOMINAL and stay nominal — «Сфери застосування…»,
+   «Сумісні аксесуари…», «Технічні характеристики» → pl "Zastosowania…", "Dane techniczne";
+   de "Anwendungsbereiche", "Technische Daten". Do NOT convert these into question form.
 SUB-HEADINGS (<h3>) in the specifications section (§7) and the functionality section (§3) are
 EXEMPT: they stay CONCISE NOMINAL PHRASES, translated as labels (pl "Moduł lasera",
 "Bezpieczeństwo"; de "Lasermodul", "Sicherheit"). Reproduce EVERY <h3> present in the source —
@@ -1143,7 +1164,7 @@ CAPITALIZATION rule describes the form those items USED to take — with no colo
 it has nothing to apply to, so do not reintroduce a colon in order to satisfy it. Every other
 consumables rule (section set, tables, the 2500-character cap) still applies unchanged.
 
-OPERATING-TIPS BLOCK: if the source has a "Tips for operating [Product]" H2, translate its heading
+OPERATING-TIPS BLOCK: if the source has a "Tips for operating" H2, translate its heading
 functionally (pl "Wskazówki dotyczące eksploatacji …", de "Hinweise zum Betrieb von …",
 ru «Советы по эксплуатации …») and keep each bullet's opener as a BOLD IMPERATIVE ending in a
 period, in the target language's FORMAL register (pl the impersonal "Należy …" form, de
@@ -1155,8 +1176,9 @@ FIGCAPTIONS: keep verb-led, period-terminated lead-ins; do not restore "LABEL:" 
 PUNCTUATION: zero exclamation marks, zero body emoji, em-dash as a rhetorical device avoided
 (genuine ranges exempt). Question marks only in the closing H2.
 
-CLOSING CTA: keep the "worth buying" H2 form (pl "Dlaczego warto kupić [Product] w Center 3D Print?",
-de "Warum sich der Kauf von [Product] bei Center 3D Print lohnt?") and END the paragraph with the
+CLOSING CTA: keep the "worth buying" H2 form with the SHORT product name
+(pl "Dlaczego warto kupić [Product-short] w Center 3D Print?",
+de "Warum sich der Kauf von [Product-short] bei Center 3D Print lohnt?") and END the paragraph with the
 direct invitation to contact the specialists — never a flat availability statement. Keep the
 brand-guarantee sentence.`;
 
@@ -1166,8 +1188,9 @@ brand-guarantee sentence.`;
  * prose instructions inside the C3D overlays above, and tov-second-person.ts matches against this
  * array so the two can never drift apart.
  *
- * Prefix match: the real heading continues with the product name ("Поради щодо експлуатації
- * Ortur Laser Master 3").
+ * Prefix match. The heading used to continue with the product name ("Поради щодо експлуатації
+ * Ortur Laser Master 3"); [HEADING FORM] now forbids that, so it is usually the bare marker.
+ * Prefix matching covers both, which is why these values did not have to change.
  */
 export const OPERATING_TIPS_H2_MARKERS = [
   'Tips for operating',
@@ -1192,6 +1215,10 @@ export const FUNCTIONAL_H2_OPENERS: Record<string, string[]> = {
  * <h2> forms the MASTER schema mandates in a nominal shape. A nominal heading here is CORRECT,
  * not a Style A regression, so heading-style.ts prefix-matches against this list before flagging.
  *
+ * WIDENED when SIGNATURE MOVE #2 was narrowed to §3 only: §4 (Сфери застосування) and §5
+ * (Сумісні аксесуари) are now nominal by design rather than by exception, so the linter has to
+ * stop treating them as Style A.
+ *
  * §7's "Технічні характеристики …" is additionally exempt structurally (any <h2> inside
  * <section class="specs">); it is listed here too so a §7 header emitted outside that wrapper is
  * still not flagged.
@@ -1202,8 +1229,14 @@ export const FUNCTIONAL_H2_OPENERS: Record<string, string[]> = {
  * recurring, add it here explicitly rather than widening the rule.
  */
 export const MANDATED_NOMINAL_H2: Record<string, string[]> = {
-  'uk-ua': ['Технічні характеристики', 'Матеріали та сумісне обладнання', 'Сумісність', 'Комплект постачання'],
-  'ru-ua': ['Технические характеристики', 'Материалы и совместимое оборудование', 'Совместимость', 'Комплект поставки'],
+  'uk-ua': [
+    'Технічні характеристики', 'Матеріали та сумісне обладнання', 'Сумісність',
+    'Сумісні аксесуари', 'Комплект постачання', 'Сфери застосування',
+  ],
+  'ru-ua': [
+    'Технические характеристики', 'Материалы и совместимое оборудование', 'Совместимость',
+    'Совместимые аксессуары', 'Комплект поставки', 'Сферы применения',
+  ],
 };
 
 /**
@@ -1229,37 +1262,38 @@ VERB STARTERS for benefit bullets (3rd-person present, machine as subject) — r
 
 IMPERATIVE STARTERS for the operating-tips block (formal «ви»-form):
 Дотримуйтеся, Працюйте, Дочекайтеся, Перевіряйте, Забезпечте, Зберігайте, Уникайте.
-  H2: «Поради щодо експлуатації [Product]»
+  H2: «Поради щодо експлуатації» (без назви товару — див. [HEADING FORM])
   <li><b>Дотримуйтеся умов у приміщенні. </b>Забезпечте температуру 18–28 °C та вологість не
   вище 30 %.</li>
 
-HEADING PATTERNS для <h2> РОЗДІЛІВ (функційні/питальні — замінюють голі іменникові теми).
-Дозволені зачини: ${FUNCTIONAL_H2_OPENERS['uk-ua'].map(o => `«${o} …»`).join(', ')} —
+HEADING PATTERNS для <h2> — ЛИШЕ §3 (функційні/питальні). §4-§7 та блок порад мають КОРОТКІ
+ІМЕННИКОВІ заголовки: «Сфери застосування лідар-сканера», «Сумісні аксесуари та кріплення»,
+«Поради щодо експлуатації», «Комплект постачання», «Технічні характеристики». Це правильна
+форма, а не повернення до Style A.
+Дозволені зачини для §3: ${FUNCTIONAL_H2_OPENERS['uk-ua'].map(o => `«${o} …»`).join(', ')} —
 або особова дієслівна форма на початку.
 §3 — конкретні заміни майстер-шаблонів:
-  Технологія / принцип роботи      → «Як працює [Product]»
+  Технологія / принцип роботи      → «Як працює [Product-short]»  ← ЄДИНИЙ заголовок §3, якому
+                                     дозволено називати товар, і лише в короткій формі
   Конструкція та апаратна частина  → «Як платформа підйому та камера підвищують точність»
                                      (шаблон: «Як [вузол] [робить X]»)
-  ПЗ та автоматизація              → «Яке ПЗ підтримує [Product]»
-  Безпека                          → «Які механізми безпеки застосовує [Product]»
-  Сертифікація та відповідність    → «Яким стандартам відповідає [Product]»
-Інші розділи: «Сфери застосування» → «Де застосовують [Product]»;
-«Технологія SLS та принцип роботи» → «Як працює селективне лазерне спікання».
-ЗАБОРОНЕНО як <h2>: «Лазерний модуль потужністю 20 Вт», «ПЗ та автоматизація», «Безпека під час
-роботи», «Електронне керування та аварійні системи», «Моторизована платформа, камера та візуальне
-позиціонування» — це іменникові теми, а не функційні заголовки.
-Формула «[Функція] та [функція]» БІЛЬШЕ НЕ Є зразком: два іменники, з'єднані «та», — це саме та
-форма, яку заборонено. Використовуйте її, лише якщо хоча б одна частина містить особову дієслівну
-форму.
-ВИНЯТОК 1 (<h3>): підзаголовки <h3> у §3 та §7 залишаються короткими іменниковими ярликами
+  ПЗ та автоматизація              → «Яке програмне забезпечення підтримує пристрій»
+  Безпека                          → «Механізми безпеки та захисту» (іменниковий тут доречний)
+  Сертифікація та відповідність    → «Яким стандартам відповідає пристрій»
+ЗАБОРОНЕНО як <h2> у §3: «Лазерний модуль потужністю 20 Вт», «ПЗ та автоматизація», «Безпека під
+час роботи», «Електронне керування та аварійні системи» — це іменникові ТЕМИ розділу §3, а не
+функційні заголовки. У §4-§7 іменникова форма, навпаки, обов'язкова.
+ВИНЯТОК (<h3>): підзаголовки <h3> у §3 та §7 залишаються короткими іменниковими ярликами
 («Лазерний модуль», «Безпека», «Електроніка та підключення»). Це правило їх НЕ стосується —
 жодного <h3> не можна прибрати чи об'єднати заради функційного формулювання.
-ВИНЯТОК 2: заголовки, які майстер-схема задає іменниковими —
+ІМЕННИКОВІ <h2>, які задає майстер-схема (правильна форма, а не Style A):
 ${MANDATED_NOMINAL_H2['uk-ua'].map(h => `«${h} …»`).join(', ')}.
+НАЗВА ТОВАРУ: жоден <h2> не містить повної назви з кодом конфігурації чи назвою комплекту, і
+жоден <h3> не містить назви взагалі — див. [HEADING FORM] у майстер-промпті.
 
 COMMERCIAL-CLOSING H2 — use the soft «варто» form, which REPLACES the master's
-«Чому купити [Product] в [Store]?» template:
-  «Чому варто купити [Product] у Center 3D Print?»
+«Чому купити [Product-short] в [Store]?» template:
+  «Чому варто купити [Product-short] у Center 3D Print?»
 The paragraph ends with a direct ask, e.g. «Зв'яжіться з нашими спеціалістами, щоб обговорити
 терміни поставки, конфігурацію та відповідність [Product] вашим виробничим вимогам.»
 
@@ -1286,23 +1320,23 @@ IMPERATIVE STARTERS for the operating-tips block — użyj formy bezosobowej «N
 polski odpowiednik formalnego trybu rozkazującego; NIE stosuj bezpośredniego „ty"):
 Należy przestrzegać, Należy zapewnić, Należy odczekać, Należy sprawdzać, Należy przechowywać,
 Należy unikać.
-  H2: «Wskazówki dotyczące eksploatacji [Product]»
+  H2: «Wskazówki dotyczące eksploatacji» (bez nazwy produktu — patrz [HEADING FORM])
   <li><b>Należy przestrzegać warunków w pomieszczeniu. </b>Temperatura 18–28 °C, wilgotność
   nie wyższa niż 30 %.</li>
 
-HEADING PATTERNS dla <h2> SEKCJI: «Jak działa …», «Jak [zespół] [podnosi / zapewnia X]»,
-«Jakie oprogramowanie obsługuje …», «Jakie mechanizmy bezpieczeństwa stosuje …»,
-«Jakim normom odpowiada …», «Gdzie stosuje się …», «Wskazówki dotyczące eksploatacji …».
-Zamiast «Zastosowania» → «Gdzie stosuje się [Product]».
-Wzorzec «[Funkcja] i [funkcja]» NIE jest już dozwolony — dwa rzeczowniki połączone «i» to
-dokładnie ta zakazana forma nominalna. Użyj go tylko wtedy, gdy co najmniej jedna część zawiera
-osobową formę czasownika.
+HEADING PATTERNS dla <h2> — TYLKO §3: «Jak działa …», «Jak [zespół] [podnosi / zapewnia X]»,
+«Jakie oprogramowanie obsługuje urządzenie», «Jakim normom odpowiada urządzenie».
+§4-§7 oraz blok wskazówek mają KRÓTKIE nagłówki RZECZOWNIKOWE: «Zastosowania skanera»,
+«Kompatybilne akcesoria i mocowania», «Wskazówki dotyczące eksploatacji», «Zawartość zestawu»,
+«Dane techniczne». To forma poprawna, a nie powrót do Style A — dawny wymóg
+«Gdzie stosuje się [Product]» został WYCOFANY, bo umieszczał nazwę produktu w nagłówku.
 WYJĄTEK: <h3> w §3 i §7 pozostają zwięzłymi etykietami rzeczownikowymi («Moduł lasera»,
-«Bezpieczeństwo») — ta reguła ich NIE dotyczy. Nagłówki, które schemat nadrzędny zadaje jako
-rzeczownikowe («Dane techniczne …», «Materiały i kompatybilne urządzenia»), też są dozwolone.
+«Bezpieczeństwo») — ta reguła ich NIE dotyczy.
+NAZWA PRODUKTU: żaden <h2> nie zawiera pełnej nazwy z kodem konfiguracji ani nazwą zestawu,
+a żaden <h3> nie zawiera nazwy w ogóle — patrz [HEADING FORM] w prompcie nadrzędnym.
 
-COMMERCIAL-CLOSING H2: «Dlaczego warto kupić [Product] w Center 3D Print?» (the master's pl-PL
-template already uses the «warto» form — keep it). Zakończ akapit bezpośrednim zaproszeniem:
+COMMERCIAL-CLOSING H2: «Dlaczego warto kupić [Product-short] w Center 3D Print?» (the master's
+pl-PL template already uses the «warto» form — keep it; the name is the SHORT form). Zakończ akapit bezpośrednim zaproszeniem:
 «Prosimy o kontakt z naszymi specjalistami, aby omówić terminy dostawy, konfigurację i zgodność
 [Product] z Państwa wymaganiami produkcyjnymi.»
 

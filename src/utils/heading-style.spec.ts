@@ -143,3 +143,71 @@ describe('validateHeadingStyle', () => {
     });
   });
 });
+
+/**
+ * heading-product-name-stuffing — the global rule, deliberately NOT gated on store or locale.
+ *
+ * Every case below is drawn from the real regressed export (XGRIDS L2 Pro 32/300 Standard
+ * Package, Center 3D Print, 2026-08-03), where the full name appeared in ~every <h2> of all
+ * five locales.
+ */
+describe('validateHeadingStyle — product-name stuffing', () => {
+  const NAME = 'XGRIDS L2 Pro 32/300 Standard Package';
+  const stuffing = (html: string, locale = 'uk-UA', store = C3D) =>
+    validateHeadingStyle(html, locale, store, NAME).filter(i => i.rule === 'heading-product-name-stuffing');
+
+  it('flags the full product name in an <h2>', () => {
+    const issues = stuffing(h2('Технічні характеристики 3D-сканера XGRIDS L2 Pro 32/300 Standard Package'));
+    expect(issues).toHaveLength(1);
+    expect(issues[0].detail).toContain('FULL product name');
+    expect(issues[0].detail).toContain('XGRIDS L2 Pro');
+  });
+
+  it('accepts the short form in the first §3 heading and the §9 closing — two is the budget', () => {
+    const html =
+      h2('Як працює 3D-сканер XGRIDS L2 Pro') +
+      h2('Механізми безпеки та захисту') +
+      h2('Технічні характеристики') +
+      h2('Чому варто купити сканер XGRIDS L2 Pro у Center 3D Print?');
+    expect(stuffing(html)).toEqual([]);
+  });
+
+  it('flags the third <h2> that names the product', () => {
+    const html =
+      h2('Як працює 3D-сканер XGRIDS L2 Pro') +
+      h2('Яке ПЗ підтримує XGRIDS L2 Pro') +
+      h2('Сфери застосування XGRIDS L2 Pro') +
+      h2('Чому варто купити XGRIDS L2 Pro у Center 3D Print?');
+    const issues = stuffing(html);
+    expect(issues).toHaveLength(2);
+    expect(issues[0].detail).toContain('at most TWO');
+  });
+
+  it('gives <h3> a budget of zero — pushing the keyword down a level is still stuffing', () => {
+    const issues = stuffing('<h3>Лідар XGRIDS L2 Pro</h3>');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].detail).toContain('never carry the product name');
+  });
+
+  it('leaves an ordinary nominal <h3> alone', () => {
+    expect(stuffing('<h3>Лазерний модуль</h3><h3>Безпека</h3>')).toEqual([]);
+  });
+
+  it('fires for every store and every locale, unlike the Style B rule', () => {
+    const stuffed = h2('Technical specifications of the XGRIDS L2 Pro 32/300 Standard Package');
+    for (const [locale, store] of [['en-GB', '3DDevice'], ['de-DE', 'EXPERT3D'], ['pl-PL', C3D]] as const) {
+      expect(stuffing(stuffed, locale, store), `${locale}/${store}`).toHaveLength(1);
+    }
+  });
+
+  it('is inert when no product name is supplied (Optimizer path)', () => {
+    expect(validateHeadingStyle(h2('Технічні характеристики XGRIDS L2 Pro'), 'uk-UA', C3D))
+      .toEqual([]);
+  });
+
+  it('tolerates the unit-spacing normalization the artifact applies to the name', () => {
+    // "20W" in the input renders as "20 W" after fixNumberFormatting; the pattern must still match.
+    const issues = validateHeadingStyle(h2('Поради щодо експлуатації Ortur H20 20 W'), 'uk-UA', C3D, 'Ortur H20 20W');
+    expect(issues.filter(i => i.rule === 'heading-product-name-stuffing')).toHaveLength(1);
+  });
+});

@@ -109,11 +109,12 @@ HARD RULES:
 - Do not invent a "section", "hr", "h2" or any other structural field. Section order, headings
   level, tables, <hr> and figure markup are the renderer's job, not yours.
 - IF YOUR STORE GUIDELINES ASK FOR AN H2 that this schema has no field for — most often
-  "${OPERATING_TIPS_H2_MARKERS[0]} [Product]" — DO NOT emit an HTML tag and do not skip the content.
+  "${OPERATING_TIPS_H2_MARKERS[0]}" — DO NOT emit an HTML tag and do not skip the content.
   Put that section into "operatingTips" as a Subsection. The renderer emits the <h2> for you and
   places it immediately before the commercial-closing section, which is what those guidelines ask
-  for. Its "heading" MUST BEGIN with the exact wording your guidelines give for this language,
-  followed by the product name — one of: ${OPERATING_TIPS_H2_MARKERS.join(' | ')}.
+  for. Its "heading" MUST BE the exact wording your guidelines give for this language — one of:
+  ${OPERATING_TIPS_H2_MARKERS.join(' | ')}. Do NOT append the product name: per [HEADING FORM]
+  this heading carries none.
   A heading that only paraphrases those words is not recognised as this block downstream.
   Keep the guidelines' own condition: include it only for production hardware with real
   handling/safety considerations, and omit "operatingTips" entirely otherwise.`;

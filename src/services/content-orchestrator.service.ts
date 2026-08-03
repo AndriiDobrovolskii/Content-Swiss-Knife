@@ -391,7 +391,7 @@ export class ContentOrchestratorService {
           ...validateSecondPersonScope(html, 'uk-UA', input.website.name),
           // Style B section headings must be functional, not bare nominal topics. Warning tier
           // while the verb heuristic is measured; inert for every store except Center 3D Print.
-          ...validateHeadingStyle(html, 'uk-UA', input.website.name),
+          ...validateHeadingStyle(html, 'uk-UA', input.website.name, input.name),
           // Per-locale sentence ceiling — language-level, so every store, not just C3D.
           ...validateSentenceLength(html, 'uk-UA', 'HTML (base)'),
           // §7 must not collapse into one catch-all category — runs on the master only, since
@@ -787,7 +787,7 @@ export class ContentOrchestratorService {
           // Style B second-person scope — see the identical hook in generate() for rationale.
           ...validateSecondPersonScope(html, UA_ISO, input.website.name),
           // Style B heading check — see the identical hook in generate() for rationale.
-          ...validateHeadingStyle(html, UA_ISO, input.website.name),
+          ...validateHeadingStyle(html, UA_ISO, input.website.name, input.name),
           ...validateSentenceLength(html, UA_ISO, 'HTML (uk-UA)'),
           // §7 category-collapse guard — see the identical hook in generate() for rationale.
           ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
@@ -1158,10 +1158,15 @@ export class ContentOrchestratorService {
         ...validateProductNameConsistency(
           html, localizedNames?.[taskLangToIso(lang, storeName)], taskLangToIso(lang, storeName), `HTML (${lang})`,
         ),
+        // Heading product-name stuffing is a TRANSLATION failure as much as a generation one:
+        // the master can drop the name from a heading and the translator put it back, which is
+        // exactly what de-DE and pl-PL did. The Style B half of this validator is inert for
+        // non-C3D stores and non-Cyrillic locales, so only the global check fires here.
+        ...validateHeadingStyle(html, taskLangToIso(lang, storeName), storeName, productName),
       ]),
       // Also run in the repair gate, where they reach the downloadable .md report. Repeating
       // them here puts them in the on-screen panel too; dedupeIssues collapses the overlap.
-      ...validateHeadingStyle(c.mainHtmlUa, masterLocale, storeName),
+      ...validateHeadingStyle(c.mainHtmlUa, masterLocale, storeName, productName),
       ...validateSentenceLength(c.mainHtmlUa, masterLocale, `HTML (${masterLocale})`),
       ...validateProductNameConsistency(c.mainHtmlUa, localizedNames?.[masterLocale], masterLocale, `HTML (${masterLocale})`),
       ...validateSeoMetadata(c.seoData, NO_CURRENCY_CHECK),

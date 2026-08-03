@@ -17,6 +17,18 @@ length, or structure of the figcaption/alt/title beyond translating them; model 
 names and numerals stay unchanged. If [BASE HTML] contains zero <figure> blocks, do not
 invent any.`;
 
+/**
+ * Appended to every Task C variant. The observed regression this guards against: the uk-UA
+ * master says «Технічні характеристики» and the de-DE/pl-PL translation comes back
+ * "Technische Daten des 3D-Scanners XGRIDS L2 Pro 32/300 Standard Package" — the translator
+ * "helpfully" restores a product name the master deliberately dropped, in every heading.
+ */
+const HEADING_FIDELITY = `[HEADING FIDELITY]
+Translate each heading in the form it arrives. NEVER add a product name to a heading that does
+not already contain one in [BASE HTML], and never expand a short brand+model name into the full
+name with its configuration code or package suffix. If the source heading has no product name,
+neither does yours.`;
+
 const HAS_FIGURE_MARKUP = /<figure\b/i;
 
 /**
@@ -101,6 +113,9 @@ export function buildPromptC(
     instruction = genericInstruction(targetLang);
   }
 
+  // Applies to every variant — see HEADING_FIDELITY's own doc-comment for the regression.
+  instruction += `\n\n${HEADING_FIDELITY}`;
+
   // …then, for consumables, append the overlay so the simplified §C1–§C6 structure and the
   // 2500-char limit survive translation regardless of which variant was chosen above.
   if (templateId === 'consumables-resin') {
@@ -147,12 +162,13 @@ includes numbers embedded in a repeated Product Name (e.g. in the spec-table hea
 CTA). Never change the digits themselves or the unit — only the separator punctuation localizes.
 ${PRODUCT_NAME_LOCALIZATION}
 [LABELS TO TRANSLATE]
-- "Technical specifications of the [Product Name]" → translate naturally to ${targetLang}
+- "Technical specifications" → translate naturally to ${targetLang}. NO product name: the
+  source header carries none and adding one is a heading regression.
 - "What's in the box" → Ukrainian: "Комплектація" | Russian: "Комплектация" | Polish: "Co w zestawie"
   | German: "Lieferumfang" | Spanish: "Contenido del paquete"
 - Brand-guarantee sentence → translate fully
 COMMERCIAL CLOSING H2: it is a "why-buy from store" question. Translate it naturally to ${targetLang}
-as such (e.g. "Why buy [Product] from [Store]?"). Keep trust signals + the brand-guarantee sentence in
+as such (e.g. "Why buy [Product-short] from [Store]?"). Keep trust signals + the brand-guarantee sentence in
 the body. Do NOT rewrite it into a transactional "Buy [Product] — price…" headline.
 No geographic, brand/store, or added-claim changes. Return ONLY raw HTML.`;
 }
@@ -173,9 +189,9 @@ Do NOT output the same text unchanged.
 ${PRODUCT_NAME_LOCALIZATION}
 
 [LABELS TO ADAPT (European English)]
-- "Technical specifications of the [Product Name]" → keep in English, British style
+- "Technical specifications" → keep in English, British style. No product name.
 - "What's in the Box" → keep (capitalise "Box")
-- Commercial closing H2 → "why-buy" British/European English: "Why buy the [Product] from [Store]?". Keep the store-trust signals and brand guarantee in the body.
+- Commercial closing H2 → "why-buy" British/European English: "Why buy the [Product-short] from [Store]?". Keep the store-trust signals and brand guarantee in the body.
 [CONSTRAINTS]
 - Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab); keep English brand-first order and "pcs" (see [PRODUCT NAME LOCALIZATION]).
 - Do NOT alter <img src="…"> URLs.
@@ -199,9 +215,9 @@ repeated Product Name. Never change the digits or the unit — only the separato
 ${PRODUCT_NAME_LOCALIZATION}
 
 [LABELS TO TRANSLATE (Ukrainian)]
-- "Technical specifications of the [Product Name]" → "Технічні характеристики [Product Name]"
+- "Technical specifications" → «Технічні характеристики» (без назви товару)
 - "What's in the box" → "Комплектація"
-- Commercial closing H2 → "why-buy" Ukrainian: "Чому купити [Product] в [Store]?". Keep the store-trust signals and brand guarantee in the body.
+- Commercial closing H2 → "why-buy" Ukrainian: «Чому купити [Product-short] в [Store]?». Keep the store-trust signals and brand guarantee in the body.
 - Brand-guarantee sentence → translate fully
 
 [STYLE]
@@ -226,9 +242,9 @@ Translate/adapt into natural, persuasive Castilian Spanish (es-ES) for EXPERT3D 
 If the input is already in Spanish, apply Castilian style improvements and SEO optimization.
 
 [LABELS TO TRANSLATE (Castilian Spanish)]
-- "Technical specifications of the [Product Name]" → "Especificaciones técnicas del [Product Name]"
+- "Technical specifications" → "Especificaciones técnicas" (sin el nombre del producto)
 - "What's in the box" → "Contenido del paquete"
-- Commercial closing H2 → "why-buy" Castilian: "¿Por qué comprar [Product] en EXPERT3D?". Keep the store-trust signals and brand guarantee in the body.
+- Commercial closing H2 → "why-buy" Castilian: "¿Por qué comprar [Product-short] en EXPERT3D?". Keep the store-trust signals and brand guarantee in the body.
 - SHOWROOM EXCLUSION: EXPERT3D has no physical showroom — remove any showroom/visit/demo benefit if present in the source CTA.
 - Brand-guarantee sentence → translate fully
 
@@ -272,9 +288,9 @@ If the input is already Portuguese, convert any Brazilian forms to European Port
 SEO optimization. Never leave pt-BR vocabulary (arquivo/tela/usuário) in the output.
 
 [LABELS TO TRANSLATE (European Portuguese)]
-- "Technical specifications of the [Product Name]" → "Especificações técnicas de [Product Name]"
+- "Technical specifications" → "Especificações técnicas" (sem o nome do produto)
 - "What's in the box" → "Conteúdo da embalagem"
-- Commercial closing H2 → "why-buy" European Portuguese: "Porquê comprar [Product] na EXPERT3D?".
+- Commercial closing H2 → "why-buy" European Portuguese: "Porquê comprar [Product-short] na EXPERT3D?".
   Keep the store-trust signals and brand guarantee in the body.
 - SHOWROOM EXCLUSION: EXPERT3D has no physical showroom — remove any showroom/visit/demo benefit.
 - Brand-guarantee sentence → translate fully.
@@ -307,13 +323,13 @@ function usInstruction(targetLang: string): string {
   const languageLabel = isEnglish ? 'American English (en-US)' : 'US/Latin American Spanish (es-US)';
   const labelsBlock = isEnglish
     ? `[LABELS TO ADAPT (American English)]
-- "Technical specifications of the [Product Name]" → keep in English
+- "Technical specifications" → keep in English. No product name.
 - "What's in the box" → "What's in the Box"
-- Commercial closing H2 → "why-buy" American English: "Why buy the [Product] from [Store] in Houston, TX?". Keep the store-trust signals and brand guarantee in the body.`
+- Commercial closing H2 → "why-buy" American English: "Why buy the [Product-short] from [Store] in Houston, TX?". Keep the store-trust signals and brand guarantee in the body.`
     : `[LABELS TO TRANSLATE (US Spanish es-MX)]
-- "Technical specifications of the [Product Name]" → "Especificaciones técnicas del [Product Name]"
+- "Technical specifications" → "Especificaciones técnicas" (sin el nombre del producto)
 - "What's in the box" → "Contenido del paquete"
-- Commercial closing H2 → "why-buy" Spanish: "¿Por qué comprar [Product] en [Store]?". Keep the store-trust signals and brand guarantee in the body.
+- Commercial closing H2 → "why-buy" Spanish: "¿Por qué comprar [Product-short] en [Store]?". Keep the store-trust signals and brand guarantee in the body.
 - Brand-guarantee sentence → translate fully`;
 
   return `TASK C — ${languageLabel.toUpperCase()} LOCALIZATION FOR US MARKET (pure HTML body only).

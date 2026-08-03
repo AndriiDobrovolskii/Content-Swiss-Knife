@@ -113,6 +113,24 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
 - State stock/availability ("in stock", "є в наявності") only when the input explicitly
   supplies stock status; when it is absent, end the sentence after the region.
 
+[HEADING FORM — applies to every <h2> and <h3> in the body, all stores, all languages]
+- [Product-short] IS GIVEN TO YOU in the user message. It is the brand plus the base model with
+  configuration codes and package/kit suffixes removed ("XGRIDS L2 Pro 32/300 Standard Package"
+  → "XGRIDS L2 Pro"). Use it exactly as supplied; never re-derive it or expand it back.
+- THE FULL PRODUCT NAME IS FORBIDDEN IN EVERY HEADING. A heading never contains a
+  configuration code or a package/bundle/kit suffix.
+- AT MOST TWO <h2> in the whole document may contain [Product-short]: the FIRST §3 heading and
+  the §9 commercial-closing heading. Every other heading names the product with a generic
+  category noun ("пристрій", "лідар-сканер", "the device", "urządzenie") or does not name it
+  at all. A heading is a label for its section, not a place to repeat the keyword.
+- NO <h3> EVER CONTAINS THE PRODUCT NAME. Sub-headings are short nominal labels
+  («Лазерний модуль», «Безпека»).
+- Keep every <h2> to 8 words or fewer.
+- THE SAME RULE APPLIES TO SECTION-OPENING SENTENCES. Do not restate the full product name at
+  the start of each section — refer back to it, and VARY the reference: rotate «Цей пристрій»,
+  «Дана модель», «Сканер», «Обладнання» (or the target language's equivalents). Never open two
+  adjacent paragraphs with the same reference phrase.
+
 [STYLE & GEO]
 - Open with a featured-snippet fact: the first sentence is a "What is / Best for" statement.
   Substitute every fluff opener ("In the modern world…", "cutting-edge", "perfect choice",
@@ -219,8 +237,10 @@ heading level anywhere in the body.
 
 5. LIST COMPATIBILITY (CONDITIONAL, 30–100 words) — emit only when the source/datasheet
    provides it:
-   Product-specific H2, e.g. <h2>Compatibility of the [Product]</h2>, followed by a <ul>
-   whose items use a <b> lead-in label: <li><b>[Aspect label]</b> [value(s)]</li>.
+   A short nominal H2 naming the SCOPE, not the product — <h2>Compatibility and accessories</h2>,
+   localized (uk "Сумісні аксесуари та кріплення") — followed by a <ul> whose items use a <b>
+   lead-in label: <li><b>[Aspect label]</b> [value(s)]</li>. Per [HEADING FORM], this heading
+   carries no product name.
    SCOPE (global, all products): ONLY physical cross-compatibility — compatible materials
    (resins, filaments, powders) and hardware components (build platforms, vats/tanks,
    post-processing stations, other physical accessories) — kept narrow for internal
@@ -235,7 +255,8 @@ heading level anywhere in the body.
    provides that detail. Include only source-confirmed items.
 
 7. REPRODUCE TECHNICAL SPECIFICATIONS:
-   Wrapper <section class="specs">. Header <h2>Technical specifications of the [Product]</h2>.
+   Wrapper <section class="specs">. Header <h2>Technical specifications</h2>, localized
+   (uk "Технічні характеристики") — no product name, per [HEADING FORM].
    One logical category = one <h3> + one table. Wrap each table in
    <div class="table-responsive">. Plain HTML table per [MICRODATA ARCHITECTURE]:
      <div class="table-responsive"><table>
@@ -287,13 +308,14 @@ ending at §9.
 9. WRITE THE COMMERCIAL CLOSING / CTA-TRUST (80–150 words):
    Structure: H2 + body in <p class="cta">. The H2 is a "why-buy from store" question
    (Schema v3.0 §9). Localized H2 templates:
-     en-GB / en-ES: "Why buy the [Product] from [Store]?"
-     en-US:         "Why buy the [Product] from [Store] in Houston, TX?"
-     uk-UA:         "Чому купити [Product] в [Store]?"
-     ru-UA:         "Почему купить [Product] в [Store]?"
-     pl-PL:         "Dlaczego warto kupić [Product] w [Store]?"
-     de-DE:         "Warum [Product] bei [Store] kaufen?"
-     es-ES / es-MX: "¿Por qué comprar [Product] en [Store]?"
+     en-GB / en-ES: "Why buy the [Product-short] from [Store]?"
+     en-US:         "Why buy the [Product-short] from [Store] in Houston, TX?"
+     uk-UA:         "Чому купити [Product-short] в [Store]?"
+     ru-UA:         "Почему купить [Product-short] в [Store]?"
+     pl-PL:         "Dlaczego warto kupić [Product-short] w [Store]?"
+     de-DE:         "Warum [Product-short] bei [Store] kaufen?"
+     es-ES / es-MX: "¿Por qué comprar [Product-short] en [Store]?"
+   This is one of the two headings allowed to name the product, and it uses the SHORT form.
    Body in <p class="cta">: "[Store] supplies professional 3D equipment since 2012." +
    4 or more trust points true for this store/market, chosen from: expert pre-sales
    consultation & configuration help; official warranty & authorized after-sales service;
