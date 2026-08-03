@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { collapseKillerSpecsToTwoColumns, flattenSpecCategoriesToColspanTable, finalizeTablesForDisplay } from './table-finalize';
+import { collapseKillerSpecsToTwoColumns, restyleSpecTables, finalizeTablesForDisplay } from './table-finalize';
 import { STORE_REGISTRY, KILLER_SPECS_HEADERS } from '../prompt-core/constants';
 
 function killerSpecsTable(whyHeader = 'Чому це важливо'): string {
@@ -125,35 +125,88 @@ describe('collapseKillerSpecsToTwoColumns', () => {
   });
 });
 
-describe('flattenSpecCategoriesToColspanTable', () => {
-  it('flattens N category blocks into one table with colspan header rows, preserving row order and content', () => {
-    const h2 = '<h2>Технічні характеристики Anycubic Kobra 3</h2>';
+describe('restyleSpecTables', () => {
+  it('keeps one table per category and applies the store theme classes', () => {
+    const h2 = '<h2>Технічні характеристики</h2>';
     const html = `<section class="specs">${h2}${category('Матеріали', 2)}${category('Продуктивність', 2)}</section>`;
-    const result = flattenSpecCategoriesToColspanTable(html);
-    const doc = new DOMParser().parseFromString(result, 'text/html');
+    const doc = new DOMParser().parseFromString(restyleSpecTables(html), 'text/html');
 
-    expect(doc.querySelectorAll('section.specs table').length).toBe(1);
+    const tables = doc.querySelectorAll('section.specs table');
+    expect(tables.length).toBe(2);
     expect(doc.querySelector('section.specs h2')?.outerHTML).toBe(h2);
+    expect(Array.from(doc.querySelectorAll('section.specs h3')).map(h => h.textContent))
+      .toEqual(['Матеріали', 'Продуктивність']);
 
-    const rows = Array.from(doc.querySelectorAll('section.specs table tr'));
-    expect(rows[0].querySelector('th[colspan="2"]')?.textContent).toBe('Матеріали');
-    expect(rows[1].textContent).toContain('Матеріали row 0');
-    expect(rows[2].textContent).toContain('Матеріали row 1');
-    expect(rows[3].querySelector('th[colspan="2"]')?.textContent).toBe('Продуктивність');
-    expect(rows[4].textContent).toContain('Продуктивність row 0');
-    expect(rows[5].textContent).toContain('Продуктивність row 1');
+    for (const table of Array.from(tables)) {
+      expect(table.getAttribute('class')).toBe('table table-bordered table-striped');
+      expect(table.getAttribute('style')).toBe('table-layout: fixed;');
+    }
+  });
+
+  it('rewrites the header row to <td><b>…</b></td>, reusing the labels the model wrote', () => {
+    const html = `<section class="specs"><h2>Specs</h2>${category('Матеріали', 1)}</section>`;
+    const doc = new DOMParser().parseFromString(restyleSpecTables(html), 'text/html');
+
+    const headerCells = Array.from(doc.querySelectorAll('section.specs thead td'));
+    expect(headerCells.map(td => td.textContent)).toEqual(['Параметр', 'Значення']);
+    expect(headerCells.map(td => td.firstElementChild?.tagName)).toEqual(['B', 'B']);
+    expect(headerCells[0].getAttribute('style')).toBe('width: 45%;');
+    expect(headerCells[1].hasAttribute('style')).toBe(false);
+    // The <th> shape is gone — the theme's templates use <td>. See the const doc-comment.
+    expect(doc.querySelectorAll('section.specs th').length).toBe(0);
+  });
+
+  it('preserves every category and every data row — the count is the contract', () => {
+    const html = `<section class="specs"><h2>Specs</h2>${category('A', 3)}${category('B', 5)}${category('C', 2)}</section>`;
+    const doc = new DOMParser().parseFromString(restyleSpecTables(html), 'text/html');
+
+    expect(doc.querySelectorAll('section.specs h3').length).toBe(3);
+    expect(doc.querySelectorAll('section.specs tbody tr').length).toBe(10);
+  });
+
+  it('collapses a multi-value <ul> cell into comma-separated text', () => {
+    const html =
+      `<section class="specs"><h2>Specs</h2><h3>Вихідні дані</h3>` +
+      `<div class="table-responsive"><table><thead><tr><th>Параметр</th><th>Значення</th></tr></thead>` +
+      `<tbody><tr><td>Формати</td><td><ul><li>.las</li><li>.ply</li></ul></td></tr></tbody></table></div>` +
+      `</section>`;
+    const doc = new DOMParser().parseFromString(restyleSpecTables(html), 'text/html');
+
+    expect(doc.querySelector('section.specs tbody tr td:last-child')?.textContent).toBe('.las, .ply');
+    expect(doc.querySelectorAll('section.specs ul').length).toBe(0);
+  });
+
+  it('borrows another category\'s labels when a table has no header row, rather than defaulting to English', () => {
+    const headerless = `<h3>Б</h3><div class="table-responsive"><table><tbody><tr><td>x</td><td>y</td></tr></tbody></table></div>`;
+    const html = `<section class="specs"><h2>Specs</h2>${category('А', 1)}${headerless}</section>`;
+    const doc = new DOMParser().parseFromString(restyleSpecTables(html), 'text/html');
+
+    const second = doc.querySelectorAll('section.specs table')[1];
+    expect(Array.from(second.querySelectorAll('thead td')).map(td => td.textContent))
+      .toEqual(['Параметр', 'Значення']);
+  });
+
+  it('emits an uppercase comment marker before each <h3>', () => {
+    const html = `<section class="specs"><h2>Specs</h2>${category('Системні параметри', 1)}</section>`;
+    expect(restyleSpecTables(html)).toContain('<!-- СИСТЕМНІ ПАРАМЕТРИ -->');
+  });
+
+  it('is idempotent — a second pass changes nothing', () => {
+    const html = `<section class="specs"><h2>Specs</h2>${category('Матеріали', 2)}${category('Точність', 3)}</section>`;
+    const once = restyleSpecTables(html);
+    expect(restyleSpecTables(once)).toBe(once);
   });
 
   it('is a no-op when <section class="specs"> is absent', () => {
     const html = '<p>No specs here.</p>';
-    expect(flattenSpecCategoriesToColspanTable(html)).toBe(html);
+    expect(restyleSpecTables(html)).toBe(html);
   });
 
   it('preserves HTML before and after section.specs untouched', () => {
     const before = '<p>Intro.</p>';
     const after = '<hr>';
     const html = before + `<section class="specs"><h2>Specs</h2>${category('A', 2)}</section>` + after;
-    const result = flattenSpecCategoriesToColspanTable(html);
+    const result = restyleSpecTables(html);
     expect(result.startsWith(before)).toBe(true);
     expect(result.endsWith(after)).toBe(true);
   });
@@ -167,7 +220,8 @@ describe('finalizeTablesForDisplay', () => {
 
     expect(Array.from(doc.querySelectorAll('table')[0].querySelectorAll('thead th')).map(th => th.textContent)).toEqual(['Параметр', 'Ваша перевага']);
     expect(doc.querySelectorAll('section.specs table').length).toBe(1);
-    expect(doc.querySelector('section.specs table th[colspan="2"]')?.textContent).toBe('A');
+    expect(doc.querySelector('section.specs h3')?.textContent).toBe('A');
+    expect(doc.querySelector('section.specs table')?.getAttribute('class')).toBe('table table-bordered table-striped');
   });
 
   it('threads storeName through to the killer-specs collapse', () => {

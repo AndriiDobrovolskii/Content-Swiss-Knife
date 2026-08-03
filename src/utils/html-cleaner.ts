@@ -287,6 +287,19 @@ export function stripTiptapArtifacts(html: string): string {
     last.remove();
   }
 
+  // TipTap's ListItem content model is `paragraph block*`, so every bullet comes back as
+  // <li><p>text</p></li> while the generator emits a bare <li>. Left alone, opening any
+  // artifact in the editor silently rewrites every list in the document. Unwrapped only when
+  // the <p> is the item's ONLY child — an <li> holding a nested list or several blocks is
+  // real structure and stays. Mirrors the identical per-cell unwrap in table-thead.ts, which
+  // exists for the same reason and cannot be fixed in the schema either.
+  doc.querySelectorAll('li').forEach(item => {
+    const onlyChild = item.firstElementChild;
+    if (onlyChild?.tagName !== 'P' || item.childNodes.length !== 1) return;
+    while (onlyChild.firstChild) item.insertBefore(onlyChild.firstChild, onlyChild);
+    onlyChild.remove();
+  });
+
   return doc.body.innerHTML;
 }
 

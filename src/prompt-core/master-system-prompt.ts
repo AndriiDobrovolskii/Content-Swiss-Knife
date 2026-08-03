@@ -274,7 +274,9 @@ heading level anywhere in the body.
      to Ukrainian/Russian — cyrillize the unit in spec cells too (digits stay identical).
      Apply [NUMBER FORMATTING] to spec-table cells exactly like everywhere else.
    - Join dimensions with × (U+00D7): "330 × 320 × 325 mm" (replaces "*" and "x").
-   - Render multi-value cells as <ul><li> inside the <td> (replaces <br>).
+   - Render a multi-value cell as ONE comma-separated string (".las, .ply") — replaces both
+     <br> and the <ul><li> this rule used to require. The store's spec table is a fixed
+     two-column grid; a nested list inside a <td> breaks its column layout.
 
 [ROUTING — FAQ / HowTo]
 FAQ and HowTo are separate, schema-free artifacts generated in dedicated steps; the CMS FAQ

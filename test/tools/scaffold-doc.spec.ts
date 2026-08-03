@@ -21,19 +21,28 @@ import { fileURLToPath } from 'node:url';
 
 import { parseSpecs, parseFigures, parseKillerSpecs, scaffoldDoc, TODO } from './scaffold-doc.mjs';
 
+/** Post restyleSpecTables: one <h3> + one themed table per category, all-<td> header row. */
+function specCategory(title: string, rows: string): string {
+  return (
+    `<!-- ${title.toUpperCase()} --><h3>${title}</h3>` +
+    `<div class="table-responsive"><table class="table table-bordered table-striped" style="table-layout: fixed;">` +
+    `<thead><tr><td style="width: 45%;"><b>Параметр</b></td><td><b>Значення</b></td></tr></thead>` +
+    `<tbody>${rows}</tbody></table></div>`
+  );
+}
+
 describe('parseSpecs', () => {
-  it('reads a category header row and its data rows', () => {
-    const html = `<section class="specs">
-<h2>Технічні характеристики Ortur H20 20 W</h2>
-<div class="table-responsive"><table>
-<tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold;">Корпус та безпека</th></tr>
-<tr><td>Матеріал корпусу</td><td>Алюмінієвий сплав</td></tr>
-<tr><td>Дитячий замок</td><td>Так</td></tr>
-</table></div>
-</section>`;
+  it('reads a category heading and its data rows', () => {
+    const html =
+      `<section class="specs"><h2>Технічні характеристики</h2>` +
+      specCategory(
+        'Корпус та безпека',
+        `<tr><td>Матеріал корпусу</td><td>Алюмінієвий сплав</td></tr><tr><td>Дитячий замок</td><td>Так</td></tr>`,
+      ) +
+      `</section>`;
 
     expect(parseSpecs(html)).toEqual({
-      heading: 'Технічні характеристики Ortur H20 20 W',
+      heading: 'Технічні характеристики',
       categories: [
         {
           title: 'Корпус та безпека',
@@ -46,50 +55,61 @@ describe('parseSpecs', () => {
     });
   });
 
+  it('never mistakes the <td><b>…</b></td> header row for a spec row', () => {
+    const html =
+      `<section class="specs"><h2>Specs</h2>` +
+      specCategory('Cat', `<tr><td>a</td><td>1</td></tr>`) +
+      `</section>`;
+    expect(parseSpecs(html).categories[0].rows).toEqual([{ label: 'a', value: '1' }]);
+  });
+
   it('keeps several categories separate and in document order', () => {
-    const html = `<section class="specs"><h2>Specs</h2><div class="table-responsive"><table>
-<tr><th colspan="2">First</th></tr>
-<tr><td>a</td><td>1</td></tr>
-<tr><th colspan="2">Second</th></tr>
-<tr><td>b</td><td>2</td></tr>
-</table></div></section>`;
+    const html =
+      `<section class="specs"><h2>Specs</h2>` +
+      specCategory('First', `<tr><td>a</td><td>1</td></tr>`) +
+      specCategory('Second', `<tr><td>b</td><td>2</td></tr>`) +
+      `</section>`;
 
     expect(parseSpecs(html).categories.map(c => c.title)).toEqual(['First', 'Second']);
     expect(parseSpecs(html).categories[1].rows).toEqual([{ label: 'b', value: '2' }]);
   });
 
   /**
-   * The EXPERT3D case that forced SpecRow.value to widen to `string | string[]`. A scaffolder that
-   * flattened this to "ORTUR / Lightburn / LaserGRBL" would silently impose Center 3D Print's
-   * convention on EXPERT3D's artifact and the round-trip would fail three <li> later.
+   * The store's §7 template replaced the nested <ul> with a comma-joined string, so the cell
+   * reads back as one value. Splitting it apart again would be guessing: a comma inside a spec
+   * value is prose far more often than it is a separator, and renderSpecs() joins a string[]
+   * with ", " anyway, so the string round-trips to identical HTML.
    */
-  it('reads a nested list in a value cell as an array, not a joined string', () => {
-    const html = `<section class="specs"><h2>Specs</h2><div class="table-responsive"><table>
-<tr><th colspan="2">Софт</th></tr>
-<tr><td>Програмне забезпечення</td><td><ul><li>ORTUR (власний застосунок)</li><li>Lightburn</li><li>LaserGRBL</li></ul></td></tr>
-</table></div></section>`;
+  it('reads a comma-joined multi-value cell as one string rather than guessing a split', () => {
+    const html =
+      `<section class="specs"><h2>Specs</h2>` +
+      specCategory(
+        'Зв\'язок',
+        `<tr><td>Бездротовий зв'язок</td><td>Підтримка Wi-Fi, Bluetooth: 802.11a/b/g/n/ac, 2.4G Wi-Fi 2412–2472 МГц</td></tr>`,
+      ) +
+      `</section>`;
 
     expect(parseSpecs(html).categories[0].rows[0]).toEqual({
-      label: 'Програмне забезпечення',
-      value: ['ORTUR (власний застосунок)', 'Lightburn', 'LaserGRBL'],
+      label: "Бездротовий зв'язок",
+      value: 'Підтримка Wi-Fi, Bluetooth: 802.11a/b/g/n/ac, 2.4G Wi-Fi 2412–2472 МГц',
     });
   });
 
   it('throws rather than guessing when a data row is not the expected two cells', () => {
-    const html = `<section class="specs"><h2>Specs</h2><div class="table-responsive"><table>
-<tr><th colspan="2">Cat</th></tr>
-<tr><td>only one cell</td></tr>
-</table></div></section>`;
+    const html =
+      `<section class="specs"><h2>Specs</h2>` +
+      specCategory('Cat', `<tr><td>only one cell</td></tr>`) +
+      `</section>`;
 
     expect(() => parseSpecs(html)).toThrow(/1 cell/i);
   });
 
-  it('throws when a data row appears before any category header', () => {
-    const html = `<section class="specs"><h2>Specs</h2><div class="table-responsive"><table>
-<tr><td>orphan</td><td>row</td></tr>
-</table></div></section>`;
+  it('throws when a data row appears before any category heading', () => {
+    const html =
+      `<section class="specs"><h2>Specs</h2><div class="table-responsive"><table>` +
+      `<tbody><tr><td>orphan</td><td>row</td></tr></tbody></table></div></section>`;
 
-    expect(() => parseSpecs(html)).toThrow(/before any category/i);
+    expect(() => parseSpecs(html)).toThrow(/before any <h3> category/i);
   });
 
   it('throws when the artifact has no specs section at all', () => {
@@ -204,9 +224,13 @@ describe('scaffoldDoc', () => {
 
 <section class="specs">
 <h2>Технічні характеристики</h2>
-<div class="table-responsive"><table>
-<tr><th colspan="2">Категорія</th></tr>
-<tr><td>Параметр</td><td>Значення</td></tr>
+<!-- КАТЕГОРІЯ -->
+<h3>Категорія</h3>
+<div class="table-responsive"><table class="table table-bordered table-striped" style="table-layout: fixed;">
+<thead><tr><td style="width: 45%;"><b>Параметр</b></td><td><b>Значення</b></td></tr></thead>
+<tbody>
+<tr><td>Потужність</td><td>20 Вт</td></tr>
+</tbody>
 </table></div>
 </section>
 <hr>`;

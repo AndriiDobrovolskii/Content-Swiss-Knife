@@ -211,14 +211,30 @@ describe('renderDescription', () => {
 
       <section class="specs">
       <h2>Технічні характеристики xTool M1 Ultra</h2>
-      <div class="table-responsive"><table>
-      <tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold;">Лазерний модуль</th></tr>
+      <!-- ЛАЗЕРНИЙ МОДУЛЬ -->
+      <h3>Лазерний модуль</h3>
+      <div class="table-responsive"><table class="table table-bordered table-striped" style="table-layout: fixed;">
+      <thead><tr><td style="width: 45%;"><b>Параметр</b></td><td><b>Значення</b></td></tr></thead>
+      <tbody>
       <tr><td>Потужність</td><td>20 Вт</td></tr>
       <tr><td>Тип</td><td>діодний</td></tr>
-      <tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold;">Механіка</th></tr>
+      </tbody>
+      </table></div>
+      <!-- МЕХАНІКА -->
+      <h3>Механіка</h3>
+      <div class="table-responsive"><table class="table table-bordered table-striped" style="table-layout: fixed;">
+      <thead><tr><td style="width: 45%;"><b>Параметр</b></td><td><b>Значення</b></td></tr></thead>
+      <tbody>
       <tr><td>Габарити</td><td>620 × 498 × 178 мм</td></tr>
-      <tr><th colspan="2" style="text-align: center; padding: 10px; font-weight: bold;">Безпека</th></tr>
+      </tbody>
+      </table></div>
+      <!-- БЕЗПЕКА -->
+      <h3>Безпека</h3>
+      <div class="table-responsive"><table class="table table-bordered table-striped" style="table-layout: fixed;">
+      <thead><tr><td style="width: 45%;"><b>Параметр</b></td><td><b>Значення</b></td></tr></thead>
+      <tbody>
       <tr><td>Сертифікація</td><td>клас 1 (TÜV SÜD)</td></tr>
+      </tbody>
       </table></div>
       </section>
       <hr>
@@ -261,31 +277,68 @@ describe('renderDescription', () => {
   });
 
   describe('§7 technical specifications', () => {
-    it('emits one flat table with a colspan header per category and no thead', () => {
+    it('emits one <h3> + one themed table per category', () => {
       const html = render(fullDoc());
       const doc = new DOMParser().parseFromString(html, 'text/html');
       const specs = doc.querySelector('section.specs')!;
 
-      expect(specs.querySelectorAll('table')).toHaveLength(1);
-      expect(specs.querySelectorAll('thead')).toHaveLength(0);
+      expect(Array.from(specs.querySelectorAll('h3')).map(h => h.textContent))
+        .toEqual(['Лазерний модуль', 'Механіка', 'Безпека']);
 
-      const categoryCells = Array.from(specs.querySelectorAll('th[colspan="2"]'));
-      expect(categoryCells.map(c => c.textContent)).toEqual(['Лазерний модуль', 'Механіка', 'Безпека']);
+      const tables = Array.from(specs.querySelectorAll('table'));
+      expect(tables).toHaveLength(3);
+      for (const table of tables) {
+        expect(table.getAttribute('class')).toBe('table table-bordered table-striped');
+        expect(table.getAttribute('style')).toBe('table-layout: fixed;');
+      }
+      // The colspan category-header row is gone with the flattener it belonged to.
+      expect(specs.querySelectorAll('th[colspan="2"]')).toHaveLength(0);
+    });
+
+    it('heads every table with two <td><b>…</b></td> cells, localized, first at 45%', () => {
+      const html = render(fullDoc());
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const specs = doc.querySelector('section.specs')!;
+
+      const heads = Array.from(specs.querySelectorAll('thead tr'));
+      expect(heads).toHaveLength(3);
+      for (const row of heads) {
+        const cells = Array.from(row.querySelectorAll('td'));
+        expect(cells.map(c => c.textContent)).toEqual(['Параметр', 'Значення']);
+        expect(cells.map(c => c.firstElementChild?.tagName)).toEqual(['B', 'B']);
+        expect(cells[0].getAttribute('style')).toBe('width: 45%;');
+      }
+      // <th> is deliberately not used here — see table-finalize.ts's const doc-comment.
+      expect(specs.querySelectorAll('th')).toHaveLength(0);
+    });
+
+    it('falls back to the en-GB column pair for a locale with no entry', () => {
+      const html = render({ ...fullDoc(), locale: 'fr-FR' });
+      expect(html).toContain('<td style="width: 45%;"><b>Parameter</b></td><td><b>Value</b></td>');
     });
 
     it('preserves row order within and across categories', () => {
       const html = render(fullDoc());
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      const rows = Array.from(doc.querySelectorAll('section.specs tr'));
+      const rows = Array.from(doc.querySelectorAll('section.specs tbody tr'));
       expect(rows.map(r => r.textContent)).toEqual([
-        'Лазерний модуль',
         'Потужність20 Вт',
         'Типдіодний',
-        'Механіка',
         'Габарити620 × 498 × 178 мм',
-        'Безпека',
         'Сертифікаціяклас 1 (TÜV SÜD)',
       ]);
+    });
+
+    it('renders a multi-valued parameter comma-joined in one cell, not as a nested list', () => {
+      const doc = fullDoc();
+      doc.specs.categories[0].rows.push({ label: 'Формати', value: ['.las', '.ply'] });
+      const rendered = render(doc);
+      expect(rendered).toContain('<td>Формати</td><td>.las, .ply</td>');
+      expect(rendered).not.toMatch(/<section class="specs">[\s\S]*<ul>[\s\S]*<\/section>/);
+    });
+
+    it('marks each category with an uppercase HTML comment', () => {
+      expect(render(fullDoc())).toContain('<!-- ЛАЗЕРНИЙ МОДУЛЬ -->');
     });
   });
 
@@ -660,10 +713,9 @@ describe('§4 applications — blocks between the heading and the list', () => {
 });
 
 describe('§7 spec values — a parameter may hold several values', () => {
-  // EXPERT3D writes a multi-valued parameter as a nested list inside the cell:
-  //   <td><ul><li>ORTUR (власний застосунок)</li><li>Lightburn</li><li>LaserGRBL</li></ul></td>
-  // Center 3D Print writes the same information as one slash-separated string. Both are real
-  // accepted output; a `value: string` models only the second.
+  // A multi-valued parameter USED to render as a nested <ul> inside the cell. The store's §7
+  // template replaced that with a comma-joined string, and master §7 was changed to match, so
+  // the array shape survives in the Doc model but flattens on the way out.
   function docWithListValue(): ProductDescriptionDoc {
     const doc = fullDoc();
     doc.specs.categories[0].rows.push({
@@ -673,11 +725,12 @@ describe('§7 spec values — a parameter may hold several values', () => {
     return doc;
   }
 
-  it('renders an array value as a nested list in the cell', () => {
-    expect(render(docWithListValue())).toContain(
-      '<td>Програмне забезпечення</td><td><ul><li>ORTUR (власний застосунок)</li>'
-      + '<li>Lightburn</li><li>LaserGRBL</li></ul></td>',
+  it('renders an array value comma-joined in one cell, with no nested list', () => {
+    const html = render(docWithListValue());
+    expect(html).toContain(
+      '<td>Програмне забезпечення</td><td>ORTUR (власний застосунок), Lightburn, LaserGRBL</td>',
     );
+    expect(html).not.toMatch(/<section class="specs">[\s\S]*<ul>[\s\S]*<\/section>/);
   });
 
   it('still renders a plain string value as plain text', () => {
@@ -687,7 +740,7 @@ describe('§7 spec values — a parameter may hold several values', () => {
   it('escapes list entries like any other cell text', () => {
     const doc = fullDoc();
     doc.specs.categories[0].rows.push({ label: 'Формат', value: ['<b>A</b> & B'] });
-    expect(render(doc)).toContain('<li>&lt;b&gt;A&lt;/b&gt; &amp; B</li>');
+    expect(render(doc)).toContain('<td>Формат</td><td>&lt;b&gt;A&lt;/b&gt; &amp; B</td>');
   });
 
   it('accepts both shapes in the schema, and rejects an empty list', () => {

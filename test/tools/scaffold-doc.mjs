@@ -82,7 +82,14 @@ function prose(node, where) {
   return node.innerHTML.trim();
 }
 
-/** §7 — the flattened colspan table. Inverse of renderSpecs() in render-description.ts. */
+/**
+ * §7 — one <h3> + one table per category. Inverse of renderSpecs() in render-description.ts.
+ *
+ * Categories come from the <h3> elements, not from a colspan header row: restyleSpecTables()
+ * replaced the single flattened table with the store's per-category layout. Only `tbody` rows
+ * are read — the header row is now two <td><b>…</b></td> cells, so a naive "two <td> means a
+ * data row" walk would silently ingest "Параметр | Значення" as a spec.
+ */
 export function parseSpecs(html) {
   const section = bodyOf(html).querySelector('section.specs');
   if (!section) {
@@ -93,35 +100,32 @@ export function parseSpecs(html) {
   if (!h2) throw new Error('<section class="specs"> has no <h2> heading.');
 
   const categories = [];
-  for (const tr of section.querySelectorAll('tr')) {
-    const th = tr.querySelector('th[colspan="2"]') ?? tr.querySelector('th');
-    if (th) {
-      categories.push({ title: th.textContent.trim(), rows: [] });
+  for (const node of section.querySelectorAll('h3, tbody tr')) {
+    if (node.tagName === 'H3') {
+      categories.push({ title: node.textContent.trim(), rows: [] });
       continue;
     }
 
-    const tds = tr.querySelectorAll('td');
+    const tds = node.querySelectorAll('td');
     if (tds.length !== 2) {
       throw new Error(
-        `spec row has ${tds.length} cell(s), expected 2: "${tr.textContent.trim().slice(0, 80)}"`,
+        `spec row has ${tds.length} cell(s), expected 2: "${node.textContent.trim().slice(0, 80)}"`,
       );
     }
     if (categories.length === 0) {
       throw new Error(
-        `spec row "${tds[0].textContent.trim()}" appears before any category header row — ` +
+        `spec row "${tds[0].textContent.trim()}" appears before any <h3> category heading — ` +
           `SpecCategory has nowhere to put it.`,
       );
     }
 
-    // A multi-valued parameter ships as a nested <ul> in the cell (EXPERT3D) or as one
-    // slash-separated string (Center 3D Print). Both are real; flattening the list would impose
-    // one store's convention on the other and break the round-trip three <li> later.
-    const list = tds[1].querySelector('ul');
-    const value = list
-      ? [...list.querySelectorAll('li')].map(li => li.textContent.trim())
-      : tds[1].textContent.trim();
-
-    categories.at(-1).rows.push({ label: tds[0].textContent.trim(), value });
+    // Multi-valued parameters ship comma-joined (".las, .ply") since the store's §7 template
+    // replaced the nested <ul>. DELIBERATELY NOT SPLIT BACK: a comma inside a spec value is
+    // ordinary prose far more often than it is a list separator ("Підтримка Wi-Fi, Bluetooth:
+    // 802.11a/b/g/n/ac, 2.4G Wi-Fi 2412–2472 МГц, …" is ONE value), and this file's contract is
+    // to refuse rather than approximate. Keeping the string is also round-trip-exact, because
+    // renderSpecs() joins a string[] with ", " to produce the very same cell.
+    categories.at(-1).rows.push({ label: tds[0].textContent.trim(), value: tds[1].textContent.trim() });
   }
 
   return { heading: h2.textContent.trim(), categories };

@@ -224,7 +224,7 @@
           { "label": "Інтерфейси", "value": "USB, DC, TF-карта" },
           { "label": "Способи підключення", "value": "Wi-Fi, USB" },
           { "label": "Камера", "value": "200000 пікселів" },
-          { "label": "Програмне забезпечення", "value": ["ORTUR (власний застосунок)", "Lightburn", "LaserGRBL"] }
+          { "label": "Програмне забезпечення", "value": "ORTUR (власний застосунок), Lightburn, LaserGRBL" }
         ]
       }
     ]

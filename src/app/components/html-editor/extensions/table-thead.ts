@@ -22,6 +22,31 @@
  * Pure DOM transform, no ProseMirror/editor involvement — same style as
  * wrapImageFigures()/stripTiptapArtifacts().
  */
+/**
+ * Two header-row shapes exist in real artifacts and both must be restored to <thead>:
+ *
+ *  1. All cells are <th> — the §2 killer-specs table.
+ *  2. All cells are <td> whose ONLY child is a <b> — the §7 spec tables. That shape comes
+ *     from the store's OpenCart/Journal template (see table-finalize.ts), which uses <td>
+ *     rather than <th> deliberately. Without this branch the round-trip silently drops
+ *     §7's <thead> on every artifact, because shape 2 never matched the <th> test.
+ *
+ * Shape 2 additionally requires the table to have more than one row, so a single-row table
+ * of bolded cells is left alone rather than being reclassified as a headless header.
+ */
+function isHeaderRow(row: Element, rowCount: number): boolean {
+  const cells = Array.from(row.children);
+  if (cells.length === 0) return false;
+  if (cells.every(cell => cell.tagName === 'TH')) return true;
+  return (
+    rowCount > 1 &&
+    cells.every(
+      cell =>
+        cell.tagName === 'TD' && cell.childNodes.length === 1 && cell.firstElementChild?.tagName === 'B',
+    )
+  );
+}
+
 export function reconstructTableThead(html: string): string {
   if (!html) return '';
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -40,9 +65,7 @@ export function reconstructTableThead(html: string): string {
     if (rows.length === 0) return;
 
     const firstRow = rows[0];
-    const isHeaderRow =
-      firstRow.children.length > 0 && Array.from(firstRow.children).every(cell => cell.tagName === 'TH');
-    if (!isHeaderRow) return;
+    if (!isHeaderRow(firstRow, rows.length)) return;
 
     const bodyRows = rows.slice(1);
     const thead = doc.createElement('thead');

@@ -23,7 +23,7 @@ import type {
   Subsection,
   VideoEmbed,
 } from '../domain/description-doc';
-import { KILLER_SPECS_HEADERS } from '../prompt-core/constants';
+import { KILLER_SPECS_HEADERS, SPEC_TABLE_HEADERS } from '../prompt-core/constants';
 import { getRenderRules } from '../prompt-core/store-render-rules';
 import { ensureRel0 } from '../utils/video-url';
 // From video-title.ts, NOT video-figure.ts: that module calls new DOMParser(), and this one
@@ -42,8 +42,10 @@ export interface RenderContext {
   storeName?: string;
 }
 
-/** [VERBATIM from table-finalize.ts] */
-const CATEGORY_HEADER_STYLE = 'text-align: center; padding: 10px; font-weight: bold;';
+/** [VERBATIM from table-finalize.ts] — the §7 table presentation fixed by the store theme. */
+const SPEC_TABLE_CLASS = 'table table-bordered table-striped';
+const SPEC_TABLE_STYLE = 'table-layout: fixed;';
+const SPEC_PARAM_COL_STYLE = 'width: 45%;';
 
 /** [VERBATIM from image-figure.ts] */
 const FIGURE_STYLE = 'display: block; width: fit-content; max-width: 100%; margin: 4px auto;';
@@ -247,29 +249,38 @@ function renderKillerSpecs(doc: ProductDescriptionDoc, ctx: RenderContext): stri
 }
 
 /**
- * §7 — the flattened colspan table. [VERBATIM shape from table-finalize.ts
- * flattenSpecCategoriesToColspanTable]: category <th colspan="2"> rows interleaved with plain data
- * rows, no <thead> anywhere — that function copies only `tbody tr`, so the per-category
- * Parameter/Value header rows do not survive into the displayed artifact.
+ * §7 — one <h3> + one themed table per category. [VERBATIM shape from table-finalize.ts
+ * restyleSpecTables]: an uppercase comment marker, the category <h3>, and a table carrying the
+ * store's theme classes whose <thead> row is two <td><b>…</b></td> cells (NOT <th> — see the
+ * const doc-comment in table-finalize.ts for why that is deliberate).
+ *
+ * A multi-valued parameter renders comma-joined in a single cell. It used to be a nested
+ * <ul><li>; the store's template replaced that, and master §7 was changed to match.
  */
-function renderSpecs(heading: string, categories: SpecCategory[]): string {
-  const rowsHtml: string[] = [];
-  for (const c of categories) {
-    rowsHtml.push(`<tr><th colspan="2" style="${CATEGORY_HEADER_STYLE}">${esc(c.title)}</th></tr>`);
-    for (const r of c.rows) {
-      // A multi-valued parameter renders as a nested list inside the cell, exactly as EXPERT3D
-      // ships it — no whitespace between the tags, since that is how the artifact reads and the
-      // renderer has no reason to add any.
-      const value = Array.isArray(r.value)
-        ? `<ul>${r.value.map(v => `<li>${esc(v)}</li>`).join('')}</ul>`
-        : esc(r.value);
-      rowsHtml.push(`<tr><td>${esc(r.label)}</td><td>${value}</td></tr>`);
-    }
-  }
+function renderSpecs(heading: string, categories: SpecCategory[], locale: string): string {
+  const [paramHeader, valueHeader] =
+    SPEC_TABLE_HEADERS[locale.toLowerCase()] ?? SPEC_TABLE_HEADERS['en-gb'];
+  const thead =
+    `<thead><tr><td style="${SPEC_PARAM_COL_STYLE}"><b>${esc(paramHeader)}</b></td>` +
+    `<td><b>${esc(valueHeader)}</b></td></tr></thead>`;
+
+  const blocks = categories.map(c => {
+    const rows = c.rows
+      .map(r => {
+        const value = Array.isArray(r.value) ? r.value.map(esc).join(', ') : esc(r.value);
+        return `<tr><td>${esc(r.label)}</td><td>${value}</td></tr>`;
+      })
+      .join('\n');
+    return (
+      `<!-- ${c.title.trim().toUpperCase()} -->\n<h3>${esc(c.title)}</h3>\n` +
+      `<div class="table-responsive"><table class="${SPEC_TABLE_CLASS}" style="${SPEC_TABLE_STYLE}">\n` +
+      `${thead}\n<tbody>\n${rows}\n</tbody>\n` +
+      `</table></div>`
+    );
+  });
+
   return (
-    `<section class="specs">\n<h2>${esc(heading)}</h2>\n` +
-    `<div class="table-responsive"><table>\n${rowsHtml.join('\n')}\n</table></div>\n` +
-    `</section>`
+    `<section class="specs">\n<h2>${esc(heading)}</h2>\n` + `${blocks.join('\n')}\n` + `</section>`
   );
 }
 
@@ -332,7 +343,7 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
   }
 
   // §7 is the only <section>, and the only <hr> follows it.
-  parts.push(`${renderSpecs(doc.specs.heading, doc.specs.categories)}\n<hr>`);
+  parts.push(`${renderSpecs(doc.specs.heading, doc.specs.categories, doc.locale)}\n<hr>`);
 
   parts.push(`<h2>${esc(doc.cta.heading)}</h2>\n<p class="cta">${prose(doc.cta.text)}</p>`);
 
