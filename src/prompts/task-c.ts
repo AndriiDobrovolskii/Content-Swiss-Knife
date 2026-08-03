@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE } from '../prompt-core/constants';
+import { buildDeliveryRegionBlock, taskLangToIso, US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 const IMAGE_PRESERVATION_MANIFEST = `[IMAGE MANIFEST]
@@ -68,7 +68,13 @@ function deriveStoreLabel(storeName: string, targetLang: string): string {
   return match ? match[1] : 'N/A — standalone snippet, not tied to a specific store';
 }
 
-function pack(instruction: string, html: string, storeLabel: string, localizedName?: string): PromptPayload {
+function pack(
+  instruction: string,
+  html: string,
+  storeLabel: string,
+  localizedName?: string,
+  deliveryBlock = '',
+): PromptPayload {
   const context = HAS_FIGURE_MARKUP.test(html) ? IMAGE_PRESERVATION_MANIFEST : STANDALONE_SNIPPET_NOTE;
   const specCount = countSpecCategories(html);
   const specBlock = specCount > 0 ? `\n\n${buildSpecTablePreservation(specCount)}` : '';
@@ -81,7 +87,7 @@ function pack(instruction: string, html: string, storeLabel: string, localizedNa
       { text: MASTER_SYSTEM_PROMPT, cache: true },
       { text: instruction, cache: true },
     ],
-    userContent: `[Store Name]: ${storeLabel}${h1Lock}\n\n${context}${specBlock}\n\n[BASE HTML]:\n${html}`,
+    userContent: `[Store Name]: ${storeLabel}${deliveryBlock ? '\n' + deliveryBlock : ''}${h1Lock}\n\n${context}${specBlock}\n\n[BASE HTML]:\n${html}`,
   };
 }
 
@@ -143,7 +149,14 @@ export function buildPromptC(
     if (antiCalque) instruction += `\n\n${antiCalque}`;
   }
 
-  return pack(instruction, html, deriveStoreLabel(storeName, targetLang), opts?.localizedName);
+  // The delivery region is the STORE's, not the target language's — a uk-UA artifact for a
+  // Polish store still ships to Poland and the EU. Omitted entirely (and NOT thrown on) for the
+  // standalone Translator, which has no store and no CTA to get wrong.
+  const deliveryBlock = storeName.trim()
+    ? buildDeliveryRegionBlock(storeName, taskLangToIso(targetLang, storeName))
+    : '';
+
+  return pack(instruction, html, deriveStoreLabel(storeName, targetLang), opts?.localizedName, deliveryBlock);
 }
 
 // ── Generic (default) translation instruction ──────────────────────────────
@@ -351,7 +364,7 @@ ${labelsBlock}
 | "3DDevice"           | Replace with "Expert-3DPrinter"                   |
 | Ukraine / Kyiv       | Replace with "USA" / "Texas" / "Houston"          |
 | Nova Poshta          | Replace with "US carriers (UPS, FedEx)"           |
-| Specific UA delivery | Replace with "Fast shipping across the USA"       |
+| Specific UA delivery | Replace with the [Delivery Region] given above     |
 | UA Phone Numbers     | Replace with "our Texas support team"             |
 | "3D Plastic"         | Replace with "Filament" (EN) / "Filamento" (ES)  |
 

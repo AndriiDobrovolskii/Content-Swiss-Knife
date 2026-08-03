@@ -10,22 +10,130 @@ export interface StoreProfile {
   languages: string[];
   imageBaseUrl: string;
   siteSuffix: string;
+  /**
+   * Where this store actually ships, in canonical English — the key into
+   * DELIVERY_REGION_PHRASES and the value handed to the prompt as [Delivery Region].
+   *
+   * SEPARATE FROM `region` ON PURPOSE. `region` is a display string carrying a flag emoji
+   * ("Poland & EU 🇵🇱") and, for EXPERT3D, a city ("Valencia, Spain 🇪🇸") — neither belongs in a
+   * delivery sentence. This field is prose-ready and emoji-free.
+   *
+   * THE DELIVERY REGION FOLLOWS THE STORE, NEVER THE LANGUAGE OF THE ARTIFACT. Center 3D Print
+   * publishes uk-UA and ru-UA, and before this field existed the master prompt's
+   * language-keyed substitution table promised those two locales delivery «по Україні» — for a
+   * Polish store. That is the bug this exists to make impossible.
+   *
+   * Empty string means "not configured": buildPromptA/buildPromptC throw rather than guess.
+   */
+  deliveryRegion: string;
 }
 
 export const STORE_REGISTRY: Record<string, StoreProfile> = {
-  '3DDevice': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3ddevice.com.ua/image/catalog/products/', siteSuffix: '3DDevice' },
-  '3DPrinter': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dprinter.com.ua/image/catalog/Products/', siteSuffix: '3DPrinter' },
-  '3DScanner': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dscanner.com.ua/image/catalog/Products/', siteSuffix: '3DScanner' },
-  'Center 3D Print': { group: 'EU', region: 'Poland & EU 🇵🇱', currency: 'PLN (zł) / EUR (€)', currencySymbol: 'zł', languages: ['pl-PL', 'en-GB', 'de-DE', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://center3dprint.com/image/catalog/Products/', siteSuffix: 'C3D' },
-  'Drukarka 3D': { group: 'EU', region: 'Poland 🇵🇱', currency: 'PLN (zł)', currencySymbol: 'zł', languages: ['pl-PL', 'uk-UA'], imageBaseUrl: 'https://drukarka-3d.com.pl/image/catalog/products/', siteSuffix: 'Drukarka 3D' },
-  'EXPERT3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'pt-PT', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', siteSuffix: 'EXPERT3D' },
-  'Expert-3DPrinter': { group: 'US', region: 'Houston, TX 🇺🇸', currency: 'USD ($)', currencySymbol: '$', languages: ['en-US', 'es-MX', 'uk-UA'], imageBaseUrl: '', siteSuffix: 'Expert-3DPrinter' },
+  '3DDevice': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3ddevice.com.ua/image/catalog/products/', deliveryRegion: 'Ukraine', siteSuffix: '3DDevice' },
+  '3DPrinter': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dprinter.com.ua/image/catalog/Products/', deliveryRegion: 'Ukraine', siteSuffix: '3DPrinter' },
+  '3DScanner': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dscanner.com.ua/image/catalog/Products/', deliveryRegion: 'Ukraine', siteSuffix: '3DScanner' },
+  'Center 3D Print': { group: 'EU', region: 'Poland & EU 🇵🇱', currency: 'PLN (zł) / EUR (€)', currencySymbol: 'zł', languages: ['pl-PL', 'en-GB', 'de-DE', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://center3dprint.com/image/catalog/Products/', deliveryRegion: 'Poland and the EU', siteSuffix: 'C3D' },
+  'Drukarka 3D': { group: 'EU', region: 'Poland 🇵🇱', currency: 'PLN (zł)', currencySymbol: 'zł', languages: ['pl-PL', 'uk-UA'], imageBaseUrl: 'https://drukarka-3d.com.pl/image/catalog/products/', deliveryRegion: 'Poland', siteSuffix: 'Drukarka 3D' },
+  'EXPERT3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'pt-PT', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', deliveryRegion: 'Spain and the EU', siteSuffix: 'EXPERT3D' },
+  'Expert-3DPrinter': { group: 'US', region: 'Houston, TX 🇺🇸', currency: 'USD ($)', currencySymbol: '$', languages: ['en-US', 'es-MX', 'uk-UA'], imageBaseUrl: '', deliveryRegion: 'the USA', siteSuffix: 'Expert-3DPrinter' },
 };
+
+/**
+ * The delivery-region clause, ALREADY INFLECTED for the sentence it lands in
+ * («Забезпечуємо доставку ⟨phrase⟩»), keyed by StoreProfile.deliveryRegion then by lowercase
+ * BCP47.
+ *
+ * WHY THE PHRASES LIVE IN CODE. Left to the model, "Poland and the EU" comes back as «Польща
+ * та ЄС» one run and «країни ЄС та Польща» the next — this is commercial copy that should not
+ * drift between regenerations of the same product. The set is small and closed (5 regions ×
+ * the ≤5 locales each store publishes).
+ *
+ * WHY INFLECTED. uk/ru/pl need case agreement the model would otherwise have to guess from a
+ * nominative phrase; storing the clause as it actually appears removes the guess.
+ *
+ * Only the locales a store with that region actually publishes are listed. A miss is handled
+ * by resolveDeliveryPhrase, which returns undefined rather than substituting another locale's
+ * phrase — see there for why that matters.
+ */
+export const DELIVERY_REGION_PHRASES: Record<string, Record<string, string>> = {
+  'Ukraine': {
+    'uk-ua': 'по Україні',
+    'ru-ua': 'по Украине',
+    'en-gb': 'across Ukraine',
+  },
+  'Poland and the EU': {
+    'uk-ua': 'по Польщі та країнах ЄС',
+    'ru-ua': 'по Польше и странам ЕС',
+    'pl-pl': 'na terenie Polski i UE',
+    'de-de': 'in Polen und der EU',
+    'en-gb': 'across Poland and the EU',
+  },
+  'Poland': {
+    'uk-ua': 'по Польщі',
+    'pl-pl': 'na terenie Polski',
+  },
+  'Spain and the EU': {
+    'uk-ua': 'по Іспанії та країнах ЄС',
+    'es-es': 'a toda España y la UE',
+    'pt-pt': 'para Portugal e a UE',
+    'en-es': 'across Spain and the EU',
+  },
+  'the USA': {
+    'uk-ua': 'по США',
+    'es-mx': 'a todo Estados Unidos',
+    'en-us': 'across the USA',
+  },
+};
+
+/**
+ * The localized delivery clause for a store/locale pair, or undefined when the pair is not in
+ * the table.
+ *
+ * EXACT-KEY LOOKUP, NO CROSS-LOCALE FALLBACK — same discipline as getKillerSpecsHeaders above,
+ * and load-bearing for the same kind of reason. Falling back to the en-GB phrase on a miss
+ * would hand a German or Ukrainian artifact a fully-formed ENGLISH clause, which the prompt is
+ * told to use verbatim, so it would ship as-is. Returning undefined instead lets the caller
+ * omit [Delivery Region Phrase] entirely, leaving the model with the canonical English region
+ * name and an instruction to render it naturally in the body language — which is exactly what
+ * the miss case is for.
+ */
+export function resolveDeliveryPhrase(deliveryRegion: string, locale: string): string | undefined {
+  return DELIVERY_REGION_PHRASES[deliveryRegion]?.[locale.toLowerCase()];
+}
+
+/**
+ * The `[Delivery Region]` / `[Delivery Region Phrase]` lines for a prompt's user turn.
+ *
+ * THROWS on a store with no configured region — see StoreProfile.deliveryRegion. The throw
+ * lives here, at the point of use, rather than in getStore(): that function is also called by
+ * the standalone Translator, the Optimizer, getLangsForStore and masterScriptFor, none of
+ * which emit a CTA, and throwing there would take down flows that have no delivery claim to
+ * get wrong. Precedent: renderContextFor() in store-render-rules.ts.
+ */
+export function buildDeliveryRegionBlock(storeName: string, locale: string): string {
+  const { deliveryRegion } = getStore(storeName);
+  if (!deliveryRegion) {
+    throw new Error(
+      `${storeName}: STORE_REGISTRY has no deliveryRegion, so the CTA would state the wrong ` +
+        `delivery market. Add the store's delivery region before generating for it.`,
+    );
+  }
+  const phrase = resolveDeliveryPhrase(deliveryRegion, locale);
+  return (
+    `[Delivery Region]: ${deliveryRegion}` +
+    (phrase ? `\n[Delivery Region Phrase]: ${phrase}` : '')
+  );
+}
 
 export function getStore(name: string): StoreProfile {
   return STORE_REGISTRY[name] ?? {
     group: 'EU', region: 'Global/EU', currency: 'EUR (€)', currencySymbol: '€',
-    languages: ['en-GB'], imageBaseUrl: '', siteSuffix: name,
+    // deliveryRegion is EMPTY, not 'the EU'. A plausible-looking default is the dangerous
+    // option here: a Ukrainian store added without a registry entry would silently promise
+    // its customers EU delivery, with no failing test anywhere. The prompt builders throw on
+    // an empty value instead — same fail-at-point-of-use shape as renderContextFor()'s
+    // empty-imageBaseUrl guard in store-render-rules.ts.
+    languages: ['en-GB'], imageBaseUrl: '', siteSuffix: name, deliveryRegion: '',
   };
 }
 
@@ -793,8 +901,10 @@ SPEC TABLES: translate English technical terminology inside specification tables
 — never leave it in English (e.g. "Selective Laser Sintering" → "Sinterização Seletiva a Laser",
 "Ytterbium Fiber" → "Fibra de Itérbio").
 
-DELIVERY / MARKET (commercial-closing CTA section): the delivery destination is Portugal and the
-rest of the EU — never state Spain as the delivery destination. Valencia, Spain may still be named
+DELIVERY / MARKET (commercial-closing CTA section) — THIS OVERRIDES [Delivery Region] FOR pt-PT
+AND ONLY FOR pt-PT: EXPERT3D's registry region is Spain and the EU, but the Portuguese artifact
+addresses the Portuguese market, so the delivery destination is Portugal and the rest of the EU
+— never state Spain as the delivery destination. Valencia, Spain may still be named
 elsewhere as the company's operating/shipping base, but must never appear as the market the
 equipment is delivered "to". Use this exact template for the delivery-availability sentence in the
 CTA paragraph: "O equipamento está disponível para aquisição com soluções de transporte

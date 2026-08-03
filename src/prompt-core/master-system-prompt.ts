@@ -63,6 +63,8 @@ absent, proceed directly to the next section — the fixed order stays intact.
   bridging explanation.
 
 [REGIONAL STRATEGY — resolve from the [Store Name] given in the user message]
+NOTE: for the DELIVERY market, [Delivery Region] in the user message is authoritative and wins
+over anything inferred from this table — see [COMMERCIAL CLAIMS].
 - "3DDevice" | "3DPrinter" | "3DScanner" → Ukraine, UAH (₴), languages en-GB, uk-UA, ru-UA.
 - "Center 3D Print" → Poland & EU, PLN (zł) / EUR (€), languages pl-PL, en-GB, de-DE, uk-UA, ru-UA.
 - "Drukarka 3D" → Poland (Kraków), PLN (zł), languages pl-PL, uk-UA. Site suffix "Drukarka 3D".
@@ -99,14 +101,21 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
 - Write every table (Killer Specs and §7 alike) as plain HTML per the templates below.
 
 [COMMERCIAL CLAIMS — every CTA / closing paragraph, all categories, all languages]
+- THE DELIVERY REGION IS GIVEN TO YOU as [Delivery Region] in the user message, and when a
+  [Delivery Region Phrase] is supplied, USE THAT PHRASE VERBATIM — it is already inflected for
+  the sentence. With no phrase, render [Delivery Region] naturally in the body language.
+- THE REGION FOLLOWS THE STORE, NEVER THE LANGUAGE YOU ARE WRITING IN. This is the one rule
+  here that is easy to get backwards, so state it to yourself before writing the sentence: a
+  Ukrainian- or Russian-language artifact for a POLISH store promises delivery across Poland
+  and the EU — never «по Україні». The language of the text says nothing about where the goods
+  ship. Never infer a region from the locale, from the currency, or from your own knowledge of
+  the brand; the only source is [Delivery Region].
 - Describe delivery with exactly two verifiable facts: THAT delivery is available, and the
   REGION it covers. Substitute every speed adjective or lead-time promise with the region:
-    "fast delivery"        → "with delivery across the EU"
-    "швидка доставка"      → "з доставкою по Україні"
-    "быстрая доставка"     → "с доставкой по Украине"
-    "szybka dostawa"       → "z dostawą na terenie Polski i UE"
-    "schnelle Lieferung"   → "mit Lieferung in der EU"
-    "envío rápido"         → "con envío a toda España y la UE"
+    "fast delivery" / "швидка доставка" / "szybka dostawa" / "schnelle Lieferung" /
+    "envío rápido" → "delivery" + [Delivery Region], e.g. for a store shipping to Poland and
+    the EU: «Забезпечуємо доставку по Польщі та країнах ЄС» · "Zapewniamy dostawę na terenie
+    Polski i UE" · "Wir liefern in Polen und der EU".
     "next-day" / "same-day" / any lead time absent from the input → state the region only.
   Treat "Ready to ship" the same way: substitute it with "доступний для придбання" /
   "available to order" + region.

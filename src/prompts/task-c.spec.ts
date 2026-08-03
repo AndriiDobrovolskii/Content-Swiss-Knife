@@ -53,7 +53,9 @@ describe('buildPromptC — pt-PT (EXPERT3D)', () => {
   });
 
   it('falls back to generic instruction for "PT" on a non-EXPERT3D store', () => {
-    const payload = buildPromptC(SAMPLE_HTML, 'PT', 'SomeOtherStore');
+    // A REGISTERED store, not an arbitrary name: buildPromptC now throws for a store with no
+    // deliveryRegion, so a fictitious name would fail here for an unrelated reason.
+    const payload = buildPromptC(SAMPLE_HTML, 'PT', 'Center 3D Print');
     const taskBlock = payload.systemBlocks[1].text;
     expect(taskBlock).not.toContain('EUROPEAN PORTUGUESE LOCALIZATION FOR EXPERT3D');
   });
@@ -178,8 +180,8 @@ describe('buildPromptC — always supplies [Store Name] and a standalone-snippet
   });
 
   it('prefers an explicit storeName argument over deriving one from the target-language label', () => {
-    const payload = buildPromptC('Estamos presentes en los siguientes mercados', 'Portuguese (EXPERT3D)', 'SomeOtherStore');
-    expect(payload.userContent).toContain('[Store Name]: SomeOtherStore');
+    const payload = buildPromptC('Estamos presentes en los siguientes mercados', 'Portuguese (EXPERT3D)', 'Drukarka 3D');
+    expect(payload.userContent).toContain('[Store Name]: Drukarka 3D');
   });
 });
 

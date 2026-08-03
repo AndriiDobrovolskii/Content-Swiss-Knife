@@ -20,6 +20,8 @@ import {
   NUMERIC_SOURCE_FIDELITY_RULES, NUMBER_FORMAT_RULES,
   FUNCTIONAL_H2_OPENERS, MANDATED_NOMINAL_H2,
   SENTENCE_LENGTH_BANDS, SENTENCE_LENGTH_RULES,
+  resolveDeliveryPhrase,
+  buildDeliveryRegionBlock,
 } from './constants';
 import { MASTER_SYSTEM_PROMPT } from './master-system-prompt';
 
@@ -509,5 +511,67 @@ describe('buildMasterUaOverlay', () => {
     const overlay = buildMasterUaOverlay('3DDevice');
     expect(overlay).toContain('UKRAINIAN MASTER OUTPUT');
     expect(overlay).not.toContain(EXPERT3D_UK_LOCALE_TOV);
+  });
+});
+
+/**
+ * Delivery region — the fix for the regression where Center 3D Print's uk-UA and ru-UA
+ * artifacts promised delivery «по Україні» for a Polish store, because the master prompt
+ * resolved the region from the LANGUAGE instead of the STORE.
+ */
+describe('delivery region', () => {
+  it('gives every registered store a non-empty, emoji-free delivery region', () => {
+    for (const [name, profile] of Object.entries(STORE_REGISTRY)) {
+      expect(profile.deliveryRegion, name).toBeTruthy();
+      expect(profile.deliveryRegion, name).not.toMatch(/\p{Extended_Pictographic}/u);
+    }
+  });
+
+  it('covers every language each store publishes with an inflected phrase', () => {
+    for (const [name, profile] of Object.entries(STORE_REGISTRY)) {
+      for (const locale of profile.languages) {
+        expect(resolveDeliveryPhrase(profile.deliveryRegion, locale), `${name}/${locale}`)
+          .toBeTruthy();
+      }
+    }
+  });
+
+  it('resolves a Polish-store region for its Ukrainian and Russian locales — the actual bug', () => {
+    const c3d = STORE_REGISTRY['Center 3D Print'];
+    expect(resolveDeliveryPhrase(c3d.deliveryRegion, 'uk-UA')).toBe('по Польщі та країнах ЄС');
+    expect(resolveDeliveryPhrase(c3d.deliveryRegion, 'ru-UA')).toBe('по Польше и странам ЕС');
+    for (const locale of c3d.languages) {
+      expect(resolveDeliveryPhrase(c3d.deliveryRegion, locale), locale).not.toMatch(/Україн|Украин/);
+    }
+  });
+
+  it('still says Ukraine for a Ukrainian store — the fix must not invert the bug', () => {
+    expect(resolveDeliveryPhrase(STORE_REGISTRY['3DDevice'].deliveryRegion, 'uk-UA')).toBe('по Україні');
+  });
+
+  it('returns undefined for an unlisted locale rather than substituting English', () => {
+    // A cross-locale fallback would hand a French artifact a fully-formed English clause that
+    // the prompt is told to use verbatim. Absence is the signal to omit the phrase entirely.
+    expect(resolveDeliveryPhrase('Poland and the EU', 'fr-FR')).toBeUndefined();
+    expect(resolveDeliveryPhrase('Atlantis', 'uk-UA')).toBeUndefined();
+  });
+
+  describe('buildDeliveryRegionBlock', () => {
+    it('emits both lines when the locale has a phrase', () => {
+      expect(buildDeliveryRegionBlock('Center 3D Print', 'uk-UA')).toBe(
+        '[Delivery Region]: Poland and the EU\n[Delivery Region Phrase]: по Польщі та країнах ЄС',
+      );
+    });
+
+    it('emits the region alone when the locale has no phrase', () => {
+      expect(buildDeliveryRegionBlock('Center 3D Print', 'fr-FR')).toBe(
+        '[Delivery Region]: Poland and the EU',
+      );
+    });
+
+    it('throws for an unregistered store rather than defaulting to a plausible region', () => {
+      expect(() => buildDeliveryRegionBlock('Brand New Store', 'uk-UA'))
+        .toThrow(/no deliveryRegion/);
+    });
   });
 });

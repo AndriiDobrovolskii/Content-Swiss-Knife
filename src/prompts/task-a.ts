@@ -1,6 +1,6 @@
 import { ProductInput, ImageManifestEntry, CONTENT_TEMPLATES } from '../app/types';
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { getStore, isExpert3dStore, isCenter3dPrintStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY } from '../prompt-core/constants';
+import { getStore, isExpert3dStore, isCenter3dPrintStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY, buildDeliveryRegionBlock, MASTER_LOCALE } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 import { productShort } from '../prompt-core/product-name-core';
 import { extractVideoEmbeds } from '../utils/video-manifest';
@@ -152,6 +152,7 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
 [Raw Description]: ${input.description}
 [Technical Specs]: ${input.specs}
 [Product-short]: ${productShort(input.name)}
+${buildDeliveryRegionBlock(input.website.name, MASTER_LOCALE)}
 [Supplemental Content]: ${input.supplementalContent || 'None provided.'}
 ${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input, isConsumables)}${template}${custom}${consumablesMode}
 
