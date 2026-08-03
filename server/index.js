@@ -8,6 +8,7 @@ import { computeCost } from './usage/pricing.js';
 import { insertUsage, queryUsage, insertGeneration, queryGenerations } from './usage/store.js';
 import { describeError } from './utils/describe-error.js';
 import { formatCallStart, formatCallDone, formatCallError } from './utils/call-log.js';
+import { formatBuild, readBuild } from './utils/build-info.js';
 import { warmProviders } from './providers/factory.js';
 
 config();
@@ -205,6 +206,15 @@ app.post('/api/retrieval/search', async (req, res) => {
 // only because the `dev` script passes `-k`. Without that flag concurrently just reports the
 // dead child and lets its siblings run on, which is how half-stacks outlive their terminal
 // and turn into orphans still holding a port.
+//
+// Since `npm run server` gained `--watch` (package.json — JSON takes no comments, so the reasoning
+// lives here), node supervises this process and stays alive across an exit, which softens the
+// tear-down above: a failed bind no longer takes `ng serve` down with it, and saving a fixed file
+// restarts the server on its own. Two things `--watch` does NOT cover:
+//   • `.env` — dotenv READS it, so it is not part of the module graph node watches. Editing a key
+//     still needs a manual restart, which is what the `.env` stamp on the boot line is for.
+//   • an in-flight generation — saving a server file mid-run kills that request. Accepted: its
+//     result would have come from the code you just replaced.
 let bindFailed = false;
 
 const server = app.listen(PORT, () => {
@@ -214,6 +224,12 @@ const server = app.listen(PORT, () => {
   setImmediate(() => {
     if (bindFailed) return;
     console.log(`[Server] Running on http://localhost:${PORT}`);
+
+    // Which commit this process is actually executing. `npm run server` now passes `--watch`, so
+    // server code reloads like client code — but a log without this line cannot PROVE it did, and
+    // that is what turned a loaded-vs-disk mismatch into a session-long misdiagnosis on 2026-08-02.
+    // See server/utils/build-info.js.
+    console.log(formatBuild(readBuild()));
 
     // The old line here printed LLM_PROVIDER and called it "provider", which has been wrong
     // since the settings menu landed: it is the fallback for a request that carries no

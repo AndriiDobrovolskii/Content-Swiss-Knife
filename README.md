@@ -201,7 +201,7 @@ npm run dev
 Or start them separately in two terminals:
 
 ```bash
-# Terminal 1 — BFF
+# Terminal 1 — BFF (runs under `node --watch`: reloads on any change under server/)
 npm run server      # → http://localhost:3001
 
 # Terminal 2 — Angular dev server
