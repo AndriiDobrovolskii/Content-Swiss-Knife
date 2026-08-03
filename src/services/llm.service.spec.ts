@@ -23,7 +23,7 @@ import '@angular/compiler';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Injector, runInInjectionContext } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { defer, of, throwError } from 'rxjs';
 
 import { LlmService } from './llm.service';
 import { ModelSettingsService } from './model-settings.service';
@@ -102,5 +102,55 @@ describe('LlmService.recordGeneration', () => {
     await service.recordGeneration(RECORD);
 
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The wiring, not the policy — `http-retry.spec.ts` owns which failures qualify. What matters here
+ * is that `post()` is piped at all, because it is the single choke point every LLM call passes
+ * through: /llm/generate, /llm/vision and /llm/pdf are all covered by that one `.pipe`, or none are.
+ *
+ * On 2026-08-03 a `--watch` restart dropped an in-flight /llm/vision call and the whole generation
+ * died with it — the browser got a Vite-manufactured 500 with an empty body, and nothing retried.
+ */
+describe('LlmService.post — surviving a dropped connection', () => {
+  /** The real 2026-08-03 HttpErrorResponse: a 500 that never came from our server. */
+  const PROXY_500 = { status: 500, statusText: 'Internal Server Error', error: null };
+
+  it('retries a call the proxy could not deliver, and returns the eventual result', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let attempts = 0;
+    const { service, calls } = serviceWith(() => defer(() => {
+      attempts++;
+      return attempts === 1 ? throwError(() => PROXY_500) : of({ result: 'the artifact' });
+    }));
+
+    const pending = service.generateText('prompt');
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(pending).resolves.toBe('the artifact');
+    // One `post()` call; the retry re-subscribes to the same observable rather than rebuilding it,
+    // so the settings snapshot and body stay identical across attempts.
+    expect(calls).toHaveLength(1);
+    expect(attempts).toBe(2);
+    vi.useRealTimers();
+  });
+
+  /**
+   * The guard against over-reach. A provider failure arrives as our own JSON envelope and withRetry
+   * has already spent three attempts on it server-side — retrying here would make that nine paid
+   * calls, on the most expensive errors there are.
+   */
+  it('surfaces a real server error immediately, without retrying', async () => {
+    const serverError = { status: 503, error: { error: 'Gemini overloaded' } };
+    let attempts = 0;
+    const { service } = serviceWith(() => defer(() => {
+      attempts++;
+      return throwError(() => serverError);
+    }));
+
+    await expect(service.generateText('prompt')).rejects.toBe(serverError);
+    expect(attempts).toBe(1);
   });
 });

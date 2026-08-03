@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { retryTransport } from './http-retry';
 import { LlmProvider } from './providers/llm-provider.interface';
 import { PromptPayload, UsageMeta } from '../prompt-core/payload';
 import { ModelSettingsService } from './model-settings.service';
@@ -15,11 +16,22 @@ export class LlmService implements LlmProvider {
   private http = inject(HttpClient);
   private settings = inject(ModelSettingsService);
 
-  /** Every LLM call carries the current provider/model/level choice. Reading the snapshot
-   *  here — rather than threading it through the orchestrator — is what keeps all 21
-   *  orchestrator call sites unaware that runtime model settings exist at all. */
+  /**
+   * Every LLM call carries the current provider/model/level choice. Reading the snapshot
+   * here — rather than threading it through the orchestrator — is what keeps all 21
+   * orchestrator call sites unaware that runtime model settings exist at all.
+   *
+   * The `retryTransport` pipe belongs on this method for the same reason: it is the one choke point
+   * /llm/generate, /llm/vision and /llm/pdf all pass through, so all three are covered or none are.
+   * It retries ONLY failures that never reached our server — see http-retry.ts for why that is a
+   * question about the response BODY rather than its status, and for the double-billing trade-off
+   * accepted in exchange for not losing a whole generation to a one-second gap.
+   */
   private post<T>(path: string, body: Record<string, unknown>): Promise<T> {
-    return firstValueFrom(this.http.post<T>(`/api${path}`, { ...body, ...this.settings.snapshot() }));
+    return firstValueFrom(
+      this.http.post<T>(`/api${path}`, { ...body, ...this.settings.snapshot() })
+        .pipe(retryTransport()),
+    );
   }
 
   private generate<T>(payload: PromptPayload, mode: string, meta?: UsageMeta): Promise<T> {
