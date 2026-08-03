@@ -102,7 +102,7 @@ function checkNumberFormatting(html: string, locale: string | undefined, issues:
 }
 
 /**
- * EXPERT3D ToV forbidden calques (es-ES). locale 'es-ES' is exclusive to EXPERT3D/Impresora-3D
+ * EXPERT3D ToV forbidden calques (es-ES). locale 'es-ES' is exclusive to EXPERT3D
  * in STORE_REGISTRY, so keying on it is equivalent to gating on the store. Warning-only:
  * "huella" can be legitimate (huella de carbono), so it flags rather than blocks. Single-word
  * ambiguous items (útiles / flujo de trabajo) are left to the prompt overlay, not the validator.
@@ -136,7 +136,7 @@ function checkExpert3dSpanishCalques(html: string, locale: string | undefined, i
 }
 
 /**
- * EXPERT3D ToV forbidden calques (pt-PT). locale 'pt-PT' is exclusive to EXPERT3D/Impresora-3D
+ * EXPERT3D ToV forbidden calques (pt-PT). locale 'pt-PT' is exclusive to EXPERT3D
  * in STORE_REGISTRY. Warning-only. Flags Brazilianisms and anglicism calques; ambiguous single
  * words are left to the prompt asset, not the validator ("pegada de carbono" is legitimate).
  */

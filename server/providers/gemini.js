@@ -4,6 +4,7 @@ import { normalizePayload } from '../utils/payload.js';
 import { parseJsonResponse } from '../utils/json-parse.js';
 import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
 import { clampLevel, resolveSlot } from './model-support.js';
+import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
 
 // Used when a caller doesn't pass a slot (direct unit-test calls, or a request that
 // predates the settings menu). Gemini 3.1 Pro cannot disable thinking at all.
@@ -12,7 +13,28 @@ const FALLBACK_FAST = () => resolveSlot('gemini', { model: 'gemini-3.6-flash', l
 
 export class GeminiProvider {
   constructor(apiKey) {
-    this.ai = new GoogleGenAI({ apiKey });
+    this.ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        // ⚠ DO NOT ADD `retryOptions` HERE. It looks like the way to disable the SDK's retry loop;
+        // it is the way to ENABLE it. `apiCall` (dist/node/index.mjs:13305) reads:
+        //
+        //     if (!httpOptions || !httpOptions.retryOptions) return fetch(url, requestInit);
+        //
+        // so the loop is dormant unless the option exists — the typings' "attempts default to 5"
+        // is unreachable, and there was never a 15-attempt multiplier with withRetry's 3. Setting
+        // `{ attempts: 1 }` opted in, and inside the wrapper a retryable status becomes
+        // `throw new Error('Retryable HTTP Error: ' + statusText)` — a bare Error stripped of
+        // `status`, thrown before `throwErrorIfNotOK` can build the real ApiError. withRetry's
+        // `status === 504` branch then never fires. That silently un-retried a Gateway Timeout on
+        // 2026-08-02 and cost a live generation its specs grounding. Omitting the option keeps the
+        // loop off (architecture rule #5) AND preserves the status for the classifier and the
+        // error body the browser sees.
+        //
+        // Client-level floor. Per-call config overrides it with the mode-appropriate value.
+        timeout: DEEP_TIMEOUT_MS,
+      },
+    });
   }
 
   /**
@@ -69,15 +91,16 @@ export class GeminiProvider {
           // breakpoints pay off here the way they do on Anthropic.
           systemInstruction: systemBlocks.filter(b => b?.text).map(b => b.text).join('\n\n') || undefined,
           maxOutputTokens,
+          httpOptions: { timeout: timeoutForMode(mode) },
           thinkingConfig: { thinkingLevel: level },
           ...(isJson ? { responseMimeType: 'application/json' } : {}),
         },
       });
 
       const text = this.#readText(response, model, mode);
+      // No logging here — the route prints one line per call for every provider and every path,
+      // with the task label, slot and elapsed time this scope cannot see. See utils/call-log.js.
       const usage = this.#usage(response, model, mode);
-      console.log('[gemini]', model, mode, `thinking=${level}`,
-        { in: usage.inputTokens, out: usage.outputTokens, cr: usage.cacheReadTokens });
 
       return { result: isJson ? parseJsonResponse(text || '{}') : text, usage };
     });
@@ -98,6 +121,7 @@ export class GeminiProvider {
         config: {
           // The caption is <= 20 words, but thinking tokens draw from the same budget.
           maxOutputTokens: Math.min(8000, maxOutputTokens),
+          httpOptions: { timeout: useThinking ? DEEP_TIMEOUT_MS : FAST_TIMEOUT_MS },
           thinkingConfig: { thinkingLevel: level },
         },
       });
@@ -119,6 +143,7 @@ export class GeminiProvider {
         },
         config: {
           maxOutputTokens: 8192,
+          httpOptions: { timeout: FAST_TIMEOUT_MS },
           // Mechanical transcription — the cheapest depth this model allows. Clamped, because
           // Gemini 3.1 Pro rejects 'minimal' outright (its floor is 'low').
           thinkingConfig: { thinkingLevel: clampLevel('gemini', model, 'minimal') },

@@ -16,10 +16,46 @@
 import { STORE_REGISTRY } from './constants';
 
 /**
- * EXPERT3D is the store the live probe exercised, so it is the only one with direct evidence
- * behind it. Add a store here only after a probe run for it looks right.
+ * Add a store here only after the evidence supports it.
+ *
+ * EXPERT3D came first — the live probe exercised it, and by 2026-08-02 it had a clean run
+ * (`generation_log`: one `ok` with zero repairs, one `repaired`, no `failed-schema`) whose four
+ * locales passed every acceptance criterion by inspection.
+ *
+ * The UA group followed. Their readiness was verified rather than assumed: `KILLER_SPECS_HEADERS`
+ * (§2a), `SPEC_TABLE_HEADERS` (§7) and `FIGCAPTION_TEMPLATES` (video) all cover `uk-ua`, `ru-ua`
+ * and `en-gb`; all three stores have a real `imageBaseUrl`; and `masterScriptFor` is 'Cyrillic',
+ * the same as EXPERT3D.
+ *
+ * Two things are genuinely first-time on this path, so watch the first run of each: `ru-UA` has
+ * never rendered through the Doc pipeline, and these stores take the DEFAULT Tone of Voice
+ * (neither isExpert3dStore nor isCenter3dPrintStore), which the Doc pipeline has never exercised.
+ *
+ * Center 3D Print came next, and it was the last store that needed CODE before it could be
+ * enrolled rather than just evidence. It is the only store with a ToV override
+ * (`KILLER_SPECS_HEADERS_C3D`) and the only user of the §5b `operatingTips` slot, and its overlay
+ * instructs the model to "Emit an H2 'Tips for operating [Product]'" — which the Doc contract
+ * forbids, while the correct action (populate `operatingTips`) was stated nowhere. Resolved in
+ * `TASK_A_DOC_INSTRUCTION`, whose §5b clause interpolates `OPERATING_TIPS_H2_MARKERS` so the
+ * heading stays detectable by `tov-second-person.ts`.
+ *
+ * `Drukarka 3D` needed no code at all — 2 locales, default voice, no override, no §5b — and
+ * completes the rollout.
+ *
+ * EVERY LIVE STORE IS NOW ON THIS LIST. The one absentee is `Expert-3DPrinter`, a placeholder that
+ * is not yet trading: its `imageBaseUrl` is `''`, so `renderContextFor()` refuses it by design
+ * rather than emitting relative `<img src>`. It joins when it has its own CDN path — it must NOT
+ * borrow the Spanish store's domain.
+ *
+ * The list stays OPT-IN even now that it is complete: a store added to STORE_REGISTRY must be
+ * named here too, so a new storefront cannot be enrolled in the Doc pipeline by accident.
  */
-export const DOC_PIPELINE_STORES: readonly string[] = ['EXPERT3D'];
+export const DOC_PIPELINE_STORES: readonly string[] = [
+  'EXPERT3D',
+  '3DDevice', '3DPrinter', '3DScanner',
+  'Center 3D Print',
+  'Drukarka 3D',
+];
 
 /**
  * Consumables are excluded unconditionally, and this is a proven impossibility rather than caution.

@@ -19,7 +19,6 @@ export const STORE_REGISTRY: Record<string, StoreProfile> = {
   'Center 3D Print': { group: 'EU', region: 'Poland & EU 🇵🇱', currency: 'PLN (zł) / EUR (€)', currencySymbol: 'zł', languages: ['pl-PL', 'en-GB', 'de-DE', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://center3dprint.com/image/catalog/Products/', siteSuffix: 'C3D' },
   'Drukarka 3D': { group: 'EU', region: 'Poland 🇵🇱', currency: 'PLN (zł)', currencySymbol: 'zł', languages: ['pl-PL', 'uk-UA'], imageBaseUrl: 'https://drukarka-3d.com.pl/image/catalog/products/', siteSuffix: 'Drukarka 3D' },
   'EXPERT3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'pt-PT', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', siteSuffix: 'EXPERT3D' },
-  'Impresora-3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'pt-PT', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', siteSuffix: 'EXPERT3D' },
   'Expert-3DPrinter': { group: 'US', region: 'Houston, TX 🇺🇸', currency: 'USD ($)', currencySymbol: '$', languages: ['en-US', 'es-MX', 'uk-UA'], imageBaseUrl: '', siteSuffix: 'Expert-3DPrinter' },
 };
 
@@ -43,7 +42,6 @@ const STORE_MASTER_SCRIPT: Record<string, MasterScript> = {
   'Center 3D Print': 'Cyrillic',
   'Drukarka 3D': 'Cyrillic',
   'EXPERT3D': 'Cyrillic',
-  'Impresora-3D': 'Cyrillic',
   'Expert-3DPrinter': 'Cyrillic',
 };
 
@@ -52,9 +50,15 @@ export function masterScriptFor(storeName: string): MasterScript {
 }
 
 /**
- * EXPERT3D / Impresora-3D — the two ES-group storefronts that share one Tone of Voice.
+ * EXPERT3D — the ES-group storefront and its Tone of Voice.
  * The single predicate that gates every EXPERT3D-only ToV injection (Task A voice block,
  * Task C translation overlay). Equivalent to group === 'ES' but named for intent.
+ *
+ * This used to cover two storefronts; `Impresora-3D` was the store's OLD NAME, on the same
+ * domain, and was retired from the registry. Group-based rather than name-based is now a
+ * DEFAULT: a future ES-group store inherits this voice unless it is given its own. That is the
+ * intended behaviour for a second Spanish storefront — but it is inheritance, not a coincidence,
+ * so give any such store an explicit voice if it should not sound like EXPERT3D.
  */
 export function isExpert3dStore(name: string): boolean {
   return getStore(name).group === 'ES';
@@ -67,8 +71,8 @@ export function isExpert3dStore(name: string): boolean {
  * translation overlay, per-locale overlays).
  *
  * DELIBERATELY NAME-BASED, NOT GROUP-BASED — do not "simplify" this to `group === 'EU'`.
- * Unlike isExpert3dStore (where EXPERT3D + Impresora-3D are the ONLY ES-group stores and share
- * one voice), Center 3D Print shares group 'EU' with Drukarka 3D, which keeps the DEFAULT voice.
+ * Unlike isExpert3dStore (where EXPERT3D is the ONLY ES-group store, so the group and the voice
+ * coincide), Center 3D Print shares group 'EU' with Drukarka 3D, which keeps the DEFAULT voice.
  * A group check would silently leak Style B onto Drukarka 3D's output.
  */
 export function isCenter3dPrintStore(name: string): boolean {
@@ -439,7 +443,7 @@ KEEP in Metric: Layer Thickness → μm, Filament Diameter → mm, Nozzle → mm
  * (latin-unit-in-cyrillic-text warning).
  */
 export const UNIT_LOCALIZATION_RULES = `[UNIT LOCALIZATION]
-LATIN-SCRIPT LANGUAGES (en-GB/en-US/en-ES, pl-PL, de-DE, es-ES, es-MX): keep ALL international
+LATIN-SCRIPT LANGUAGES (en-GB/en-US/en-ES, pl-PL, de-DE, es-ES, es-MX, pt-PT): keep ALL international
 unit abbreviations unchanged (mm, kg, W, kW, GHz, GB…). Never invent localized abbreviations.
 Lowercase "l" for litre in pl (litr); "L" acceptable in en/de.
 
@@ -666,7 +670,7 @@ If the target language expands vs. the source, COMPRESS §C2/§C3/§C5 prose to 
 Preserve every spec-table row and numeric value verbatim (only localize unit/separator as instructed above).`;
 
 /**
- * EXPERT3D Tone of Voice — BASE-GENERATION overlay (Task A only, EXPERT3D/Impresora-3D).
+ * EXPERT3D Tone of Voice — BASE-GENERATION overlay (Task A only, EXPERT3D).
  * Added as an extra CACHED system block AFTER master + task-a instruction, so the shared
  * master+task prefix stays byte-stable (cache hit) for every other store and EXPERT3D just
  * gets one additional cached suffix (its own cache slot). Encodes brand character, the
@@ -830,7 +834,7 @@ COLON CAPITALIZATION in "<b>Label:</b> continuation" list items and figcaptions:
 first letter after the colon (it introduces an explanation of the bold label, not a new sentence).`;
 
 /**
- * EXPERT3D Tone of Voice — TRANSLATION overlay (Task C, EXPERT3D/Impresora-3D locales).
+ * EXPERT3D Tone of Voice — TRANSLATION overlay (Task C, EXPERT3D locales).
  * Appended to whichever task-c instruction is selected — same mechanism as
  * CONSUMABLES_TRANSLATION_OVERLAY. Carries the per-locale FORMAL register, the es-ES
  * forbidden-calque list and the uk-UA forbidden-word stems into every EXPERT3D language

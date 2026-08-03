@@ -21,9 +21,60 @@ const Prose = z.string().min(1).refine(s => !PROSE_FORBIDDEN.test(s), {
   message: 'Prose fields may contain only <b> and <strong> tags; no other HTML is permitted.',
 });
 
-const NonEmpty = z.string().min(1);
+/**
+ * A tag, as opposed to a bare `<`. Deliberately requires a LETTER right after `<` or `</`, because
+ * real spec values start with one: the 3DDevice artifact ships `<30 Вт`, and `≤ 0,5 см` / `1/2"`
+ * are neighbours of it. A guard keying on `<` alone would reject correct documents.
+ */
+const TAG_LIKE = /<\/?[a-zA-Z][^>]*>/;
+
+/**
+ * Fields the renderer passes through `esc()` rather than `prose()` — headings, labels, values,
+ * bullet leads, alt text. They are contractually plain text, and STRICTER than Prose: even `<b>`
+ * is wrong here, because for a bullet lead the renderer supplies the `<b>` wrapper itself.
+ *
+ * Why this is a schema rule and not just a prompt rule: on 2026-08-02 a model wrote
+ * `"lead": "<b>Транспортування:</b>"`. `text` beside it was `Prose`, so the same behaviour there
+ * would have been a caught, repairable error — but `lead` was bare `z.string().min(1)`, so it
+ * passed validation, got escaped, and shipped as literal `&lt;b&gt;` inside the renderer's own
+ * `<b>`. Identical input, opposite outcomes, one field apart. Guarding here routes it into the
+ * repair gate, which names the offending field and gets it fixed.
+ */
+const NonEmpty = z.string().min(1).refine(s => !TAG_LIKE.test(s), {
+  message: 'Plain-text fields may not contain HTML tags — the renderer applies all formatting.',
+});
 
 const KillerSpecSchema = z.object({ label: NonEmpty, value: NonEmpty, why: Prose });
+
+/**
+ * `<li><b>{lead}</b>{text}</li>` — the renderer joins these with NOTHING of its own, deliberately.
+ * render-description.ts:174-183 has the corpus evidence: Center 3D Print writes the space INSIDE
+ * the bold (`<b>Складається за лічені хвилини. </b>`), EXPERT3D writes it outside
+ * (`<b>Гравіювання деревини:</b> гравер…`). One injected space reproduces neither, so the
+ * whitespace is authored content and the renderer must not guess.
+ *
+ * That leaves one case the renderer cannot save: NEITHER side carries a separator, which is wrong
+ * under every store's convention. The 3DDevice run shipped `<b>Топографічне знімання</b>Дальність
+ * лідара 300 м`. Rejecting only that case keeps both conventions intact.
+ *
+ * 🔴 `\p{L}\p{N}` WITH THE /u FLAG, NEVER `\w`. JavaScript's `\w` is ASCII [A-Za-z0-9_].
+ * masterScriptFor returns 'Cyrillic' for all seven stores, so a `\w` rule would match NONE of the
+ * real cases — including the one above — and would also miss Polish ł ą ę ś ż ź ć ń ó and German
+ * ä ö ü ß, i.e. Drukarka 3D and Center 3D Print. output-validator.ts:209 already carries a comment
+ * about this exact trap.
+ */
+const ENDS_WITH_ALNUM = /[\p{L}\p{N}]$/u;
+const STARTS_WITH_ALNUM = /^[\p{L}\p{N}]/u;
+
+const BulletItemSchema = z.object({ lead: NonEmpty, text: Prose }).refine(
+  i => !(ENDS_WITH_ALNUM.test(i.lead) && STARTS_WITH_ALNUM.test(i.text)),
+  {
+    message:
+      'A bullet lead and its text run together — neither side carries a separator. Put the space '
+      + 'or punctuation at the end of "lead" or the start of "text"; the renderer adds none.',
+    path: ['lead'],
+  },
+);
 
 /**
  * Block is a flat union — a figure references the manifest by index rather than nesting, so there
@@ -31,7 +82,7 @@ const KillerSpecSchema = z.object({ label: NonEmpty, value: NonEmpty, why: Prose
  */
 const BlockSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('paragraph'), text: Prose }),
-  z.object({ kind: z.literal('bullets'), items: z.array(z.object({ lead: NonEmpty, text: Prose })).min(3).max(8) }),
+  z.object({ kind: z.literal('bullets'), items: z.array(BulletItemSchema).min(3).max(8) }),
   z.object({ kind: z.literal('figure'), ref: z.number().int().nonnegative() }),
   z.object({ kind: z.literal('video'), ref: z.number().int().nonnegative() }),
 ]);

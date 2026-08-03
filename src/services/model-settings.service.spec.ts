@@ -13,13 +13,20 @@ function boot(stored?: unknown): ModelSettingsService {
 describe('ModelSettingsService defaults', () => {
   beforeEach(() => localStorage.clear());
 
-  // The one guarantee that matters for everyone who never opens the settings menu: the
-  // pipeline must behave exactly as it did before runtime settings existed.
-  it('reproduces the pre-settings Anthropic configuration', () => {
+  // What everyone who never opens the settings menu gets: judgment work on Claude, mechanical
+  // work on Gemini. The mixed pair IS the shipped default, not something you have to assemble.
+  it('ships the mixed Anthropic-deep / Gemini-fast configuration', () => {
     expect(boot().snapshot()).toEqual({
       deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
-      fast: { provider: 'anthropic', model: 'claude-haiku-4-5', level: 'disabled' },
+      fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
     });
+  });
+
+  // 'minimal', not the catalog's defaultLevel of 'medium' — the Fast slot transcribes, it does
+  // not reason, and this has to match FALLBACK_FAST in server/providers/gemini.js so a request
+  // with settings and one without route identically.
+  it('runs the fast slot at minimal thinking, not the catalog default', () => {
+    expect(boot().fastLevel()).toBe('minimal');
   });
 
   it('reports the default config as default', () => {
@@ -30,14 +37,16 @@ describe('ModelSettingsService defaults', () => {
 describe('ModelSettingsService mixed providers', () => {
   beforeEach(() => localStorage.clear());
 
-  // The point of the feature: Task A on Claude, translations on Gemini, one run.
-  it('runs the two slots on different providers', () => {
+  // The point of the feature: two providers in one run. The default already mixes them one
+  // way, so this drives the inverted pair to prove neither direction is special-cased.
+  it('runs the two slots on different providers, either way round', () => {
     const s = boot();
-    s.setFastProvider('gemini');
+    s.setDeepProvider('gemini');
+    s.setFastProvider('anthropic');
 
     expect(s.snapshot()).toEqual({
-      deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
-      fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'medium' },
+      deep: { provider: 'gemini', model: 'gemini-3.1-pro-preview', level: 'medium' },
+      fast: { provider: 'anthropic', model: 'claude-haiku-4-5', level: 'disabled' },
     });
   });
 
@@ -102,10 +111,11 @@ describe('ModelSettingsService persistence', () => {
     expect(boot('{not json').isDefault()).toBe(true);
   });
 
+  // Each slot falls back to ITS OWN default, which are no longer the same provider.
   it('falls back to defaults for an unknown provider', () => {
     const s = boot({ deep: { provider: 'skynet' }, fast: { provider: 'skynet' } });
     expect(s.deepProvider()).toBe('anthropic');
-    expect(s.fastProvider()).toBe('anthropic');
+    expect(s.fastProvider()).toBe('gemini');
   });
 
   it('falls back to a catalog model when the stored model is gone', () => {
@@ -150,7 +160,24 @@ describe('ModelSettingsService legacy storage', () => {
     const s = boot({ provider: 'skynet', deep: {}, fast: {} });
     expect(s.deepProvider()).toBe('anthropic');
     expect(s.deepModel()).toBe('claude-sonnet-5');
-    expect(s.fastModel()).toBe('claude-haiku-4-5');
+    expect(s.fastModel()).toBe('gemini-3.6-flash');
+  });
+
+  // A returning user configured all-Anthropic before the default went mixed. That is an
+  // explicit choice and outranks the new default — moving their Fast slot to Gemini behind
+  // their back would spend on a provider they never picked.
+  it('keeps a stored all-Anthropic configuration instead of applying the new default', () => {
+    const s = boot({
+      provider: 'anthropic',
+      deep: { model: 'claude-sonnet-5', level: 'medium' },
+      fast: { model: 'claude-haiku-4-5', level: 'disabled' },
+    });
+
+    expect(s.snapshot()).toEqual({
+      deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
+      fast: { provider: 'anthropic', model: 'claude-haiku-4-5', level: 'disabled' },
+    });
+    expect(s.isDefault()).toBe(false);
   });
 
   // A per-slot provider is the newer, more specific statement of intent.

@@ -20,6 +20,11 @@
  * frozen prompts, because [FORMAT] in the master system prompt mandates HTML.
  */
 import { buildPromptA } from './task-a';
+// Interpolated into the instruction rather than retyped. It is the SINGLE SOURCE OF TRUTH for
+// detecting the §5b block downstream — tov-second-person.ts:78 exempts that block from the
+// second-person rule only when the heading starts with one of these — so a hand-copied string here
+// would drift and silently un-exempt the block, flagging the imperative prose it mandates.
+import { OPERATING_TIPS_H2_MARKERS } from '../prompt-core/constants';
 import type { PromptPayload } from '../prompt-core/payload';
 import type { ProductInput } from '../app/types';
 
@@ -86,13 +91,32 @@ HARD RULES:
   "src" for a video is the full embed URL, copied VERBATIM from the manifest.
 - Every entry in "figures" and in "videos" must be referenced exactly once by a block — no entry
   unused, none referenced twice.
-- TEXT FIELDS ADMIT <b> and <strong> AND NOTHING ELSE. No <p>, <ul>, <a>, <em>, no entities, no
+- PROSE FIELDS ADMIT <b> and <strong> AND NOTHING ELSE. No <p>, <ul>, <a>, <em>, no entities, no
   Markdown. Reserve <strong> for brands / main model / core USPs; use <b> for inline scannability.
+  The prose fields are exactly: "hook", "why", every Block "text", "items[].text", every "caption".
+- PLAIN-TEXT FIELDS ADMIT NO TAGS AT ALL — not even <b>, and no Markdown "**".
+  They are: every "heading", "title", "label", "value", "scenario", "alt", "lead",
+  "localizedName", and "packageContents.items".
+  Writing "<b>Транспортування:</b>" into a "lead" does NOT produce bold text — the renderer already
+  wraps that field in <b>, so your tags are escaped and the reader sees the angle brackets
+  themselves. Put the plain words there and the renderer applies the formatting.
 - "value" in a spec row is a string, or an array of strings when the parameter genuinely has
   several values. Never an empty array.
 - A bullet's "lead" carries its own trailing punctuation and spacing; the renderer adds none.
+  It joins them as <b>{lead}</b>{text} with nothing in between, so if "lead" ends with a letter or
+  digit AND "text" begins with one, the two words collide: "Топографічне зніманняДальність".
+  End the "lead" with ":" or ". ", or begin the "text" with a space.
 - Do not invent a "section", "hr", "h2" or any other structural field. Section order, headings
-  level, tables, <hr> and figure markup are the renderer's job, not yours.`;
+  level, tables, <hr> and figure markup are the renderer's job, not yours.
+- IF YOUR STORE GUIDELINES ASK FOR AN H2 that this schema has no field for — most often
+  "${OPERATING_TIPS_H2_MARKERS[0]} [Product]" — DO NOT emit an HTML tag and do not skip the content.
+  Put that section into "operatingTips" as a Subsection. The renderer emits the <h2> for you and
+  places it immediately before the commercial-closing section, which is what those guidelines ask
+  for. Its "heading" MUST BEGIN with the exact wording your guidelines give for this language,
+  followed by the product name — one of: ${OPERATING_TIPS_H2_MARKERS.join(' | ')}.
+  A heading that only paraphrases those words is not recognised as this block downstream.
+  Keep the guidelines' own condition: include it only for production hardware with real
+  handling/safety considerations, and omit "operatingTips" entirely otherwise.`;
 
 /**
  * Task A returning a Doc contract instead of an HTML one.

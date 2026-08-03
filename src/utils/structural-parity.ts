@@ -79,3 +79,61 @@ export function validateStructuralParity(
 
   return issues;
 }
+
+/**
+ * Deterministically restores every media `src` in a translation to its master value.
+ *
+ * WHY THIS IS NOT A PROMPT FIX. A real artifact shipped broken: in the 2026-08-01 EXPERT3D run the
+ * es-ES translation came back with the image folder rewritten from `L2-Pro-32-300` to
+ * `L2-Pro-32–300` — an EN DASH (U+2013), because Spanish typography uses one for numeric ranges and
+ * the model applied it inside a URL. All seven images 404'd.
+ *
+ * validateStructuralParity() caught it and named both lists exactly. The repair gate then spent its
+ * entire budget and the model never fixed it, because this is a systematic transform rather than a
+ * random slip — re-prompting in Spanish reproduces it. `task-c.ts` already says every attribute
+ * stays byte-identical including `src`, and the model overrode that instruction anyway.
+ *
+ * The master's src list is known, so the right value never has to be asked for. This is the tier-0
+ * rung: no LLM, no tokens, and it cannot fail the way re-prompting just did.
+ *
+ * SCOPE IS EXACTLY `src`, AND NOTHING ELSE. `alt`, `figcaption`, `title` and all prose are
+ * legitimately translated and must survive untouched — this is a translation, not a copy.
+ *
+ * REFUSES TO GUESS WHEN THE COUNTS DIFFER. Positional restoration is only meaningful when the two
+ * lists line up; with an image dropped or added there is no defensible mapping, and mapping anyway
+ * would silently attach the wrong picture to a caption. That case is `structural-parity-count`'s to
+ * report, and it is left to fire. Each tag is decided independently, so a broken `<img>` list does
+ * not block an `<iframe>` restore.
+ *
+ * Pure string rewriting, no DOM — same contract as the rest of this module.
+ */
+export function restoreMediaSrcs(
+  translated: string,
+  master: string,
+): { html: string; restored: number } {
+  let html = translated;
+  let restored = 0;
+
+  for (const tag of ['img', 'iframe'] as const) {
+    const expected = srcList(master, tag);
+    const actual = srcList(html, tag);
+    // Counts must match, or positional mapping is meaningless — see the note above.
+    if (expected.length !== actual.length) continue;
+    if (expected.every((s, i) => s === actual[i])) continue;
+
+    let i = 0;
+    html = html.replace(
+      // String.raw, so `\b` stays a word boundary. In a plain template literal it is the BACKSPACE
+      // escape (U+0008) and the pattern silently matches nothing.
+      new RegExp(String.raw`(<${tag}\b[^>]*\bsrc=")([^"]*)(")`, 'gi'),
+      (whole, open, current, close) => {
+        const want = expected[i++];
+        if (want === undefined || want === current) return whole;
+        restored++;
+        return `${open}${want}${close}`;
+      },
+    );
+  }
+
+  return { html, restored };
+}

@@ -18,6 +18,15 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
+    // Emit target for plain `tsc`. Load-bearing despite nothing reading the output:
+    // src/prompt-core/model-catalog.spec.ts imports ../../server/providers/model-support.js, so
+    // with allowJs that .js file enters the program as an INPUT. Without an outDir, tsc computes
+    // that it would emit over its own input and reports TS5055 ("would overwrite input file").
+    // `npm run lint` never saw it because the CLI passes --noEmit; the IDE reads this file and did.
+    //
+    // `"exclude": ["server"]` does NOT fix this — exclude only filters `include`, and the file
+    // arrives via an import, not the glob. Verified with `tsc --listFiles`.
+    "outDir": "./dist/out-tsc",
     "paths": {
       "@/*": [
         "./*"
@@ -26,7 +35,12 @@
   },
   "include": [
     "index.ts",
-    "src/**/*"
+    "src/**/*",
+    // `test/**` was invisible to `npm run lint` until now: vitest transpiles without typechecking,
+    // so a type error in a spec surfaced as nothing at all — a mis-asserted test that still ran.
+    // Adding it here depends on the outDir above: these specs import server .js files, which
+    // allowJs pulls in as program inputs, which is exactly what TS5055 fires on without one.
+    "test/**/*"
   ],
   "angularCompilerOptions": {
     "disableTypeScriptVersionCheck": true

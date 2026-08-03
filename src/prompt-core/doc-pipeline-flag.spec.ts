@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 
 import { DOC_PIPELINE_STORES, usesDocPipeline } from './doc-pipeline-flag';
 import { STORE_REGISTRY } from './constants';
+import { getRenderRules } from './store-render-rules';
 
 describe('usesDocPipeline', () => {
   it('enables the store the live probe actually exercised', () => {
@@ -24,7 +25,31 @@ describe('usesDocPipeline', () => {
 
   it('leaves every other store on the HTML path', () => {
     const enabled = Object.keys(STORE_REGISTRY).filter(s => usesDocPipeline(s));
-    expect(enabled).toEqual(['EXPERT3D']);
+    expect(enabled).toEqual([
+      '3DDevice', '3DPrinter', '3DScanner', 'Center 3D Print', 'Drukarka 3D', 'EXPERT3D',
+    ]);
+  });
+
+  /**
+   * Center 3D Print was the last store to need code before it could be enrolled: its ToV overlay
+   * tells the model to "Emit an H2 'Tips for operating [Product]'" while the Doc contract forbids
+   * inventing an h2, and the resolution — populate `operatingTips` — was stated nowhere. Fixed in
+   * TASK_A_DOC_INSTRUCTION, so the store is now eligible.
+   *
+   * Drukarka 3D followed with no code change at all: 2 locales, default voice, no override.
+   */
+  it('covers every live store, leaving only the one that cannot render', () => {
+    const off = Object.keys(STORE_REGISTRY).filter(s => !usesDocPipeline(s));
+    // Expert-3DPrinter is a placeholder, not yet trading: imageBaseUrl is '', so
+    // renderContextFor() refuses it by design. It must NOT borrow another store's domain.
+    expect(off).toEqual(['Expert-3DPrinter']);
+    expect(STORE_REGISTRY['Expert-3DPrinter'].imageBaseUrl).toBe('');
+  });
+
+  /** The §5b slot is what made this store the hard one, and it is C3D's alone. */
+  it('enrols the only store that uses the §5b operating-tips slot', () => {
+    expect(usesDocPipeline('Center 3D Print')).toBe(true);
+    expect(getRenderRules('Center 3D Print').admitsOperatingTips).toBe(true);
   });
 
   /**

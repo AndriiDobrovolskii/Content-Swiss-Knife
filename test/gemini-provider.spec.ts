@@ -4,8 +4,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const calls: any[] = [];
 let nextResponse: any;
 
+/** Constructor options, so the client-level timeout and retry settings can be asserted. */
+const ctorArgs: any[] = [];
+
 vi.mock('@google/genai', () => ({
   GoogleGenAI: class {
+    constructor(opts: any) { ctorArgs.push(opts); }
     models = {
       generateContent: async (req: any) => {
         calls.push(req);
@@ -158,5 +162,52 @@ describe('GeminiProvider vision and pdf', () => {
 
     await p.extractFromPdf('PDF64', { model: 'gemini-3.1-pro-preview', level: 'medium', maxOutputTokens: 65536 });
     expect(calls[1].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+  });
+});
+
+/**
+ * A hung provider call must stay bounded, and retry policy belongs in exactly one
+ * provider-independent place — `withRetry`, per architecture rule #5.
+ *
+ * ⚠ `retryOptions` MUST BE ABSENT, not set to `{ attempts: 1 }`. An earlier version of this test
+ * asserted the opposite, on the premise that `attempts` "defaults to 5" and would stack with
+ * withRetry's 3 into 15 issues of one request. The SDK source disproves it — `apiCall`
+ * (dist/node/index.mjs:13305) enters its pRetry wrapper ONLY when `retryOptions` is present:
+ *
+ *     if (!httpOptions || !httpOptions.retryOptions) return fetch(url, requestInit);
+ *
+ * So the default was never reachable; passing `{ attempts: 1 }` OPTED IN to a dormant wrapper. And
+ * inside it a retryable status becomes `throw new Error('Retryable HTTP Error: ' + statusText)` —
+ * a bare Error with no `status` — thrown before `throwErrorIfNotOK` can build the real `ApiError`.
+ * That is what silently un-retried a 504 on 2026-08-02 and lost a live generation's specs
+ * grounding. Omitting the option disables the loop AND preserves the status.
+ *
+ * The values are asserted as literals rather than against the shared constant: a test that reads
+ * the same constant as the code proves only that the constant equals itself.
+ */
+describe('GeminiProvider request bounds', () => {
+  beforeEach(() => { calls.length = 0; ctorArgs.length = 0; nextResponse = reply('<p>ok</p>'); });
+
+  it('leaves the SDK retry wrapper disengaged and sets a client-level timeout', () => {
+    new GeminiProvider('test-key');
+    expect(ctorArgs[0].httpOptions.retryOptions).toBeUndefined();
+    expect(ctorArgs[0].httpOptions.timeout).toBe(600_000);
+  });
+
+  /**
+   * The deep slot must stay generous. The 2026-08-01 run emitted 17,940 output tokens in a single
+   * `creative-json` call — minutes of work — so a short cap would abort legitimate generations.
+   */
+  it('gives a deep call the long timeout', async () => {
+    nextResponse = reply('{"ok":1}');   // creative-json parses its reply
+    await new GeminiProvider('k')
+      .generate(PAYLOAD, 'creative-json', { model: 'gemini-3.1-pro-preview', level: 'high', maxOutputTokens: 65536 });
+    expect(calls[0].config.httpOptions.timeout).toBe(600_000);
+  });
+
+  it('gives a fast call the short timeout', async () => {
+    await new GeminiProvider('k')
+      .generate(PAYLOAD, 'text', { model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 8192 });
+    expect(calls[0].config.httpOptions.timeout).toBe(120_000);
   });
 });

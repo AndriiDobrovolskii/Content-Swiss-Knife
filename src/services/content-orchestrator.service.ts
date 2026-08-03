@@ -34,13 +34,14 @@ import { renderDescription } from '../render/render-description';
 import { normalizeDocProse } from '../render/doc-prose-transforms';
 import { renderContextFor } from '../prompt-core/store-render-rules';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
+import { docSchemaIssues, assertDocRendered } from '../render/doc-schema-issues';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
-import { validateStructuralParity } from '../utils/structural-parity';
+import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { buildOptimizerPrompt } from '../prompts/optimizer';
@@ -57,6 +58,26 @@ import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
 import { validateSpecCategoryShape } from '../utils/spec-category-shape';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
 import { validateLanguageConsistency } from '../utils/language-consistency';
+
+/**
+ * Disables `meta-description-currency` at every validateSeoMetadata call site — and says so, rather
+ * than leaving a bare `''` that reads like an oversight. It was read as exactly that once, and
+ * "fixed" by wiring the store's real symbol through; the rule then demanded something no model can
+ * produce. Three facts, each sufficient on its own:
+ *
+ *   1. task-b.ts:61 (FROZEN) instructs the opposite — "Do NOT invent prices, discounts, currency
+ *      values, or availability — not provided here; those are emitted separately via Schema.org
+ *      Offer."
+ *   2. task-b.ts's own resolveCurrencySymbol is @deprecated and unused: "Currency is no longer
+ *      injected into the Task B prompt. Price is not available at this pipeline stage."
+ *   3. ProductInput (app/types.ts) carries no price field at all, so there is no source for a
+ *      figure to put a symbol next to.
+ *
+ * The rule in output-validator.ts is not broken and needs no change — it simply has no input on
+ * this pipeline. See src/services/seo-currency-wiring.spec.ts, which fails if this is re-wired.
+ */
+const NO_CURRENCY_CHECK = '';
+
 // ── Orchestrator ────────────────────────────────────────────────────────────
 
 @Injectable({
@@ -282,11 +303,17 @@ export class ContentOrchestratorService {
       // What the LAST produce call had to splice back. Read by the validate array below, which
       // runs against that same artifact, to surface automatic placement as a warning.
       let restoredVideos: SourceVideoEmbed[] = [];
+      // Doc-path failures from the LAST produce call, read by the validate array below — same
+      // closure-stash pattern as restoredVideos above. Without this a rejected Doc would throw out
+      // of produce(), and runRepairGate does not catch (repair-gate.ts:112, :339).
+      let docIssues: ValidationIssue[] = [];
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
         // The Doc path returns HTML too — renderDescription() builds it — so the repair gate and
         // every downstream validator below keep working unchanged. That is what keeps this switch
         // contained to these few lines instead of rippling through the whole method.
         if (useDocPipeline) {
+          docIssues = [];
+          try {
           const raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: 'Doc (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
           // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
           // rather than be rendered into plausible-looking wrong HTML.
@@ -305,6 +332,14 @@ export class ContentOrchestratorService {
             normalizeDocProse(doc, 'uk-UA'),
             renderContextFor(input.website.name, input.brandFolder, input.modelFolder),
           );
+          } catch (err) {
+            // Convert, do not rethrow: an empty artifact plus real issues lets the gate spend a
+            // repair attempt, and appendRepairFeedback then tells the model WHICH FIELD failed
+            // rather than "empty-output". assertDocRendered below refuses to ship the '' if every
+            // attempt fails.
+            docIssues = docSchemaIssues(err, 'HTML (base)');
+            return '';
+          }
         }
         let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
         html = stripCodeFences(html);
@@ -338,6 +373,9 @@ export class ContentOrchestratorService {
         basePayload: basePayloadA,
         produce: produceHtmlA,
         validate: html => [
+          // First, so a rejected Doc reads as the cause rather than as the empty-output symptom
+          // every other rule would report against ''.
+          ...docIssues,
           ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
           // Trusted exactly when the model was given this same text (see masterInput.specs). If
           // grounding fell back to the English sheet, a label mismatch says nothing about the row
@@ -399,6 +437,23 @@ export class ContentOrchestratorService {
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
+      // Outcome is recorded BEFORE the guard below, so a generation that never validated is
+      // counted rather than lost with the exception. Fire-and-forget — telemetry must not be able
+      // to fail a generation that otherwise succeeded.
+      void this.llm.recordGeneration({
+        store: input.website.name,
+        locale: 'uk-UA',
+        productName: input.name,
+        pipeline: useDocPipeline ? 'doc' : 'html',
+        outcome: !htmlAResult.artifact.trim() ? 'failed-schema'
+          : htmlAResult.repairsUsed > 0 ? 'repaired'
+          : 'ok',
+        repairsUsed: htmlAResult.repairsUsed,
+      });
+
+      // Every attempt failed the schema → the gate's best result is ''. Saving that would be a
+      // silent data loss; fail loudly instead. Inert on the HTML path, which cannot produce ''.
+      if (useDocPipeline) assertDocRendered(htmlAResult.artifact, 'HTML (base)', htmlAResult.finalIssues);
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlAResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult, this.blockPatchTally.get('HTML (base)'))]);
@@ -458,7 +513,7 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
-        validate: (json) => validateSeoMetadata(json, ''),
+        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -491,6 +546,9 @@ export class ContentOrchestratorService {
           { localizedName: localizedNames?.[locale], sourceLocale: 'uk-UA' },
         );
 
+        // How many media srcs the LAST produce call had to put back — read by validate below, the
+        // same closure-stash pattern restoredVideos uses on the master path.
+        let restoredSrcs = 0;
         const htmlLangResult = await runRepairGate<string>({
           label: `HTML (${lang})`,
           maxRepairs: repairBudget,
@@ -504,11 +562,29 @@ export class ContentOrchestratorService {
             }
             // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
             html = normalizeTerminology(cyrillizeUnits(restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(html), locale), locale), locale), locale);
-            return canonicalizeMultiInOne(html, locale);
+            html = canonicalizeMultiInOne(html, locale);
+            // TIER 0 — deterministic, no LLM. A real es-ES artifact shipped with all seven image
+            // URLs broken because the model rewrote the folder's ASCII hyphen as an EN DASH
+            // (U+2013), Spanish typography applied inside a URL. Detection worked; the repair gate
+            // then spent its whole budget and the model never fixed it, because re-prompting in
+            // Spanish reproduces the same substitution. The master's src list is known, so the
+            // right value never has to be asked for.
+            const restoration = restoreMediaSrcs(html, finalMasterHtml);
+            restoredSrcs = restoration.restored;
+            return restoration.html;
           },
           validate: (html) => [
             ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId, imageManifest: masterImageManifest }),
             ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
+            // Surfaced as a WARNING, not silently. The artifact is correct now, but a model that
+            // keeps rewriting URLs is a real signal — swallowing the fix would hide it and make the
+            // next regression invisible.
+            ...(restoredSrcs > 0 ? [{
+              severity: 'warning' as const,
+              rule: 'media-src-restored',
+              detail: `${restoredSrcs} media src(s) diverged from the uk-UA master and were restored deterministically. The translation model altered a URL — check for typographic substitution (e.g. an EN DASH for a hyphen).`,
+              context: `HTML (${lang})`,
+            }] : []),
           ],
           withFeedback: appendRepairFeedback,
           // Safe against structural parity: validateStructuralParity counts tags, and a rewrite
@@ -790,7 +866,7 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO })),
-        validate: (json) => validateSeoMetadata(json, ''),
+        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -887,7 +963,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
-        validate: (json) => validateSeoMetadata(json, ''),
+        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -897,7 +973,7 @@ export class ContentOrchestratorService {
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      this.validationIssues.set(validateSeoMetadata(this.content().seoData, ''));
+      this.validationIssues.set(validateSeoMetadata(this.content().seoData, NO_CURRENCY_CHECK));
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('SEO Generation Done!');
@@ -1088,7 +1164,7 @@ export class ContentOrchestratorService {
       ...validateHeadingStyle(c.mainHtmlUa, masterLocale, storeName),
       ...validateSentenceLength(c.mainHtmlUa, masterLocale, `HTML (${masterLocale})`),
       ...validateProductNameConsistency(c.mainHtmlUa, localizedNames?.[masterLocale], masterLocale, `HTML (${masterLocale})`),
-      ...validateSeoMetadata(c.seoData, ''),
+      ...validateSeoMetadata(c.seoData, NO_CURRENCY_CHECK),
       ...validateSlugs(c.slugData ?? null),
       ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
     ];

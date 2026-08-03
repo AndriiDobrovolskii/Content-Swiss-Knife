@@ -27,6 +27,7 @@ import { normalizeDocProse } from '../src/render/doc-prose-transforms';
 import { renderContextFor } from '../src/prompt-core/store-render-rules';
 import { validateGeneratedHtml } from '../src/utils/output-validator';
 import type { ProductInput } from '../src/app/types';
+import type { ProductDescriptionDoc } from '../src/domain/description-doc';
 
 const LIVE = !!process.env.LIVE_DOC_TEST;
 const PROXY = process.env.PROXY_URL ?? 'http://localhost:3001';
@@ -89,7 +90,12 @@ describe.skipIf(!LIVE)('live: can a model emit a valid ProductDescriptionDoc?', 
   });
 
   it('renders, and the rendered HTML has zero validator errors', () => {
-    const doc = ProductDescriptionDocSchema.parse(raw);
+    // parse() for the validation, `raw` for the type — the same workaround
+    // content-orchestrator.service.ts:306 uses, for the same reason: without strictNullChecks
+    // zod's inferred type comes back all-optional and does not satisfy ProductDescriptionDoc.
+    // See the TSCONFIG NOTE at the foot of src/domain/description-doc.schema.ts.
+    ProductDescriptionDocSchema.parse(raw);
+    const doc = raw as ProductDescriptionDoc;
     const html = renderDescription(normalizeDocProse(doc, doc.locale), renderContextFor(STORE, 'Ortur', 'H20'));
     const errors = validateGeneratedHtml(html, 'live doc probe', doc.localizedName, doc.locale, {
       imageManifest: doc.figures.map(f => ({ urlFilename: f.file })),

@@ -43,11 +43,6 @@ describe('buildPromptA — ToV system-block scoping', () => {
     expect(systemBlocks.map(b => b.text).join()).not.toContain(C3D_TOV_BASE_OVERLAY);
   });
 
-  it('Impresora-3D (the other ES-group store) also keeps the EXPERT3D overlay only', () => {
-    const { systemBlocks } = buildPromptA(inputFor('Impresora-3D'));
-    expect(systemBlocks[2].text).toBe(EXPERT3D_TOV_BASE_OVERLAY);
-  });
-
   /** Unlike the ToV overlays, the numeric-fidelity rule is store-agnostic — the defect was too. */
   it('every store receives the numeric-fidelity rule for alt/figcaption', () => {
     for (const store of Object.keys(STORE_REGISTRY)) {
