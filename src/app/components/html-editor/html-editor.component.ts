@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, NgZone, computed, effect, inject, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, NgZone, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Editor } from '@tiptap/core';
 import { EditorView } from '@codemirror/view';
@@ -214,7 +214,6 @@ export class HtmlEditorComponent {
   }));
 
   sourceMode = signal<boolean>(false);
-  sourceHtml = signal<string>('');
   fullscreen = signal<boolean>(false);
 
   findReplaceOpen = signal<boolean>(false);
@@ -245,6 +244,13 @@ export class HtmlEditorComponent {
   private cmView?: EditorView;
   private pendingContent = '';
 
+  // Deliberately a plain field, not a signal — mirrors `pendingContent`. It is
+  // written on every CodeMirror doc change, and a signal here would make the
+  // Source-view lifecycle effect below re-run (and so tear the editor down and
+  // rebuild it) on every keystroke. Nothing renders it, so there is nothing to
+  // be reactive for. Read it through currentSourceHtml().
+  private sourceHtml = '';
+
   // Tailwind's dark mode is class-based on <html>, toggled by app.component.ts
   // with no shared service — a MutationObserver is the simplest way for this
   // component to react to it without adding a new @Input every future caller
@@ -259,31 +265,34 @@ export class HtmlEditorComponent {
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
+    // Source-view lifecycle. Only these three signals decide whether a
+    // CodeMirror view should exist; everything the view is *built from* is read
+    // inside untracked() so it can never become a dependency. Without that, the
+    // per-keystroke write to the doc re-runs this effect, onCleanup destroys the
+    // view, and the body rebuilds it — which is exactly how typing in Source
+    // mode used to lose focus and the caret after every single character.
     effect(onCleanup => {
       const host = this.sourceHost();
       const loaded = this.loaded();
       const sourceMode = this.sourceMode();
 
-      if (!loaded || !sourceMode) {
-        if (this.cmView) {
-          this.cmView.destroy();
-          this.cmView = undefined;
-        }
-        return;
-      }
-      if (!host || this.cmView) return;
+      if (!host || !loaded || !sourceMode) return;
 
-      this.cmView = new EditorView({
-        state: createSourceEditorState(
-          this.sourceHtml(),
-          this.darkMode(),
-          value => this.sourceHtml.set(value),
-          () => this.refreshCodeMirrorMatchInfo(),
-        ),
-        parent: host.nativeElement,
+      untracked(() => {
+        this.cmView = new EditorView({
+          state: createSourceEditorState(
+            this.sourceHtml,
+            this.darkMode(),
+            value => { this.sourceHtml = value; },
+            () => this.refreshCodeMirrorMatchInfo(),
+          ),
+          parent: host.nativeElement,
+        });
+        if (this.lastFindReplaceQuery) this.dispatchCodeMirrorQuery(this.lastFindReplaceQuery);
       });
-      if (this.lastFindReplaceQuery) this.dispatchCodeMirrorQuery(this.lastFindReplaceQuery);
 
+      // Fires both when sourceMode/loaded flip back to false and on component
+      // destroy, so this effect solely owns the view's teardown.
       onCleanup(() => {
         this.cmView?.destroy();
         this.cmView = undefined;
@@ -331,8 +340,16 @@ export class HtmlEditorComponent {
   });
 
   ngOnDestroy() {
+    // Only the TipTap editor — its lifecycle effect has no onCleanup. The
+    // CodeMirror view is destroyed by its effect's onCleanup; destroying it
+    // here too would double-destroy the same view.
     this.editor?.destroy();
-    this.cmView?.destroy();
+  }
+
+  /** The live CodeMirror document, which is the authority while Source mode is
+   * open; the mirrored field is the fallback for when no view exists. */
+  private currentSourceHtml(): string {
+    return this.cmView?.state.doc.toString() ?? this.sourceHtml;
   }
 
   private refreshToolbarState() {
@@ -407,7 +424,7 @@ export class HtmlEditorComponent {
   }
 
   private buildCopyHtml(): string {
-    const raw = this.sourceMode() ? this.sourceHtml() : (this.editor?.getHTML() ?? '');
+    const raw = this.sourceMode() ? this.currentSourceHtml() : (this.editor?.getHTML() ?? '');
     const stripped = stripTiptapArtifacts(raw);
     const tableFixed = reconstructTableThead(stripped);
     const figuresFixed = wrapImageFigures(tableFixed);
@@ -449,10 +466,12 @@ export class HtmlEditorComponent {
 
   toggleSourceMode() {
     if (this.sourceMode()) {
-      this.pendingContent = this.sourceHtml();
+      // Read before flipping the signal — that flip tears the view down.
+      this.pendingContent = this.currentSourceHtml();
       this.sourceMode.set(false);
     } else {
-      this.sourceHtml.set(beautifyHtml(this.editor?.getHTML() ?? ''));
+      // Seeds the doc the lifecycle effect builds the view from, below.
+      this.sourceHtml = beautifyHtml(this.editor?.getHTML() ?? '');
       this.sourceMode.set(true);
     }
   }
