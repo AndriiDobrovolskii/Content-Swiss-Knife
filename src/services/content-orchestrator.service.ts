@@ -350,7 +350,7 @@ export class ContentOrchestratorService {
         restoredVideos = restoration.restored;
         html = wrapVideoFigures(html, input.name, 'uk-UA');
         html = wrapImageFigures(html);
-        html = fixNumberFormatting(html);
+        html = fixNumberFormatting(html, input.name);
         // Immediately after fixNumberFormatting, which has already stripped thousands separators —
         // so the decimal pass sees one unambiguous number shape per value.
         html = fixDecimalSeparator(html, 'uk-UA');
@@ -512,7 +512,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }), input.name),
         validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -561,7 +561,7 @@ export class ContentOrchestratorService {
               html = this.applySpanishExpert3dReplacements(html);
             }
             // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
-            html = normalizeTerminology(cyrillizeUnits(restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(html), locale), locale), locale), locale);
+            html = normalizeTerminology(cyrillizeUnits(restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(html, input.name), locale), locale), locale), locale);
             html = canonicalizeMultiInOne(html, locale);
             // TIER 0 — deterministic, no LLM. A real es-ES artifact shipped with all seven image
             // URLs broken because the model rewrote the folder's ASCII hyphen as an EN DASH
@@ -647,7 +647,7 @@ export class ContentOrchestratorService {
               // and latin-unit-in-cyrillic-text findings that no instrument can reach (the FAQ had
               // no block rung either) — held to the master's standard without the master's tooling.
               // Ordering mirrors produceHtmlA above and is documented there.
-              html = fixNumberFormatting(html);
+              html = fixNumberFormatting(html, input.name);
               html = fixDecimalSeparator(html, isoCode);
               html = restoreIdentifierDots(html, isoCode);
               html = cyrillizeUnits(html, isoCode);
@@ -761,7 +761,7 @@ export class ContentOrchestratorService {
         restoredVideos = restoration.restored;
         html = wrapVideoFigures(html, input.name, UA_ISO);
         html = wrapImageFigures(html);
-        html = fixNumberFormatting(html);
+        html = fixNumberFormatting(html, input.name);
         // Ordering rationale as in generate()'s master produce.
         html = fixDecimalSeparator(html, UA_ISO);
         // See the sibling comment in generate()'s master produce.
@@ -865,7 +865,7 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
-        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO })),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }), input.name),
         validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -903,7 +903,7 @@ export class ContentOrchestratorService {
             let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
             html = stripCodeFences(html);
             // Same normalizer chain as the sibling FAQ produce in generate() — see the rationale there.
-            html = fixNumberFormatting(html);
+            html = fixNumberFormatting(html, input.name);
             html = fixDecimalSeparator(html, UA_ISO);
             html = restoreIdentifierDots(html, UA_ISO);
             html = cyrillizeUnits(html, UA_ISO);
@@ -962,7 +962,7 @@ export class ContentOrchestratorService {
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
-        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name })),
+        produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }), input.name),
         validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
@@ -997,7 +997,7 @@ export class ContentOrchestratorService {
       this.content.update(c => ({ ...c, slugData }));
       this.approvedSlugKey.set(this.slugKey(input));
 
-      this.validationIssues.set(validateSlugs(slugData));
+      this.validationIssues.set(validateSlugs(slugData, input.name));
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Slug Generation Done!');
@@ -1025,7 +1025,7 @@ export class ContentOrchestratorService {
    * gate's `produce`, `validate` measures the post-formatting string — a description that crosses
    * 155 chars only after formatting is caught rather than shipped under a stale measurement.
    */
-  private canonicalizeSeoData(seo: SeoResponse): SeoResponse {
+  private canonicalizeSeoData(seo: SeoResponse, productName = ''): SeoResponse {
     return normalizeSeoNumbers({
       ...seo,
       seo_data: (seo.seo_data ?? []).map(item => ({
@@ -1034,7 +1034,7 @@ export class ContentOrchestratorService {
         meta_title: canonicalizeMultiInOne(item.meta_title, item.language),
         meta_description: canonicalizeMultiInOne(item.meta_description, item.language),
       })),
-    });
+    }, productName);
   }
 
   async generateKeywords(name: string, description: string): Promise<void> {
@@ -1170,7 +1170,7 @@ export class ContentOrchestratorService {
       ...validateSentenceLength(c.mainHtmlUa, masterLocale, `HTML (${masterLocale})`),
       ...validateProductNameConsistency(c.mainHtmlUa, localizedNames?.[masterLocale], masterLocale, `HTML (${masterLocale})`),
       ...validateSeoMetadata(c.seoData, NO_CURRENCY_CHECK),
-      ...validateSlugs(c.slugData ?? null),
+      ...validateSlugs(c.slugData ?? null, productName),
       ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
     ];
     // MERGE, never set. This runs LAST in the pipeline, after the signal already holds the

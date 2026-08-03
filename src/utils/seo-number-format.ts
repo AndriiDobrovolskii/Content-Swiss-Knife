@@ -43,7 +43,13 @@
 import { fixNumberFormatting } from './number-format-fixer';
 import type { SeoResponse } from '../app/types';
 
-export function normalizeSeoNumbers(seo: SeoResponse): SeoResponse {
+/**
+ * @param productName optional; its invariant core is protected from the numeric transforms.
+ *                    Without it a designator like "32/300" that arrived as "32 300" is
+ *                    collapsed to "32300" HERE and nowhere else — which is exactly why
+ *                    meta_description showed "32300" while h1/meta_title kept "32 300".
+ */
+export function normalizeSeoNumbers(seo: SeoResponse, productName = ''): SeoResponse {
   return {
     ...seo,
     seo_data: (seo.seo_data ?? []).map(item => ({
@@ -51,7 +57,7 @@ export function normalizeSeoNumbers(seo: SeoResponse): SeoResponse {
       // fixNumberFormatting is tag-aware via mapHtmlText; on a string with no tags the whole
       // value is a single text segment, so it behaves as a plain-text formatter here. It neither
       // decodes nor escapes entities, which is why "➔" and comma-decimals ("0,5") survive.
-      meta_description: item.meta_description ? fixNumberFormatting(item.meta_description) : item.meta_description,
+      meta_description: item.meta_description ? fixNumberFormatting(item.meta_description, productName) : item.meta_description,
     })),
   };
 }

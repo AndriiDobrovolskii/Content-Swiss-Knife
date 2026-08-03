@@ -336,3 +336,58 @@ describe('fixNumberFormatting — tag protection', () => {
     expect(fixNumberFormatting(input)).toBe(expected);
   });
 });
+
+/**
+ * Model-designator masking — the "32/300" regression.
+ *
+ * The slug step mangled "XGRIDS L2 Pro 32/300" into "… 32 300", and stripThousandsSeparators
+ * then read that as a thousands separator and collapsed it to "32300" — in every locale's
+ * meta_description and in all 13 mentions of the en-GB body.
+ */
+describe('fixNumberFormatting — product-core masking', () => {
+  const NAME = 'XGRIDS L2 Pro 32/300 Standard Package';
+
+  it('leaves the slashed designator alone (it was never a number)', () => {
+    expect(fixNumberFormatting('<p>Сканер XGRIDS L2 Pro 32/300 працює.</p>', NAME))
+      .toBe('<p>Сканер XGRIDS L2 Pro 32/300 працює.</p>');
+  });
+
+  it('protects a designator that already looks like a thousands separator', () => {
+    const html = '<p>Сканер XGRIDS L2 Pro 32 300 працює.</p>';
+    expect(fixNumberFormatting(html, 'XGRIDS L2 Pro 32 300')).toContain('XGRIDS L2 Pro 32 300');
+  });
+
+  it('collapses that same digit group when it is NOT part of the product name', () => {
+    // The transform must stay useful — masking is targeted, not a blanket disable.
+    expect(fixNumberFormatting('<p>Швидкість 32 300 точок/с.</p>', NAME))
+      .toContain('32300');
+  });
+
+  it('masks the invariant core, so it still fires on a LOCALIZED name', () => {
+    // The whole point of masking invariantCore rather than the full name: four locales out of
+    // five never contain the source name literally.
+    const uk = '<p>3D сканер XGRIDS L2 Pro 32/300 Стандартний комплект.</p>';
+    expect(fixNumberFormatting(uk, NAME)).toContain('XGRIDS L2 Pro 32/300');
+  });
+
+  it('keeps normalizing everything outside the masked span', () => {
+    const out = fixNumberFormatting('<p>XGRIDS L2 Pro 32/300 має 1 000 точок і 20mm хід.</p>', NAME);
+    expect(out).toContain('XGRIDS L2 Pro 32/300');
+    expect(out).toContain('1000');
+    expect(out).toMatch(/20.mm/);
+  });
+
+  it('is idempotent with a product name, as the module header requires', () => {
+    const once = fixNumberFormatting('<p>XGRIDS L2 Pro 32/300 — 1 000 точок.</p>', NAME);
+    expect(fixNumberFormatting(once, NAME)).toBe(once);
+  });
+
+  it('behaves exactly as before when no product name is supplied', () => {
+    const html = '<p>Швидкість 1 000 точок.</p>';
+    expect(fixNumberFormatting(html, '')).toBe(fixNumberFormatting(html));
+  });
+
+  it('never leaks the mask token into the output', () => {
+    expect(fixNumberFormatting('<p>XGRIDS L2 Pro 32/300</p>', NAME)).not.toContain('PRODUCTCOREMASK');
+  });
+});

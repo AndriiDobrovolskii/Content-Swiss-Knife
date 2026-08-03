@@ -9,9 +9,60 @@
  * Safe to apply to any HTML string; must be idempotent.
  */
 import { mapHtmlText } from './html-text-walk';
+import { invariantCore } from '../prompt-core/product-name-core';
 
-export function fixNumberFormatting(html: string): string {
-  return mapHtmlText(html, processTextNode);
+/**
+ * A model designator is not a number, but it can look exactly like one.
+ *
+ * `stripThousandsSeparators` matches `\b\d{1,3}(?:[ ]\d{3})+`, and "XGRIDS L2 Pro 32 300" fits
+ * it perfectly — 1-3 digits, a space, a 3-digit group — so it collapses to "32300". That is how
+ * a "32/300" the slug step had already mangled into "32 300" became "32300" in every locale's
+ * meta_description and in all 13 mentions of the en-GB body. Nothing about the failure is
+ * specific to a slash: any designator containing a NN NNN sequence is one regex away from it.
+ *
+ * So the invariant core of the product name is masked out before the numeric transforms and
+ * restored after. `invariantCore` rather than the whole name ON PURPOSE — the full name is
+ * localized per artifact ("3D сканер XGRIDS L2 Pro 32/300 Стандартний комплект"), so masking it
+ * literally would match nothing on four locales out of five and silently do nothing.
+ *
+ * [ADAPTED from buildProductNamePattern in output-validator.ts:369, which masks the product
+ * name out of the unit-spacing check for the same reason. That file is FROZEN and does not
+ * export it.]
+ */
+/**
+ * Letters only — no spaces, no digits. It replaces the matched span exactly, so surrounding
+ * whitespace is untouched, and none of the numeric regexes below can match inside it. The
+ * frozen original uses NUL sentinels, which is fine for its plain string.replace but not here:
+ * this text goes through a DOM walk, and NUL does not survive DOM serialization intact.
+ */
+const MASK = 'PRODUCTCOREMASK';
+
+function coreMaskPattern(productName: string): RegExp | null {
+  const core = invariantCore(productName).trim();
+  if (!core) return null;
+  const escaped = core.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Same digit/letter flexibility as the original: a core typed "20W" appears as "20 W" once
+  // unit spacing has run, and must still be recognized on a second pass (this is idempotent).
+  return new RegExp(escaped.replace(/(\d)(?=[A-Za-zµμ])/g, '$1\\s?'), 'g');
+}
+
+/**
+ * @param html        the HTML (or, via normalizeSeoNumbers, a plain meta string)
+ * @param productName optional raw product name; its invariant core is protected from every
+ *                    numeric transform below. Optional so existing call sites keep working —
+ *                    omitting it restores the pre-fix behaviour rather than throwing.
+ */
+export function fixNumberFormatting(html: string, productName = ''): string {
+  const pattern = productName.trim() ? coreMaskPattern(productName) : null;
+  if (!pattern) return mapHtmlText(html, processTextNode);
+
+  const originals: string[] = [];
+  const masked = html.replace(pattern, match => {
+    originals.push(match);
+    return MASK;
+  });
+  let i = 0;
+  return mapHtmlText(masked, processTextNode).replace(new RegExp(MASK, 'g'), () => originals[i++]);
 }
 
 /** Applied to text nodes and alt values — full formatting. */

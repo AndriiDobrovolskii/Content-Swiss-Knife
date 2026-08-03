@@ -63,7 +63,16 @@ drives word order, number format and transliteration.
    where the localized noun and its English source would both appear ("Zestaw Wkładek Formlabs
    Basket Liner Kit"), keep the localized form and the Latin brand/model ("Zestaw wkładek
    Formlabs Basket").
-4. CHARACTER SET: compose names from letters, digits, and single spaces; the only permitted
+4. CHARACTER SET — GOVERNS THE DESCRIPTIVE PART OF THE NAME ONLY (category, qualifiers,
+   colour), NEVER the brand/model span:
+   MODEL-DESIGNATOR PUNCTUATION IS PART OF THE MODEL, not source punctuation to normalize. A
+   slash, hyphen, plus or dot INSIDE the brand/model token — "L2 Pro 32/300", "X1-Carbon",
+   "P1S+", "F/2.0" — is a character of the designator, and rule 1 (VERBATIM) WINS over this
+   character set for that span, in every locale. NEVER substitute a space for a slash:
+   "32/300" → "32 300" reads as a thousands-separated number (thirty-two thousand three
+   hundred), and the pipeline's number normalizer then collapses it to "32300" — the model
+   designator is destroyed in the name, the H1, the meta title and every description body.
+   For the descriptive part: compose from letters, digits, and single spaces; the only permitted
    comma/dot is the decimal separator inside a measurement (rule 7). Substitutions for source
    punctuation: parenthesized qualifier "(4-pack)" → space-separated token "x4"; comma-separated
    qualifiers → space-separated; multiplier sign "×" → letter "x"; quotation marks and trailing
@@ -137,7 +146,19 @@ Input product: "Bambu Lab PLA Basic Filament 1.75 mm 1 kg x4 With Spool CMYK"
 ]}
 Note: head noun rendered once, fully localized (Filament→Filamento→Філамент); linking preposition
 dropped from the slug (With/Con/з); dimensions retained; name uses plain space-separated tokens;
-slug decimal is a dot.`;
+slug decimal is a dot.
+
+══════════ WORKED EXAMPLE 3 — A MODEL DESIGNATOR CONTAINING A SLASH (rule 4) ══════════
+Both examples above have punctuation-free models, which is exactly why rule 4's character set
+used to read as absolute. It is not.
+Input product: "XGRIDS L2 Pro 32/300 Standard Package"
+{"site_name":"Center 3D Print","slugs":[
+ {"language":"en-GB","name":"XGRIDS L2 Pro 32/300 3D Scanner Standard Package","slug":"xgrids-l2-pro-32-300-3d-scanner-standard-package"},
+ {"language":"pl-PL","name":"Skaner 3D XGRIDS L2 Pro 32/300 Zestaw Standardowy","slug":"skaner-3d-xgrids-l2-pro-32-300-zestaw-standardowy"},
+ {"language":"uk-UA","name":"3D сканер XGRIDS L2 Pro 32/300 Стандартний комплект","slug":"3d-skaner-xgrids-l2-pro-32-300-standartnyi-komplekt"}
+]}
+Note: the slash SURVIVES in every "name" and becomes a hyphen ONLY in the "slug", where the
+lowercase-Latin-and-hyphens charset genuinely requires it. "32 300" and "32300" are both WRONG.`;
 
 export function buildPromptSlug(
   storeName: string,
