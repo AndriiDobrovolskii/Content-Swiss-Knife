@@ -149,7 +149,43 @@ function baseGateOpts(overrides: Record<string, unknown> = {}) {
 }
 
 describe('runDocGate — renders exactly once (acceptance criterion #2)', () => {
-  it('calls renderDescription() exactly once across a run that requires a repair', async () => {
+  /**
+   * MUST use a Doc that fails a SEMANTIC validator (grounding, here), not one that fails
+   * ProductDescriptionDocSchema.parse(). A schema-invalid attempt never reached renderDescription()
+   * even in the pre-Task-2 buggy code — parse() throws before the old code's render call, so a
+   * schema-failure fixture renders exactly once under BOTH the old and the new code and proves
+   * nothing about this criterion. The old bug only manifests when an attempt's Doc PASSES schema
+   * validation but FAILS a semantic check: the old code rendered that Doc to HTML inside produce(),
+   * before the semantic validator ever ran and rejected it — so a schema-valid-but-semantically-
+   * rejected attempt 1 would have rendered TWICE under the old code (once per attempt) and must
+   * render exactly ONCE under runDocGate (once, after the gate accepts attempt 2).
+   * groundingFailureDoc() is exactly that: schema-valid, rejected only by validateSpecsGroundingDoc.
+   */
+  it('calls renderDescription() exactly once across a repair triggered by a semantic (not schema) rejection', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson
+      .mockResolvedValueOnce(groundingFailureDoc())
+      .mockResolvedValueOnce(groundingFixedDoc());
+    const orchestrator = bootOrchestrator(mockLlm) as any;
+    const renderSpy = vi.spyOn(renderDescriptionModule, 'renderDescription');
+
+    const result = await orchestrator.runDocGate(baseGateOpts({ groundingSpecs: GROUNDING_SOURCE }));
+
+    // Two generation attempts (attempt 1 schema-valid but semantically rejected, attempt 2 clean) …
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(2);
+    // … but exactly ONE render call. Under the pre-Task-2 code this would be 2: attempt 1's
+    // schema-valid Doc rendered inside produce() before validateSpecsGrounding (the HTML-DOM
+    // version) ever got a chance to reject it. This is the single most important regression this
+    // task prevents — see the file header comment.
+    expect(renderSpy).toHaveBeenCalledTimes(1);
+    expect(typeof result.artifact).toBe('string');
+    expect(result.artifact.length).toBeGreaterThan(0);
+    expect(result.repairsUsed).toBe(1);
+  });
+
+  /** Companion case: a schema failure DOES still render exactly once (on the one attempt that
+   *  parses), confirming the assertion above isn't vacuously true for every fixture shape. */
+  it('also renders exactly once when the repair is triggered by a schema failure instead', async () => {
     const mockLlm = makeMockLlm();
     mockLlm.generateJson
       .mockResolvedValueOnce(invalidSchemaDoc())
@@ -157,17 +193,10 @@ describe('runDocGate — renders exactly once (acceptance criterion #2)', () => 
     const orchestrator = bootOrchestrator(mockLlm) as any;
     const renderSpy = vi.spyOn(renderDescriptionModule, 'renderDescription');
 
-    const result = await orchestrator.runDocGate(baseGateOpts());
+    await orchestrator.runDocGate(baseGateOpts());
 
-    // Two generation attempts (schema failure, then a valid Doc) …
     expect(mockLlm.generateJson).toHaveBeenCalledTimes(2);
-    // … but exactly ONE render call, proving the render happens once after the gate accepts the
-    // Doc rather than once per attempt. This is the single most important regression this task
-    // prevents — see the file header comment.
     expect(renderSpy).toHaveBeenCalledTimes(1);
-    expect(typeof result.artifact).toBe('string');
-    expect(result.artifact.length).toBeGreaterThan(0);
-    expect(result.repairsUsed).toBe(1);
   });
 });
 

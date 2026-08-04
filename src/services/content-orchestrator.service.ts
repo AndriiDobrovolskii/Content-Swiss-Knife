@@ -36,7 +36,7 @@ import { renderDescription } from '../render/render-description';
 import { normalizeDocProse } from '../render/doc-prose-transforms';
 import { renderContextFor } from '../prompt-core/store-render-rules';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
-import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, providerDetail, DOC_SCHEMA_RULE } from '../render/doc-schema-issues';
+import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, providerDetail } from '../render/doc-schema-issues';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
@@ -440,20 +440,12 @@ export class ContentOrchestratorService {
       onAttempt: opts.onAttempt,
     });
 
-    // Mirrors assertDocRendered's refusal to ship an empty artifact, adapted to check
-    // `result.artifact.doc !== null` instead of `html.trim()`. Throwing here (not returning '')
-    // matches the existing HTML-path contract: every attempt failed, there is nothing to render,
-    // fail loudly.
-    if (!result.artifact.doc) {
-      const schemaFailures = result.finalIssues
-        .filter(i => i.rule === DOC_SCHEMA_RULE)
-        .map(i => `  - ${i.detail}`).join('\n');
-      throw new Error(
-        `${opts.label}: the model never produced a valid ProductDescriptionDoc within the repair `
-        + `budget, so there is nothing to save.`
-        + (schemaFailures ? `\nUnresolved schema failures:\n${schemaFailures}` : ''),
-      );
-    }
+    // The actual, shared empty-artifact guard — not a re-derived copy of its message text. When
+    // `result.artifact.doc` is null there is nothing to render, so this is called with a sentinel
+    // '' (the same thing `html.trim()` would see from a genuinely empty HTML artifact); when a doc
+    // IS present it always renders to non-empty HTML, so this call is skipped rather than passed a
+    // value it would just approve.
+    if (!result.artifact.doc) assertDocRendered('', opts.label, result.finalIssues);
 
     // The ONE render call for this Task A generation — see the method doc comment above.
     const html = renderDescription(
