@@ -456,7 +456,10 @@ describe('validateSpecCountParityDoc', () => {
     expect(validateSpecCountParityDoc(doc, 'free text, no table here', '', 'Doc (uk-UA)')).toEqual([]);
   });
 
-  it('does not throw and no-ops on a doc with zero spec rows', () => {
+  it('does not throw on a doc with zero spec rows, even though it still (correctly) emits a shortfall error', () => {
+    // Zero actual rows against a 15-row expected count is a real, large shortfall — this asserts
+    // null/undefined-safety (no throw on the degenerate `categories: []` shape), not a no-op; the
+    // count check itself still fires exactly as it would for any other undercount.
     const doc = baseDoc({ heading: 'Специфікації', categories: [] });
     expect(() => validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (uk-UA)')).not.toThrow();
     const issues = validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (uk-UA)');

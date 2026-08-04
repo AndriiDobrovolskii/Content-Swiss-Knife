@@ -331,7 +331,14 @@ function checkSubsection(sub: Subsection, path: string, check: (t: string, p: st
  * keyBenefits / functionality (incl. nested subsections) / applications.blocks / compatibility /
  * operatingTips, applications.items[].text, packageContents?.items (the HTML sibling scores <li>
  * as well as <p>, and packageContents renders as a plain <ul>, so its items are in scope the same
- * way), specs.categories[].rows[].value, and cta.text.
+ * way), and cta.text.
+ *
+ * DELIBERATELY EXCLUDED: specs.categories[].rows[].value. The HTML sibling's own isExcludedScope
+ * tests `section.specs` specifically so spec-table cells are never scored ("Spec-table cells are
+ * not sentences ... no rule asks to shorten them" — see this file's own comment above, on
+ * validateSentenceLength). A multi-valued SpecRow (e.g. a format list joined with spaces) reads as
+ * one long unpunctuated "sentence" to splitSentences and can trip the word-count ceiling — a false
+ * positive the HTML pipeline never produces, and this sibling must not invent one.
  *
  * Traversal is written by hand per field, rather than via description-doc.ts's
  * forEachBlockInOrder helper, because forEachBlockInOrder's `visit(block)` callback carries no
@@ -368,10 +375,7 @@ export function validateSentenceLengthDoc(
   doc.applications.items.forEach((it, i) => check(it.text, `applications.items[${i}].text`));
   doc.packageContents?.items.forEach((item, i) => check(item, `packageContents.items[${i}]`));
 
-  doc.specs.categories.forEach((cat, ci) => cat.rows.forEach((row, ri) => {
-    const value = Array.isArray(row.value) ? row.value.join(' ') : row.value;
-    check(value, `specs.categories[${ci}].rows[${ri}].value`);
-  }));
+  // specs.categories[].rows[].value is intentionally NOT scanned — see the SCOPE note above.
 
   check(doc.cta.text, 'cta.text');
 

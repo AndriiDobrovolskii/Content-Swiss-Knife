@@ -396,13 +396,27 @@ describe('validateSentenceLengthDoc — Doc-reading sibling', () => {
     expect(issues[0].path).toBe('packageContents.items[0]');
   });
 
-  it('measures specs.categories[].rows[].value, joining a multi-valued row before counting', () => {
+  // Deliberately EXCLUDED, matching the HTML sibling's isExcludedScope('section.specs') — see
+  // this file's own SCOPE comment on validateSentenceLength ("Spec-table cells are not sentences
+  // ... no rule asks to shorten them"). validateSentenceLengthDoc must not invent a stricter rule
+  // for the Doc pipeline than the HTML pipeline has ever enforced.
+  it('does NOT score specs.categories[].rows[].value, even when it is over the ceiling', () => {
     const doc = baseDoc({
-      specs: { heading: 'S', categories: [{ title: 'Cat', rows: [{ label: 'L', value: [TOO_LONG] }] }] },
+      specs: { heading: 'S', categories: [{ title: 'Cat', rows: [{ label: 'L', value: TOO_LONG }] }] },
     });
-    const issues = runDoc(doc);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].path).toBe('specs.categories[0].rows[0].value');
+    expect(runDoc(doc)).toEqual([]);
+  });
+
+  it('does NOT score a multi-valued spec row either — the false-positive shape a joined, unpunctuated list would create', () => {
+    // A real multi-valued SpecRow.value (e.g. a supported-format list) space-joins into one long
+    // unpunctuated blob under the array-join treatment other validators in this codebase apply to
+    // SpecRow.value — splitSentences finds no terminator in it, so if this were scored it would
+    // read as a single very-long "sentence" and false-positive on a ceiling meant for prose.
+    const manyFormats = ['STL', 'OBJ', 'PLY', 'IGES', 'SolidWorks', 'X_T', 'STEP', 'Parasolid', 'CATIA', 'Inventor', 'Rhino', 'Творчий формат довгий'];
+    const doc = baseDoc({
+      specs: { heading: 'S', categories: [{ title: 'Cat', rows: [{ label: 'Formats', value: manyFormats }] }] },
+    });
+    expect(runDoc(doc)).toEqual([]);
   });
 
   it('measures cta.text, addressed by path "cta.text"', () => {
