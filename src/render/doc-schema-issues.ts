@@ -32,6 +32,65 @@ function zodIssues(error: unknown): Array<{ path?: unknown[]; message?: string }
 }
 
 /**
+ * The provider's own words for a failure, dug out of the proxy envelope.
+ *
+ * WHY THIS IS NOT JUST `error.message`. `sendError` (server/index.js:38) answers every failure as
+ * `res.status(...).json({ error: describeError(error) })`, so what the browser holds is an
+ * HttpErrorResponse whose `.message` is Angular's own `"Http failure response for
+ * /api/llm/generate: 500 Internal Server Error"` and whose real text sits at `.error.error`. Reading
+ * `.message` therefore threw away the only sentence worth having: the server log said
+ * `hit max_tokens (64000) on claude-sonnet-4-6` while the repair prompt was told "500 Internal
+ * Server Error".
+ *
+ * Duck-typing that envelope rather than importing HttpErrorResponse keeps this module
+ * dependency-free, and it is the same shape `isUpstreamTransportFailure` already recognises
+ * (src/services/http-retry.ts).
+ */
+export function providerDetail(error: unknown): string | undefined {
+  if (typeof error === 'string') return error;
+  if (!error || typeof error !== 'object') return undefined;
+
+  const body = (error as { error?: unknown }).error;
+  if (body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string') {
+    return (body as { error: string }).error;
+  }
+  // A plain string body, and finally the generic message — better than nothing when the envelope
+  // is absent (a thrown Error inside the Doc branch, a proxy that answered for the server).
+  if (typeof body === 'string' && body) return body;
+
+  const message = (error as { message?: unknown }).message;
+  return typeof message === 'string' ? message : undefined;
+}
+
+/**
+ * Deterministic provider guards, which repair cannot fix.
+ *
+ * A truncation and a safety block are properties of the REQUEST, not of the field the model got
+ * wrong: re-issuing the same prompt with "you failed, try again" feedback produces the same
+ * truncation, at the same cost, however many attempts are left. On the Doc path that is expensive in
+ * a way schema errors are not — `masterRepairBudget` grants up to 3 attempts and a deep Sonnet 4.6
+ * call runs for minutes, so one truncation could burn an hour before `assertDocRendered` finally
+ * throws with nothing to show for it.
+ *
+ * This is not a new classification. server/utils/retry.js already names "a truncation guard" and "a
+ * safety block" as the errors that must fail fast rather than be retried; the repair gate simply
+ * never knew about the rule. Matching is done on the provider's own wording, which both providers
+ * share by construction: `[anthropic] output truncated: hit max_tokens` and
+ * `[gemini] … truncated: hit maxOutputTokens`.
+ *
+ * TIMEOUTS ARE DELIBERATELY EXCLUDED. Those are transient — a retry can legitimately succeed, and
+ * withRetry has already spent its own attempts on them before the error ever reaches here.
+ */
+export function isUnrepairableGenerationError(error: unknown): boolean {
+  const detail = providerDetail(error);
+  if (!detail) return false;
+
+  return detail.includes('truncated: hit')
+    || detail.includes('refused by safety classifier')
+    || detail.includes('blocked by safety filter');
+}
+
+/**
  * Every failure inside the Doc branch of `produce`, expressed as errors.
  *
  * ERROR SEVERITY IS LOAD-BEARING: the repair gate only spends an attempt on `severity: 'error'`.
@@ -63,15 +122,10 @@ export function docSchemaIssues(error: unknown, context: string): ValidationIssu
   }
 
   // Not a zod error — JSON that never parsed, or any other throw. Still an error, still reportable.
-  // Duck-type: Angular's HttpErrorResponse does NOT extend Error, so `instanceof Error` is false
-  // even though it carries a `message` property. Without this branch, a server 500 reaches the
-  // repair gate as the generic fallback below — useless for the model and invisible in the log.
-  const message =
-    error instanceof Error ? error.message
-    : typeof error === 'string' ? error
-    : (typeof error === 'object' && error !== null && 'message' in error && typeof (error as Record<string, unknown>).message === 'string')
-      ? (error as Record<string, unknown>).message as string
-    : 'The model did not return a usable ProductDescriptionDoc.';
+  // providerDetail() unwraps the proxy envelope first, so a server-side failure arrives here as the
+  // provider's own sentence rather than Angular's "500 Internal Server Error" — the difference
+  // between a repair prompt that names the cause and one that describes the HTTP status.
+  const message = providerDetail(error) || 'The model did not return a usable ProductDescriptionDoc.';
 
   return [{
     severity: 'error' as const,

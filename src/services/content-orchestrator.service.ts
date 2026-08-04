@@ -34,7 +34,7 @@ import { renderDescription } from '../render/render-description';
 import { normalizeDocProse } from '../render/doc-prose-transforms';
 import { renderContextFor } from '../prompt-core/store-render-rules';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
-import { docSchemaIssues, assertDocRendered } from '../render/doc-schema-issues';
+import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, providerDetail } from '../render/doc-schema-issues';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
@@ -333,6 +333,14 @@ export class ContentOrchestratorService {
             renderContextFor(input.website.name, input.brandFolder, input.modelFolder),
           );
           } catch (err) {
+            // …unless the provider refused to produce anything in the first place. A truncation or
+            // a safety block is a property of the request, so every remaining attempt would fail
+            // identically — and on this path that is up to 3 more deep calls of several minutes
+            // each. Throwing escapes the gate (runRepairGate awaits produce() bare at
+            // repair-gate.ts:112 and :339), which is the correct outcome here: fail in one attempt
+            // with the provider's own instruction ("lower the thinking level") instead of an hour
+            // later with "empty-output".
+            if (isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
             // Convert, do not rethrow: an empty artifact plus real issues lets the gate spend a
             // repair attempt, and appendRepairFeedback then tells the model WHICH FIELD failed
             // rather than "empty-output". assertDocRendered below refuses to ship the '' if every

@@ -13,12 +13,12 @@
           "maxOutputTokens": 64000
         },
         {
-          "id": "claude-opus-4-8",
-          "label": "Claude Opus 4.8",
+          "id": "claude-sonnet-4-6",
+          "label": "Claude Sonnet 4.6",
           "tier": "premium",
           "levels": ["disabled", "low", "medium", "high"],
           "defaultLevel": "medium",
-          "maxOutputTokens": 64000
+          "maxOutputTokens": 128000
         },
         {
           "id": "claude-haiku-4-5",

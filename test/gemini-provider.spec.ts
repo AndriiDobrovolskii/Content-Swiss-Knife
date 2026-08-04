@@ -191,7 +191,7 @@ describe('GeminiProvider request bounds', () => {
   it('leaves the SDK retry wrapper disengaged and sets a client-level timeout', () => {
     new GeminiProvider('test-key');
     expect(ctorArgs[0].httpOptions.retryOptions).toBeUndefined();
-    expect(ctorArgs[0].httpOptions.timeout).toBe(600_000);
+    expect(ctorArgs[0].httpOptions.timeout).toBe(1_200_000);
   });
 
   /**
@@ -202,7 +202,7 @@ describe('GeminiProvider request bounds', () => {
     nextResponse = reply('{"ok":1}');   // creative-json parses its reply
     await new GeminiProvider('k')
       .generate(PAYLOAD, 'creative-json', { model: 'gemini-3.1-pro-preview', level: 'high', maxOutputTokens: 65536 });
-    expect(calls[0].config.httpOptions.timeout).toBe(600_000);
+    expect(calls[0].config.httpOptions.timeout).toBe(1_200_000);
   });
 
   it('gives a fast call the short timeout', async () => {

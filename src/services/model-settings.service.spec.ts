@@ -52,11 +52,11 @@ describe('ModelSettingsService mixed providers', () => {
 
   it('leaves the other slot untouched when one slot switches provider', () => {
     const s = boot();
-    s.setDeepModel('claude-opus-4-8');
+    s.setDeepModel('claude-sonnet-4-6');
     s.setFastProvider('gemini');
 
     expect(s.deepProvider()).toBe('anthropic');
-    expect(s.deepModel()).toBe('claude-opus-4-8');
+    expect(s.deepModel()).toBe('claude-sonnet-4-6');
   });
 
   it('lands a provider switch on a model of the slot own tier', () => {
