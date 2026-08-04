@@ -12,9 +12,11 @@ import {
   extractVideoEmbeds,
   restoreMissingVideos,
   validateVideoCoverage,
+  validateVideoCoverageDoc,
   videoKey,
 } from './video-manifest';
 import { wrapVideoFigures } from './video-figure';
+import type { VideoEmbed } from '../domain/description-doc';
 
 const PRODUCT = 'Lixel L2 Pro';
 const SRC = 'https://www.youtube.com/embed/Bw2xL_gL7zc';
@@ -221,5 +223,45 @@ describe('validateVideoCoverage', () => {
 
   it('is silent when the source had no video at all', () => {
     expect(validateVideoCoverage(GENERATED_HTML, [], 'x')).toEqual([]);
+  });
+});
+
+describe('validateVideoCoverageDoc — Doc-reading sibling', () => {
+  const embeds = extractVideoEmbeds(SOURCE_DESCRIPTION);
+  const docVideo = (src: string): VideoEmbed => ({ src, title: 'Відео', caption: `Відеоогляд ${PRODUCT}` });
+
+  it('reports an error when a source embed is missing from doc.videos', () => {
+    const issues = validateVideoCoverageDoc([], embeds, 'Doc (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].rule).toBe('video-embed-missing');
+    expect(issues[0].severity).toBe('error');
+    expect(issues[0].detail).toContain(SRC);
+    expect(issues[0].detail).toContain('doc.videos');
+    expect(issues[0].path).toBeUndefined(); // resolves to full-regen, not a block patch
+    expect(issues[0].context).toBe('Doc (uk-UA)');
+  });
+
+  it('is silent once the embed is present in doc.videos, in either src form', () => {
+    expect(validateVideoCoverageDoc([docVideo(SRC)], embeds, 'x')).toEqual([]);
+    expect(validateVideoCoverageDoc([docVideo(`${SRC}?rel=0`)], embeds, 'x')).toEqual([]);
+  });
+
+  it('matches across youtu.be / watch?v= / embed URL forms via videoKey, not string equality', () => {
+    expect(validateVideoCoverageDoc([docVideo('https://youtu.be/Bw2xL_gL7zc')], embeds, 'x')).toEqual([]);
+  });
+
+  it('is silent when the source had no video at all — an empty doc.videos is not an error by itself', () => {
+    expect(validateVideoCoverageDoc([], [], 'x')).toEqual([]);
+  });
+
+  it('does not throw when both arrays are empty', () => {
+    expect(() => validateVideoCoverageDoc([], [], 'x')).not.toThrow();
+  });
+
+  it('reports one issue per missing source embed, independent of unrelated entries already in doc.videos', () => {
+    const otherVideo: VideoEmbed = { src: 'https://www.youtube.com/embed/OTHER-id', title: 't', caption: 'c' };
+    const issues = validateVideoCoverageDoc([otherVideo], embeds, 'x');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].detail).toContain(SRC);
   });
 });

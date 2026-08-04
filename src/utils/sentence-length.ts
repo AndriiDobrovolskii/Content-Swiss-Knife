@@ -20,6 +20,7 @@
 
 import { parseDocument } from 'htmlparser2';
 import type { ValidationIssue } from './output-validator';
+import type { ProductDescriptionDoc, Subsection, Block } from '../domain/description-doc';
 import { SENTENCE_LENGTH_BANDS } from '../prompt-core/constants';
 import { LATIN_TO_CYRILLIC_UNITS } from './unit-tables';
 import { extractBlocks, type HtmlBlockAncestor } from './block-repair';
@@ -249,6 +250,130 @@ export function validateSentenceLength(
       });
     }
   }
+
+  return issues;
+}
+
+/**
+ * Strips the two inline tags Prose is allowed to carry (`<b>`, `<strong>` — see description-doc.ts)
+ * before tokenizing. The HTML sibling gets the equivalent effect for free: it always measures
+ * PARSED node text (nodeText / textContent), never raw markup. A Doc's Prose string is the raw
+ * value itself, so this is the direct substitute for that parse step, not a change of intent.
+ */
+function stripProseTags(text: string): string {
+  return text.replace(/<\/?(?:b|strong)>/gi, '');
+}
+
+/**
+ * Measures one prose string against the locale ceiling, pushing 'sentence-too-long' issues
+ * addressed by `path` into `issues`/`seen` (both closed over by the caller).
+ *
+ * Unlike the HTML sibling's proseSegments — which has to GUESS whether a leading `<b>` is a bullet
+ * label by structural position — a Doc's BulletItem already models `lead` and `text` as two
+ * separate fields (see description-doc.ts). Callers here therefore pass `lead` and `text` (or any
+ * other prose field) as independent calls; there is no bold-detection heuristic to port, because
+ * the ambiguity it existed to resolve does not exist in the Doc model.
+ */
+function makeSentenceChecker(
+  band: { ceiling: number },
+  locale: string,
+  context: string,
+  issues: ValidationIssue[],
+  seen: Set<string>,
+) {
+  return (rawText: string, path: string): void => {
+    if (!rawText?.trim()) return;
+    const text = stripProseTags(rawText).replace(/\s+/g, ' ').trim();
+    for (const sentence of splitSentences(text)) {
+      const words = countWords(sentence);
+      if (words <= band.ceiling) continue;
+      const key = sentence.slice(0, 80);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      issues.push({
+        severity: 'warning',
+        rule: 'sentence-too-long',
+        detail:
+          `Sentence of ${words} words at ${path} exceeds the ${locale} hard ceiling of ` +
+          `${band.ceiling} ([SENTENCE LENGTH]). Split it into two shorter sentences: "${sentence}"`,
+        context,
+        path,
+        measured: { actual: words, limit: band.ceiling, unit: 'words' },
+      });
+    }
+  };
+}
+
+/** Feeds every text-bearing field of a Block into `check`, addressed by JSON path. Figure/video
+ *  blocks carry no text and are skipped, matching the HTML sibling's <p>/<li>-only scope. */
+function checkBlock(block: Block, path: string, check: (t: string, p: string) => void): void {
+  if (block.kind === 'paragraph') { check(block.text, path); return; }
+  if (block.kind === 'bullets') {
+    block.items.forEach((item, i) => {
+      check(item.lead, `${path}.items[${i}].lead`);
+      check(item.text, `${path}.items[${i}].text`);
+    });
+  }
+  // figure / video: no text.
+}
+
+function checkSubsection(sub: Subsection, path: string, check: (t: string, p: string) => void): void {
+  sub.blocks.forEach((b, i) => checkBlock(b, `${path}.blocks[${i}]`, check));
+  sub.subsections?.forEach((s, i) => checkSubsection(s, `${path}.subsections[${i}]`, check));
+}
+
+/**
+ * Doc-reading sibling of validateSentenceLength — reads Doc fields directly instead of parsing
+ * <p>/<li> blocks out of rendered HTML with extractBlocks. Same tokenizer (countWords), same
+ * per-locale ceiling (SENTENCE_LENGTH_BANDS), same sentence splitter (splitSentences).
+ *
+ * SCOPE — every prose-bearing field: hook, killerSpecs[].why, every Block reachable from
+ * keyBenefits / functionality (incl. nested subsections) / applications.blocks / compatibility /
+ * operatingTips, applications.items[].text, packageContents?.items (the HTML sibling scores <li>
+ * as well as <p>, and packageContents renders as a plain <ul>, so its items are in scope the same
+ * way), specs.categories[].rows[].value, and cta.text.
+ *
+ * Traversal is written by hand per field, rather than via description-doc.ts's
+ * forEachBlockInOrder helper, because forEachBlockInOrder's `visit(block)` callback carries no
+ * positional information — this validator needs a `path` per block for the repair ladder to
+ * address, which forEachBlockInOrder cannot supply. The traversal order below matches
+ * forEachBlockInOrder's own (keyBenefits, functionality, applications.blocks, compatibility,
+ * operatingTips) field-for-field.
+ *
+ * @param doc     the ProductDescriptionDoc under validation
+ * @param locale  BCP47; an unmapped locale returns no issues rather than guessing a ceiling
+ * @param context reporting label, e.g. "Doc (base)"
+ */
+export function validateSentenceLengthDoc(
+  doc: ProductDescriptionDoc,
+  locale: string,
+  context: string,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const band = SENTENCE_LENGTH_BANDS[locale.toLowerCase()];
+  if (!band) return issues;
+
+  const seen = new Set<string>();
+  const check = makeSentenceChecker(band, locale, context, issues, seen);
+
+  check(doc.hook, 'hook');
+  doc.killerSpecs.forEach((k, i) => check(k.why, `killerSpecs[${i}].why`));
+
+  doc.keyBenefits.forEach((b, i) => checkBlock(b, `keyBenefits[${i}]`, check));
+  doc.functionality.forEach((s, i) => checkSubsection(s, `functionality[${i}]`, check));
+  (doc.applications.blocks ?? []).forEach((b, i) => checkBlock(b, `applications.blocks[${i}]`, check));
+  if (doc.compatibility) checkSubsection(doc.compatibility, 'compatibility', check);
+  if (doc.operatingTips) checkSubsection(doc.operatingTips, 'operatingTips', check);
+
+  doc.applications.items.forEach((it, i) => check(it.text, `applications.items[${i}].text`));
+  doc.packageContents?.items.forEach((item, i) => check(item, `packageContents.items[${i}]`));
+
+  doc.specs.categories.forEach((cat, ci) => cat.rows.forEach((row, ri) => {
+    const value = Array.isArray(row.value) ? row.value.join(' ') : row.value;
+    check(value, `specs.categories[${ci}].rows[${ri}].value`);
+  }));
+
+  check(doc.cta.text, 'cta.text');
 
   return issues;
 }

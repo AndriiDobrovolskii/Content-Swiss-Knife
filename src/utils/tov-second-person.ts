@@ -21,6 +21,7 @@
  */
 
 import type { ValidationIssue } from './output-validator';
+import type { ProductDescriptionDoc, Subsection, Block } from '../domain/description-doc';
 import { UK_LEFT_BOUNDARY, UK_RIGHT_BOUNDARY } from './terminology-normalize';
 import { OPERATING_TIPS_H2_MARKERS, isCenter3dPrintStore } from '../prompt-core/constants';
 
@@ -151,6 +152,136 @@ export function validateSecondPersonScope(
           `machine as the subject. Context: "${excerpt(text, match.index ?? 0, match[0].length)}". ` +
           `Rewrite it in the third person, or move the thought into the tips block if it is advice.`,
         context: `${locale} — Center 3D Print ToV`,
+      });
+    }
+  }
+
+  return issues;
+}
+
+/** One span of Doc-authored text, addressed by its JSON path — the Doc-side equivalent of the
+ *  HTML walker's `{ tag, text }` pairs. */
+interface DocTextSpan {
+  path: string;
+  text: string;
+}
+
+/** Text of a single Block, for scope-collection purposes only — figure/video carry no text. */
+function blockSpans(block: Block, path: string): DocTextSpan[] {
+  if (block.kind === 'paragraph') return [{ path, text: block.text }];
+  if (block.kind === 'bullets') {
+    return block.items.flatMap((item, i) => [
+      { path: `${path}.items[${i}].lead`, text: item.lead },
+      { path: `${path}.items[${i}].text`, text: item.text },
+    ]);
+  }
+  return [];
+}
+
+function subsectionSpans(sub: Subsection, path: string): DocTextSpan[] {
+  const spans: DocTextSpan[] = [{ path: `${path}.heading`, text: sub.heading }];
+  sub.blocks.forEach((b, i) => spans.push(...blockSpans(b, `${path}.blocks[${i}]`)));
+  sub.subsections?.forEach((s, i) => spans.push(...subsectionSpans(s, `${path}.subsections[${i}]`)));
+  return spans;
+}
+
+/**
+ * Every span of Doc-authored text OUTSIDE the two sanctioned zones — the Doc-side equivalent of
+ * textOutsideExemptBlocks.
+ *
+ * operatingTips is EXCLUDED entirely (the tips-block exemption; unlike the HTML walker, there is
+ * no heading-string heuristic to delimit it — the Doc model already segregates tips content into
+ * its own optional field). cta.text is EXCLUDED (the CTA exemption); cta.heading is INCLUDED,
+ * exactly as in the HTML sibling — "The CTA's own <h2> is NOT exempted" (see the module doc
+ * above): the mandated "worth buying" question form contains no second-person pronoun by
+ * construction, so a hit there is a real finding, not a slicing artifact.
+ *
+ * Reasonably broad on purpose, mirroring the HTML walker's own breadth (it scans every top-level
+ * body element outside the two zones, including the killer-specs table and the §7 spec table) —
+ * every prose-and-label-bearing field in the document, in document order.
+ */
+function collectScopedSpans(doc: ProductDescriptionDoc): DocTextSpan[] {
+  const spans: DocTextSpan[] = [{ path: 'hook', text: doc.hook }];
+
+  doc.killerSpecs.forEach((k, i) => {
+    spans.push({ path: `killerSpecs[${i}].label`, text: k.label });
+    spans.push({ path: `killerSpecs[${i}].value`, text: k.value });
+    spans.push({ path: `killerSpecs[${i}].why`, text: k.why });
+  });
+
+  doc.keyBenefits.forEach((b, i) => spans.push(...blockSpans(b, `keyBenefits[${i}]`)));
+  doc.functionality.forEach((s, i) => spans.push(...subsectionSpans(s, `functionality[${i}]`)));
+
+  spans.push({ path: 'applications.heading', text: doc.applications.heading });
+  (doc.applications.blocks ?? []).forEach((b, i) =>
+    spans.push(...blockSpans(b, `applications.blocks[${i}]`)));
+  doc.applications.items.forEach((it, i) => {
+    spans.push({ path: `applications.items[${i}].scenario`, text: it.scenario });
+    spans.push({ path: `applications.items[${i}].text`, text: it.text });
+  });
+
+  if (doc.compatibility) spans.push(...subsectionSpans(doc.compatibility, 'compatibility'));
+  // operatingTips deliberately excluded — the exempt tips zone, see doc-comment above.
+
+  if (doc.packageContents) {
+    spans.push({ path: 'packageContents.heading', text: doc.packageContents.heading });
+    doc.packageContents.items.forEach((item, i) =>
+      spans.push({ path: `packageContents.items[${i}]`, text: item }));
+  }
+
+  spans.push({ path: 'specs.heading', text: doc.specs.heading });
+  doc.specs.categories.forEach((cat, ci) => {
+    spans.push({ path: `specs.categories[${ci}].title`, text: cat.title });
+    cat.rows.forEach((row, ri) => {
+      spans.push({ path: `specs.categories[${ci}].rows[${ri}].label`, text: row.label });
+      const value = Array.isArray(row.value) ? row.value.join(' ') : row.value;
+      spans.push({ path: `specs.categories[${ci}].rows[${ri}].value`, text: value });
+    });
+  });
+
+  spans.push({ path: 'cta.heading', text: doc.cta.heading });
+  // cta.text deliberately excluded — the exempt CTA zone.
+
+  return spans;
+}
+
+/**
+ * Doc-reading sibling of validateSecondPersonScope — reads Doc fields directly instead of parsing
+ * an artifact's rendered HTML with DOMParser. Same store gate, same locale gate, same two
+ * sanctioned zones (operating tips, CTA text).
+ *
+ * @param doc       the ProductDescriptionDoc under validation
+ * @param locale    BCP47 locale of this artifact; only uk-UA / ru-UA are analyzed
+ * @param storeName gate — Style B is Center 3D Print's voice, not a global rule
+ * @returns one 'tov-second-person-outside-scope' warning per distinct form found outside the
+ *          operating-tips block and the CTA, addressed by its JSON path
+ */
+export function validateSecondPersonScopeDoc(
+  doc: ProductDescriptionDoc,
+  locale: string,
+  storeName: string,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (!isCenter3dPrintStore(storeName)) return issues;
+  if (!CYRILLIC_LOCALES.includes(locale.toLowerCase())) return issues;
+
+  const seen = new Set<string>();
+  for (const { path, text } of collectScopedSpans(doc)) {
+    if (!text?.trim()) continue;
+    for (const match of text.matchAll(SECOND_PERSON_RE)) {
+      const form = match[0].toLowerCase();
+      if (seen.has(form)) continue;
+      seen.add(form);
+      issues.push({
+        severity: 'warning',
+        rule: 'tov-second-person-outside-scope',
+        detail:
+          `Direct second-person address ("${match[0]}") appears at ${path}, outside the ` +
+          `operating-tips block and the CTA, where Style B requires an impersonal voice with the ` +
+          `machine as the subject. Context: "${excerpt(text, match.index ?? 0, match[0].length)}". ` +
+          `Rewrite it in the third person, or move the thought into the tips block if it is advice.`,
+        context: `${locale} — Center 3D Print ToV`,
+        path,
       });
     }
   }

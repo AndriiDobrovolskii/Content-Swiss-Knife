@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { countExpectedSpecRows, countActualSpecRows, validateSpecCountParity, expectedSpecParameterLabels, findMalformedTableLines } from './spec-count-parity';
+import {
+  countExpectedSpecRows, countActualSpecRows, countActualSpecRowsDoc,
+  validateSpecCountParity, validateSpecCountParityDoc,
+  expectedSpecParameterLabels, findMalformedTableLines,
+} from './spec-count-parity';
+import type { ProductDescriptionDoc, SpecCategory } from '../domain/description-doc';
 
 const ORTUR_H20_SPECS = `| Item | Specification |
 | :--- | :--- |
@@ -349,5 +354,134 @@ describe('validateSpecCountParity — spec-table-malformed-row', () => {
   it('emits no spec-table-malformed-row warning for a well-formed source', () => {
     const issues = validateSpecCountParity(specSection(15), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)');
     expect(issues.filter(i => i.rule === 'spec-table-malformed-row')).toHaveLength(0);
+  });
+});
+
+function specDoc(rowCount: number, categoryCount = 1): ProductDescriptionDoc['specs'] {
+  const perCategory = Math.ceil(rowCount / categoryCount);
+  const categories: SpecCategory[] = [];
+  let remaining = rowCount;
+  for (let c = 0; c < categoryCount; c++) {
+    const n = Math.min(perCategory, remaining);
+    categories.push({
+      title: `Cat${c}`,
+      rows: Array.from({ length: n }, (_, i) => ({ label: `Row ${i}`, value: `${i}` })),
+    });
+    remaining -= n;
+  }
+  return { heading: 'Технічні характеристики', categories };
+}
+
+function baseDoc(specs: ProductDescriptionDoc['specs']): ProductDescriptionDoc {
+  return {
+    schemaVersion: '3.0',
+    locale: 'uk-UA',
+    localizedName: 'H20 Laser Engraving Machine',
+    hook: 'Hook.',
+    killerSpecs: [
+      { label: 'A', value: '1', why: 'why a' },
+      { label: 'B', value: '2', why: 'why b' },
+      { label: 'C', value: '3', why: 'why c' },
+    ],
+    keyBenefits: [],
+    functionality: [],
+    applications: { heading: 'Застосування', items: [] },
+    specs,
+    cta: { heading: 'CTA', text: 'Купуйте.' },
+    figures: [],
+    videos: [],
+  };
+}
+
+describe('countActualSpecRowsDoc', () => {
+  it('sums SpecRow entries across one category', () => {
+    expect(countActualSpecRowsDoc(baseDoc(specDoc(15)))).toBe(15);
+  });
+
+  it('sums across multiple categories', () => {
+    expect(countActualSpecRowsDoc(baseDoc(specDoc(9, 3)))).toBe(9);
+  });
+
+  it('returns 0 for a doc with no spec rows at all', () => {
+    expect(countActualSpecRowsDoc(baseDoc({ heading: 'Специфікації', categories: [] }))).toBe(0);
+  });
+
+  it('does not throw on a category with an empty rows array', () => {
+    const doc = baseDoc({ heading: 'Специфікації', categories: [{ title: 'Cat', rows: [] }] });
+    expect(() => countActualSpecRowsDoc(doc)).not.toThrow();
+    expect(countActualSpecRowsDoc(doc)).toBe(0);
+  });
+});
+
+describe('validateSpecCountParityDoc', () => {
+  it('returns no issues when counts match', () => {
+    const doc = baseDoc(specDoc(15));
+    const issues = validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (uk-UA)');
+    expect(issues).toHaveLength(0);
+  });
+
+  it('flags a shortfall of 5 as an ERROR with an anti-invention instruction, naming specs.categories[]', () => {
+    const doc = baseDoc(specDoc(10));
+    const issues = validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('error');
+    expect(issues[0].rule).toBe('spec-count-mismatch');
+    expect(issues[0].detail).toContain('is 10, expected 15');
+    expect(issues[0].detail).toContain('specs.categories[]');
+    expect(issues[0].detail).toContain('Never invent');
+  });
+
+  it('flags an off-by-one shortfall as a WARNING with no anti-invention clause', () => {
+    const doc = baseDoc(specDoc(14));
+    const issues = validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].detail).not.toContain('Never invent');
+  });
+
+  it('flags extra rows (actual > expected) as a WARNING', () => {
+    const doc = baseDoc(specDoc(18));
+    const issues = validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+  });
+
+  it('sums rows across multiple categories, matching countActualSpecRowsDoc', () => {
+    const doc = baseDoc(specDoc(15, 3));
+    expect(validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (uk-UA)')).toEqual([]);
+  });
+
+  it('no-ops when canonicalSpecs has no detectable table', () => {
+    const doc = baseDoc(specDoc(3));
+    expect(validateSpecCountParityDoc(doc, 'free text, no table here', '', 'Doc (uk-UA)')).toEqual([]);
+  });
+
+  it('does not throw and no-ops on a doc with zero spec rows', () => {
+    const doc = baseDoc({ heading: 'Специфікації', categories: [] });
+    expect(() => validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (uk-UA)')).not.toThrow();
+    const issues = validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (uk-UA)');
+    expect(issues.some(i => i.rule === 'spec-count-mismatch' && i.severity === 'error')).toBe(true);
+  });
+
+  it('still emits spec-table-malformed-row independently of the count check', () => {
+    const md =
+      '| Item | Specification |\r\n' +
+      '| :--- | :--- |\r\n' +
+      '| **Material** | Aluminum Alloy |\r\n' +
+      '| **Screen** | 1.3-inch OLED |\r\n' +
+      '| **Exhaust Fan** | Yes |\r\n' +
+      '| **Laser Head Power** | 20W\r\n';
+    const expected = countExpectedSpecRows(md, '');
+    const doc = baseDoc(specDoc(expected));
+    const issues = validateSpecCountParityDoc(doc, md, '', 'Doc (uk-UA)');
+    const malformedIssues = issues.filter(i => i.rule === 'spec-table-malformed-row');
+    expect(malformedIssues).toHaveLength(1);
+    expect(issues.filter(i => i.rule === 'spec-count-mismatch')).toHaveLength(0);
+  });
+
+  it('propagates context', () => {
+    const doc = baseDoc(specDoc(1));
+    const issues = validateSpecCountParityDoc(doc, ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'Doc (base)');
+    expect(issues[0].context).toBe('Doc (base)');
   });
 });

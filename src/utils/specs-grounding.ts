@@ -48,10 +48,11 @@
  */
 
 import type { ValidationIssue } from './output-validator';
+import type { ProductDescriptionDoc } from '../domain/description-doc';
 import { extractBlocks } from './block-repair';
 import { stripCodeFences } from './html-cleaner';
 import { stripThousandsSeparators } from './number-format-fixer';
-import { countActualSpecRows } from './spec-count-parity';
+import { countActualSpecRows, countActualSpecRowsDoc } from './spec-count-parity';
 
 /** Words too generic to serve as grounding evidence for a label. */
 const LABEL_STOPWORDS = new Set([
@@ -346,6 +347,136 @@ export function validateSpecsGrounding(
         `(e.g. a failed specs translation) than mass hallucination, so the per-row grounding ` +
         `guard is disabled for this artifact rather than deleting rows it cannot verify. ` +
         `Rows: ${failedLabels.join(', ')}.`,
+      context,
+    }];
+  }
+
+  return issues;
+}
+
+/**
+ * Doc-reading sibling of validateSpecsGrounding — reads doc.specs.categories[].rows[] directly
+ * instead of parsing <section class="specs"> tables out of rendered HTML. Same three grounding
+ * signals (stemmed label / numeric anchor / Latin-token anchor), same count-parity precondition,
+ * same mass-failure circuit breaker; only the traversal and the addressing differ:
+ * `specs.categories[N].rows[M]` (0-indexed) instead of the HTML version's `block[N]`.
+ *
+ * SpecRow.value is `string | string[]` (a multi-valued parameter, e.g. EXPERT3D's nested-<ul>
+ * cells). Multiple values are joined with a space before numeric/Latin-token extraction — the
+ * same "read the cell as one blob of text" treatment `cells[1]?.textContent` gives a rendered
+ * `<ul>` inside a `<td>` in the HTML version.
+ *
+ * @param doc           the ProductDescriptionDoc under validation
+ * @param sourceSpecs   see validateSpecsGrounding
+ * @param context       reporting label, e.g. "Doc (base)"
+ * @param allowedParams see validateSpecsGrounding
+ * @param options       see validateSpecsGrounding
+ */
+export function validateSpecsGroundingDoc(
+  doc: ProductDescriptionDoc,
+  sourceSpecs: string,
+  context: string,
+  allowedParams: readonly string[] = [],
+  options: { labelAnchorTrusted?: boolean } = {},
+): ValidationIssue[] {
+  const labelAnchorTrusted = options.labelAnchorTrusted ?? true;
+  const issues: ValidationIssue[] = [];
+  if (!sourceSpecs?.trim()) return issues;
+  if (doc.specs.categories.length === 0) return issues; // nothing in scope → no-op
+
+  // COUNT-PARITY PRECONDITION — see validateSpecsGrounding's own comment for the full rationale.
+  // countActualSpecRowsDoc has no -1 "DOMParser unavailable" sentinel to guard against, unlike its
+  // HTML-reading counterpart.
+  if (allowedParams.length > 0) {
+    const actualRows = countActualSpecRowsDoc(doc);
+    if (actualRows === allowedParams.length) return issues;
+  }
+
+  const sourceNorm = normalizeText(sourceSpecs);
+  const sourceStems = new Set(
+    sourceNorm.split(' ')
+      .map(w => w.replace(/\.$/, ''))
+      .filter(w => w.length >= MIN_LABEL_WORD_LEN)
+      .map(stem),
+  );
+  const sourceNumbers = new Set(extractNumberTokens(sourceSpecs));
+  const sourceLatinTokens = new Set(extractLatinTokens(sourceSpecs));
+
+  let evaluatedRows = 0;
+  const failedRows: Array<{ path: string; label: string }> = [];
+
+  for (let catIndex = 0; catIndex < doc.specs.categories.length; catIndex++) {
+    const category = doc.specs.categories[catIndex];
+    for (let rowIndex = 0; rowIndex < category.rows.length; rowIndex++) {
+      const row = category.rows[rowIndex];
+      const path = `specs.categories[${catIndex}].rows[${rowIndex}]`;
+
+      const label = (row.label ?? '').trim();
+      if (!label) continue;
+
+      const words = significantWords(label);
+      if (words.length === 0) continue; // label had only generic words — cannot ground, skip
+
+      const valueText = Array.isArray(row.value) ? row.value.join(' ') : (row.value ?? '');
+      const valueNumbers = extractNumberTokens(valueText);
+      const numericGrounded = valueNumbers.length > 0 && valueNumbers.every(n => sourceNumbers.has(n));
+
+      const valueLatinTokens = extractLatinTokens(valueText);
+      const latinTokenGrounded = valueLatinTokens.some(t => sourceLatinTokens.has(t));
+
+      const labelGrounded = words.some(w => sourceStems.has(stem(w)));
+
+      evaluatedRows++;
+      const grounded = numericGrounded || latinTokenGrounded || labelGrounded;
+      if (!grounded) {
+        const valueCarriedEvidence = valueNumbers.length > 0 || valueLatinTokens.length > 0;
+        failedRows.push({ path, label });
+        issues.push({
+          severity: labelAnchorTrusted || valueCarriedEvidence ? 'error' : 'warning',
+          rule: 'spec-row-not-grounded',
+          detail:
+            `Spec row at ${path} (label "${label}") is not supported by the source ` +
+            `specifications. Reconcile before removing: if it corresponds to one of the allowed ` +
+            `parameters under different wording, KEEP the row and correct only its label to ` +
+            `match. Remove the row only if it corresponds to no allowed parameter. Never invent ` +
+            `values or units.` +
+            (allowedParams.length > 0
+              ? ` ALLOWED PARAMETERS (pick exactly one, and write its name in the language of the `
+                + `table — do not copy the English wording): ${allowedParams.join(', ')}.`
+              : ''),
+          context,
+          path,
+        });
+      }
+    }
+  }
+
+  // Emitted once per artifact, only when at least one row failed — see validateSpecsGrounding.
+  if (issues.length > 0 && allowedParams.length > 0) {
+    issues.push({
+      severity: issues.some(i => i.severity === 'error') ? 'error' : 'warning',
+      rule: 'spec-rows-allowed-parameters',
+      detail:
+        `ALLOWED PARAMETERS (the complete set of §7-eligible parameters in the source ` +
+        `specifications): ${allowedParams.join(', ')}. Every specs.categories[].rows[] entry must ` +
+        `correspond to exactly one of these. Do not add a parameter that is not on this list, and ` +
+        `do not add a row for the product's own name.`,
+      context,
+    });
+  }
+
+  // A model that fabricates more than half a spec table is not a realistic failure mode; a
+  // broken or degraded grounding source is — see validateSpecsGrounding's own comment.
+  if (issues.length >= MASS_FAILURE_MIN_ROWS && issues.length > evaluatedRows / 2) {
+    return [{
+      severity: 'warning',
+      rule: 'spec-row-not-grounded-mass-failure',
+      detail:
+        `${issues.length} of ${evaluatedRows} graded spec-table rows failed grounding. Mass ` +
+        `failure across half a table is far more likely a broken/degraded grounding source ` +
+        `(e.g. a failed specs translation) than mass hallucination, so the per-row grounding ` +
+        `guard is disabled for this artifact rather than deleting rows it cannot verify. ` +
+        `Rows: ${failedRows.map(r => `${r.path} ("${r.label}")`).join(', ')}.`,
       context,
     }];
   }
