@@ -74,20 +74,24 @@ export function providerDetail(error: unknown): string | undefined {
  *
  * This is not a new classification. server/utils/retry.js already names "a truncation guard" and "a
  * safety block" as the errors that must fail fast rather than be retried; the repair gate simply
- * never knew about the rule. Matching is done on the provider's own wording, which both providers
- * share by construction: `[anthropic] output truncated: hit max_tokens` and
- * `[gemini] … truncated: hit maxOutputTokens`.
+ * never knew about the rule. Matching is done on the provider's own wording: `[anthropic] output
+ * truncated: hit max_tokens`, `[gemini] … truncated: hit maxOutputTokens`, `[openai] response
+ * blocked by content filter`, and the deterministic truncations json-parse.js raises itself
+ * (`truncated: unterminated string…` / `truncated: N unclosed container(s)…`) when a provider's
+ * JSON never closes — the same class of failure as a max_tokens truncation, arriving via the
+ * defence-in-depth path instead of the provider's own stop_reason check.
  *
  * TIMEOUTS ARE DELIBERATELY EXCLUDED. Those are transient — a retry can legitimately succeed, and
  * withRetry has already spent its own attempts on them before the error ever reaches here.
  */
+const UNREPAIRABLE_PATTERN =
+  /truncated: (hit|unterminated string|\d+ unclosed container)|refused by safety classifier|blocked by (safety|content) filter/i;
+
 export function isUnrepairableGenerationError(error: unknown): boolean {
   const detail = providerDetail(error);
   if (!detail) return false;
 
-  return detail.includes('truncated: hit')
-    || detail.includes('refused by safety classifier')
-    || detail.includes('blocked by safety filter');
+  return UNREPAIRABLE_PATTERN.test(detail);
 }
 
 /**

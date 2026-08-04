@@ -158,6 +158,23 @@ describe('isUnrepairableGenerationError', () => {
     )).toBe(true);
   });
 
+  it('catches an OpenAI content-filter block', () => {
+    expect(isUnrepairableGenerationError(
+      new Error('[openai] response blocked by content filter on gpt-4o / creative-json.'),
+    )).toBe(true);
+  });
+
+  // The defence-in-depth path: json-parse.js's own truncation guard, for JSON that never closes.
+  // Same failure class as a provider's max_tokens truncation — the request cannot succeed as-is.
+  it('catches a json-parse truncation', () => {
+    expect(isUnrepairableGenerationError(
+      new Error('[json-parse] response truncated: unterminated string at end of input.'),
+    )).toBe(true);
+    expect(isUnrepairableGenerationError(
+      new Error('[json-parse] response truncated: 2 unclosed container(s) at end of input.'),
+    )).toBe(true);
+  });
+
   // The whole point of the split: a schema failure IS repairable and must keep its attempts.
   it('leaves a schema failure to the repair gate', () => {
     const result = ProductDescriptionDocSchema.safeParse(brokenDoc());

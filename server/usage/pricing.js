@@ -7,7 +7,9 @@ const DEFAULT_PRICES = {
   // not 5m caches (which would be 1.25x). cr is 0.1x base input.
   'claude-sonnet-5':   { in: 2.00, out: 10.00, cw: 4.00, cr: 0.20 },
   // Selectable in the settings menu, so its cw follows the same 2x-base 1h-cache rule as
-  // Sonnet 5 above. The dormant entries below still carry the 1.25x 5m rate.
+  // Sonnet 5 above. claude-haiku-4-5 below is likewise live (it's the fast-tier model — see
+  // ANTHROPIC_MODEL_FAST in server/providers/anthropic.js) and follows the same 2x-base 1h-cache
+  // rule. The remaining dormant/unselectable entries below those two still carry the 1.25x 5m rate.
   'claude-sonnet-4-6': { in: 3.00, out: 15.00, cw: 6.00, cr: 0.30 },
   'claude-sonnet-4-5': { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },
   'claude-sonnet-4':   { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },
@@ -15,7 +17,7 @@ const DEFAULT_PRICES = {
   'claude-opus-4-7':   { in: 5.00, out: 25.00, cw: 6.25, cr: 0.50 },
   'claude-opus-4-6':   { in: 5.00, out: 25.00, cw: 6.25, cr: 0.50 },
   'claude-opus-4-5':   { in: 5.00, out: 25.00, cw: 6.25, cr: 0.50 },
-  'claude-haiku-4-5':  { in: 1.00, out: 5.00,  cw: 1.25, cr: 0.10 },
+  'claude-haiku-4-5':  { in: 1.00, out: 5.00,  cw: 2.00, cr: 0.10 },
   'claude-haiku-3-5':  { in: 0.80, out: 4.00,  cw: 1.00, cr: 0.08 },
 
   // Google Gemini. `out` covers thinking tokens too — GeminiProvider folds thoughtsTokenCount
