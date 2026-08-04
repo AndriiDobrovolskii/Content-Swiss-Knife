@@ -35,10 +35,14 @@
  * 5's (4.6 @ high ≈ 5 @ medium), so it thinks appreciably longer for the same artifact — and the
  * wider ceiling that stops the truncation makes each attempt longer still.
  *
- * THE COST, STATED PLAINLY: `withRetry` spends 3 attempts, so a genuinely wedged request now hangs
- * for up to 60 minutes rather than 30. What keeps that bounded in practice is that the repair gate
- * no longer multiplies it — a truncation or safety block short-circuits out of the Doc branch
- * instead of buying 3 more attempts (see src/render/doc-schema-issues.ts).
+ * THE COST, STATED PLAINLY: `withRetry` spends 3 attempts, so a single produce() call that is
+ * genuinely wedged now hangs for up to 60 minutes rather than 30. The repair gate's short-circuit
+ * (src/render/doc-schema-issues.ts, `isUnrepairableGenerationError`) bounds ONLY the truncation and
+ * safety-block case — one attempt instead of the full repair budget. It does NOT cover a timeout:
+ * `isUnrepairableGenerationError` deliberately excludes timeouts (they're transient; a retry can
+ * legitimately succeed), so a genuinely wedged deep call still pays the repair budget in full —
+ * up to `masterRepairBudget + 1` produce() calls (4, with the current budget of 3) × 3 withRetry
+ * attempts × 20 minutes, close to 4 hours in the worst case.
  */
 export const DEEP_TIMEOUT_MS = 1_200_000;
 

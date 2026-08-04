@@ -77,16 +77,25 @@ const HTTP_TRUNCATION = {
  * parse, stash issues on failure, and return '' so the gate sees a failed attempt rather than an
  * exception. Kept faithful to content-orchestrator.service.ts — a helper that skipped the
  * short-circuit would let these tests pass while production behaved differently.
+ *
+ * The short-circuit only throws on the FIRST call: content-orchestrator.service.ts's
+ * `isFirstHtmlAAttempt` flag, mirrored here as a variable scoped to this single `makeProduce()`
+ * call (i.e. fresh per test, same as the real flag is fresh per generate() invocation). A later
+ * call (a repair attempt) already has a `best` artifact the gate can fall back to, so it converts
+ * to issues instead of throwing.
  */
 function makeProduce(llm: { generate: (p: PromptPayload) => Promise<unknown> }, stash: ValidationIssue[]) {
+  let isFirstAttempt = true;
   return async (payload: PromptPayload): Promise<string> => {
+    const isInitialAttempt = isFirstAttempt;
+    isFirstAttempt = false;
     stash.length = 0;
     try {
       const raw = await llm.generate(payload);
       ProductDescriptionDocSchema.parse(raw);
       return '<p>rendered</p>';
     } catch (err) {
-      if (isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
+      if (isInitialAttempt && isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
       stash.push(...docSchemaIssues(err, 'HTML (base)'));
       return '';
     }
@@ -260,5 +269,38 @@ describe('Doc path recovery — a deterministic provider failure is not repairab
 
     expect(generate).toHaveBeenCalledTimes(2);
     expect(result.artifact).toBe('<p>rendered</p>');
+  });
+
+  /**
+   * The regression this whole describe block exists to prevent going forward: an unrepairable
+   * error on a REPAIR attempt (not the initial one) must not discard the `best` a prior attempt
+   * already earned. Attempt 0 renders real content but is validated against an extra, external
+   * finding (simulating validateGeneratedHtml() catching something docIssues alone would not) —
+   * so a repair attempt is genuinely triggered. That attempt then hits a truncation. Before the
+   * isInitialAttempt guard, makeProduce's throw would propagate out of runRepairGate uncaught and
+   * this test would reject; now it must resolve with attempt 0's own artifact intact.
+   */
+  it('preserves attempt 0’s artifact when a later repair attempt is unrepairable', async () => {
+    const generate = vi.fn()
+      .mockResolvedValueOnce(validDoc())
+      .mockRejectedValueOnce(HTTP_TRUNCATION);
+    const docIssues: ValidationIssue[] = [];
+    const externalFinding: ValidationIssue = {
+      severity: 'error', rule: 'html-check', detail: 'a separate validator found something', context: 'test',
+    };
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)',
+      maxRepairs: 1,
+      basePayload: BASE,
+      produce: makeProduce({ generate }, docIssues),
+      validate: () => [...docIssues, externalFinding],
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(result.artifact).toBe('<p>rendered</p>');
+    expect(result.shippedAttempt).toBe(0);
+    expect(result.finalIssues).toEqual([externalFinding]);
   });
 });

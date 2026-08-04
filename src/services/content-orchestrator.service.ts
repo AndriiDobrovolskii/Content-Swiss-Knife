@@ -307,7 +307,17 @@ export class ContentOrchestratorService {
       // closure-stash pattern as restoredVideos above. Without this a rejected Doc would throw out
       // of produce(), and runRepairGate does not catch (repair-gate.ts:112, :339).
       let docIssues: ValidationIssue[] = [];
+      // True only for the very first produce() call (repair-gate.ts:112) — the one point where an
+      // unrepairable provider error has no earlier `best` to fall back to, so failing fast is
+      // correct. Every later call (repair-gate.ts:339) already has a `best` from a prior attempt;
+      // discarding it via a throw would abort the whole generate() run over a request that just
+      // can't be repaired further — converting to issues instead lets the gate keep what it has.
+      // Scoped inside generate() (per-request), same as docIssues/restoredVideos above — never
+      // module-level, so concurrent requests never share this flag.
+      let isFirstHtmlAAttempt = true;
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
+        const isInitialAttempt = isFirstHtmlAAttempt;
+        isFirstHtmlAAttempt = false;
         // The Doc path returns HTML too — renderDescription() builds it — so the repair gate and
         // every downstream validator below keep working unchanged. That is what keeps this switch
         // contained to these few lines instead of rippling through the whole method.
@@ -333,14 +343,19 @@ export class ContentOrchestratorService {
             renderContextFor(input.website.name, input.brandFolder, input.modelFolder),
           );
           } catch (err) {
-            // …unless the provider refused to produce anything in the first place. A truncation or
-            // a safety block is a property of the request, so every remaining attempt would fail
-            // identically — and on this path that is up to 3 more deep calls of several minutes
-            // each. Throwing escapes the gate (runRepairGate awaits produce() bare at
-            // repair-gate.ts:112 and :339), which is the correct outcome here: fail in one attempt
-            // with the provider's own instruction ("lower the thinking level") instead of an hour
-            // later with "empty-output".
-            if (isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
+            // …unless the provider refused to produce anything in the first place, AND this is the
+            // initial attempt (no `best` yet exists to fall back to — repair-gate.ts:112). A
+            // truncation or a safety block is a property of the request, so every remaining attempt
+            // would fail identically — and on this path that is up to 3 more deep calls of several
+            // minutes each. Throwing escapes the gate (runRepairGate awaits produce() bare here),
+            // which is the correct outcome here: fail in one attempt with the provider's own
+            // instruction ("lower the thinking level") instead of an hour later with "empty-output".
+            //
+            // On a REPAIR attempt (repair-gate.ts:339) `best` already holds a usable artifact from
+            // an earlier attempt. Throwing here would discard it and abort the whole generate() run
+            // over a request that just can't be repaired further — so this falls through to the
+            // convert-not-rethrow path below instead, same as any other failed repair attempt.
+            if (isInitialAttempt && isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
             // Convert, do not rethrow: an empty artifact plus real issues lets the gate spend a
             // repair attempt, and appendRepairFeedback then tells the model WHICH FIELD failed
             // rather than "empty-output". assertDocRendered below refuses to ship the '' if every
