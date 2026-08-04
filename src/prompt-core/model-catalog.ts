@@ -21,7 +21,16 @@ export interface ModelSpec {
   /** Exactly what this model's API accepts — the settings UI renders nothing else. */
   levels: ThinkingLevel[];
   defaultLevel: ThinkingLevel;
-  /** The model's real output ceiling; providers use it for max_tokens / maxOutputTokens. */
+  /**
+   * The model's real output ceiling; providers use it for max_tokens / maxOutputTokens.
+   *
+   * Two premium Claude models sit at different values on purpose, and the JSON cannot say why.
+   * On Anthropic this caps thinking AND response text together, and Sonnet 4.6's effort ladder sits
+   * a rung below Sonnet 5's (4.6 @ high ≈ 5 @ medium), so 4.6 spends appreciably more of the budget
+   * thinking to reach the same artifact — 64000 truncated a `Doc (base)` run mid-JSON. 4.6 therefore
+   * gets its true 128K ceiling while Sonnet 5 stays at 64000, where it works. Only tokens actually
+   * generated are billed, so a higher ceiling costs nothing until it is used.
+   */
   maxOutputTokens: number;
 }
 

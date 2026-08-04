@@ -15,7 +15,9 @@
  */
 import { describe, it, expect } from 'vitest';
 
-import { docSchemaIssues, DOC_SCHEMA_RULE } from './doc-schema-issues';
+import {
+  docSchemaIssues, DOC_SCHEMA_RULE, isUnrepairableGenerationError, providerDetail,
+} from './doc-schema-issues';
 import { ProductDescriptionDocSchema } from '../domain/description-doc.schema';
 
 /** A Doc that fails several ways at once, so the field paths are distinguishable. */
@@ -95,5 +97,82 @@ describe('docSchemaIssues', () => {
     expect(docSchemaIssues(undefined, 'ctx').length).toBeGreaterThan(0);
     expect(docSchemaIssues(null, 'ctx').length).toBeGreaterThan(0);
     expect(docSchemaIssues('a bare string', 'ctx').length).toBeGreaterThan(0);
+  });
+
+  /**
+   * The repair prompt used to be handed Angular's HTTP wording instead of the provider's. The
+   * server log said `hit max_tokens (64000) on claude-sonnet-4-6` while the model was told "500
+   * Internal Server Error" — a sentence it can do nothing with.
+   */
+  it('reports the provider sentence from a proxy failure, not the HTTP status', () => {
+    const detail = docSchemaIssues(HTTP_TRUNCATION, 'HTML (base)')[0].detail;
+    expect(detail).toContain('hit max_tokens');
+    expect(detail).not.toContain('Internal Server Error');
+  });
+});
+
+/** What Angular hands the Doc branch when the proxy answers `{ error: describeError(err) }`. */
+const HTTP_TRUNCATION = {
+  status: 500,
+  message: 'Http failure response for /api/llm/generate: 500 Internal Server Error',
+  error: { error: '[anthropic] output truncated: hit max_tokens (64000) on claude-sonnet-4-6 / creative-json.' },
+};
+
+describe('providerDetail', () => {
+  it('digs the real sentence out of the proxy envelope', () => {
+    expect(providerDetail(HTTP_TRUNCATION)).toContain('hit max_tokens');
+  });
+
+  it('falls back to message when there is no envelope', () => {
+    expect(providerDetail(new Error('boom'))).toBe('boom');
+    expect(providerDetail('a bare string')).toBe('a bare string');
+  });
+
+  it('returns undefined when there is nothing to read', () => {
+    expect(providerDetail(undefined)).toBeUndefined();
+    expect(providerDetail(null)).toBeUndefined();
+    expect(providerDetail({})).toBeUndefined();
+  });
+});
+
+/**
+ * The classification server/utils/retry.js already applies — "a truncation guard" and "a safety
+ * block" must fail fast — extended to the repair gate, which never knew about it. Repairing a
+ * truncation costs up to 3 more deep calls and cannot succeed: the same request truncates the
+ * same way.
+ */
+describe('isUnrepairableGenerationError', () => {
+  it('catches a truncation from either provider', () => {
+    expect(isUnrepairableGenerationError(HTTP_TRUNCATION)).toBe(true);
+    expect(isUnrepairableGenerationError(
+      new Error('[gemini] generate truncated: hit maxOutputTokens on gemini-3.1-pro-preview.'),
+    )).toBe(true);
+  });
+
+  it('catches a safety block from either provider', () => {
+    expect(isUnrepairableGenerationError(
+      new Error('[anthropic] request refused by safety classifier on claude-sonnet-4-6 / creative-json.'),
+    )).toBe(true);
+    expect(isUnrepairableGenerationError(
+      new Error('[gemini] generate blocked by safety filter (SAFETY) on gemini-3.1-pro-preview.'),
+    )).toBe(true);
+  });
+
+  // The whole point of the split: a schema failure IS repairable and must keep its attempts.
+  it('leaves a schema failure to the repair gate', () => {
+    const result = ProductDescriptionDocSchema.safeParse(brokenDoc());
+    expect(isUnrepairableGenerationError(result.success ? null : result.error)).toBe(false);
+    expect(isUnrepairableGenerationError(new Error('Unexpected token } in JSON at position 42'))).toBe(false);
+  });
+
+  // Deliberately excluded: transient, and a retry can legitimately succeed.
+  it('does not short-circuit a timeout or a bodyless 500', () => {
+    expect(isUnrepairableGenerationError(new Error('Request timed out.'))).toBe(false);
+    expect(isUnrepairableGenerationError({ status: 500, message: 'Http failure response', error: null })).toBe(false);
+  });
+
+  it('says no when there is nothing to classify', () => {
+    expect(isUnrepairableGenerationError(undefined)).toBe(false);
+    expect(isUnrepairableGenerationError({})).toBe(false);
   });
 });

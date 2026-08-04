@@ -15,7 +15,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import { runRepairGate, appendRepairFeedback } from '../utils/repair-gate';
-import { docSchemaIssues, assertDocRendered } from './doc-schema-issues';
+import {
+  docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, providerDetail,
+} from './doc-schema-issues';
 import { ProductDescriptionDocSchema } from '../domain/description-doc.schema';
 import type { ValidationIssue } from '../utils/output-validator';
 import type { PromptPayload } from '../prompt-core/payload';
@@ -63,9 +65,18 @@ function invalidDoc() {
   return { ...validDoc(), killerSpecs: [{ label: 'A', value: '1', why: 'only one' }] };
 }
 
+/** What Angular hands the Doc branch when the proxy answers `{ error: describeError(err) }`. */
+const HTTP_TRUNCATION = {
+  status: 500,
+  message: 'Http failure response for /api/llm/generate: 500 Internal Server Error',
+  error: { error: '[anthropic] output truncated: hit max_tokens (128000) on claude-sonnet-4-6 / creative-json. Raise the model\'s maxOutputTokens in model-catalog.json or lower the thinking level.' },
+};
+
 /**
- * Reproduces the orchestrator's Doc branch: parse, stash issues on failure, return '' so the gate
- * sees a failed attempt rather than an exception.
+ * Reproduces the orchestrator's Doc branch: short-circuit the deterministic provider guards, then
+ * parse, stash issues on failure, and return '' so the gate sees a failed attempt rather than an
+ * exception. Kept faithful to content-orchestrator.service.ts — a helper that skipped the
+ * short-circuit would let these tests pass while production behaved differently.
  */
 function makeProduce(llm: { generate: (p: PromptPayload) => Promise<unknown> }, stash: ValidationIssue[]) {
   return async (payload: PromptPayload): Promise<string> => {
@@ -75,6 +86,7 @@ function makeProduce(llm: { generate: (p: PromptPayload) => Promise<unknown> }, 
       ProductDescriptionDocSchema.parse(raw);
       return '<p>rendered</p>';
     } catch (err) {
+      if (isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
       stash.push(...docSchemaIssues(err, 'HTML (base)'));
       return '';
     }
@@ -186,5 +198,67 @@ describe('Doc path recovery — exhausting the budget must not ship nothing', ()
 
   it('lets a real artifact through untouched', () => {
     expect(() => assertDocRendered('<p>rendered</p>', 'HTML (base)', [])).not.toThrow();
+  });
+});
+
+/**
+ * The mirror image of everything above: repair is the right answer for a Doc the model got wrong,
+ * and the WRONG answer for a request the provider could not complete at all.
+ *
+ * A Sonnet 4.6 @ high `Doc (base)` call runs for minutes. When one truncated, the gate spent its
+ * whole budget re-issuing a request that truncates identically every time — up to an hour of paid
+ * calls ending in "empty-output". server/utils/retry.js already refuses to retry "a truncation
+ * guard" for exactly this reason; these tests hold the repair gate to the same rule.
+ */
+describe('Doc path recovery — a deterministic provider failure is not repairable', () => {
+  it('spends no repair attempts on a truncation', async () => {
+    const generate = vi.fn().mockRejectedValue(HTTP_TRUNCATION);
+    const docIssues: ValidationIssue[] = [];
+
+    await expect(runRepairGate<string>({
+      label: 'HTML (base)',
+      maxRepairs: 3,
+      basePayload: BASE,
+      produce: makeProduce({ generate }, docIssues),
+      validate: () => [...docIssues],
+      withFeedback: appendRepairFeedback,
+    })).rejects.toThrow(/hit max_tokens/);
+
+    // One call, not four. This number is the whole point of the test.
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces the provider instruction, not the HTTP status', async () => {
+    const generate = vi.fn().mockRejectedValue(HTTP_TRUNCATION);
+    const docIssues: ValidationIssue[] = [];
+
+    await expect(runRepairGate<string>({
+      label: 'HTML (base)',
+      maxRepairs: 3,
+      basePayload: BASE,
+      produce: makeProduce({ generate }, docIssues),
+      validate: () => [...docIssues],
+      withFeedback: appendRepairFeedback,
+    })).rejects.toThrow(/lower the thinking level/);
+  });
+
+  // The contrast that makes the split meaningful: a schema failure keeps every attempt it had.
+  it('still spends the budget on a schema failure, which repair can fix', async () => {
+    const generate = vi.fn()
+      .mockResolvedValueOnce(invalidDoc())
+      .mockResolvedValueOnce(validDoc());
+    const docIssues: ValidationIssue[] = [];
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (base)',
+      maxRepairs: 3,
+      basePayload: BASE,
+      produce: makeProduce({ generate }, docIssues),
+      validate: () => [...docIssues],
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(result.artifact).toBe('<p>rendered</p>');
   });
 });

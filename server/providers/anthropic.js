@@ -4,7 +4,7 @@ import { normalizePayload } from '../utils/payload.js';
 import { parseJsonResponse } from '../utils/json-parse.js';
 import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
 import { resolveSlot } from './model-support.js';
-import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
+import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, VISION_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
 
 // Fallback slot used when a caller doesn't pass one (direct unit-test calls, a request that
 // predates the settings menu). Mirrors the historical env-driven defaults.
@@ -40,14 +40,19 @@ export class AnthropicProvider {
 
   // Translate a catalog thinking level into Anthropic's request shape.
   // 'disabled' → thinking off, no output_config at all. Everything else → adaptive thinking
-  // at that effort. Manual thinking with budget_tokens is a 400 on Sonnet 5; adaptive +
-  // output_config.effort is the only supported form.
+  // at that effort. Manual thinking with budget_tokens is deprecated on Sonnet 4.6 and a 400
+  // on Sonnet 5; adaptive + output_config.effort is the form that works on every model here.
+  //
+  // display is pinned rather than left to the model default, which differs across the catalog
+  // ('omitted' on Sonnet 5, 'summarized' on Sonnet 4.6). Nothing in this app surfaces the
+  // model's reasoning, so a summary would be payload we parse past on one model and not the
+  // other. Thinking still happens and still bills the same either way.
   #thinkingConfig(level) {
     if (level === 'disabled') return { thinking: { type: 'disabled' } };
     // Anthropic has no 'minimal'; the catalog never offers it for a Claude model, but clamp
     // defensively so a hand-rolled request can't produce a 400.
     const effort = level === 'minimal' ? 'low' : level;
-    return { thinking: { type: 'adaptive' }, output_config: { effort } };
+    return { thinking: { type: 'adaptive', display: 'omitted' }, output_config: { effort } };
   }
 
   /**
@@ -64,7 +69,7 @@ export class AnthropicProvider {
       const config = {
         model,
         // The model's real output ceiling. max_tokens caps thinking + response text combined
-        // on Sonnet 5, so this must leave room for both.
+        // on every adaptive-thinking model, so this must leave room for both.
         max_tokens: maxOutputTokens,
         system: this.#toSystem(systemBlocks),
         messages: [{ role: 'user', content: userContent }],
@@ -132,7 +137,7 @@ export class AnthropicProvider {
       };
 
       const response = await this.client.messages.create(config, {
-        timeout: useThinking ? DEEP_TIMEOUT_MS : FAST_TIMEOUT_MS,
+        timeout: useThinking ? VISION_TIMEOUT_MS : FAST_TIMEOUT_MS,
       });
 
       // Same fail-loud contract as generate(): a truncated or refused caption must never reach
@@ -148,7 +153,7 @@ export class AnthropicProvider {
       }
 
       // Return only visible text blocks; adaptive thinking emits separate thinking blocks
-      // (display defaults to 'omitted' on Sonnet 5) that must never be spliced into the caption.
+      // (empty-texted, since #thinkingConfig pins display) that must never reach the caption.
       return response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
     });
   }
@@ -160,8 +165,8 @@ export class AnthropicProvider {
         model,
         max_tokens: 4096,
         // Extraction is mechanical transcription. Pin thinking off — Sonnet 5 runs adaptive
-        // thinking when `thinking` is omitted, which would eat this small budget if a
-        // thinking-capable model is assigned to the Fast slot. No-op on Haiku.
+        // thinking when `thinking` is omitted, which would eat this small budget if such a
+        // model is assigned to the Fast slot. No-op on Haiku and on Sonnet 4.6.
         thinking: { type: 'disabled' },
         messages: [{
           role: 'user',

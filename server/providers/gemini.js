@@ -4,7 +4,7 @@ import { normalizePayload } from '../utils/payload.js';
 import { parseJsonResponse } from '../utils/json-parse.js';
 import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
 import { clampLevel, resolveSlot } from './model-support.js';
-import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
+import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, VISION_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
 
 // Used when a caller doesn't pass a slot (direct unit-test calls, or a request that
 // predates the settings menu). Gemini 3.1 Pro cannot disable thinking at all.
@@ -121,7 +121,7 @@ export class GeminiProvider {
         config: {
           // The caption is <= 20 words, but thinking tokens draw from the same budget.
           maxOutputTokens: Math.min(8000, maxOutputTokens),
-          httpOptions: { timeout: useThinking ? DEEP_TIMEOUT_MS : FAST_TIMEOUT_MS },
+          httpOptions: { timeout: useThinking ? VISION_TIMEOUT_MS : FAST_TIMEOUT_MS },
           thinkingConfig: { thinkingLevel: level },
         },
       });

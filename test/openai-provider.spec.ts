@@ -84,12 +84,12 @@ describe('OpenAiProvider request bounds', () => {
     // The client is lazily constructed, so touching the getter is what builds it.
     void new OpenAiProvider('k', 'gpt-4o').client;
     expect(ctorArgs[0].maxRetries).toBe(0);
-    expect(ctorArgs[0].timeout).toBe(600_000);
+    expect(ctorArgs[0].timeout).toBe(1_200_000);
   });
 
   it('gives a deep call the long timeout', async () => {
     await new OpenAiProvider('k', 'gpt-4o').generate(PAYLOAD, 'creative');
-    expect(calls[0].options.timeout).toBe(600_000);
+    expect(calls[0].options.timeout).toBe(1_200_000);
   });
 
   it('gives a fast call the short timeout', async () => {

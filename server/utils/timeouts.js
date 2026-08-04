@@ -24,8 +24,31 @@
  * failure and retries — so bounding the hang and recovering from it are two halves of one change.
  */
 
-/** Deep: thinking models producing long artifacts. Matches Anthropic's own default. */
-export const DEEP_TIMEOUT_MS = 600_000;
+/**
+ * Deep: thinking models producing long artifacts.
+ *
+ * WHY 20 MINUTES AND NOT ANTHROPIC'S 10. This used to be 600_000 — the SDK's own default — until a
+ * Sonnet 4.6 @ high `Doc (base)` run showed 600 s is not enough for a single attempt. The [LLM] line
+ * read `FAILED in 1137.2s`, and since server/index.js starts that clock BEFORE `generate()` it spans
+ * the whole `withRetry`: attempt 1 hit this timeout at 600 s and was retried as a transport failure,
+ * attempt 2 ran ~533 s and died on max_tokens. Sonnet 4.6's effort ladder sits a rung below Sonnet
+ * 5's (4.6 @ high ≈ 5 @ medium), so it thinks appreciably longer for the same artifact — and the
+ * wider ceiling that stops the truncation makes each attempt longer still.
+ *
+ * THE COST, STATED PLAINLY: `withRetry` spends 3 attempts, so a genuinely wedged request now hangs
+ * for up to 60 minutes rather than 30. What keeps that bounded in practice is that the repair gate
+ * no longer multiplies it — a truncation or safety block short-circuits out of the Doc branch
+ * instead of buying 3 more attempts (see src/render/doc-schema-issues.ts).
+ */
+export const DEEP_TIMEOUT_MS = 1_200_000;
+
+/**
+ * Vision with thinking. Deliberately NOT DEEP_TIMEOUT_MS: an image caption is capped at 8000 output
+ * tokens and cannot legitimately run for twenty minutes, so borrowing the deep budget would only
+ * widen the hang window — and an image manifest issues one call per image, so it would widen it
+ * once per image.
+ */
+export const VISION_TIMEOUT_MS = 600_000;
 
 /** Fast: short text/JSON calls — slugs, keywords, metadata, translations. */
 export const FAST_TIMEOUT_MS = 120_000;

@@ -48,12 +48,14 @@ describe('AnthropicProvider thinking configuration', () => {
 
   // Sonnet 5 rejects manual budget_tokens; adaptive + output_config.effort is the only
   // supported form. This is the exact shape the pre-settings code sent at 'medium'.
+  // display is pinned because the catalog spans models whose defaults disagree ('omitted'
+  // on Sonnet 5, 'summarized' on Sonnet 4.6) and nothing here surfaces reasoning.
   it('sends adaptive thinking plus effort for a level', async () => {
     await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'creative', DEEP);
     const { config } = streamCalls[0];
 
     expect(config.model).toBe('claude-sonnet-5');
-    expect(config.thinking).toEqual({ type: 'adaptive' });
+    expect(config.thinking).toEqual({ type: 'adaptive', display: 'omitted' });
     expect(config.output_config).toEqual({ effort: 'medium' });
     expect(config.max_tokens).toBe(64000);
   });
@@ -138,7 +140,7 @@ describe('AnthropicProvider vision and pdf', () => {
 
     await p.analyzeImage('B64', 'image/jpeg', 'Describe', true, DEEP);
     expect(createCalls[0].config.max_tokens).toBe(8000);
-    expect(createCalls[0].config.thinking).toEqual({ type: 'adaptive' });
+    expect(createCalls[0].config.thinking).toEqual({ type: 'adaptive', display: 'omitted' });
 
     await p.analyzeImage('B64', 'image/jpeg', 'Describe', false, FAST);
     expect(createCalls[1].config.max_tokens).toBe(1000);
@@ -179,16 +181,25 @@ describe('AnthropicProvider request bounds', () => {
   it('disables the SDK retry loop and sets a client-level timeout', () => {
     new AnthropicProvider('k');
     expect(ctorArgs[0].maxRetries).toBe(0);
-    expect(ctorArgs[0].timeout).toBe(600_000);
+    expect(ctorArgs[0].timeout).toBe(1_200_000);
   });
 
   it('gives a deep call the long timeout', async () => {
     await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'creative', DEEP);
-    expect(streamCalls[0].options.timeout).toBe(600_000);
+    expect(streamCalls[0].options.timeout).toBe(1_200_000);
   });
 
   it('gives a fast call the short timeout', async () => {
     await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'text', FAST);
     expect(streamCalls[0].options.timeout).toBe(120_000);
+  });
+
+  // A thinking caption is capped at 8000 tokens and cannot run for twenty minutes, so it gets its
+  // own budget rather than the deep one. Pinned because the two were the same constant until the
+  // deep timeout was raised, and sharing it again would silently widen the hang window once per
+  // image in a manifest.
+  it('gives a thinking vision call the vision timeout, not the deep one', async () => {
+    await new AnthropicProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', true, DEEP);
+    expect(createCalls[0].options.timeout).toBe(600_000);
   });
 });
