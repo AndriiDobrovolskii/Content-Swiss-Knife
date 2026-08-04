@@ -1,4 +1,5 @@
 import type { ValidationIssue, ValidationSeverity } from './output-validator';
+import type { ProductDescriptionDoc } from '../domain/description-doc';
 
 /**
  * spec-count-parity.ts
@@ -194,6 +195,16 @@ export function countActualSpecRows(html: string): number {
 }
 
 /**
+ * Doc-reading counterpart of countActualSpecRows: sums SpecRow entries across every category
+ * directly off the typed document, no DOMParser involved. Always well-defined (a Doc's
+ * `specs.categories` is a required array, never absent), so — unlike countActualSpecRows — there
+ * is no -1 "DOMParser unavailable" sentinel for callers to check.
+ */
+export function countActualSpecRowsDoc(doc: ProductDescriptionDoc): number {
+  return doc.specs.categories.reduce((n, c) => n + c.rows.length, 0);
+}
+
+/**
  * Validate that the §7 spec-table row count matches the canonical source's expected count.
  * Severity depends on direction and magnitude:
  * - Extra rows (actual > expected) always stay 'warning' — already independently caught, per
@@ -244,6 +255,71 @@ export function validateSpecCountParity(
 
   const detail = `§7 spec-table row count is ${actual}, expected ${expected} (canonical input rows, ` +
     `excluding empty/"N/A" values and the product-name row).`;
+
+  if (actual > expected) {
+    issues.push({ severity: 'warning', rule: 'spec-count-mismatch', detail, context });
+    return issues;
+  }
+
+  const shortfall = expected - actual;
+  const severity: ValidationSeverity = shortfall >= 2 ? 'error' : 'warning';
+  issues.push({
+    severity,
+    rule: 'spec-count-mismatch',
+    detail: severity === 'error'
+      ? `${detail} Restore only parameters that are literally present in the provided source ` +
+        `specifications. Never invent a parameter, value, or unit to satisfy the count.`
+      : detail,
+    context,
+  });
+  return issues;
+}
+
+/**
+ * Doc-reading sibling of validateSpecCountParity — reads doc.specs.categories[] directly instead
+ * of parsing rendered HTML. Same expected-count derivation (countExpectedSpecRows), same severity
+ * rules by shortfall size. The only structural difference from the HTML version is that a Doc's
+ * row count is always computable (countActualSpecRowsDoc never returns the -1 "DOMParser
+ * unavailable" sentinel), so there is no `actual < 0` guard to carry over.
+ *
+ * @param doc             the ProductDescriptionDoc under validation
+ * @param canonicalSpecs  `input.specs` as submitted (NOT groundingSpecs — see module doc)
+ * @param productName     `input.name`
+ * @param context         reporting label, e.g. "Doc (uk-UA)"
+ */
+export function validateSpecCountParityDoc(
+  doc: ProductDescriptionDoc,
+  canonicalSpecs: string,
+  productName: string,
+  context: string,
+): ValidationIssue[] {
+  if (!canonicalSpecs?.trim()) return [];
+
+  const issues: ValidationIssue[] = [];
+
+  // Independent of the count check below — a malformed row is a source-data-quality problem
+  // regardless of whether the counts happen to match by coincidence.
+  const malformed = findMalformedTableLines(canonicalSpecs);
+  if (malformed.length > 0) {
+    issues.push({
+      severity: 'warning',
+      rule: 'spec-table-malformed-row',
+      detail: `Source spec table has malformed row(s) at line(s) ${malformed.join(', ')} — likely a ` +
+        `missing closing "|". These rows are silently excluded from row counting, so the ` +
+        `expected count above may be understated.`,
+      context,
+    });
+  }
+
+  const expected = countExpectedSpecRows(canonicalSpecs, productName);
+  if (expected === 0) return issues; // no canonical table detected — cannot verify count parity
+
+  const actual = countActualSpecRowsDoc(doc);
+
+  if (actual === expected) return issues;
+
+  const detail = `specs.categories[] row count is ${actual}, expected ${expected} (canonical input ` +
+    `rows, excluding empty/"N/A" values and the product-name row).`;
 
   if (actual > expected) {
     issues.push({ severity: 'warning', rule: 'spec-count-mismatch', detail, context });

@@ -25,6 +25,9 @@
 
 import { isVideoSrc } from './video-figure';
 import { ValidationIssue } from './output-validator';
+// Aliased: src/domain/description-doc.ts already exports `VideoEmbed` for a different shape
+// ({ src, title, caption }). Two same-named types in one codebase is a trap — see the note below.
+import type { VideoEmbed as DocVideoEmbed } from '../domain/description-doc';
 
 /** A video embed found in the SOURCE description — what the output is obliged to contain. */
 export interface SourceVideoEmbed {
@@ -214,6 +217,45 @@ export function validateVideoCoverage(
         `The source description contains a video embed (${e.src}) that is missing from the output. `
         + 'Keep the iframe with its src copied VERBATIM, introduced by its own lead-in <p>, in '
         + '§3 FUNCTIONALITY — before §7 Technical Specifications.',
+      context,
+    }));
+}
+
+/**
+ * Doc-reading sibling of validateVideoCoverage — takes `doc.videos` (the array) directly rather
+ * than the whole ProductDescriptionDoc, matching the shape `videoEmbeds` already uses for the
+ * source side. No HTML, no DOMParser: identity comparison is by `videoKey(src)` on both sides.
+ *
+ * `doc.videos` can legitimately be `[]` when the source product has no videos at all — that is
+ * NOT an error; the early `!videoEmbeds.length` guard below covers it exactly like the HTML
+ * sibling's own guard, since an empty `videos` array with an empty `videoEmbeds` source list has
+ * nothing to report.
+ *
+ * No `path`: like validateVideoCoverage, the finding is about the document (a whole entry is
+ * absent from the manifest), not one addressable field — it resolves to ['full-regen'] per
+ * resolveLadder. The `detail` names the field (`doc.videos`) that is missing the entry instead.
+ *
+ * @param videos      `doc.videos` — every VideoEmbed the document actually carries
+ * @param videoEmbeds every video embed the SOURCE description contains — what `videos` is
+ *                     obliged to cover
+ * @param context     reporting label, e.g. "Doc (uk-UA)"
+ */
+export function validateVideoCoverageDoc(
+  videos: readonly DocVideoEmbed[],
+  videoEmbeds: readonly SourceVideoEmbed[],
+  context: string,
+): ValidationIssue[] {
+  if (!videoEmbeds.length) return [];
+  const present = new Set(videos.map(v => videoKey(v.src)));
+  return videoEmbeds
+    .filter(e => !present.has(e.key))
+    .map(e => ({
+      severity: 'error' as const,
+      rule: 'video-embed-missing',
+      detail:
+        `The source description contains a video embed (${e.src}) that is missing from ` +
+        'doc.videos. Add a VideoEmbed entry with its src copied VERBATIM, and reference it from ' +
+        'a `video` block in §3 FUNCTIONALITY — before §7 Technical Specifications.',
       context,
     }));
 }

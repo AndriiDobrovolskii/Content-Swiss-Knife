@@ -9,20 +9,23 @@ import { wrapImageFigures } from '../utils/image-figure';
 import { fixNumberFormatting } from '../utils/number-format-fixer';
 import { fixDecimalSeparator } from '../utils/decimal-separator';
 import { restoreIdentifierDots } from '../utils/identifier-decimal';
-import { extractVideoEmbeds, restoreMissingVideos, validateVideoCoverage, SourceVideoEmbed } from '../utils/video-manifest';
+import {
+  extractVideoEmbeds, restoreMissingVideos, validateVideoCoverage, validateVideoCoverageDoc, SourceVideoEmbed,
+} from '../utils/video-manifest';
 import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import {
-  validateSpecsGrounding, isAlreadyCyrillic, inspectGroundedTranslation,
+  validateSpecsGrounding, validateSpecsGroundingDoc, isAlreadyCyrillic, inspectGroundedTranslation,
   describeGroundingFailure, type GroundingInspection,
 } from '../utils/specs-grounding';
-import { validateSpecCountParity, expectedSpecParameterLabels } from '../utils/spec-count-parity';
-import { validateAltNumericFidelity } from '../utils/alt-numeric-fidelity';
-import { validateSecondPersonScope } from '../utils/tov-second-person';
+import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParameterLabels } from '../utils/spec-count-parity';
+import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
+import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
+import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
-import { validateHeadingStyle } from '../utils/heading-style';
-import { validateSentenceLength } from '../utils/sentence-length';
+import { validateHeadingStyle, validateHeadingStyleDoc } from '../utils/heading-style';
+import { validateSentenceLength, validateSentenceLengthDoc } from '../utils/sentence-length';
 import { cyrillizeUnits } from '../utils/unit-cyrillize';
 import { validateProductNameConsistency, validateProductNameH1SlugAgreement } from '../utils/product-name-consistency';
 import { validateSlugs } from '../utils/slug-validator';
@@ -50,12 +53,14 @@ import { buildKeywordsPrompt } from '../prompts/keywords';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { buildCopywriterPrompt } from '../prompts/copywriter';
 import { SlugResponse, SeoResponse } from '../app/types';
-import { runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta } from '../utils/repair-gate';
+import {
+  runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta, RepairGateResult,
+} from '../utils/repair-gate';
 import { createBlockRepairExecutor } from '../utils/block-tier';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
-import { validateSpecCategoryShape } from '../utils/spec-category-shape';
+import { validateSpecCategoryShape, validateSpecCategoryShapeDoc } from '../utils/spec-category-shape';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
 import { validateLanguageConsistency } from '../utils/language-consistency';
 
@@ -77,6 +82,19 @@ import { validateLanguageConsistency } from '../utils/language-consistency';
  * this pipeline. See src/services/seo-currency-wiring.spec.ts, which fails if this is re-wired.
  */
 const NO_CURRENCY_CHECK = '';
+
+/**
+ * Result of one Doc-path Task A generation attempt (produceTaskADoc).
+ *
+ * `doc: null` means the raw model output failed ProductDescriptionDocSchema.parse() (or never
+ * arrived as parseable JSON at all) — `issues` then carries docSchemaIssues() output so the repair
+ * gate's validate() has something to report other than "empty-output". `doc` non-null always pairs
+ * with `issues: []`: a successfully parsed Doc has nothing to say about the failure it didn't have.
+ */
+export interface DocAttempt {
+  doc: ProductDescriptionDoc | null;
+  issues: ValidationIssue[];
+}
 
 // ── Orchestrator ────────────────────────────────────────────────────────────
 
@@ -231,85 +249,28 @@ export class ContentOrchestratorService {
   }
 
   /**
-   * Produces the uk-UA master Task A artifact — either via the Doc pipeline (model emits a
-   * ProductDescriptionDoc, rendered to HTML) or the plain-HTML path — shared between generate()
+   * Produces the uk-UA master Task A artifact via the plain-HTML path — shared between generate()
    * and generateUaContent(). Both callers target the same locale ('uk-UA') and post-process the
-   * HTML branch identically, so this used to be two ~70-line near-duplicates; extracted once
-   * generateUaContent() needed Doc awareness too (it previously had none at all).
+   * HTML identically, so this used to be two ~70-line near-duplicates.
    *
-   * Returns docIssues/restoredVideos rather than mutating caller state directly — callers stash
-   * them in their own per-request closure variables, same as before, because the validate array
-   * and the restoredVideos warning both need to read the LAST produce() call's result after
-   * runRepairGate resolves, not just this one.
+   * The Doc-pipeline sibling is produceTaskADoc()/runDocGate() below — this method no longer
+   * branches on useDocPipeline (removed), because every remaining caller only reaches it when the
+   * Doc pipeline is NOT enrolled for the store.
+   *
+   * Returns restoredVideos rather than mutating caller state directly — callers stash it in their
+   * own per-request closure variable, same as before, because the validate array and the
+   * restoredVideos warning both need to read the LAST produce() call's result after runRepairGate
+   * resolves, not just this one.
    */
   private async produceTaskAArtifact(opts: {
     payload: PromptPayload;
     useThinking: boolean;
-    useDocPipeline: boolean;
-    isInitialAttempt: boolean;
     input: ProductInput;
     videoEmbeds: SourceVideoEmbed[];
-    // docSchemaIssues context, and the llm meta.taskLabel used on the HTML branch.
+    // docSchemaIssues context, and the llm meta.taskLabel.
     contextLabel: string;
-    // llm meta.taskLabel on the Doc branch only — distinct from contextLabel so telemetry can
-    // tell a Doc call from an HTML call for the same artifact.
-    docTaskLabel: string;
-  }): Promise<{ html: string; docIssues: ValidationIssue[]; restoredVideos: SourceVideoEmbed[] }> {
-    const { payload, useThinking, useDocPipeline, isInitialAttempt, input, videoEmbeds, contextLabel, docTaskLabel } = opts;
-
-    // The Doc path returns HTML too — renderDescription() builds it — so the repair gate and
-    // every downstream validator keep working unchanged. That is what keeps this switch
-    // contained to this one method instead of rippling through every caller.
-    if (useDocPipeline) {
-      // Kept outside the try so a schema failure can still log what the model actually sent —
-      // without this, debugging a hallucinated Doc means reproducing the call by hand.
-      let raw: unknown;
-      try {
-        raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: docTaskLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
-        // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
-        // rather than be rendered into plausible-looking wrong HTML.
-        //
-        // The return value is DISCARDED and `raw` is used instead. Without strictNullChecks —
-        // which this repo does not enable — zod's inferred type comes back all-optional and does
-        // not satisfy ProductDescriptionDoc. See the TSCONFIG NOTE at the foot of
-        // description-doc.schema.ts; this is the same workaround, not a new one. parse() still
-        // does the validating, so nothing is weakened.
-        ProductDescriptionDocSchema.parse(raw);
-        const doc = raw as ProductDescriptionDoc;
-        // Prose normalization moves here from the HTML chain below — same transforms, same order.
-        // stripCodeFences, wrapVideoFigures and wrapImageFigures have no job on this path: JSON
-        // parsing replaces the first, and the renderer emits canonical figures directly.
-        const html = renderDescription(
-          normalizeDocProse(doc, 'uk-UA'),
-          renderContextFor(input.website.name, input.brandFolder, input.modelFolder),
-        );
-        return { html, docIssues: [], restoredVideos: [] };
-      } catch (err) {
-        // …unless the provider refused to produce anything in the first place, AND this is the
-        // initial attempt (no `best` yet exists to fall back to — repair-gate.ts:112). A
-        // truncation or a safety block is a property of the request, so every remaining attempt
-        // would fail identically — and on this path that is up to 3 more deep calls of several
-        // minutes each. Throwing escapes the gate (runRepairGate awaits produce() bare here),
-        // which is the correct outcome here: fail in one attempt with the provider's own
-        // instruction ("lower the thinking level") instead of an hour later with "empty-output".
-        //
-        // On a REPAIR attempt (repair-gate.ts:339) `best` already holds a usable artifact from
-        // an earlier attempt. Throwing here would discard it and abort the whole run over a
-        // request that just can't be repaired further — so this falls through to the
-        // convert-not-rethrow path below instead, same as any other failed repair attempt.
-        if (isInitialAttempt && isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
-        // Convert, do not rethrow: an empty artifact plus real issues lets the gate spend a
-        // repair attempt, and appendRepairFeedback then tells the model WHICH FIELD failed
-        // rather than "empty-output". assertDocRendered at the call site refuses to ship '' if
-        // every attempt fails.
-        const docIssues = docSchemaIssues(err, contextLabel);
-        // The raw payload, not just the Zod issues — a hallucinated Doc is far easier to debug
-        // with what the model actually sent than with "specs.categories.0: expected array". Only
-        // logged when generateJson itself succeeded; a network/parse failure never set raw.
-        if (raw !== undefined) console.error(`[${contextLabel}] raw model output failed schema validation:`, raw);
-        return { html: '', docIssues, restoredVideos: [] };
-      }
-    }
+  }): Promise<{ html: string; restoredVideos: SourceVideoEmbed[] }> {
+    const { payload, useThinking, input, videoEmbeds, contextLabel } = opts;
 
     let html = await this.llm.generateText(payload, useThinking, { taskLabel: contextLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
     html = stripCodeFences(html);
@@ -335,7 +296,193 @@ export class ContentOrchestratorService {
     html = cyrillizeUnits(html, 'uk-UA');
     html = normalizeTerminology(html, 'uk-UA');
     html = canonicalizeMultiInOne(html, 'uk-UA');
-    return { html, docIssues: [], restoredVideos };
+    return { html, restoredVideos };
+  }
+
+  /**
+   * Produces the uk-UA master Task A artifact via the Doc pipeline: the model emits a
+   * ProductDescriptionDoc (JSON), which is schema-validated and returned WHOLE — no rendering, no
+   * prose normalization, no HTML transforms. That happens exactly once, in runDocGate(), after the
+   * gate has accepted a Doc, not on every attempt here.
+   *
+   * Mirrors the pre-Task-2 Doc branch's try/catch structure, the isUnrepairableGenerationError
+   * initial-attempt throw, and the raw-payload debug log verbatim — the only behavioral change is
+   * the return shape (DocAttempt instead of {html, docIssues, restoredVideos}) and the absence of
+   * normalizeDocProse/renderDescription.
+   */
+  private async produceTaskADoc(opts: {
+    payload: PromptPayload;
+    useThinking: boolean;
+    isInitialAttempt: boolean;
+    input: ProductInput;
+    // docSchemaIssues context — matches the HTML sibling's contextLabel.
+    contextLabel: string;
+    // llm meta.taskLabel for this call — distinct from contextLabel so telemetry can tell a Doc
+    // call from an HTML call for the same artifact.
+    docTaskLabel: string;
+  }): Promise<DocAttempt> {
+    const { payload, useThinking, isInitialAttempt, input, contextLabel, docTaskLabel } = opts;
+
+    // Kept outside the try so a schema failure can still log what the model actually sent —
+    // without this, debugging a hallucinated Doc means reproducing the call by hand.
+    let raw: unknown;
+    try {
+      raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: docTaskLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
+      // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
+      // rather than be treated as valid.
+      //
+      // The return value is DISCARDED and `raw` is used instead. Without strictNullChecks —
+      // which this repo does not enable — zod's inferred type comes back all-optional and does
+      // not satisfy ProductDescriptionDoc. See the TSCONFIG NOTE at the foot of
+      // description-doc.schema.ts; this is the same workaround, not a new one. parse() still
+      // does the validating, so nothing is weakened.
+      ProductDescriptionDocSchema.parse(raw);
+      return { doc: raw as ProductDescriptionDoc, issues: [] };
+    } catch (err) {
+      // …unless the provider refused to produce anything in the first place, AND this is the
+      // initial attempt (no `best` yet exists to fall back to — repair-gate.ts:112). A
+      // truncation or a safety block is a property of the request, so every remaining attempt
+      // would fail identically — and on this path that is up to 3 more deep calls of several
+      // minutes each. Throwing escapes the gate (runRepairGate awaits produce() bare here),
+      // which is the correct outcome here: fail in one attempt with the provider's own
+      // instruction ("lower the thinking level") instead of an hour later with "empty-output".
+      //
+      // On a REPAIR attempt (repair-gate.ts:339) `best` already holds a usable artifact from
+      // an earlier attempt. Throwing here would discard it and abort the whole run over a
+      // request that just can't be repaired further — so this falls through to the
+      // convert-not-rethrow path below instead, same as any other failed repair attempt.
+      if (isInitialAttempt && isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
+      // Convert, do not rethrow: a null doc plus real issues lets the gate spend a repair
+      // attempt, and appendRepairFeedback then tells the model WHICH FIELD failed rather than
+      // "empty-output". runDocGate's post-gate guard refuses to ship a null doc if every
+      // attempt fails.
+      const issues = docSchemaIssues(err, contextLabel);
+      // The raw payload, not just the Zod issues — a hallucinated Doc is far easier to debug
+      // with what the model actually sent than with "specs.categories.0: expected array". Only
+      // logged when generateJson itself succeeded; a network/parse failure never set raw.
+      if (raw !== undefined) console.error(`[${contextLabel}] raw model output failed schema validation:`, raw);
+      return { doc: null, issues };
+    }
+  }
+
+  /**
+   * The Doc-pipeline gate: validates the ProductDescriptionDoc ITSELF against the Task 1 Doc-reading
+   * validators, and renders it to HTML exactly once — after the gate has accepted a Doc, not on
+   * every repair attempt. This is the fix for the bug this task exists to close: the old
+   * produceTaskAArtifact Doc branch rendered on every attempt and then validated the RENDERED HTML
+   * with DOM-based checks, which could only ever confirm what a pure, deterministic renderer already
+   * guarantees structurally — burning repair budget on findings that could never occur.
+   *
+   * Returns RepairGateResult<string> — the same shape the plain-HTML runRepairGate<string> call
+   * produces — so every line of code after the gate call site (recordGeneration, assertDocRendered,
+   * the destructure, toArtifactReport, mergeSmallSpecCategories, …) stays oblivious to which pipeline
+   * ran.
+   */
+  private async runDocGate(opts: {
+    label: string;
+    contextLabel: string;
+    docTaskLabel: string;
+    maxRepairs: number;
+    basePayload: PromptPayload;
+    useThinking: boolean;
+    locale: string;
+    localeIso: string;
+    input: ProductInput;
+    groundingSpecs: string;
+    allowedSpecParams: string[];
+    groundingDisabled: boolean;
+    grounding: GroundingInspection;
+    videoEmbeds: SourceVideoEmbed[];
+    imgManifest?: ImageManifestEntry[];
+    onAttempt: (n: number, c: number) => void;
+  }): Promise<RepairGateResult<string>> {
+    let isFirstAttempt = true;
+    const produce = async (payload: PromptPayload): Promise<DocAttempt> => {
+      const initial = isFirstAttempt;
+      isFirstAttempt = false;
+      return this.produceTaskADoc({
+        payload, useThinking: opts.useThinking, isInitialAttempt: initial, input: opts.input,
+        contextLabel: opts.contextLabel, docTaskLabel: opts.docTaskLabel,
+      });
+    };
+
+    const result = await runRepairGate<DocAttempt>({
+      label: opts.label,
+      maxRepairs: opts.maxRepairs,
+      basePayload: opts.basePayload,
+      produce,
+      validate: (attempt) => {
+        if (!attempt.doc) return attempt.issues;
+        const doc = attempt.doc;
+        return [
+          ...validateSpecsGroundingDoc(doc, opts.groundingSpecs, opts.label, opts.allowedSpecParams,
+            { labelAnchorTrusted: !!opts.groundingSpecs }),
+          ...validateSpecCountParityDoc(doc, opts.input.specs, opts.input.name, opts.label),
+          ...validateAltNumericFidelityDoc(doc, this.numericFidelitySources(opts.input, opts.imgManifest), opts.label),
+          ...validateSecondPersonScopeDoc(doc, opts.localeIso, opts.input.website.name),
+          ...validateHeadingStyleDoc(doc, opts.localeIso, opts.input.website.name, opts.input.name),
+          ...validateSentenceLengthDoc(doc, opts.localeIso, opts.label),
+          ...validateVideoCoverageDoc(doc.videos, opts.videoEmbeds, opts.label),
+          // CONTENT checks, not renderer invariants — see the final-review fix wave's Critical #1/#2.
+          // Which images the model puts into figures[] and how it groups §7 rows into categories are
+          // both model judgment calls; renderDescription() faithfully renders whatever shape it is
+          // handed and guarantees neither. Dropping either from the Doc-path gate reopened real
+          // incidents (image-manifest: "9/14-images regression", M1 Ultra SafetyPro, 2026-07-15;
+          // spec-category-collapse: Center 3D Print / Ortur H20, 2026-07-26) for every Doc-enrolled
+          // store — see image-manifest-coverage.ts and spec-category-shape.ts's *Doc siblings.
+          ...validateImageManifestCoverageDoc(doc.figures, opts.imgManifest, opts.label),
+          ...validateSpecCategoryShapeDoc(doc, opts.label, { templateId: opts.input.templateId, locale: opts.locale }),
+          ...(opts.groundingDisabled ? [{
+            severity: 'warning' as const,
+            rule: 'specs-grounding-disabled',
+            detail:
+              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
+              + 'source specifications. Cause: '
+              + (opts.grounding.failure ? describeGroundingFailure(opts.grounding.failure) : 'unknown')
+              + '.',
+            context: opts.label,
+          }] : []),
+        ];
+      },
+      withFeedback: appendRepairFeedback,
+      // No repairField / repairBlocks — full-regen-only repair for the Doc path in this PR (per
+      // the plan's explicit scope decision). maxFieldRepairs: 0 makes that true BY CONSTRUCTION
+      // rather than by coincidence — today the ladder is inert here anyway, because no Doc-emitted
+      // rule happens to have a registered strategy with a 'deterministic'/'field-scoped' rung
+      // (repair-strategy.ts), but that is incidental, not structural: the next Doc validator added
+      // with a registered strategy would silently wake the ladder up on a path it was never
+      // designed for. Explicit 0 closes that off.
+      maxFieldRepairs: 0,
+      onAttempt: opts.onAttempt,
+    });
+
+    // Every attempt failed the schema → nothing to render. Return the empty-artifact sentinel
+    // ('' — the same thing `html.trim()` would see from a genuinely empty HTML artifact) rather
+    // than throwing here. THROWING HERE WAS THE BUG (final-review fix wave, Important #3): it
+    // unwound past both call sites' `recordGeneration(...)` call, which their own comments say
+    // must fire "BEFORE the guard below, so a generation that never validated is counted rather
+    // than lost with the exception" — but a throw from inside runDocGate happens before the call
+    // site ever gets control back, so recordGeneration never ran and 'failed-schema' was
+    // unrecordable, exactly the outcome doc-pipeline-flag.ts's rollout monitoring depends on being
+    // able to see. The call sites already guard this: `if (useDocPipeline)
+    // assertDocRendered(htmlAResult.artifact, ...)` runs AFTER their recordGeneration call, so
+    // returning '' here (instead of throwing) restores that original order — assertDocRendered is
+    // now called in exactly one place, at the call sites, not inside this method too.
+    if (!result.artifact.doc) return { ...result, artifact: '' };
+
+    // The ONE render call for this Task A generation — see the method doc comment above. Runs
+    // AFTER every Tier-1 validator above, which is an ORDER FLIP from the old HTML path (there,
+    // normalizeDocProse-equivalent transforms ran, then validation read the transformed HTML).
+    // Confirmed harmless today — e.g. validateAltNumericFidelityDoc's number-matching is
+    // separator-insensitive to normalizeDocProse's number-format fixes — but a future validator
+    // that is NOT insensitive to normalizeDocProse's transforms would validate pre-normalization
+    // text here. Worth checking when adding one.
+    const html = renderDescription(
+      normalizeDocProse(result.artifact.doc, opts.locale),
+      renderContextFor(opts.input.website.name, opts.input.brandFolder, opts.input.modelFolder),
+    );
+
+    return { ...result, artifact: html };
   }
 
   async generate(input: ProductInput, useThinking = false): Promise<void> {
@@ -408,102 +555,89 @@ export class ContentOrchestratorService {
       const basePayloadA = useDocPipeline
         ? buildPromptADoc(masterInput, 'Ukrainian (uk-UA)')
         : buildPromptA(masterInput, 'Ukrainian (uk-UA)');
-      // What the LAST produce call had to splice back. Read by the validate array below, which
-      // runs against that same artifact, to surface automatic placement as a warning.
+      // What the LAST produce call had to splice back — plain-HTML path only (restoreMissingVideos
+      // is a string-splicing mechanism; the Doc path's own validateVideoCoverageDoc, wired inside
+      // runDocGate, covers video coverage there without this stash).
       let restoredVideos: SourceVideoEmbed[] = [];
-      // Doc-path failures from the LAST produce call, read by the validate array below — same
-      // closure-stash pattern as restoredVideos above. Without this a rejected Doc would throw out
-      // of produce(), and runRepairGate does not catch (repair-gate.ts:112, :339).
-      let docIssues: ValidationIssue[] = [];
-      // True only for the very first produce() call (repair-gate.ts:112) — the one point where an
-      // unrepairable provider error has no earlier `best` to fall back to, so failing fast is
-      // correct. Every later call (repair-gate.ts:339) already has a `best` from a prior attempt;
-      // discarding it via a throw would abort the whole generate() run over a request that just
-      // can't be repaired further — converting to issues instead lets the gate keep what it has.
-      // Scoped inside generate() (per-request), same as docIssues/restoredVideos above — never
-      // module-level, so concurrent requests never share this flag.
-      let isFirstHtmlAAttempt = true;
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
-        const isInitialAttempt = isFirstHtmlAAttempt;
-        isFirstHtmlAAttempt = false;
         const result = await this.produceTaskAArtifact({
-          payload, useThinking, useDocPipeline, isInitialAttempt, input, videoEmbeds,
-          contextLabel: 'HTML (base)', docTaskLabel: 'Doc (base)',
+          payload, useThinking, input, videoEmbeds, contextLabel: 'HTML (base)',
         });
-        docIssues = result.docIssues;
         restoredVideos = result.restoredVideos;
         return result.html;
       };
-      const htmlAResult = await runRepairGate<string>({
-        label: 'HTML (base)',
-        maxRepairs: masterRepairBudget,
-        basePayload: basePayloadA,
-        produce: produceHtmlA,
-        validate: html => [
-          // First, so a rejected Doc reads as the cause rather than as the empty-output symptom
-          // every other rule would report against ''.
-          ...docIssues,
-          ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
-          // Trusted exactly when the model was given this same text (see masterInput.specs). If
-          // grounding fell back to the English sheet, a label mismatch says nothing about the row
-          // and must not cost a regeneration.
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams,
-            { labelAnchorTrusted: !!groundingSpecs }),
-          ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
-          // Image text may not carry a figure the source never stated — the prompt-side rule
-          // (NUMERIC_SOURCE_FIDELITY_RULES) reduces the rate; this is the deterministic gate.
-          ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (base)'),
-          // Style B second-person scope — warning tier while the block-slicing heuristic is
-          // measured on real generations; inert for every store except Center 3D Print.
-          ...validateSecondPersonScope(html, 'uk-UA', input.website.name),
-          // Style B section headings must be functional, not bare nominal topics. Warning tier
-          // while the verb heuristic is measured; inert for every store except Center 3D Print.
-          ...validateHeadingStyle(html, 'uk-UA', input.website.name, input.name),
-          // Per-locale sentence ceiling — language-level, so every store, not just C3D.
-          ...validateSentenceLength(html, 'uk-UA', 'HTML (base)'),
-          // §7 must not collapse into one catch-all category — runs on the master only, since
-          // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
-          ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
-          // Should never fire: restoreMissingVideos ran in produce. That is the point — this is
-          // the assertion that the deterministic layer worked, not the mechanism that makes it.
-          ...validateVideoCoverage(html, videoEmbeds, 'HTML (base)'),
-          // Placement by code rather than by the model. Warning tier: the artifact is correct,
-          // but the editor should know the anchor was chosen mechanically.
-          ...restoredVideos.map(e => ({
-            severity: 'warning' as const,
-            rule: 'video-embed-restored',
-            detail:
-              `The model omitted the source video embed (${e.src}); it was re-inserted `
-              + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
-            context: 'HTML (base)',
-          })),
-          ...(groundingDisabled ? [{
-            severity: 'warning' as const,
-            rule: 'specs-grounding-disabled',
-            // The cause is named, not guessed. The old wording asserted the script explanation
-            // even when the call had thrown, which made the one observable signal actively
-            // misleading — and three different causes produce this same state.
-            detail:
-              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
-              + 'source specifications. Cause: '
-              + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
-              + '.',
-            context: 'HTML (base)',
-          }] : []),
-        ],
-        withFeedback: appendRepairFeedback,
-        // Block-scoped rung. Runs BEFORE any full regeneration and is the only instrument a
-        // warning can reach — see resolveLadder. Wired here rather than after the gate so a
-        // translation inherits already-repaired prose from the master.
-        // Block-scoped repair slices and patches HTML. On the Doc path the HTML is a RENDERED
-        // artifact, so patching it would desync it from the Doc that produced it and the next
-        // regeneration would silently discard the fix. Full-regen repair (withFeedback) still
-        // applies there — it reuses basePayload.systemBlocks by reference, so the retry is still
-        // told to emit JSON.
-        repairBlocks: useDocPipeline ? undefined : this.blockRepairer('uk-UA', 'HTML (base)', input),
-        onAttempt: (n, c) =>
-          this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
-      });
+      const htmlAResult = useDocPipeline
+        ? await this.runDocGate({
+            label: 'HTML (base)', contextLabel: 'HTML (base)', docTaskLabel: 'Doc (base)',
+            maxRepairs: masterRepairBudget, basePayload: basePayloadA, useThinking,
+            locale: 'uk-UA', localeIso: 'uk-UA', input, groundingSpecs, allowedSpecParams,
+            groundingDisabled, grounding, videoEmbeds, imgManifest,
+            onAttempt: (n, c) =>
+              this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+          })
+        : await runRepairGate<string>({
+            label: 'HTML (base)',
+            maxRepairs: masterRepairBudget,
+            basePayload: basePayloadA,
+            produce: produceHtmlA,
+            validate: html => [
+              ...validateGeneratedHtml(html, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest }),
+              // Trusted exactly when the model was given this same text (see masterInput.specs). If
+              // grounding fell back to the English sheet, a label mismatch says nothing about the row
+              // and must not cost a regeneration.
+              ...validateSpecsGrounding(html, groundingSpecs, 'HTML (base)', allowedSpecParams,
+                { labelAnchorTrusted: !!groundingSpecs }),
+              ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
+              // Image text may not carry a figure the source never stated — the prompt-side rule
+              // (NUMERIC_SOURCE_FIDELITY_RULES) reduces the rate; this is the deterministic gate.
+              ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (base)'),
+              // Style B second-person scope — warning tier while the block-slicing heuristic is
+              // measured on real generations; inert for every store except Center 3D Print.
+              ...validateSecondPersonScope(html, 'uk-UA', input.website.name),
+              // Style B section headings must be functional, not bare nominal topics. Warning tier
+              // while the verb heuristic is measured; inert for every store except Center 3D Print.
+              ...validateHeadingStyle(html, 'uk-UA', input.website.name, input.name),
+              // Per-locale sentence ceiling — language-level, so every store, not just C3D.
+              ...validateSentenceLength(html, 'uk-UA', 'HTML (base)'),
+              // §7 must not collapse into one catch-all category — runs on the master only, since
+              // Task C's countSpecCategories + validateStructuralParity carry the shape onward.
+              ...validateSpecCategoryShape(html, 'HTML (base)', { templateId: input.templateId, locale: 'uk-UA' }),
+              // Should never fire: restoreMissingVideos ran in produce. That is the point — this is
+              // the assertion that the deterministic layer worked, not the mechanism that makes it.
+              ...validateVideoCoverage(html, videoEmbeds, 'HTML (base)'),
+              // Placement by code rather than by the model. Warning tier: the artifact is correct,
+              // but the editor should know the anchor was chosen mechanically.
+              ...restoredVideos.map(e => ({
+                severity: 'warning' as const,
+                rule: 'video-embed-restored',
+                detail:
+                  `The model omitted the source video embed (${e.src}); it was re-inserted `
+                  + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+                context: 'HTML (base)',
+              })),
+              ...(groundingDisabled ? [{
+                severity: 'warning' as const,
+                rule: 'specs-grounding-disabled',
+                // The cause is named, not guessed. The old wording asserted the script explanation
+                // even when the call had thrown, which made the one observable signal actively
+                // misleading — and three different causes produce this same state.
+                detail:
+                  'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
+                  + 'source specifications. Cause: '
+                  + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
+                  + '.',
+                context: 'HTML (base)',
+              }] : []),
+            ],
+            withFeedback: appendRepairFeedback,
+            // Block-scoped rung. Runs BEFORE any full regeneration and is the only instrument a
+            // warning can reach — see resolveLadder. Wired here rather than after the gate so a
+            // translation inherits already-repaired prose from the master. Unconditional here — this
+            // branch only ever runs when useDocPipeline is false.
+            repairBlocks: this.blockRepairer('uk-UA', 'HTML (base)', input),
+            onAttempt: (n, c) =>
+              this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+          });
       // Outcome is recorded BEFORE the guard below, so a generation that never validated is
       // counted rather than lost with the exception. Fire-and-forget — telemetry must not be able
       // to fail a generation that otherwise succeeded.
@@ -824,79 +958,77 @@ export class ContentOrchestratorService {
       const basePayloadA = useDocPipelineUa
         ? buildPromptADoc(uaInput, UA_BASE_LANGUAGE)
         : buildPromptA(uaInput, UA_BASE_LANGUAGE);
-      // See the sibling comment in generate().
+      // See the sibling comment in generate() — plain-HTML path only.
       let restoredVideos: SourceVideoEmbed[] = [];
-      // See the sibling comment in generate().
-      let docIssues: ValidationIssue[] = [];
-      // See the sibling comment in generate().
-      let isFirstHtmlUaAttempt = true;
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
-        const isInitialAttempt = isFirstHtmlUaAttempt;
-        isFirstHtmlUaAttempt = false;
         const result = await this.produceTaskAArtifact({
-          payload, useThinking, useDocPipeline: useDocPipelineUa, isInitialAttempt, input, videoEmbeds,
-          contextLabel: 'HTML (uk-UA)', docTaskLabel: 'Doc (uk-UA)',
+          payload, useThinking, input, videoEmbeds, contextLabel: 'HTML (uk-UA)',
         });
-        docIssues = result.docIssues;
         restoredVideos = result.restoredVideos;
         return result.html;
       };
-      const htmlUaResult = await runRepairGate<string>({
-        label: 'HTML (uk-UA)',
-        maxRepairs: repairBudget,
-        basePayload: basePayloadA,
-        produce: produceHtmlUa,
-        validate: html => [
-          // First, so a rejected Doc reads as the cause rather than as the empty-output symptom
-          // every other rule would report against ''. See the sibling comment in generate().
-          ...docIssues,
-          ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
-          // Same reasoning as the sibling call in generate().
-          ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams,
-            { labelAnchorTrusted: !!groundingSpecs }),
-          ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
-          // Image-text numeric gate — see the identical hook in generate() for rationale.
-          ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),
-          // Style B second-person scope — see the identical hook in generate() for rationale.
-          ...validateSecondPersonScope(html, UA_ISO, input.website.name),
-          // Style B heading check — see the identical hook in generate() for rationale.
-          ...validateHeadingStyle(html, UA_ISO, input.website.name, input.name),
-          ...validateSentenceLength(html, UA_ISO, 'HTML (uk-UA)'),
-          // §7 category-collapse guard — see the identical hook in generate() for rationale.
-          ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
-          // Video coverage + automatic-placement notice — see the identical hook in generate().
-          ...validateVideoCoverage(html, videoEmbeds, 'HTML (uk-UA)'),
-          ...restoredVideos.map(e => ({
-            severity: 'warning' as const,
-            rule: 'video-embed-restored',
-            detail:
-              `The model omitted the source video embed (${e.src}); it was re-inserted `
-              + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
-            context: 'HTML (uk-UA)',
-          })),
-          ...(groundingDisabled ? [{
-            severity: 'warning' as const,
-            rule: 'specs-grounding-disabled',
-            // The cause is named, not guessed. The old wording asserted the script explanation
-            // even when the call had thrown, which made the one observable signal actively
-            // misleading — and three different causes produce this same state.
-            detail:
-              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
-              + 'source specifications. Cause: '
-              + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
-              + '.',
-            context: 'HTML (uk-UA)',
-          }] : []),
-        ],
-        withFeedback: appendRepairFeedback,
-        // Same rung as generate()'s master gate — this standalone path runs the same validators,
-        // so leaving it out would make sentence-too-long repairable in one entry point and merely
-        // reported in the other. Block-scoped repair patches rendered HTML in place, which would
-        // desync it from the Doc that produced it — see the identical guard in generate().
-        repairBlocks: useDocPipelineUa ? undefined : this.blockRepairer(UA_ISO, 'HTML (uk-UA)', input),
-        onAttempt: (n, c) =>
-          this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
-      });
+      const htmlUaResult = useDocPipelineUa
+        ? await this.runDocGate({
+            label: 'HTML (uk-UA)', contextLabel: 'HTML (uk-UA)', docTaskLabel: 'Doc (uk-UA)',
+            maxRepairs: repairBudget, basePayload: basePayloadA, useThinking,
+            locale: UA_ISO, localeIso: UA_ISO, input, groundingSpecs, allowedSpecParams,
+            groundingDisabled, grounding, videoEmbeds, imgManifest,
+            onAttempt: (n, c) =>
+              this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+          })
+        : await runRepairGate<string>({
+            label: 'HTML (uk-UA)',
+            maxRepairs: repairBudget,
+            basePayload: basePayloadA,
+            produce: produceHtmlUa,
+            validate: html => [
+              ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
+              // Same reasoning as the sibling call in generate().
+              ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams,
+                { labelAnchorTrusted: !!groundingSpecs }),
+              ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
+              // Image-text numeric gate — see the identical hook in generate() for rationale.
+              ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),
+              // Style B second-person scope — see the identical hook in generate() for rationale.
+              ...validateSecondPersonScope(html, UA_ISO, input.website.name),
+              // Style B heading check — see the identical hook in generate() for rationale.
+              ...validateHeadingStyle(html, UA_ISO, input.website.name, input.name),
+              ...validateSentenceLength(html, UA_ISO, 'HTML (uk-UA)'),
+              // §7 category-collapse guard — see the identical hook in generate() for rationale.
+              ...validateSpecCategoryShape(html, 'HTML (uk-UA)', { templateId: input.templateId, locale: UA_ISO }),
+              // Video coverage + automatic-placement notice — see the identical hook in generate().
+              ...validateVideoCoverage(html, videoEmbeds, 'HTML (uk-UA)'),
+              ...restoredVideos.map(e => ({
+                severity: 'warning' as const,
+                rule: 'video-embed-restored',
+                detail:
+                  `The model omitted the source video embed (${e.src}); it was re-inserted `
+                  + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+                context: 'HTML (uk-UA)',
+              })),
+              ...(groundingDisabled ? [{
+                severity: 'warning' as const,
+                rule: 'specs-grounding-disabled',
+                // The cause is named, not guessed. The old wording asserted the script explanation
+                // even when the call had thrown, which made the one observable signal actively
+                // misleading — and three different causes produce this same state.
+                detail:
+                  'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
+                  + 'source specifications. Cause: '
+                  + (grounding.failure ? describeGroundingFailure(grounding.failure) : 'unknown')
+                  + '.',
+                context: 'HTML (uk-UA)',
+              }] : []),
+            ],
+            withFeedback: appendRepairFeedback,
+            // Same rung as generate()'s master gate — this standalone path runs the same validators,
+            // so leaving it out would make sentence-too-long repairable in one entry point and merely
+            // reported in the other. Unconditional here — this branch only ever runs when
+            // useDocPipelineUa is false.
+            repairBlocks: this.blockRepairer(UA_ISO, 'HTML (uk-UA)', input),
+            onAttempt: (n, c) =>
+              this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+          });
       // Outcome is recorded BEFORE the guard below, so a generation that never validated is
       // counted rather than lost with the exception. Fire-and-forget, same as generate() —
       // telemetry must not be able to fail a generation that otherwise succeeded. UA Description

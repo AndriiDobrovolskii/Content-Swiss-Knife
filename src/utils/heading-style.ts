@@ -18,6 +18,7 @@
  */
 
 import type { ValidationIssue } from './output-validator';
+import type { ProductDescriptionDoc, Subsection } from '../domain/description-doc';
 import {
   FUNCTIONAL_H2_OPENERS,
   MANDATED_NOMINAL_H2,
@@ -229,6 +230,192 @@ export function validateHeadingStyle(
       context: `${locale} — Center 3D Print ToV`,
     });
   }
+
+  return issues;
+}
+
+/** A single heading collected off the Doc, in document order, addressed by JSON path. `level`
+ *  mirrors the HTML renderer's own choice — top-level Subsections render <h2>, one nesting level
+ *  deep renders <h3> (see description-doc.ts's Subsection.heading doc-comment). */
+interface DocHeading {
+  text: string;
+  level: 'h2' | 'h3';
+  path: string;
+}
+
+function subsectionHeadings(sub: Subsection, path: string, level: 'h2' | 'h3'): DocHeading[] {
+  const out: DocHeading[] = [{ text: sub.heading, level, path: `${path}.heading` }];
+  sub.subsections?.forEach((s, i) => out.push(...subsectionHeadings(s, `${path}.subsections[${i}]`, 'h3')));
+  return out;
+}
+
+/**
+ * Every heading in the document, in document order, tagged h2/h3 by nesting depth.
+ *
+ * Unlike the HTML sibling's `doc.querySelectorAll('h2, h3')`, this does not need a
+ * section.specs-wrapper check or a MANDATED_NOMINAL_H2/OPERATING_TIPS_H2_MARKERS skip-list to
+ * find its way to "which headings are §3" — the Doc's structure already says so directly:
+ * functionality[] IS §3, specs.heading IS §7, and so on. See validateHeadingStyleDoc below.
+ */
+function collectHeadings(doc: ProductDescriptionDoc): DocHeading[] {
+  const out: DocHeading[] = [];
+  doc.functionality.forEach((s, i) => out.push(...subsectionHeadings(s, `functionality[${i}]`, 'h2')));
+  out.push({ text: doc.applications.heading, level: 'h2', path: 'applications.heading' });
+  if (doc.compatibility) out.push(...subsectionHeadings(doc.compatibility, 'compatibility', 'h2'));
+  if (doc.operatingTips) out.push(...subsectionHeadings(doc.operatingTips, 'operatingTips', 'h2'));
+  if (doc.packageContents) out.push({ text: doc.packageContents.heading, level: 'h2', path: 'packageContents.heading' });
+  out.push({ text: doc.specs.heading, level: 'h2', path: 'specs.heading' });
+  out.push({ text: doc.cta.heading, level: 'h2', path: 'cta.heading' });
+  return out;
+}
+
+/** Doc-reading sibling of checkProductNameStuffing — same three rules (full-name-in-any-heading,
+ *  short-name-in-h3, budget-of-two short-name-in-h2), reading collectHeadings() instead of
+ *  doc.querySelectorAll('h2, h3'). */
+function checkProductNameStuffingDoc(
+  doc: ProductDescriptionDoc,
+  productName: string,
+  locale: string,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const full = productName.trim();
+  if (!full) return issues;
+
+  const short = productShort(full);
+  const fullPattern = productNamePattern(full);
+  const shortPattern = short && short !== full ? productNamePattern(short) : null;
+
+  const headings = collectHeadings(doc);
+  const named: DocHeading[] = [];
+
+  for (const heading of headings) {
+    const text = (heading.text ?? '').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+
+    if (fullPattern.test(text)) {
+      issues.push({
+        severity: 'warning',
+        rule: 'heading-product-name-stuffing',
+        detail:
+          `The heading at ${heading.path} ("${text}") contains the FULL product name. Per ` +
+          `[HEADING FORM] no heading may carry the configuration code or the package/kit suffix ` +
+          `— use the short form "${short}" in the first §3 heading and the §9 closing, and a ` +
+          `generic category noun everywhere else.`,
+        context: `${locale} — heading form`,
+        path: heading.path,
+      });
+      continue;
+    }
+
+    if (heading.level === 'h3' && shortPattern?.test(text)) {
+      issues.push({
+        severity: 'warning',
+        rule: 'heading-product-name-stuffing',
+        detail:
+          `The sub-heading at ${heading.path} ("${text}") names the product. Sub-headings are ` +
+          `short nominal labels («Лазерний модуль», «Безпека») and never carry the product name ` +
+          `at all.`,
+        context: `${locale} — heading form`,
+        path: heading.path,
+      });
+      continue;
+    }
+
+    if (heading.level === 'h2' && shortPattern?.test(text)) named.push(heading);
+  }
+
+  // Budget of two: the first §3 heading and the §9 commercial closing.
+  for (const heading of named.slice(2)) {
+    const text = (heading.text ?? '').replace(/\s+/g, ' ').trim();
+    issues.push({
+      severity: 'warning',
+      rule: 'heading-product-name-stuffing',
+      detail:
+        `The heading at ${heading.path} ("${text}") is the ${named.indexOf(heading) + 1}th ` +
+        `heading naming the product; at most TWO may — the first §3 heading and the §9 closing. ` +
+        `Replace this one's product name with a generic category noun ("пристрій", "лідар-сканер") ` +
+        `or drop it entirely.`,
+      context: `${locale} — heading form`,
+      path: heading.path,
+    });
+  }
+
+  return issues;
+}
+
+/**
+ * Doc-reading sibling of validateHeadingStyle — reads Doc fields directly instead of parsing
+ * rendered HTML with DOMParser.
+ *
+ * The Style B nominal-heading check (`h2-nominal-heading`) is scoped to `functionality[].heading`
+ * ONLY — the Doc-model equivalent of "§3 <h2> ONLY" from the HTML sibling's own detail message.
+ * The HTML version needed a §7-wrapper check plus MANDATED_NOMINAL_H2/OPERATING_TIPS_H2_MARKERS/
+ * "?"-suffix skip conditions to reconstruct which headings belong to §3; the Doc model already
+ * segregates §3 into its own `functionality[]` field, so none of that reconstruction is needed —
+ * every OTHER section's heading (§4–§7, tips, §9) is structurally never a `functionality[]`
+ * heading and is therefore never a h2-nominal-heading candidate in the first place. The skip
+ * conditions are kept anyway as a defensive no-op (a §3 heading that happens to start with a
+ * mandated-nominal phrase is vanishingly unlikely, but free to guard against).
+ *
+ * `heading-product-name-stuffing` stays global — every store, every locale, h2 AND h3 — exactly
+ * like the HTML sibling.
+ *
+ * @param doc         the ProductDescriptionDoc under validation
+ * @param locale      BCP47; the Style B nominal check analyzes only uk-UA / ru-UA
+ * @param storeName   gate — Style B is Center 3D Print's voice, not a global rule
+ * @param productName raw input name; enables the global heading-product-name-stuffing check
+ * @returns 'h2-nominal-heading' and 'heading-product-name-stuffing' warnings, each addressed by
+ *          JSON path
+ */
+export function validateHeadingStyleDoc(
+  doc: ProductDescriptionDoc,
+  locale: string,
+  storeName: string,
+  productName: string,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  // Runs for every store and locale — see checkProductNameStuffingDoc's doc-comment.
+  issues.push(...checkProductNameStuffingDoc(doc, productName, locale));
+
+  if (!isCenter3dPrintStore(storeName)) return issues;
+
+  const localeKey = locale.toLowerCase();
+  if (!CYRILLIC_LOCALES.includes(localeKey)) return issues;
+
+  const mandatedNominal = MANDATED_NOMINAL_H2[localeKey] ?? [];
+
+  doc.functionality.forEach((section, i) => {
+    const text = (section.heading ?? '').replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    const lower = text.toLowerCase();
+    const path = `functionality[${i}].heading`;
+
+    if (text.includes('?')) return;                                                    // §9-shaped, defensive
+    if (OPERATING_TIPS_H2_MARKERS.some(m => lower.startsWith(m.toLowerCase()))) return; // tips-shaped, defensive
+    if (mandatedNominal.some(m => lower.startsWith(m.toLowerCase()))) return;           // §5/§6/§7-shaped, defensive
+    if (startsWithFunctionalOpener(text, localeKey)) return;
+    if (looksVerbal(text)) return;
+
+    issues.push({
+      severity: 'warning',
+      rule: 'h2-nominal-heading',
+      // The nested-subsection carve-out is restated here because appendRepairFeedback echoes
+      // `detail` back to the model on any error-severity repair in the same artifact — an
+      // unscoped heading ban in that feedback is how the §7 category collapse propagated once
+      // already (see heading-style.ts's HTML sibling).
+      detail:
+        `The section heading at ${path} ("${text}") is a bare nominal topic. Style B requires §3 ` +
+        `headings to state a function or answer a query — «Як працює [Product-short]», «Яке ` +
+        `програмне забезпечення підтримує пристрій», «Яким стандартам відповідає пристрій». ` +
+        `SCOPE: functionality[].heading (§3) ONLY. §4–§7 and the operating-tips block are ` +
+        `nominal BY DESIGN, and nested sub-headings in §3 and §7 stay concise nominal labels that ` +
+        `must never be dropped or merged. Do not add a product name to fix this — see [HEADING ` +
+        `FORM].`,
+      context: `${locale} — Center 3D Print ToV`,
+      path,
+    });
+  });
 
   return issues;
 }

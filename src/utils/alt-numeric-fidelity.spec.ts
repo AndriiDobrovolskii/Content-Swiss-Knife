@@ -8,7 +8,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateAltNumericFidelity, sourceNumbers } from './alt-numeric-fidelity';
+import { validateAltNumericFidelity, validateAltNumericFidelityDoc, sourceNumbers } from './alt-numeric-fidelity';
+import type { Figure, ProductDescriptionDoc } from '../domain/description-doc';
 
 const SPECS = [
   'Потужність лазера | 20 Вт',
@@ -180,5 +181,94 @@ describe('alt numbers: the product name is not a claim', () => {
   it('reads a range as two figures, both of which must be grounded', () => {
     const src = 'Робоча температура | 20-25 °C';
     expect(validateAltNumericFidelity(figure('Робоча температура 20-25 °C'), src, 'HTML (base)')).toEqual([]);
+  });
+});
+
+describe('validateAltNumericFidelityDoc — Doc-reading sibling', () => {
+  const fig = (alt: string, caption = 'Підпис без чисел.', file = 'head.jpg'): Figure =>
+    ({ file, alt, caption });
+
+  // validateAltNumericFidelityDoc takes the whole ProductDescriptionDoc (unlike
+  // validateVideoCoverageDoc, which the plan calls out to take doc.videos directly) — this wraps
+  // a figures[] array into a minimal doc so each test only has to state what varies.
+  function docWithFigures(figures: Figure[]): ProductDescriptionDoc {
+    return {
+      schemaVersion: '3.0',
+      locale: 'uk-UA',
+      localizedName: 'Ortur H20 20 W',
+      hook: 'Hook.',
+      killerSpecs: [
+        { label: 'A', value: '1', why: 'why a' },
+        { label: 'B', value: '2', why: 'why b' },
+        { label: 'C', value: '3', why: 'why c' },
+      ],
+      keyBenefits: [],
+      functionality: [],
+      applications: { heading: 'Застосування', items: [] },
+      specs: { heading: 'Специфікації', categories: [] },
+      cta: { heading: 'CTA', text: 'Купуйте.' },
+      figures,
+      videos: [],
+    };
+  }
+
+  it('fails an alt claiming a wattage the specs do not state, addressed by figures[N].alt', () => {
+    const issues = validateAltNumericFidelityDoc(
+      docWithFigures([fig('лазерна головка 40 Вт')]), SPECS, 'Doc (base)',
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0].rule).toBe('alt-numeric-not-grounded');
+    expect(issues[0].severity).toBe('error');
+    expect(issues[0].detail).toContain('40 Вт');
+    expect(issues[0].detail).toContain('figures[0]');
+    expect(issues[0].path).toBe('figures[0].alt');
+    expect(issues[0].context).toBe('Doc (base)');
+  });
+
+  it('passes a figure whose figure IS in the specs', () => {
+    expect(validateAltNumericFidelityDoc(docWithFigures([fig('лазерна головка 20 Вт')]), SPECS, 'x')).toEqual([]);
+  });
+
+  it('flags the same defect inside a caption, addressed by figures[N].caption', () => {
+    const issues = validateAltNumericFidelityDoc(
+      docWithFigures([fig('чиста головка', 'Гравіює на 60000 мм/хв.')]), SPECS, 'x',
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0].detail).toContain('60000');
+    expect(issues[0].path).toBe('figures[0].caption');
+  });
+
+  it('addresses a second figure with its own index', () => {
+    const issues = validateAltNumericFidelityDoc(
+      docWithFigures([
+        fig('лазерна головка 20 Вт', undefined, 'a.jpg'),
+        fig('лазерна головка 40 Вт', undefined, 'b.jpg'),
+      ]),
+      SPECS, 'x',
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0].path).toBe('figures[1].alt');
+  });
+
+  it('an empty figures array is valid — no-op, does not throw', () => {
+    expect(() => validateAltNumericFidelityDoc(docWithFigures([]), SPECS, 'x')).not.toThrow();
+    expect(validateAltNumericFidelityDoc(docWithFigures([]), SPECS, 'x')).toEqual([]);
+  });
+
+  it('never inspects anything outside figures[].alt / figures[].caption', () => {
+    // Nothing else on the doc (hook, specs, etc.) is consulted — this just documents the scope by
+    // construction: a figure whose numbers ARE grounded is silent regardless of other fields.
+    expect(validateAltNumericFidelityDoc(docWithFigures([fig('20 Вт')]), SPECS, 'x')).toEqual([]);
+  });
+
+  describe('no-op guards', () => {
+    it('returns nothing when sources are empty', () => {
+      expect(validateAltNumericFidelityDoc(docWithFigures([fig('головка 40 Вт')]), '', 'x')).toEqual([]);
+      expect(validateAltNumericFidelityDoc(docWithFigures([fig('головка 40 Вт')]), '   ', 'x')).toEqual([]);
+    });
+
+    it('does not crash on an empty alt or caption', () => {
+      expect(validateAltNumericFidelityDoc(docWithFigures([fig('', '')]), SPECS, 'x')).toEqual([]);
+    });
   });
 });

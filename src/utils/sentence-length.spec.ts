@@ -5,8 +5,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateSentenceLength, countWords } from './sentence-length';
+import { validateSentenceLength, validateSentenceLengthDoc, countWords } from './sentence-length';
 import { extractBlocks, getBlock } from './block-repair';
+import type { ProductDescriptionDoc } from '../domain/description-doc';
 
 const p = (t: string) => `<p>${t}</p>`;
 const run = (html: string, locale = 'uk-UA') => validateSentenceLength(html, locale, 'HTML (base)');
@@ -251,5 +252,218 @@ describe('validateSentenceLength — sentence boundaries', () => {
     const glued = 'Товщина матеріалу становить 5 мм. і залежить від обраного режиму роботи верстата '
       + 'та від того, скільки проходів оператор задає для конкретної заготовки.';
     expect(run(p(glued)).length).toBe(1);
+  });
+});
+
+describe('validateSentenceLengthDoc — Doc-reading sibling', () => {
+  function baseDoc(overrides: Partial<ProductDescriptionDoc> = {}): ProductDescriptionDoc {
+    return {
+      schemaVersion: '3.0',
+      locale: 'uk-UA',
+      localizedName: 'Ortur H20',
+      hook: 'Коротке речення.',
+      killerSpecs: [
+        { label: 'A', value: '1', why: 'Коротке why a.' },
+        { label: 'B', value: '2', why: 'Коротке why b.' },
+        { label: 'C', value: '3', why: 'Коротке why c.' },
+      ],
+      keyBenefits: [],
+      functionality: [],
+      applications: { heading: 'Застосування', items: [] },
+      specs: { heading: 'Технічні характеристики', categories: [] },
+      cta: { heading: 'CTA', text: 'Коротке cta речення.' },
+      figures: [],
+      videos: [],
+      ...overrides,
+    };
+  }
+
+  const runDoc = (doc: ProductDescriptionDoc, locale = 'uk-UA') => validateSentenceLengthDoc(doc, locale, 'Doc (base)');
+
+  it('flags the reported 27-word sentence in doc.hook, addressed by path "hook"', () => {
+    const issues = runDoc(baseDoc({ hook: TOO_LONG }));
+    expect(issues).toHaveLength(1);
+    expect(issues[0].rule).toBe('sentence-too-long');
+    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].detail).toMatch(/exceeds the uk-UA hard ceiling of 20/);
+    expect(issues[0].detail).toContain('380 відтінків кольору');
+    expect(issues[0].detail).toContain('hook');
+    expect(issues[0].path).toBe('hook');
+  });
+
+  it('accepts the two-sentence rewrite of it', () => {
+    const fixed =
+      'Лазерний модуль потужністю 20 Вт підходить як для гравіювання, так і для різання дерева, ' +
+      'акрилу та подібних матеріалів. На нержавіючій сталі він відтворює понад 380 відтінків кольору.';
+    expect(runDoc(baseDoc({ hook: fixed }))).toEqual([]);
+  });
+
+  it('is a strict >, so a sentence exactly at the ceiling passes', () => {
+    const exactly20 = Array.from({ length: 20 }, (_, i) => `слово${i}`).join(' ') + '.';
+    expect(runDoc(baseDoc({ hook: exactly20 }))).toEqual([]);
+    expect(runDoc(baseDoc({ hook: `${exactly20.slice(0, -1)} іще.` }))).toHaveLength(1);
+  });
+
+  it('measures killerSpecs[].why independently, addressed by its own path', () => {
+    const doc = baseDoc({
+      killerSpecs: [
+        { label: 'A', value: '1', why: TOO_LONG },
+        { label: 'B', value: '2', why: 'Коротко.' },
+        { label: 'C', value: '3', why: 'Коротко.' },
+      ],
+    });
+    const issues = runDoc(doc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].path).toBe('killerSpecs[0].why');
+  });
+
+  describe('bullets — lead and text are already separate fields, no heuristic needed', () => {
+    it('measures a bullet lead-in and its text as two independent segments, each addressed by its own path', () => {
+      const longLead = Array.from({ length: 25 }, (_, i) => `слово${i}`).join(' ');
+      const doc = baseDoc({
+        keyBenefits: [{ kind: 'bullets', items: [{ lead: `${longLead}:`, text: 'Коротке речення.' }] }],
+      });
+      const issues = runDoc(doc);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].path).toBe('keyBenefits[0].items[0].lead');
+      expect(issues[0].detail).toContain('слово24');
+      expect(issues[0].detail).not.toContain('Коротке речення');
+    });
+
+    it('accepts the three real bullets from the QA run, lead + text both under ceiling', () => {
+      const doc = baseDoc({
+        keyBenefits: [{
+          kind: 'bullets',
+          items: [
+            {
+              lead: 'Миттєва кольорова хмара точок:',
+              text: 'алгоритм LixelUpSample™ обробляє дані на льоту, тому оператор отримує готовий результат одразу в полі, без окремого етапу камеральної обробки.',
+            },
+          ],
+        }],
+      });
+      expect(runDoc(doc)).toEqual([]);
+    });
+  });
+
+  it('strips inline <b>/<strong> tags (the only markup Prose may carry) before counting words', () => {
+    const withBold = TOO_LONG.replace('гравіювання', '<b>гравіювання</b>');
+    expect(runDoc(baseDoc({ hook: withBold }))).toHaveLength(1);
+    // The tags themselves must not be counted as extra tokens or leak into the quoted sentence.
+    expect(runDoc(baseDoc({ hook: withBold }))[0].detail).not.toContain('<b>');
+  });
+
+  it('walks functionality (incl. nested subsections), applications.blocks, compatibility and operatingTips — matching forEachBlockInOrder\'s field coverage', () => {
+    const doc = baseDoc({
+      functionality: [{
+        heading: 'H',
+        blocks: [{ kind: 'paragraph', text: 'Коротко.' }],
+        subsections: [{ heading: 'Sub', blocks: [{ kind: 'paragraph', text: TOO_LONG }] }],
+      }],
+      applications: { heading: 'A', blocks: [{ kind: 'paragraph', text: TOO_LONG.replace('20 Вт', '21 Вт') }], items: [] },
+      compatibility: { heading: 'C', blocks: [{ kind: 'paragraph', text: TOO_LONG.replace('20 Вт', '22 Вт') }] },
+      operatingTips: { heading: 'T', blocks: [{ kind: 'paragraph', text: TOO_LONG.replace('20 Вт', '23 Вт') }] },
+    });
+    const issues = runDoc(doc);
+    expect(issues.map(i => i.path).sort()).toEqual([
+      'applications.blocks[0]',
+      'compatibility.blocks[0]',
+      'functionality[0].subsections[0].blocks[0]',
+      'operatingTips.blocks[0]',
+    ]);
+  });
+
+  it('figure/video blocks carry no text and are silently skipped', () => {
+    const doc = baseDoc({
+      keyBenefits: [{ kind: 'figure', ref: 0 }],
+      functionality: [{ heading: 'H', blocks: [{ kind: 'video', ref: 0 }] }],
+    });
+    expect(() => runDoc(doc)).not.toThrow();
+    expect(runDoc(doc)).toEqual([]);
+  });
+
+  it('measures applications.items[].text, addressed by its own path', () => {
+    const doc = baseDoc({ applications: { heading: 'A', items: [{ scenario: 'S.', text: TOO_LONG }] } });
+    const issues = runDoc(doc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].path).toBe('applications.items[0].text');
+  });
+
+  it('measures packageContents.items, matching the HTML sibling scoring <li> as well as <p>', () => {
+    const doc = baseDoc({ packageContents: { heading: 'P', items: [TOO_LONG] } });
+    const issues = runDoc(doc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].path).toBe('packageContents.items[0]');
+  });
+
+  // Deliberately EXCLUDED, matching the HTML sibling's isExcludedScope('section.specs') — see
+  // this file's own SCOPE comment on validateSentenceLength ("Spec-table cells are not sentences
+  // ... no rule asks to shorten them"). validateSentenceLengthDoc must not invent a stricter rule
+  // for the Doc pipeline than the HTML pipeline has ever enforced.
+  it('does NOT score specs.categories[].rows[].value, even when it is over the ceiling', () => {
+    const doc = baseDoc({
+      specs: { heading: 'S', categories: [{ title: 'Cat', rows: [{ label: 'L', value: TOO_LONG }] }] },
+    });
+    expect(runDoc(doc)).toEqual([]);
+  });
+
+  it('does NOT score a multi-valued spec row either — the false-positive shape a joined, unpunctuated list would create', () => {
+    // A real multi-valued SpecRow.value (e.g. a supported-format list) space-joins into one long
+    // unpunctuated blob under the array-join treatment other validators in this codebase apply to
+    // SpecRow.value — splitSentences finds no terminator in it, so if this were scored it would
+    // read as a single very-long "sentence" and false-positive on a ceiling meant for prose.
+    const manyFormats = ['STL', 'OBJ', 'PLY', 'IGES', 'SolidWorks', 'X_T', 'STEP', 'Parasolid', 'CATIA', 'Inventor', 'Rhino', 'Творчий формат довгий'];
+    const doc = baseDoc({
+      specs: { heading: 'S', categories: [{ title: 'Cat', rows: [{ label: 'Formats', value: manyFormats }] }] },
+    });
+    expect(runDoc(doc)).toEqual([]);
+  });
+
+  it('measures cta.text, addressed by path "cta.text"', () => {
+    const issues = runDoc(baseDoc({ cta: { heading: 'CTA', text: TOO_LONG } }));
+    expect(issues).toHaveLength(1);
+    expect(issues[0].path).toBe('cta.text');
+  });
+
+  it('reports the measured word count and the ceiling as structured operands', () => {
+    const [issue] = runDoc(baseDoc({ hook: TOO_LONG }));
+    expect(issue.measured).toEqual({ actual: countWords(TOO_LONG), limit: 20, unit: 'words' });
+  });
+
+  describe('locale bands', () => {
+    it('uses the de-DE ceiling of 18', () => {
+      const s = Array.from({ length: 19 }, (_, i) => `Wort${i}`).join(' ') + '.';
+      expect(runDoc(baseDoc({ hook: s }), 'de-DE')).toHaveLength(1);
+      expect(runDoc(baseDoc({ hook: s }), 'es-ES')).toEqual([]); // es-ES ceiling is 27
+    });
+
+    it('returns nothing for an unmapped locale rather than guessing', () => {
+      expect(runDoc(baseDoc({ hook: TOO_LONG }), 'xx-XX')).toEqual([]);
+    });
+  });
+
+  describe('null/undefined safety', () => {
+    it('does not throw on a doc missing compatibility, operatingTips and packageContents', () => {
+      const doc = baseDoc();
+      expect(doc.compatibility).toBeUndefined();
+      expect(doc.operatingTips).toBeUndefined();
+      expect(doc.packageContents).toBeUndefined();
+      expect(() => runDoc(doc)).not.toThrow();
+      expect(runDoc(doc)).toEqual([]);
+    });
+
+    it('does not throw on empty figures/videos/specs.categories arrays', () => {
+      const doc = baseDoc({ figures: [], videos: [] });
+      expect(() => runDoc(doc)).not.toThrow();
+    });
+  });
+
+  it('gives each offending field its own path, never colliding', () => {
+    const doc = baseDoc({
+      hook: TOO_LONG,
+      cta: { heading: 'CTA', text: TOO_LONG.replace('20 Вт', '30 Вт') },
+    });
+    const paths = runDoc(doc).map(i => i.path);
+    expect(new Set(paths).size).toBe(paths.length);
   });
 });

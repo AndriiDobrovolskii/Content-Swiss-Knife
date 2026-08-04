@@ -19,6 +19,7 @@
  */
 
 import type { ValidationIssue } from './output-validator';
+import type { ProductDescriptionDoc } from '../domain/description-doc';
 import { parseSpecCategories, DEFAULT_MIN_ROWS } from './spec-category-merge';
 import { SPEC_TABLE_HEADERS, resolveLocaleValue } from '../prompt-core/constants';
 
@@ -87,6 +88,73 @@ export function validateSpecCategoryShape(
     `</table></div>. Each group needs at least ${DEFAULT_MIN_ROWS} rows. HTML only — never ` +
     `Markdown, and never one merged table. DO NOT change any row label, value, unit, or the ` +
     `total row count: this is a regrouping of existing rows, nothing else.`;
+
+  return [{ severity: 'error', rule: 'spec-category-collapse', detail, context }];
+}
+
+/**
+ * Doc-reading sibling of validateSpecCategoryShape.
+ *
+ * ADDED IN THE FINAL-REVIEW FIX WAVE, NOT PORTED WITH THE OTHER TASK 1 SIBLINGS. The migration plan
+ * originally dropped this guard from the Doc-path gate on the premise that `renderDescription()`
+ * guarantees §7 category shape "by construction." That premise is wrong: the renderer faithfully
+ * renders whatever `SpecCategory[]` shape the model hands it — it does not decide how many
+ * categories exist or how rows are grouped into them. That grouping is a model JUDGMENT CALL, the
+ * same content decision the HTML-reading version guards against, and the module's own docstring
+ * above names the real incident this exists for: Center 3D Print / Ortur H20 (2026-07-26), a store
+ * that is Doc-enrolled today. Dropping the check on the Doc path would silently reopen that exact
+ * failure mode for every enrolled store.
+ *
+ * SURVIVING CATEGORIES, DOC VERSION: same rule as the HTML sibling — only categories with
+ * `>= DEFAULT_MIN_ROWS` rows count, because mergeSmallSpecCategories-equivalent logic downstream
+ * dissolves anything smaller into one catch-all. Here that is simply
+ * `doc.specs.categories.filter(c => c.rows.length >= DEFAULT_MIN_ROWS).length` — no HTML to parse,
+ * the Doc already carries `SpecCategory[]` directly.
+ *
+ * REPAIR FEEDBACK IS JSON-SHAPED, NOT HTML-SHAPED. The HTML sibling's `detail` prescribes literal
+ * `<h3>`/`<table>` markup, because that is what a full HTML regeneration needs to hear. That
+ * markup would be actively wrong feedback for a Doc regeneration — the model would either emit HTML
+ * inside a JSON string field (a schema violation) or ignore the instruction. This version instead
+ * asks for a `specs.categories[]` regrouping in JSON terms.
+ *
+ * @param doc     the ProductDescriptionDoc under validation
+ * @param context reporting label, e.g. "Doc (base)"
+ * @param options.templateId 'consumables-resin' disables the check — same carve-out as the HTML
+ *                            sibling (the Doc pipeline never runs for consumables in the first
+ *                            place — see doc-pipeline-flag.ts — but the parameter is accepted for
+ *                            symmetry with the HTML sibling's call shape).
+ * @param options.locale      drives the example column headers in the repair message; defaults to
+ *                            the uk-UA master's.
+ */
+export function validateSpecCategoryShapeDoc(
+  doc: ProductDescriptionDoc,
+  context: string,
+  options?: { templateId?: string; locale?: string },
+): ValidationIssue[] {
+  if (options?.templateId === 'consumables-resin') return [];
+
+  const categories = doc.specs.categories;
+  const totalRows = categories.reduce((sum, cat) => sum + cat.rows.length, 0);
+  const surviving = categories.filter(cat => cat.rows.length >= DEFAULT_MIN_ROWS).length;
+
+  if (totalRows < MIN_ROWS_TO_REQUIRE_CATEGORIES) return [];
+  if (surviving >= MIN_SPEC_CATEGORIES) return [];
+
+  const [paramHeader, valueHeader] = resolveLocaleValue(
+    SPEC_TABLE_HEADERS, options?.locale ?? 'uk-ua', SPEC_TABLE_HEADERS['uk-ua'],
+  );
+
+  const detail =
+    `specs.categories[] collapsed into ${surviving} ` +
+    `categor${surviving === 1 ? 'y' : 'ies'} of ${DEFAULT_MIN_ROWS}+ rows for ${totalRows} spec ` +
+    `rows (minimum ${MIN_SPEC_CATEGORIES} required). Regroup specs.categories into ` +
+    `${MIN_SPEC_CATEGORIES}-6 logical semantic groups — e.g. optics/laser or print engine, ` +
+    `safety, electronics & connectivity, dimensions & mechanics, software. Each SpecCategory needs ` +
+    `a "title" naming the group IN THE TARGET OUTPUT LANGUAGE (e.g. "${paramHeader}" / ` +
+    `"${valueHeader}" are the column labels a renderer would use for its table, not a category ` +
+    `title) and at least ${DEFAULT_MIN_ROWS} "rows". DO NOT change any row's label, value, or unit, ` +
+    `and do not change the total row count: this is a regrouping of existing rows into different ` +
+    `categories, nothing else.`;
 
   return [{ severity: 'error', rule: 'spec-category-collapse', detail, context }];
 }

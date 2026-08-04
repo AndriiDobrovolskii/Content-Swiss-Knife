@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  validateSpecsGrounding, isAlreadyCyrillic, sanitizeGroundedTranslation,
+  validateSpecsGrounding, validateSpecsGroundingDoc, isAlreadyCyrillic, sanitizeGroundedTranslation,
   inspectGroundedTranslation, describeGroundingFailure,
 } from './specs-grounding';
 import { getBlock, extractBlocks } from './block-repair';
+import type { ProductDescriptionDoc, SpecCategory } from '../domain/description-doc';
 
 const SRC = `Build Volume: 330 × 330 × 565 mm (61.5 L)
 Hopper Capacity: 105 L
@@ -594,5 +595,190 @@ describe('validateSpecsGrounding — how much the label anchor is worth', () => 
     // whole guard down, and this test is about the companion message's SEVERITY, not its trigger.
     const issues = validateSpecsGrounding(boolRow, SRC_UK, 'HTML (uk-UA)', ['Work Area', 'Alarm Method'], { labelAnchorTrusted: false });
     expect(issues.find(i => i.rule === 'spec-rows-allowed-parameters')?.severity).toBe('warning');
+  });
+});
+
+describe('validateSpecsGroundingDoc — Doc-reading sibling', () => {
+  function specCategories(...categories: SpecCategory[]): ProductDescriptionDoc['specs'] {
+    return { heading: 'Специфікації', categories };
+  }
+
+  function baseDoc(specs: ProductDescriptionDoc['specs']): ProductDescriptionDoc {
+    return {
+      schemaVersion: '3.0',
+      locale: 'uk-UA',
+      localizedName: 'Test Product',
+      hook: 'Hook sentence.',
+      killerSpecs: [
+        { label: 'A', value: '1', why: 'why a' },
+        { label: 'B', value: '2', why: 'why b' },
+        { label: 'C', value: '3', why: 'why c' },
+      ],
+      keyBenefits: [],
+      functionality: [],
+      applications: { heading: 'Застосування', items: [] },
+      specs,
+      cta: { heading: 'CTA', text: 'Купуйте.' },
+      figures: [],
+      videos: [],
+    };
+  }
+
+  it('flags a hallucinated row whose label is absent from source ("Throughput")', () => {
+    const doc = baseDoc(specCategories({
+      title: 'Cat', rows: [{ label: 'Throughput', value: '0330 kg/hr' }],
+    }));
+    const issues = validateSpecsGroundingDoc(doc, SRC, 'Doc (base)');
+    const issue = issues.find(i => i.rule === 'spec-row-not-grounded');
+    expect(issue?.severity).toBe('error');
+    expect(issue?.path).toBe('specs.categories[0].rows[0]');
+    // Hard requirement: the path must be readable inside `detail`, not only in the `path` field.
+    expect(issue?.detail).toContain('specs.categories[0].rows[0]');
+    expect(issue?.context).toBe('Doc (base)');
+  });
+
+  it('does NOT flag a grounded row present in source ("Hopper Capacity")', () => {
+    const doc = baseDoc(specCategories({
+      title: 'Cat', rows: [{ label: 'Hopper Capacity', value: '105 L' }],
+    }));
+    expect(validateSpecsGroundingDoc(doc, SRC, 'Doc (base)')).toHaveLength(0);
+  });
+
+  it('addresses rows across multiple categories with the correct category/row indices', () => {
+    const doc = baseDoc(specCategories(
+      { title: 'Cat0', rows: [{ label: 'Hopper Capacity', value: '105 L' }] },
+      { title: 'Cat1', rows: [
+        { label: 'Layer Thickness', value: '110 μm' },
+        { label: 'Throughput', value: '0330 kg/hr' },
+      ] },
+    ));
+    const issues = validateSpecsGroundingDoc(doc, SRC, 'Doc (base)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].path).toBe('specs.categories[1].rows[1]');
+  });
+
+  it('no-ops when source specs are empty', () => {
+    const doc = baseDoc(specCategories({ title: 'Cat', rows: [{ label: 'Throughput', value: '0330' }] }));
+    expect(validateSpecsGroundingDoc(doc, '', 'Doc (base)')).toHaveLength(0);
+  });
+
+  it('does not throw and no-ops when specs.categories is empty', () => {
+    const doc = baseDoc(specCategories());
+    expect(() => validateSpecsGroundingDoc(doc, SRC, 'Doc (base)')).not.toThrow();
+    expect(validateSpecsGroundingDoc(doc, SRC, 'Doc (base)')).toEqual([]);
+  });
+
+  it('skips rows whose label is only generic/stopwords', () => {
+    const doc = baseDoc(specCategories({ title: 'Cat', rows: [{ label: 'Type', value: 'PLA' }] }));
+    expect(validateSpecsGroundingDoc(doc, SRC, 'Doc (base)')).toHaveLength(0);
+  });
+
+  it('grounds a Cyrillic row present in source ("Робоча зона")', () => {
+    const doc = baseDoc(specCategories({ title: 'Cat', rows: [{ label: 'Робоча зона', value: '400 × 400 мм' }] }));
+    expect(validateSpecsGroundingDoc(doc, SRC_UK, 'Doc (uk-UA)')).toHaveLength(0);
+  });
+
+  describe('multi-valued SpecRow.value (string[])', () => {
+    // EXPERT3D writes a multi-valued parameter as a nested list — modelled as SpecRow.value: string[].
+    it('grounds via the numeric anchor when at least one array entry matches (values joined for scanning)', () => {
+      const doc = baseDoc(specCategories({
+        title: 'Cat',
+        rows: [{ label: 'Якийсь параметр', value: ['перше значення', '105 L'] }],
+      }));
+      expect(validateSpecsGroundingDoc(doc, SRC, 'Doc (base)')).toHaveLength(0);
+    });
+
+    it('flags an array value whose entries are all absent from source', () => {
+      const doc = baseDoc(specCategories({
+        title: 'Cat',
+        rows: [{ label: 'Пропускна здатність', value: ['0330 kg/hr', 'ще щось вигадане'] }],
+      }));
+      const issues = validateSpecsGroundingDoc(doc, SRC, 'Doc (base)');
+      expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+    });
+  });
+
+  describe('allowedParams / count-parity precondition', () => {
+    const ALLOWED = ['Build Volume', 'Hopper Capacity', 'Layer Thickness', 'Laser'];
+
+    it('emits a spec-rows-allowed-parameters companion issue, addressing specs.categories[].rows[]', () => {
+      const doc = baseDoc(specCategories({
+        title: 'Cat', rows: [{ label: 'Throughput', value: '0330 kg/hr' }],
+      }));
+      const issues = validateSpecsGroundingDoc(doc, SRC, 'Doc (base)', ALLOWED);
+      const companion = issues.find(i => i.rule === 'spec-rows-allowed-parameters');
+      expect(companion?.detail).toContain('ALLOWED PARAMETERS');
+      expect(companion?.detail).toContain('specs.categories[].rows[]');
+    });
+
+    it('stands the guard down under exact count parity (mirrors the HTML sibling)', () => {
+      const doc = baseDoc(specCategories({
+        title: 'Cat',
+        rows: [
+          { label: 'Роздільна здатність', value: '1 × 1 Мп' },
+          { label: 'Затвор', value: 'Глобальний (global shutter)' },
+          { label: 'Кут огляду', value: '190° × 119°' },
+        ],
+      }));
+      const srcDrifted = `Розділення: 1 × 1 МП\nЗатвор: global shutter\nПоле зору: 190° × 119°`;
+      expect(validateSpecsGroundingDoc(doc, srcDrifted, 'Doc (uk-UA)', ['Resolution', 'Shutter', 'FOV']))
+        .toEqual([]);
+    });
+  });
+
+  describe('mass-failure circuit breaker', () => {
+    function numericSource(count: number): string {
+      return Array.from({ length: count }, (_, i) => `Param${i}: ${1000 + i * 7} units`).join('\n');
+    }
+    function groundedRows(count: number) {
+      return Array.from({ length: count }, (_, i) => ({ label: `Param${i}`, value: `${1000 + i * 7}` }));
+    }
+    function ungroundedRows(count: number) {
+      return Array.from({ length: count }, (_, i) => ({ label: `Fabricated${i} Property`, value: `${9000 + i}` }));
+    }
+
+    it('15 graded / 8 ungrounded — trips, collapses to one warning naming every offending path', () => {
+      const source = numericSource(7);
+      const doc = baseDoc(specCategories({
+        title: 'Cat', rows: [...groundedRows(7), ...ungroundedRows(8)],
+      }));
+      const issues = validateSpecsGroundingDoc(doc, source, 'Doc (uk-UA)');
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('warning');
+      expect(issues[0].rule).toBe('spec-row-not-grounded-mass-failure');
+      for (let i = 0; i < 8; i++) {
+        expect(issues[0].detail).toContain(`Fabricated${i} Property`);
+        expect(issues[0].detail).toContain(`specs.categories[0].rows[${7 + i}]`);
+      }
+    });
+
+    it('15 graded / 1 ungrounded — unchanged: one error, breaker does not engage', () => {
+      const source = numericSource(14);
+      const doc = baseDoc(specCategories({
+        title: 'Cat', rows: [...groundedRows(14), ...ungroundedRows(1)],
+      }));
+      const issues = validateSpecsGroundingDoc(doc, source, 'Doc (uk-UA)');
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('error');
+      expect(issues[0].rule).toBe('spec-row-not-grounded');
+    });
+  });
+
+  describe('how much the label anchor is worth (labelAnchorTrusted)', () => {
+    it('defaults to trusting the label anchor (error), matching validateSpecsGrounding', () => {
+      const doc = baseDoc(specCategories({
+        title: 'Cat', rows: [{ label: 'Спосіб сповіщення', value: 'Звуковий сигнал' }],
+      }));
+      expect(validateSpecsGroundingDoc(doc, SRC_UK, 'Doc (uk-UA)')
+        .find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('error');
+    });
+
+    it('downgrades to warning when labelAnchorTrusted: false and the value carries no evidence', () => {
+      const doc = baseDoc(specCategories({
+        title: 'Cat', rows: [{ label: 'Спосіб сповіщення', value: 'Звуковий сигнал' }],
+      }));
+      const issues = validateSpecsGroundingDoc(doc, SRC_UK, 'Doc (uk-UA)', [], { labelAnchorTrusted: false });
+      expect(issues.find(i => i.rule === 'spec-row-not-grounded')?.severity).toBe('warning');
+    });
   });
 });

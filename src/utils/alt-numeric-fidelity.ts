@@ -19,6 +19,7 @@
  */
 
 import type { ValidationIssue } from './output-validator';
+import type { ProductDescriptionDoc } from '../domain/description-doc';
 
 /**
  * Unit tokens that mark a number as a technical CLAIM rather than an ordinal, a model number or a
@@ -204,6 +205,69 @@ export function validateAltNumericFidelity(
           `invent, infer or round a figure. Remove it and describe the subject qualitatively, ` +
           `or replace it with the value the source actually states.`,
         context,
+      });
+    }
+  }
+
+  return issues;
+}
+
+/**
+ * Doc-reading sibling of validateAltNumericFidelity — reads doc.figures[].alt and
+ * doc.figures[].caption directly instead of parsing `img[alt]`/`figcaption` out of rendered HTML.
+ * Same provenance rule (number only, unit ignored), same no-op guards.
+ *
+ * An empty `doc.figures` array is a valid, common state (a product with no images) — it produces
+ * an empty `targets` list below and returns no issues, never throws.
+ *
+ * @param doc      the ProductDescriptionDoc under validation
+ * @param sources  see validateAltNumericFidelity
+ * @param context  reporting label, e.g. "Doc (base)"
+ * @returns one 'alt-numeric-not-grounded' error per unsupported figure, addressed by
+ *          `figures[N].alt` / `figures[N].caption`
+ */
+export function validateAltNumericFidelityDoc(
+  doc: ProductDescriptionDoc,
+  sources: string,
+  context: string,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (!sources?.trim()) return issues;
+
+  const allowed = sourceNumbers(sources);
+  if (allowed.size === 0) return issues;
+
+  const targets: Array<{ where: string; text: string; path: string }> = [];
+  doc.figures.forEach((fig, i) => {
+    targets.push({
+      where: `alt of figures[${i}] (${fig.file})`,
+      text: fig.alt ?? '',
+      path: `figures[${i}].alt`,
+    });
+    targets.push({
+      where: `caption of figures[${i}] (${fig.file})`,
+      text: fig.caption ?? '',
+      path: `figures[${i}].caption`,
+    });
+  });
+
+  for (const { where, text, path } of targets) {
+    if (!text.trim()) continue;
+    const seen = new Set<string>();
+    for (const match of text.matchAll(NUMBER_WITH_UNIT)) {
+      const canonical = canonicalNumber(match[1]);
+      if (!canonical || allowed.has(canonical) || seen.has(canonical)) continue;
+      seen.add(canonical);
+      issues.push({
+        severity: 'error',
+        rule: 'alt-numeric-not-grounded',
+        detail:
+          `The ${where} states "${match[0].trim()}", but ${canonical} appears nowhere in the ` +
+          `source specs, description, product name or image captions for this product. Do not ` +
+          `invent, infer or round a figure. Remove it and describe the subject qualitatively, ` +
+          `or replace it with the value the source actually states.`,
+        context,
+        path,
       });
     }
   }
