@@ -230,6 +230,114 @@ export class ContentOrchestratorService {
     ].filter(Boolean).join('\n');
   }
 
+  /**
+   * Produces the uk-UA master Task A artifact — either via the Doc pipeline (model emits a
+   * ProductDescriptionDoc, rendered to HTML) or the plain-HTML path — shared between generate()
+   * and generateUaContent(). Both callers target the same locale ('uk-UA') and post-process the
+   * HTML branch identically, so this used to be two ~70-line near-duplicates; extracted once
+   * generateUaContent() needed Doc awareness too (it previously had none at all).
+   *
+   * Returns docIssues/restoredVideos rather than mutating caller state directly — callers stash
+   * them in their own per-request closure variables, same as before, because the validate array
+   * and the restoredVideos warning both need to read the LAST produce() call's result after
+   * runRepairGate resolves, not just this one.
+   */
+  private async produceTaskAArtifact(opts: {
+    payload: PromptPayload;
+    useThinking: boolean;
+    useDocPipeline: boolean;
+    isInitialAttempt: boolean;
+    input: ProductInput;
+    videoEmbeds: SourceVideoEmbed[];
+    // docSchemaIssues context, and the llm meta.taskLabel used on the HTML branch.
+    contextLabel: string;
+    // llm meta.taskLabel on the Doc branch only — distinct from contextLabel so telemetry can
+    // tell a Doc call from an HTML call for the same artifact.
+    docTaskLabel: string;
+  }): Promise<{ html: string; docIssues: ValidationIssue[]; restoredVideos: SourceVideoEmbed[] }> {
+    const { payload, useThinking, useDocPipeline, isInitialAttempt, input, videoEmbeds, contextLabel, docTaskLabel } = opts;
+
+    // The Doc path returns HTML too — renderDescription() builds it — so the repair gate and
+    // every downstream validator keep working unchanged. That is what keeps this switch
+    // contained to this one method instead of rippling through every caller.
+    if (useDocPipeline) {
+      // Kept outside the try so a schema failure can still log what the model actually sent —
+      // without this, debugging a hallucinated Doc means reproducing the call by hand.
+      let raw: unknown;
+      try {
+        raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: docTaskLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
+        // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
+        // rather than be rendered into plausible-looking wrong HTML.
+        //
+        // The return value is DISCARDED and `raw` is used instead. Without strictNullChecks —
+        // which this repo does not enable — zod's inferred type comes back all-optional and does
+        // not satisfy ProductDescriptionDoc. See the TSCONFIG NOTE at the foot of
+        // description-doc.schema.ts; this is the same workaround, not a new one. parse() still
+        // does the validating, so nothing is weakened.
+        ProductDescriptionDocSchema.parse(raw);
+        const doc = raw as ProductDescriptionDoc;
+        // Prose normalization moves here from the HTML chain below — same transforms, same order.
+        // stripCodeFences, wrapVideoFigures and wrapImageFigures have no job on this path: JSON
+        // parsing replaces the first, and the renderer emits canonical figures directly.
+        const html = renderDescription(
+          normalizeDocProse(doc, 'uk-UA'),
+          renderContextFor(input.website.name, input.brandFolder, input.modelFolder),
+        );
+        return { html, docIssues: [], restoredVideos: [] };
+      } catch (err) {
+        // …unless the provider refused to produce anything in the first place, AND this is the
+        // initial attempt (no `best` yet exists to fall back to — repair-gate.ts:112). A
+        // truncation or a safety block is a property of the request, so every remaining attempt
+        // would fail identically — and on this path that is up to 3 more deep calls of several
+        // minutes each. Throwing escapes the gate (runRepairGate awaits produce() bare here),
+        // which is the correct outcome here: fail in one attempt with the provider's own
+        // instruction ("lower the thinking level") instead of an hour later with "empty-output".
+        //
+        // On a REPAIR attempt (repair-gate.ts:339) `best` already holds a usable artifact from
+        // an earlier attempt. Throwing here would discard it and abort the whole run over a
+        // request that just can't be repaired further — so this falls through to the
+        // convert-not-rethrow path below instead, same as any other failed repair attempt.
+        if (isInitialAttempt && isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
+        // Convert, do not rethrow: an empty artifact plus real issues lets the gate spend a
+        // repair attempt, and appendRepairFeedback then tells the model WHICH FIELD failed
+        // rather than "empty-output". assertDocRendered at the call site refuses to ship '' if
+        // every attempt fails.
+        const docIssues = docSchemaIssues(err, contextLabel);
+        // The raw payload, not just the Zod issues — a hallucinated Doc is far easier to debug
+        // with what the model actually sent than with "specs.categories.0: expected array". Only
+        // logged when generateJson itself succeeded; a network/parse failure never set raw.
+        if (raw !== undefined) console.error(`[${contextLabel}] raw model output failed schema validation:`, raw);
+        return { html: '', docIssues, restoredVideos: [] };
+      }
+    }
+
+    let html = await this.llm.generateText(payload, useThinking, { taskLabel: contextLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
+    html = stripCodeFences(html);
+    // BEFORE wrapVideoFigures, so a restored embed goes through exactly the same figure and
+    // attribute contract as one the model emitted itself.
+    const restoration = restoreMissingVideos(html, videoEmbeds, input.name, 'uk-UA');
+    html = restoration.html;
+    const restoredVideos = restoration.restored;
+    html = wrapVideoFigures(html, input.name, 'uk-UA');
+    html = wrapImageFigures(html);
+    html = fixNumberFormatting(html, input.name);
+    // Immediately after fixNumberFormatting, which has already stripped thousands separators —
+    // so the decimal pass sees one unambiguous number shape per value.
+    html = fixDecimalSeparator(html, 'uk-UA');
+    // The inverse: a comma the MODEL wrote inside an identifier (F/2,0, 2,4G). Nothing else
+    // catches those — the validator only looks for the opposite. Safe next to the forward
+    // pass, which only ever touches a decimal followed by a unit.
+    html = restoreIdentifierDots(html, 'uk-UA');
+    // AFTER fixNumberFormatting so the cyrillizer sees a canonical NUM<NBSP>UNIT shape, and
+    // BEFORE normalizeTerminology so its Cyrillic word-boundary lookarounds see final
+    // orthography. Both neighbours are idempotent and independent, so this is a documented
+    // convention rather than a correctness requirement.
+    html = cyrillizeUnits(html, 'uk-UA');
+    html = normalizeTerminology(html, 'uk-UA');
+    html = canonicalizeMultiInOne(html, 'uk-UA');
+    return { html, docIssues: [], restoredVideos };
+  }
+
   async generate(input: ProductInput, useThinking = false): Promise<void> {
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
@@ -318,77 +426,13 @@ export class ContentOrchestratorService {
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
         const isInitialAttempt = isFirstHtmlAAttempt;
         isFirstHtmlAAttempt = false;
-        // The Doc path returns HTML too — renderDescription() builds it — so the repair gate and
-        // every downstream validator below keep working unchanged. That is what keeps this switch
-        // contained to these few lines instead of rippling through the whole method.
-        if (useDocPipeline) {
-          docIssues = [];
-          try {
-          const raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: 'Doc (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
-          // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
-          // rather than be rendered into plausible-looking wrong HTML.
-          //
-          // The return value is DISCARDED and `raw` is used instead. Without strictNullChecks —
-          // which this repo does not enable — zod's inferred type comes back all-optional and does
-          // not satisfy ProductDescriptionDoc. See the TSCONFIG NOTE at the foot of
-          // description-doc.schema.ts; this is the same workaround, not a new one. parse() still
-          // does the validating, so nothing is weakened.
-          ProductDescriptionDocSchema.parse(raw);
-          const doc = raw;
-          // Prose normalization moves here from the HTML chain below — same transforms, same order.
-          // stripCodeFences, wrapVideoFigures and wrapImageFigures have no job on this path: JSON
-          // parsing replaces the first, and the renderer emits canonical figures directly.
-          return renderDescription(
-            normalizeDocProse(doc, 'uk-UA'),
-            renderContextFor(input.website.name, input.brandFolder, input.modelFolder),
-          );
-          } catch (err) {
-            // …unless the provider refused to produce anything in the first place, AND this is the
-            // initial attempt (no `best` yet exists to fall back to — repair-gate.ts:112). A
-            // truncation or a safety block is a property of the request, so every remaining attempt
-            // would fail identically — and on this path that is up to 3 more deep calls of several
-            // minutes each. Throwing escapes the gate (runRepairGate awaits produce() bare here),
-            // which is the correct outcome here: fail in one attempt with the provider's own
-            // instruction ("lower the thinking level") instead of an hour later with "empty-output".
-            //
-            // On a REPAIR attempt (repair-gate.ts:339) `best` already holds a usable artifact from
-            // an earlier attempt. Throwing here would discard it and abort the whole generate() run
-            // over a request that just can't be repaired further — so this falls through to the
-            // convert-not-rethrow path below instead, same as any other failed repair attempt.
-            if (isInitialAttempt && isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
-            // Convert, do not rethrow: an empty artifact plus real issues lets the gate spend a
-            // repair attempt, and appendRepairFeedback then tells the model WHICH FIELD failed
-            // rather than "empty-output". assertDocRendered below refuses to ship the '' if every
-            // attempt fails.
-            docIssues = docSchemaIssues(err, 'HTML (base)');
-            return '';
-          }
-        }
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (base)', productName: input.name, store: input.website.name, lang: 'uk-UA' });
-        html = stripCodeFences(html);
-        // BEFORE wrapVideoFigures, so a restored embed goes through exactly the same figure and
-        // attribute contract as one the model emitted itself.
-        const restoration = restoreMissingVideos(html, videoEmbeds, input.name, 'uk-UA');
-        html = restoration.html;
-        restoredVideos = restoration.restored;
-        html = wrapVideoFigures(html, input.name, 'uk-UA');
-        html = wrapImageFigures(html);
-        html = fixNumberFormatting(html, input.name);
-        // Immediately after fixNumberFormatting, which has already stripped thousands separators —
-        // so the decimal pass sees one unambiguous number shape per value.
-        html = fixDecimalSeparator(html, 'uk-UA');
-        // The inverse: a comma the MODEL wrote inside an identifier (F/2,0, 2,4G). Nothing else
-        // catches those — the validator only looks for the opposite. Safe next to the forward
-        // pass, which only ever touches a decimal followed by a unit.
-        html = restoreIdentifierDots(html, 'uk-UA');
-        // AFTER fixNumberFormatting so the cyrillizer sees a canonical NUM<NBSP>UNIT shape, and
-        // BEFORE normalizeTerminology so its Cyrillic word-boundary lookarounds see final
-        // orthography. Both neighbours are idempotent and independent, so this is a documented
-        // convention rather than a correctness requirement.
-        html = cyrillizeUnits(html, 'uk-UA');
-        html = normalizeTerminology(html, 'uk-UA');
-        html = canonicalizeMultiInOne(html, 'uk-UA');
-        return html;
+        const result = await this.produceTaskAArtifact({
+          payload, useThinking, useDocPipeline, isInitialAttempt, input, videoEmbeds,
+          contextLabel: 'HTML (base)', docTaskLabel: 'Doc (base)',
+        });
+        docIssues = result.docIssues;
+        restoredVideos = result.restoredVideos;
+        return result.html;
       };
       const htmlAResult = await runRepairGate<string>({
         label: 'HTML (base)',
@@ -773,26 +817,29 @@ export class ContentOrchestratorService {
           buildMasterUaOverlay(input.website.name),
         ].filter(Boolean).join('\n\n'),
       };
-      const basePayloadA = buildPromptA(uaInput, UA_BASE_LANGUAGE);
+      // Same per-store rollout as generate() — see the sibling comment there and
+      // doc-pipeline-flag.ts. UA Description targets the same locale ('uk-UA') the Doc pipeline
+      // already renders in generate(), so a store's enrollment applies here identically.
+      const useDocPipelineUa = usesDocPipeline(input.website.name, input.templateId);
+      const basePayloadA = useDocPipelineUa
+        ? buildPromptADoc(uaInput, UA_BASE_LANGUAGE)
+        : buildPromptA(uaInput, UA_BASE_LANGUAGE);
       // See the sibling comment in generate().
       let restoredVideos: SourceVideoEmbed[] = [];
+      // See the sibling comment in generate().
+      let docIssues: ValidationIssue[] = [];
+      // See the sibling comment in generate().
+      let isFirstHtmlUaAttempt = true;
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
-        let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'HTML (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
-        html = stripCodeFences(html);
-        const restoration = restoreMissingVideos(html, videoEmbeds, input.name, UA_ISO);
-        html = restoration.html;
-        restoredVideos = restoration.restored;
-        html = wrapVideoFigures(html, input.name, UA_ISO);
-        html = wrapImageFigures(html);
-        html = fixNumberFormatting(html, input.name);
-        // Ordering rationale as in generate()'s master produce.
-        html = fixDecimalSeparator(html, UA_ISO);
-        // See the sibling comment in generate()'s master produce.
-        html = restoreIdentifierDots(html, UA_ISO);
-        html = cyrillizeUnits(html, UA_ISO);
-        html = normalizeTerminology(html, UA_ISO);
-        html = canonicalizeMultiInOne(html, UA_ISO);
-        return html;
+        const isInitialAttempt = isFirstHtmlUaAttempt;
+        isFirstHtmlUaAttempt = false;
+        const result = await this.produceTaskAArtifact({
+          payload, useThinking, useDocPipeline: useDocPipelineUa, isInitialAttempt, input, videoEmbeds,
+          contextLabel: 'HTML (uk-UA)', docTaskLabel: 'Doc (uk-UA)',
+        });
+        docIssues = result.docIssues;
+        restoredVideos = result.restoredVideos;
+        return result.html;
       };
       const htmlUaResult = await runRepairGate<string>({
         label: 'HTML (uk-UA)',
@@ -800,6 +847,9 @@ export class ContentOrchestratorService {
         basePayload: basePayloadA,
         produce: produceHtmlUa,
         validate: html => [
+          // First, so a rejected Doc reads as the cause rather than as the empty-output symptom
+          // every other rule would report against ''. See the sibling comment in generate().
+          ...docIssues,
           ...validateGeneratedHtml(html, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest }),
           // Same reasoning as the sibling call in generate().
           ...validateSpecsGrounding(html, groundingSpecs, 'HTML (uk-UA)', allowedSpecParams,
@@ -841,11 +891,30 @@ export class ContentOrchestratorService {
         withFeedback: appendRepairFeedback,
         // Same rung as generate()'s master gate — this standalone path runs the same validators,
         // so leaving it out would make sentence-too-long repairable in one entry point and merely
-        // reported in the other.
-        repairBlocks: this.blockRepairer(UA_ISO, 'HTML (uk-UA)', input),
+        // reported in the other. Block-scoped repair patches rendered HTML in place, which would
+        // desync it from the Doc that produced it — see the identical guard in generate().
+        repairBlocks: useDocPipelineUa ? undefined : this.blockRepairer(UA_ISO, 'HTML (uk-UA)', input),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
+      // Outcome is recorded BEFORE the guard below, so a generation that never validated is
+      // counted rather than lost with the exception. Fire-and-forget, same as generate() —
+      // telemetry must not be able to fail a generation that otherwise succeeded. UA Description
+      // generations were not recorded at all before this change, Doc or not.
+      void this.llm.recordGeneration({
+        store: input.website.name,
+        locale: UA_ISO,
+        productName: input.name,
+        pipeline: useDocPipelineUa ? 'doc' : 'html',
+        outcome: !htmlUaResult.artifact.trim() ? 'failed-schema'
+          : htmlUaResult.repairsUsed > 0 ? 'repaired'
+          : 'ok',
+        repairsUsed: htmlUaResult.repairsUsed,
+      });
+      // Every attempt failed the schema → the gate's best result is ''. Saving that would be a
+      // silent data loss; fail loudly instead. See the identical guard in generate() — inert on
+      // the HTML path, which cannot produce ''.
+      if (useDocPipelineUa) assertDocRendered(htmlUaResult.artifact, 'HTML (uk-UA)', htmlUaResult.finalIssues);
       const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlUaResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult, this.blockPatchTally.get('HTML (uk-UA)'))]);
