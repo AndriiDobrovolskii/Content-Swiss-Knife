@@ -10,9 +10,11 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  validateSpecCategoryShape, MIN_SPEC_CATEGORIES, MIN_ROWS_TO_REQUIRE_CATEGORIES,
+  validateSpecCategoryShape, validateSpecCategoryShapeDoc,
+  MIN_SPEC_CATEGORIES, MIN_ROWS_TO_REQUIRE_CATEGORIES,
 } from './spec-category-shape';
 import { DEFAULT_MIN_ROWS } from './spec-category-merge';
+import type { ProductDescriptionDoc } from '../domain/description-doc';
 
 /** Builds a §7 section from a category-label -> row-count map, in the shape the model emits
  *  (N x <h3> + <div class="table-responsive"><table>) — i.e. pre-merge, pre-finalize. */
@@ -131,6 +133,129 @@ describe('validateSpecCategoryShape', () => {
 
     it('starts enforcing only where the remedy is satisfiable (3 categories x 3 rows)', () => {
       expect(MIN_ROWS_TO_REQUIRE_CATEGORIES).toBe(MIN_SPEC_CATEGORIES * DEFAULT_MIN_ROWS);
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// validateSpecCategoryShapeDoc — Doc-reading sibling
+//
+// Added in the final-review fix wave: the migration plan dropped this guard from the Doc-path gate
+// on the premise that renderDescription() guarantees §7 shape "by construction" — wrong, because
+// which rows the model groups into which category is a content decision the renderer has no say
+// in. Center 3D Print / Ortur H20, the incident this file's header comment documents, is Doc-
+// enrolled today, so the gap was live.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function docWithCategories(categories: Array<{ title: string; rows: Array<{ label: string; value: string }> }>): ProductDescriptionDoc {
+  return {
+    schemaVersion: '3.0',
+    locale: 'uk-UA',
+    localizedName: 'Ortur H20 20 W',
+    hook: 'Hook.',
+    killerSpecs: [
+      { label: 'A', value: '1', why: 'why a' },
+      { label: 'B', value: '2', why: 'why b' },
+      { label: 'C', value: '3', why: 'why c' },
+    ],
+    keyBenefits: [],
+    functionality: [],
+    applications: { heading: 'Застосування', items: [] },
+    specs: { heading: 'Технічні характеристики', categories },
+    cta: { heading: 'CTA', text: 'Купуйте.' },
+    figures: [],
+    videos: [],
+  };
+}
+
+const rulesOfDoc = (issues: ReturnType<typeof validateSpecCategoryShapeDoc>) => issues.map(i => i.rule);
+
+/** Builds `n` rows named `${label} параметр {i}` / `значення {i}` — mirrors specsSection()'s row
+ *  shape above, minus the HTML wrapper. */
+function rows(label: string, n: number): Array<{ label: string; value: string }> {
+  return Array.from({ length: n }, (_, i) => ({ label: `${label} параметр ${i + 1}`, value: `значення ${i + 1}` }));
+}
+
+describe('validateSpecCategoryShapeDoc', () => {
+  describe('happy path', () => {
+    it('stays silent on the EXPERT3D shape: 4 categories of 4/3/4/4 rows', () => {
+      const doc = docWithCategories([
+        { title: 'Загальні характеристики', rows: rows('Загальні', 4) },
+        { title: 'Лазерний модуль', rows: rows('Лазерний', 3) },
+        { title: 'Безпека', rows: rows('Безпека', 4) },
+        { title: 'Електроніка та підключення', rows: rows('Електроніка', 4) },
+      ]);
+      expect(validateSpecCategoryShapeDoc(doc, 'Doc (base)')).toEqual([]);
+    });
+
+    it('stays silent below the row threshold: a single category of 8 rows', () => {
+      const doc = docWithCategories([{ title: 'Характеристики', rows: rows('Х', 8) }]);
+      expect(validateSpecCategoryShapeDoc(doc, 'Doc (base)')).toEqual([]);
+    });
+
+    it('stays silent at the exact boundary: 3 categories of 3 rows (9 rows total)', () => {
+      const doc = docWithCategories([
+        { title: 'A', rows: rows('A', 3) }, { title: 'B', rows: rows('B', 3) }, { title: 'C', rows: rows('C', 3) },
+      ]);
+      expect(validateSpecCategoryShapeDoc(doc, 'Doc (base)')).toEqual([]);
+    });
+  });
+
+  describe('failure path', () => {
+    it('fires on the reported shape: one category holding all 15 rows', () => {
+      const doc = docWithCategories([{ title: 'Загальні характеристики', rows: rows('Загальні', 15) }]);
+      const issues = validateSpecCategoryShapeDoc(doc, 'Doc (base)');
+      expect(rulesOfDoc(issues)).toEqual(['spec-category-collapse']);
+      expect(issues[0].severity).toBe('error');
+      expect(issues[0].context).toBe('Doc (base)');
+    });
+
+    it('fires on 2 categories of 11/4 rows — a <= 1 threshold would wrongly pass this', () => {
+      const doc = docWithCategories([
+        { title: 'Загальні характеристики', rows: rows('Загальні', 11) },
+        { title: 'Безпека', rows: rows('Безпека', 4) },
+      ]);
+      expect(rulesOfDoc(validateSpecCategoryShapeDoc(doc, 'Doc (base)'))).toEqual(['spec-category-collapse']);
+    });
+
+    it('names specs.categories[] in the repair detail, in JSON terms rather than HTML markup', () => {
+      const doc = docWithCategories([{ title: 'Загальні характеристики', rows: rows('Загальні', 15) }]);
+      const detail = validateSpecCategoryShapeDoc(doc, 'Doc (base)')[0].detail;
+      expect(detail).toContain('specs.categories[]');
+      expect(detail).toContain('1 category');
+      expect(detail).toContain('15 spec rows');
+      expect(detail).toContain('DO NOT change any row');
+      // The Doc-model regrouping instruction must not prescribe literal HTML markup — that would be
+      // wrong feedback for a JSON field and either violate the schema (HTML text in a plain field)
+      // or simply be ignored.
+      expect(detail).not.toContain('<h3>');
+      expect(detail).not.toContain('<table>');
+    });
+
+    it('for consumables, whose simplified §C4 schema forbids categories by design', () => {
+      const doc = docWithCategories([{ title: 'Характеристики', rows: rows('Х', 15) }]);
+      expect(validateSpecCategoryShapeDoc(doc, 'Doc (base)', { templateId: 'consumables-resin' })).toEqual([]);
+      expect(validateSpecCategoryShapeDoc(doc, 'Doc (base)', { templateId: 'printer' })).toHaveLength(1);
+    });
+  });
+
+  describe('null/undefined safety', () => {
+    it('handles a document with no spec categories at all', () => {
+      expect(validateSpecCategoryShapeDoc(docWithCategories([]), 'Doc (base)')).toEqual([]);
+    });
+
+    it('handles a single category with zero rows', () => {
+      expect(validateSpecCategoryShapeDoc(docWithCategories([{ title: 'Empty', rows: [] }]), 'Doc (base)')).toEqual([]);
+    });
+  });
+
+  describe('localizes the example column headers, matching the HTML sibling', () => {
+    it('uses the uk-UA headers by default and the requested locale otherwise', () => {
+      const doc = docWithCategories([{ title: 'Загальні характеристики', rows: rows('Загальні', 15) }]);
+      expect(validateSpecCategoryShapeDoc(doc, 'Doc (base)')[0].detail).toContain('Параметр');
+
+      const enDoc = docWithCategories([{ title: 'General', rows: rows('General', 15) }]);
+      expect(validateSpecCategoryShapeDoc(enDoc, 'Doc (base)', { locale: 'en-GB' })[0].detail).toContain('Parameter');
     });
   });
 });

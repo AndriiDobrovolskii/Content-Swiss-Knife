@@ -21,6 +21,7 @@ import {
 } from '../utils/specs-grounding';
 import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
+import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
 import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
 import { validateHeadingStyle, validateHeadingStyleDoc } from '../utils/heading-style';
@@ -59,7 +60,7 @@ import { createBlockRepairExecutor } from '../utils/block-tier';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
-import { validateSpecCategoryShape } from '../utils/spec-category-shape';
+import { validateSpecCategoryShape, validateSpecCategoryShapeDoc } from '../utils/spec-category-shape';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
 import { validateLanguageConsistency } from '../utils/language-consistency';
 
@@ -422,6 +423,15 @@ export class ContentOrchestratorService {
           ...validateHeadingStyleDoc(doc, opts.localeIso, opts.input.website.name, opts.input.name),
           ...validateSentenceLengthDoc(doc, opts.localeIso, opts.label),
           ...validateVideoCoverageDoc(doc.videos, opts.videoEmbeds, opts.label),
+          // CONTENT checks, not renderer invariants — see the final-review fix wave's Critical #1/#2.
+          // Which images the model puts into figures[] and how it groups §7 rows into categories are
+          // both model judgment calls; renderDescription() faithfully renders whatever shape it is
+          // handed and guarantees neither. Dropping either from the Doc-path gate reopened real
+          // incidents (image-manifest: "9/14-images regression", M1 Ultra SafetyPro, 2026-07-15;
+          // spec-category-collapse: Center 3D Print / Ortur H20, 2026-07-26) for every Doc-enrolled
+          // store — see image-manifest-coverage.ts and spec-category-shape.ts's *Doc siblings.
+          ...validateImageManifestCoverageDoc(doc.figures, opts.imgManifest, opts.label),
+          ...validateSpecCategoryShapeDoc(doc, opts.label, { templateId: opts.input.templateId, locale: opts.locale }),
           ...(opts.groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
@@ -436,18 +446,37 @@ export class ContentOrchestratorService {
       },
       withFeedback: appendRepairFeedback,
       // No repairField / repairBlocks — full-regen-only repair for the Doc path in this PR (per
-      // the plan's explicit scope decision). The tiered ladder is not wired here.
+      // the plan's explicit scope decision). maxFieldRepairs: 0 makes that true BY CONSTRUCTION
+      // rather than by coincidence — today the ladder is inert here anyway, because no Doc-emitted
+      // rule happens to have a registered strategy with a 'deterministic'/'field-scoped' rung
+      // (repair-strategy.ts), but that is incidental, not structural: the next Doc validator added
+      // with a registered strategy would silently wake the ladder up on a path it was never
+      // designed for. Explicit 0 closes that off.
+      maxFieldRepairs: 0,
       onAttempt: opts.onAttempt,
     });
 
-    // The actual, shared empty-artifact guard — not a re-derived copy of its message text. When
-    // `result.artifact.doc` is null there is nothing to render, so this is called with a sentinel
-    // '' (the same thing `html.trim()` would see from a genuinely empty HTML artifact); when a doc
-    // IS present it always renders to non-empty HTML, so this call is skipped rather than passed a
-    // value it would just approve.
-    if (!result.artifact.doc) assertDocRendered('', opts.label, result.finalIssues);
+    // Every attempt failed the schema → nothing to render. Return the empty-artifact sentinel
+    // ('' — the same thing `html.trim()` would see from a genuinely empty HTML artifact) rather
+    // than throwing here. THROWING HERE WAS THE BUG (final-review fix wave, Important #3): it
+    // unwound past both call sites' `recordGeneration(...)` call, which their own comments say
+    // must fire "BEFORE the guard below, so a generation that never validated is counted rather
+    // than lost with the exception" — but a throw from inside runDocGate happens before the call
+    // site ever gets control back, so recordGeneration never ran and 'failed-schema' was
+    // unrecordable, exactly the outcome doc-pipeline-flag.ts's rollout monitoring depends on being
+    // able to see. The call sites already guard this: `if (useDocPipeline)
+    // assertDocRendered(htmlAResult.artifact, ...)` runs AFTER their recordGeneration call, so
+    // returning '' here (instead of throwing) restores that original order — assertDocRendered is
+    // now called in exactly one place, at the call sites, not inside this method too.
+    if (!result.artifact.doc) return { ...result, artifact: '' };
 
-    // The ONE render call for this Task A generation — see the method doc comment above.
+    // The ONE render call for this Task A generation — see the method doc comment above. Runs
+    // AFTER every Tier-1 validator above, which is an ORDER FLIP from the old HTML path (there,
+    // normalizeDocProse-equivalent transforms ran, then validation read the transformed HTML).
+    // Confirmed harmless today — e.g. validateAltNumericFidelityDoc's number-matching is
+    // separator-insensitive to normalizeDocProse's number-format fixes — but a future validator
+    // that is NOT insensitive to normalizeDocProse's transforms would validate pre-normalization
+    // text here. Worth checking when adding one.
     const html = renderDescription(
       normalizeDocProse(result.artifact.doc, opts.locale),
       renderContextFor(opts.input.website.name, opts.input.brandFolder, opts.input.modelFolder),
