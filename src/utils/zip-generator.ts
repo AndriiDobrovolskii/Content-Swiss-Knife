@@ -19,7 +19,11 @@ function buildFilePrefix(content: GeneratedContent, productName: string): string
   return [safeSite, safeName].filter(Boolean).join('_');
 }
 
-export const downloadPackage = async (content: GeneratedContent, productName: string) => {
+export const downloadPackage = async (
+  content: GeneratedContent,
+  productName: string,
+  extraFiles?: { name: string; content: string }[],
+) => {
   const zip = new JSZip();
   const prefix = buildFilePrefix(content, productName);
   const ts = buildTimestamp();
@@ -68,6 +72,10 @@ export const downloadPackage = async (content: GeneratedContent, productName: st
     });
     zip.file('seo_readable.txt', seoText);
   }
+
+  // 7. Extra files supplied by the caller (e.g. the repair-gate report) — kept generic here so
+  // this utility stays agnostic of where the content came from.
+  extraFiles?.forEach(f => zip.file(f.name, f.content));
 
   const blob = await zip.generateAsync({ type: 'blob' });
   saveAs(blob, `${prefix}_${ts}.zip`);
