@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runRepairGate, appendRepairFeedback, formatRepairReportMarkdown, toArtifactReport, RepairArtifactReport } from './repair-gate';
+import { validateSlugs } from './slug-validator';
+import type { SlugResponse } from '../app/types';
 import { PromptPayload } from '../prompt-core/payload';
 import { ValidationIssue } from './output-validator';
 
@@ -1212,5 +1214,111 @@ describe('formatRepairReportMarkdown — local block patches', () => {
 
   it('omits the section entirely when the block tier never ran', () => {
     expect(formatRepairReportMarkdown([clean('HTML (uk-UA)')], META)).not.toContain('## Local patches');
+  });
+});
+
+// ── heading-product-name-stuffing — one registered strategy, two artifact shapes ──
+//
+// Regression coverage for the 2026-08 EXPERT3D Ortur F10 10W incident: this rule used to be
+// checked (sometimes) but never repaired anywhere, on either pipeline. These tests exercise the
+// REAL registered strategy (repair-strategy.ts), not a stand-in, so a future edit to its ladder
+// or its path-addressing assumptions fails here first.
+describe('heading-product-name-stuffing — one ladder serving two artifact shapes', () => {
+  const headingWarning = (path: string): ValidationIssue => ({
+    severity: 'warning',
+    rule: 'heading-product-name-stuffing',
+    detail:
+      'The <h2> "Ortur F10 10 W — Engraving and Cutting" contains the FULL product name. Per ' +
+      '[HEADING FORM] no heading may carry the configuration code or the package/kit suffix — ' +
+      'use the short form "Ortur F10 10W" in the first §3 heading and the §9 closing, and a ' +
+      'generic category noun everywhere else.',
+    context: 'en-ES — heading form',
+    path,
+  });
+
+  it('resolves an HTML "block[i]" path via the block-scoped rung — field-scoped harmlessly no-ops first', async () => {
+    // This is the Task C shape: a plain HTML string, addressed by block-repair.ts's grammar.
+    const produce = vi.fn().mockResolvedValue('<h2>Ortur F10 10 W — Engraving and Cutting</h2>');
+    const repairField = vi.fn(); // must NEVER be called — getAtPath can't address "block[0]" on a string
+    const repairBlocks = vi.fn().mockResolvedValue('<h2>Ortur F10 10W — Engraving and Cutting</h2>');
+    const validate = vi.fn()
+      .mockReturnValueOnce([headingWarning('block[0]')])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate<string>({
+      label: 'HTML (en-ES)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField, repairBlocks,
+    });
+
+    expect(repairField).not.toHaveBeenCalled();
+    expect(repairBlocks).toHaveBeenCalledTimes(1);
+    expect(repairBlocks.mock.calls[0][1]).toEqual([headingWarning('block[0]')]);
+    expect(result.artifact).toBe('<h2>Ortur F10 10W — Engraving and Cutting</h2>');
+    expect(result.finalIssues).toEqual([]);
+    expect(produce).toHaveBeenCalledTimes(1); // a warning never reaches full regeneration
+  });
+
+  it('resolves a Doc "doc.arrayProp[i].leafProp" path via the field-scoped rung — block-scoped never runs', async () => {
+    // This is the runDocGate shape: { doc: { functionality: [...] } }, addressed by
+    // repair-strategy.ts's wrapperProp grammar.
+    type DocLike = { doc: { functionality: { heading: string }[] } };
+    const artifact = (): DocLike => ({ doc: { functionality: [{ heading: 'Ortur F10 10 W — Engraving and Cutting' }] } });
+    const produce = vi.fn().mockResolvedValue(artifact());
+    const repairField = vi.fn().mockResolvedValue('Ortur F10 10W — Engraving and Cutting');
+    const repairBlocks = vi.fn(); // must never be called — this issue never reaches that rung
+    const validate = vi.fn()
+      .mockReturnValueOnce([headingWarning('doc.functionality[0].heading')])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate<DocLike>({
+      label: 'Doc (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField, repairBlocks,
+    });
+
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect(repairBlocks).not.toHaveBeenCalled();
+    expect(result.artifact.doc.functionality[0].heading).toBe('Ortur F10 10W — Engraving and Cutting');
+    expect(result.finalIssues).toEqual([]);
+    expect(produce).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Slug generation used to have NO repair gate at all (2026-08 EXPERT3D Ortur F10 10W) ──
+//
+// validateSlugs only ever ran in the post-hoc, advisory-only runOutputValidation pass; the real
+// generation call sites were a bare try/catch around generateJson with no validate/repair step.
+// This exercises the REAL validateSlugs against runRepairGate, the composition now wired into
+// content-orchestrator.service.ts, so a future edit that silently drops that wiring fails here.
+describe('validateSlugs feeding a real repair loop', () => {
+  const slugArtifact = (name: string): SlugResponse => ({
+    site_name: 'EXPERT3D',
+    slugs: [{ language: 'en-ES', name, slug: 'ortur-f10-laser-engraver-10-w' }],
+  });
+
+  it('a slug-name-designator-lost error triggers full regeneration instead of only being reported', async () => {
+    const produce = vi.fn()
+      .mockResolvedValueOnce(slugArtifact('Ortur F10 Laser Engraver 10 W')) // drops the invariant core "Ortur F10 10W"
+      .mockResolvedValueOnce(slugArtifact('Ortur F10 10W Laser Engraver')); // corrected on retry
+
+    const result = await runRepairGate<SlugResponse>({
+      label: 'Slugs',
+      maxRepairs: 1,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate: json => validateSlugs(json, 'Ortur F10 10W'),
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(produce).toHaveBeenCalledTimes(2); // the retry that used to never happen
+    expect(result.repairsUsed).toBe(1);
+    expect(result.finalIssues).toEqual([]);
+    expect(result.artifact.slugs[0].name).toBe('Ortur F10 10W Laser Engraver');
+  });
+
+  it('the feedback names the exact invariant core, not a generic message', () => {
+    const issues = validateSlugs(slugArtifact('Ortur F10 Laser Engraver 10 W'), 'Ortur F10 10W');
+    const payload = appendRepairFeedback(BASE_PAYLOAD, issues);
+
+    expect(payload.userContent).toContain('Ortur F10 10W');
   });
 });

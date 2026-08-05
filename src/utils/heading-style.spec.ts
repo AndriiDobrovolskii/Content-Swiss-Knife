@@ -256,7 +256,7 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
         expect(issues[0].rule).toBe('h2-nominal-heading');
         expect(issues[0].severity).toBe('warning');
         expect(issues[0].detail).toContain(heading);
-        expect(issues[0].path).toBe('functionality[0].heading');
+        expect(issues[0].path).toBe('doc.functionality[0].heading');
       }
     });
 
@@ -305,7 +305,7 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
       const doc = baseDoc(['Як працює Ortur H20', 'ПЗ та автоматизація', 'Безпека під час роботи']);
       const issues = rules(doc);
       expect(issues).toHaveLength(2);
-      expect(issues.map(i => i.path)).toEqual(['functionality[1].heading', 'functionality[2].heading']);
+      expect(issues.map(i => i.path)).toEqual(['doc.functionality[1].heading', 'doc.functionality[2].heading']);
     });
 
     it('other sections are never candidates — a §7/§9/tips-shaped string never reaches this check because it never sits in functionality[]', () => {
@@ -351,7 +351,7 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
       const issues = stuffing(doc);
       expect(issues).toHaveLength(1);
       expect(issues[0].detail).toContain('FULL product name');
-      expect(issues[0].path).toBe('functionality[0].heading');
+      expect(issues[0].path).toBe('doc.functionality[0].heading');
     });
 
     it('accepts the short form in the first §3 heading and the §9 closing — two is the budget', () => {
@@ -383,7 +383,7 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
       const issues = stuffing(doc);
       expect(issues).toHaveLength(1);
       expect(issues[0].detail).toContain('never carry the product name');
-      expect(issues[0].path).toBe('functionality[0].subsections[0].heading');
+      expect(issues[0].path).toBe('doc.functionality[0].subsections[0].heading');
     });
 
     it('leaves an ordinary nominal nested heading alone', () => {
@@ -414,7 +414,7 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
       const issues = validateHeadingStyleDoc(doc, 'uk-UA', C3D, 'Ortur H20 20W')
         .filter(i => i.rule === 'heading-product-name-stuffing');
       expect(issues).toHaveLength(1);
-      expect(issues[0].path).toBe('operatingTips.heading');
+      expect(issues[0].path).toBe('doc.operatingTips.heading');
     });
 
     it('checks every section heading — applications, compatibility, operatingTips, packageContents, specs, cta', () => {
@@ -429,8 +429,8 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
       const issues = stuffing(doc);
       const paths = issues.map(i => i.path).sort();
       expect(paths).toEqual([
-        'applications.heading', 'compatibility.heading', 'cta.heading',
-        'operatingTips.heading', 'packageContents.heading', 'specs.heading',
+        'doc.applications.heading', 'doc.compatibility.heading', 'doc.cta.heading',
+        'doc.operatingTips.heading', 'doc.packageContents.heading', 'doc.specs.heading',
       ]);
     });
   });

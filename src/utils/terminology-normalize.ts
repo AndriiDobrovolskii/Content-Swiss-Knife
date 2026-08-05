@@ -90,6 +90,27 @@ const UK_PHRASE_FIXES: Array<[RegExp, string]> = [
   [/крафтових проєктів/g, 'художньо-ремісничих проєктів'], // anglicism 'крафт'.
   [/інструментів для крафту/g, 'інструментів для ручного виробництва'], // anglicism 'крафт'.
   [/без обмеження по висоті/g, 'без обмеження за висотою'], // 'по+dative' calque.
+  // "акрило" is not a Ukrainian word — "акрил" (acrylic) is masculine, so the model's invented
+  // neuter form drags a neuter adjective ending along with it ("чорне акрило", "темне акрило").
+  // A root-swap alone (UK_ROOT_SWAPS) would fix the noun and leave the adjective ending
+  // mismatched ("чорне акрил"), so both words are corrected together here instead. Scoped to the
+  // nominative/accusative form actually observed (2026-08 EXPERT3D Ortur F10 10W audit) — the
+  // genitive "чорного акрила" etc. is already correct Ukrainian and must not be touched; add a
+  // separate pair here if a wrong genitive/dative form is ever observed, rather than widening this
+  // one to match every case ending blind. Both capitalizations included: the error occurs both
+  // sentence-initially and mid-sentence in real output.
+  [/Чорне акрило/g, 'Чорний акрил'],
+  [/чорне акрило/g, 'чорний акрил'],
+  [/Темне акрило/g, 'Темний акрил'],
+  [/темне акрило/g, 'темний акрил'],
+  // "консумаблі" is a russified anglicism the master ToV forbids; "витратні матеріали" is the
+  // established Ukrainian term (2026-08 EXPERT3D Ortur F10 10W audit — the CTA paragraph used it
+  // even after being told the correct term, so this is a deterministic backstop, not a substitute
+  // for the prompt instruction).
+  [/Консумаблі та запасні частини/g, 'Витратні матеріали та запасні частини'],
+  [/консумаблі та запасні частини/g, 'витратні матеріали та запасні частини'],
+  [/Консумаблі/g, 'Витратні матеріали'],
+  [/консумаблі/g, 'витратні матеріали'],
 ];
 
 /**

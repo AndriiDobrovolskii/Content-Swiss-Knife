@@ -22,6 +22,7 @@ import {
 import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
 import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
+import { validateBulletLeadPunctuationDoc } from '../utils/bullet-lead-punctuation';
 import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
 import { validateHeadingStyle, validateHeadingStyleDoc } from '../utils/heading-style';
@@ -432,6 +433,10 @@ export class ContentOrchestratorService {
           // store — see image-manifest-coverage.ts and spec-category-shape.ts's *Doc siblings.
           ...validateImageManifestCoverageDoc(doc.figures, opts.imgManifest, opts.label),
           ...validateSpecCategoryShapeDoc(doc, opts.label, { templateId: opts.input.templateId, locale: opts.locale }),
+          // A bold bullet lead with no separator before its text renders as one glued word in
+          // EVERY store's house style — a mechanical fact, not a judgement call, hence error
+          // severity (see bullet-lead-punctuation.ts for why this is not a renderer fix).
+          ...validateBulletLeadPunctuationDoc(doc, opts.label),
           ...(opts.groundingDisabled ? [{
             severity: 'warning' as const,
             rule: 'specs-grounding-disabled',
@@ -445,14 +450,21 @@ export class ContentOrchestratorService {
         ];
       },
       withFeedback: appendRepairFeedback,
-      // No repairField / repairBlocks — full-regen-only repair for the Doc path in this PR (per
-      // the plan's explicit scope decision). maxFieldRepairs: 0 makes that true BY CONSTRUCTION
-      // rather than by coincidence — today the ladder is inert here anyway, because no Doc-emitted
-      // rule happens to have a registered strategy with a 'deterministic'/'field-scoped' rung
-      // (repair-strategy.ts), but that is incidental, not structural: the next Doc validator added
-      // with a registered strategy would silently wake the ladder up on a path it was never
-      // designed for. Explicit 0 closes that off.
-      maxFieldRepairs: 0,
+      // Field-scoped rung now live for `heading-product-name-stuffing` (repair-strategy.ts) — a
+      // warning-severity rule that never reaches full regeneration (resolveLadder never appends
+      // 'full-regen' after a warning's own ladder), so this is the ONLY instrument that can ever
+      // fix it. No repairBlocks — block-scoped repair for the Doc path is still out of scope; no
+      // registered Doc-emitted rule uses that rung yet.
+      //
+      // maxFieldRepairs is intentionally left at the default (repair-gate.ts's own `?? 3`) rather
+      // than 0 — that used to be an explicit, documented choice to keep the ladder off entirely
+      // because nothing on the Doc path had a strategy to run. That is no longer true: this now
+      // activates the ladder for every Doc-emitted rule with a registered strategy — today just
+      // `heading-product-name-stuffing` — not a blanket reopening. Re-verify this note if a second
+      // Doc-path strategy is ever registered.
+      repairField: async payload => stripCodeFences(await this.llm.generateText(
+        payload, false, { taskLabel: `${opts.label} heading repair`, productName: opts.input.name, store: opts.input.website.name, lang: opts.localeIso },
+      )),
       onAttempt: opts.onAttempt,
     });
 
@@ -690,8 +702,24 @@ export class ContentOrchestratorService {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
           const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn);
           // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
-          const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
-          const slugData = this.normalizeSlugResponse(rawSlug);
+          // Gated the same way as SEO metadata below: validateSlugs feeds this loop directly now,
+          // so slug-name-designator-lost / slug-charset / slug-duplicate get a real repair attempt
+          // instead of only being reported after the fact by runOutputValidation.
+          const slugResult = await runRepairGate<SlugResponse>({
+            label: 'Slugs',
+            maxRepairs: this.maxRepairs(),
+            basePayload: promptSlug,
+            produce: async payload => this.normalizeSlugResponse(
+              await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }),
+            ),
+            validate: json => validateSlugs(json, input.name),
+            withFeedback: appendRepairFeedback,
+            onAttempt: (n, c) =>
+              this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+          });
+          const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
+          if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
+          this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
           this.content.update(c => ({ ...c, slugData }));
           this.approvedSlugKey.set(this.slugKey(input));
           localizedNames = slugsToLocalizedNames(slugData.slugs);
@@ -777,6 +805,12 @@ export class ContentOrchestratorService {
           validate: (html) => [
             ...validateGeneratedHtml(html, `HTML (${lang})`, input.name, locale, { templateId: input.templateId, imageManifest: masterImageManifest }),
             ...validateStructuralParity(finalMasterHtml, html, `HTML (${lang})`),
+            // Checked here (not just in the post-hoc runOutputValidation pass) so a heading that
+            // regressed back to the full product name during translation — HEADING_FIDELITY
+            // (task-c.ts) tells the model not to, but telling is not enforcing — gets a real
+            // repair attempt via repairBlocks below, instead of only being reported after the
+            // artifact already shipped (the 2026-08 EXPERT3D Ortur F10 10W en-ES/es-ES/pt-PT gap).
+            ...validateHeadingStyle(html, locale, input.website.name, input.name),
             // Surfaced as a WARNING, not silently. The artifact is correct now, but a model that
             // keeps rewriting URLs is a real signal — swallowing the fix would hide it and make the
             // next regression invisible.
@@ -1068,8 +1102,23 @@ export class ContentOrchestratorService {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
         const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
-        const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO });
-        const slugData = this.normalizeSlugResponse(rawSlug);
+        // See generate()'s Step 2 for why this is a runRepairGate call now instead of a bare
+        // generateJson: validateSlugs must feed a real repair loop, not just runOutputValidation.
+        const slugResult = await runRepairGate<SlugResponse>({
+          label: 'Slugs',
+          maxRepairs: this.maxRepairs(),
+          basePayload: promptSlug,
+          produce: async payload => this.normalizeSlugResponse(
+            await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO }),
+          ),
+          validate: json => validateSlugs(json, input.name),
+          withFeedback: appendRepairFeedback,
+          onAttempt: (n, c) =>
+            this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+        });
+        const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
+        if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
+        this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
         this.content.update(c => ({ ...c, slugData }));
         this.approvedSlugKey.set(this.slugKey(input));
         localizedNames = slugsToLocalizedNames(slugData.slugs);
@@ -1216,12 +1265,25 @@ export class ContentOrchestratorService {
       this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
 
       const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, input.description);
-      const rawSlug = await this.llm.generateJson<SlugResponse>(promptSlug, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name });
-      const slugData = this.normalizeSlugResponse(rawSlug);
+      const slugResult = await runRepairGate<SlugResponse>({
+        label: 'Slugs',
+        maxRepairs: this.maxRepairs(),
+        basePayload: promptSlug,
+        produce: async payload => this.normalizeSlugResponse(
+          await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }),
+        ),
+        validate: json => validateSlugs(json, input.name),
+        withFeedback: appendRepairFeedback,
+        onAttempt: (n, c) =>
+          this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+      });
+      const { artifact: slugData, finalIssues: slugFinalIssues, repairsUsed: slugRepairs } = slugResult;
+      if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
+      this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
       this.content.update(c => ({ ...c, slugData }));
       this.approvedSlugKey.set(this.slugKey(input));
 
-      this.validationIssues.set(validateSlugs(slugData, input.name));
+      this.validationIssues.set(slugFinalIssues);
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Slug Generation Done!');

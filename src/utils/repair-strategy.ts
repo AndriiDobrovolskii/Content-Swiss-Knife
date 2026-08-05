@@ -33,24 +33,38 @@ export interface RepairStrategy {
 
 // ── Path addressing ────────────────────────────────────────────────────────────
 //
-// Two forms, both emitted by the initial registry:
-//   arrayProp[i].leafProp   'seo_data[2].meta_title', 'slugs[0].slug'
-//   arrayProp[i]            'slugs[0]'  — element-level replacement
+// Three forms:
+//   arrayProp[i].leafProp        'seo_data[2].meta_title', 'slugs[0].slug'
+//   arrayProp[i]                 'slugs[0]'  — element-level replacement
+//   wrapperProp.arrayProp[i]...  'doc.functionality[2].heading' — ONE optional leading
+//                                 object-property hop before the array form, added for
+//                                 runDocGate's `{ doc, issues }` wrapper: a Doc validator's
+//                                 own path (e.g. `functionality[2].heading`, relative to the
+//                                 Doc) is not relative to the artifact runRepairGate<DocAttempt>
+//                                 actually holds, so its emitter prefixes it with the wrapper's
+//                                 own property name.
 // Anything else throws. A malformed path from a future rule must fail loudly rather than be
-// mistaken for "nothing to fix".
+// mistaken for "nothing to fix". Deliberately NOT a general dotted-path walker: an unbracketed
+// path like "seo_data.meta_title" stays unsupported (see repair-strategy.spec.ts) because it is
+// almost always a caller bug — the array index was dropped, not intentionally omitted — and a
+// walker that quietly accepted it would turn that bug into a silent no-op instead of a thrown
+// error. The one addition here is a SINGLE named hop, not arbitrary nesting.
 
-const PATH_RE = /^([A-Za-z_$][\w$]*)\[(\d+)\](?:\.([A-Za-z_$][\w$]*))?$/;
+const PATH_RE = /^(?:([A-Za-z_$][\w$]*)\.)?([A-Za-z_$][\w$]*)\[(\d+)\](?:\.([A-Za-z_$][\w$]*))?$/;
 
-function parsePath(path: string): { arrayProp: string; index: number; leafProp?: string } {
+function parsePath(path: string): { wrapperProp?: string; arrayProp: string; index: number; leafProp?: string } {
   const m = PATH_RE.exec(path);
-  if (!m) throw new Error(`repair-strategy: unsupported path "${path}" (expected arrayProp[i] or arrayProp[i].leafProp)`);
-  return { arrayProp: m[1], index: Number(m[2]), leafProp: m[3] };
+  if (!m) throw new Error(`repair-strategy: unsupported path "${path}" (expected arrayProp[i], arrayProp[i].leafProp, or wrapperProp.arrayProp[i].leafProp)`);
+  return { wrapperProp: m[1], arrayProp: m[2], index: Number(m[3]), leafProp: m[4] };
 }
 
 /** Reads the value a `path` addresses, or undefined when any hop is missing. */
 export function getAtPath(artifact: unknown, path: string): unknown {
-  const { arrayProp, index, leafProp } = parsePath(path);
-  const arr = (artifact as Record<string, unknown> | null)?.[arrayProp];
+  const { wrapperProp, arrayProp, index, leafProp } = parsePath(path);
+  const base = wrapperProp
+    ? (artifact as Record<string, unknown> | null)?.[wrapperProp]
+    : artifact;
+  const arr = (base as Record<string, unknown> | null)?.[arrayProp];
   if (!Array.isArray(arr)) return undefined;
   const element = arr[index];
   if (element === undefined) return undefined;
@@ -66,9 +80,10 @@ export function getAtPath(artifact: unknown, path: string): unknown {
  * successful one.
  */
 export function setAtPath<T>(artifact: T, path: string, value: unknown): T {
-  const { arrayProp, index, leafProp } = parsePath(path);
+  const { wrapperProp, arrayProp, index, leafProp } = parsePath(path);
   const root = artifact as unknown as Record<string, unknown>;
-  const arr = root?.[arrayProp];
+  const base = (wrapperProp ? root?.[wrapperProp] : root) as Record<string, unknown> | undefined;
+  const arr = base?.[arrayProp];
   if (!Array.isArray(arr)) throw new Error(`repair-strategy: "${arrayProp}" is not an array on the artifact`);
   if (arr[index] === undefined) throw new Error(`repair-strategy: index ${index} is out of range for "${arrayProp}"`);
 
@@ -76,7 +91,11 @@ export function setAtPath<T>(artifact: T, path: string, value: unknown): T {
   nextArr[index] = leafProp
     ? { ...(arr[index] as Record<string, unknown>), [leafProp]: value }
     : value;
-  return { ...root, [arrayProp]: nextArr } as unknown as T;
+  if (!wrapperProp) return { ...root, [arrayProp]: nextArr } as unknown as T;
+  return {
+    ...root,
+    [wrapperProp]: { ...(base as Record<string, unknown>), [arrayProp]: nextArr },
+  } as unknown as T;
 }
 
 // ── Tier-0 primitives ──────────────────────────────────────────────────────────
@@ -212,6 +231,45 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
       // Not three: a sentence that survives two explicit instructions is one the instruction
       // cannot break, and it should reach the report honestly rather than burn a third call.
       ladder: ['block-scoped', 'block-scoped'],
+    },
+  ],
+  [
+    'heading-product-name-stuffing',
+    {
+      // Warning-only, by construction (see checkProductNameStuffing/checkProductNameStuffingDoc):
+      // resolveLadder never appends 'full-regen' after a warning's own ladder, so the rungs below
+      // are the ONLY instruments this rule can ever be repaired by — without this strategy the
+      // rule was unconditionally "reported, never repaired" (see isLadderCandidate's doc comment
+      // and the 2026-08 EXPERT3D Ortur F10 10W incident this strategy was added to close).
+      //
+      // TWO rungs serving TWO artifact shapes with ONE shared ladder, not a mistake — this rule
+      // fires on both a Doc (`path` like "doc.functionality[2].heading", repair-strategy.ts's
+      // wrapperProp addressing) and an HTML string (`path` like "block[5]", block-repair.ts's own
+      // grammar). Each tier's executor only acts when the path shape actually matches what it
+      // knows how to address, and is a documented, harmless no-op otherwise:
+      //   - field-scoped calls getAtPath/setAtPath (repair-strategy.ts), which understands
+      //     "doc.…[i].leaf" but returns undefined for "block[5]" (a plain string has no `.block`
+      //     property) — applyTier reads that as "nothing to replace" and just advances the cursor.
+      //   - block-scoped calls repairBlocks (block-repair.ts's getBlock/setBlock), which
+      //     understands "block[5]" but never receives a Doc-shaped issue at all, because
+      //     runDocGate does not wire a repairBlocks executor (block-scoped repair for the Doc path
+      //     is still out of scope — see runDocGate's own comment).
+      // So on a Doc artifact this ladder resolves in one field-scoped pass; on an HTML artifact
+      // the field-scoped pass harmlessly no-ops and the SECOND pass reaches block-scoped, which
+      // does the real work via whichever gate's `repairBlocks: this.blockRepairer(...)` is wired
+      // (Task C, the consumables master, FAQ — see content-orchestrator.service.ts).
+      ladder: ['field-scoped', 'block-scoped'],
+      fieldInstruction: (current, issue) => [
+        'Rewrite this heading so it satisfies the constraint below. Return ONLY the corrected',
+        'heading text as plain text — no quotes, no HTML tags, no commentary.',
+        '',
+        // issue.detail already names the exact required short form (productShort(productName)),
+        // computed once by the validator — never re-derived here, so the instruction always
+        // matches whatever this run's product actually is.
+        issue.detail,
+        '',
+        `Current heading: "${current}"`,
+      ].join('\n'),
     },
   ],
 ]);

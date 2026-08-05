@@ -232,6 +232,30 @@ describe('normalizeTerminology — uk-UA (2026-07-16 EXPERT3D find/replace audit
       .toBe('маркерами без обмеження за висотою');
   });
 
+  it('fixes the invented neuter "акрило" + adjective agreement (2026-08 EXPERT3D Ortur F10 10W audit)', () => {
+    expect(normalizeTerminology('Чорне акрило і фанера ріжуться за один прохід лазера.', 'uk-UA'))
+      .toBe('Чорний акрил і фанера ріжуться за один прохід лазера.');
+    expect(normalizeTerminology('Різання за один прохід: чорне акрило 5 мм / фанера 8 мм', 'uk-UA'))
+      .toBe('Різання за один прохід: чорний акрил 5 мм / фанера 8 мм');
+    expect(normalizeTerminology('Темне акрило та галька підходять для гравіювання.', 'uk-UA'))
+      .toBe('Темний акрил та галька підходять для гравіювання.');
+    expect(normalizeTerminology('темне акрило 5 мм і фанера 8 мм ріжуться', 'uk-UA'))
+      .toBe('темний акрил 5 мм і фанера 8 мм ріжуться');
+    // A correctly-declined form must not be touched.
+    expect(normalizeTerminology('різання чорного акрила товщиною 5 мм', 'uk-UA'))
+      .toBe('різання чорного акрила товщиною 5 мм');
+    // Other locales are untouched.
+    expect(normalizeTerminology('Chorne akrylo', 'es-ES')).toBe('Chorne akrylo');
+  });
+
+  it('fixes "консумаблі" -> "витратні матеріали" (2026-08 EXPERT3D Ortur F10 10W audit)', () => {
+    expect(normalizeTerminology('Консумаблі та запасні частини є в наявності на складі.', 'uk-UA'))
+      .toBe('Витратні матеріали та запасні частини є в наявності на складі.');
+    expect(normalizeTerminology('Замовляйте консумаблі окремо.', 'uk-UA'))
+      .toBe('Замовляйте витратні матеріали окремо.');
+    expect(normalizeTerminology('консумаблі', 'es-ES')).toBe('консумаблі');
+  });
+
   it('translates the voltage-line "AC" to "(змінний струм)"', () => {
     expect(normalizeTerminology('Напруга: 100–240 В ~ AC, 50/60 Гц', 'uk-UA'))
       .toBe('Напруга: 100–240 В (змінний струм), 50/60 Гц');

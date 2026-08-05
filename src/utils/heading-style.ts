@@ -26,6 +26,7 @@ import {
   isCenter3dPrintStore,
 } from '../prompt-core/constants';
 import { productShort } from '../prompt-core/product-name-core';
+import { extractBlocks } from './block-repair';
 
 /**
  * [ADAPTED from buildProductNamePattern in output-validator.ts:369]
@@ -101,6 +102,7 @@ function startsWithFunctionalOpener(heading: string, localeKey: string): boolean
  */
 function checkProductNameStuffing(
   doc: Document,
+  html: string,
   productName: string,
   locale: string,
 ): ValidationIssue[] {
@@ -115,6 +117,19 @@ function checkProductNameStuffing(
   const shortPattern = short && short !== full ? productNamePattern(short) : null;
 
   const headings = Array.from(doc.querySelectorAll('h2, h3'));
+  // extractBlocks() (block-repair.ts) already indexes h2/h3 among its addressable prose blocks —
+  // reused here rather than inventing a second HTML-position scheme, so a finding raised here can
+  // be repaired by the SAME repairBlocks executor every other block-scoped rule already uses. Both
+  // lists are document-order traversals of the identical `html`, so position i in one corresponds
+  // to position i in the other; a length mismatch (a parser disagreement) degrades to "no path" —
+  // still reported, just not machine-addressable — rather than mis-pairing a heading to the wrong
+  // block.
+  const headingBlocks = extractBlocks(html).filter(b => b.tag === 'h2' || b.tag === 'h3');
+  const blockPathFor = (heading: Element): string | undefined => {
+    if (headingBlocks.length !== headings.length) return undefined;
+    const i = headings.indexOf(heading);
+    return i >= 0 ? `block[${headingBlocks[i].index}]` : undefined;
+  };
   const named: Element[] = [];
 
   for (const heading of headings) {
@@ -131,6 +146,7 @@ function checkProductNameStuffing(
           `suffix — use the short form "${short}" in the first §3 heading and the §9 closing, ` +
           `and a generic category noun everywhere else.`,
         context: `${locale} — heading form`,
+        path: blockPathFor(heading),
       });
       continue;
     }
@@ -143,6 +159,7 @@ function checkProductNameStuffing(
           `The <h3> "${text}" names the product. Sub-headings are short nominal labels ` +
           `(«Лазерний модуль», «Безпека») and never carry the product name at all.`,
         context: `${locale} — heading form`,
+        path: blockPathFor(heading),
       });
       continue;
     }
@@ -161,6 +178,7 @@ function checkProductNameStuffing(
         `may — the first §3 heading and the §9 closing. Replace this one's product name with a ` +
         `generic category noun ("пристрій", "лідар-сканер") or drop it entirely.`,
       context: `${locale} — heading form`,
+      path: blockPathFor(heading),
     });
   }
 
@@ -191,7 +209,7 @@ export function validateHeadingStyle(
   }
 
   // Runs for every store and locale — see checkProductNameStuffing's doc-comment.
-  issues.push(...checkProductNameStuffing(doc, productName, locale));
+  issues.push(...checkProductNameStuffing(doc, html, productName, locale));
 
   if (!isCenter3dPrintStore(storeName)) return issues;
 
@@ -236,7 +254,18 @@ export function validateHeadingStyle(
 
 /** A single heading collected off the Doc, in document order, addressed by JSON path. `level`
  *  mirrors the HTML renderer's own choice — top-level Subsections render <h2>, one nesting level
- *  deep renders <h3> (see description-doc.ts's Subsection.heading doc-comment). */
+ *  deep renders <h3> (see description-doc.ts's Subsection.heading doc-comment).
+ *
+ *  `path` is prefixed with `doc.` — relative to `runDocGate`'s `{ doc, issues }` wrapper
+ *  (`DocAttempt`), which is what `runRepairGate`'s path addressing actually walks, not the Doc
+ *  itself (see repair-strategy.ts's path-addressing note). Only the single-hop
+ *  `doc.functionality[i].heading` shape is addressable by that grammar today — every other path
+ *  here (`doc.specs.heading`, `doc.cta.heading`, any h3 `...subsections[j].heading`) still throws
+ *  "unsupported path" if ever handed to a registered strategy, which is caught and treated as
+ *  "cannot patch this one" rather than a crash. That is a known, deliberate gap, not an oversight:
+ *  extending the shared path grammar to arbitrary nesting was rejected because it would also have
+ *  to accept a bare `arrayProp.leafProp` (no index) as valid, which repair-strategy.spec.ts locks
+ *  in as a thrown error on purpose (see its comment on why that stays a caller-bug signal). */
 interface DocHeading {
   text: string;
   level: 'h2' | 'h3';
@@ -259,13 +288,13 @@ function subsectionHeadings(sub: Subsection, path: string, level: 'h2' | 'h3'): 
  */
 function collectHeadings(doc: ProductDescriptionDoc): DocHeading[] {
   const out: DocHeading[] = [];
-  doc.functionality.forEach((s, i) => out.push(...subsectionHeadings(s, `functionality[${i}]`, 'h2')));
-  out.push({ text: doc.applications.heading, level: 'h2', path: 'applications.heading' });
-  if (doc.compatibility) out.push(...subsectionHeadings(doc.compatibility, 'compatibility', 'h2'));
-  if (doc.operatingTips) out.push(...subsectionHeadings(doc.operatingTips, 'operatingTips', 'h2'));
-  if (doc.packageContents) out.push({ text: doc.packageContents.heading, level: 'h2', path: 'packageContents.heading' });
-  out.push({ text: doc.specs.heading, level: 'h2', path: 'specs.heading' });
-  out.push({ text: doc.cta.heading, level: 'h2', path: 'cta.heading' });
+  doc.functionality.forEach((s, i) => out.push(...subsectionHeadings(s, `doc.functionality[${i}]`, 'h2')));
+  out.push({ text: doc.applications.heading, level: 'h2', path: 'doc.applications.heading' });
+  if (doc.compatibility) out.push(...subsectionHeadings(doc.compatibility, 'doc.compatibility', 'h2'));
+  if (doc.operatingTips) out.push(...subsectionHeadings(doc.operatingTips, 'doc.operatingTips', 'h2'));
+  if (doc.packageContents) out.push({ text: doc.packageContents.heading, level: 'h2', path: 'doc.packageContents.heading' });
+  out.push({ text: doc.specs.heading, level: 'h2', path: 'doc.specs.heading' });
+  out.push({ text: doc.cta.heading, level: 'h2', path: 'doc.cta.heading' });
   return out;
 }
 
@@ -389,7 +418,8 @@ export function validateHeadingStyleDoc(
     const text = (section.heading ?? '').replace(/\s+/g, ' ').trim();
     if (!text) return;
     const lower = text.toLowerCase();
-    const path = `functionality[${i}].heading`;
+    // 'doc.'-prefixed for the same reason collectHeadings()'s paths are — see DocHeading's comment.
+    const path = `doc.functionality[${i}].heading`;
 
     if (text.includes('?')) return;                                                    // §9-shaped, defensive
     if (OPERATING_TIPS_H2_MARKERS.some(m => lower.startsWith(m.toLowerCase()))) return; // tips-shaped, defensive

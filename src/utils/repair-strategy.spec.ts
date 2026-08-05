@@ -195,7 +195,7 @@ describe('warnings on the ladder', () => {
 describe('registry strategies', () => {
   it('registers exactly the intended rules and nothing by analogy', () => {
     expect([...REPAIR_STRATEGIES.keys()].sort())
-      .toEqual(['meta-title-length', 'sentence-too-long', 'slug-charset']);
+      .toEqual(['heading-product-name-stuffing', 'meta-title-length', 'sentence-too-long', 'slug-charset']);
   });
 
   it('does NOT repair spec-row-not-grounded, because the finding itself is unreliable', () => {

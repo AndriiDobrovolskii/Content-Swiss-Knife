@@ -161,6 +161,15 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
   When "nylon" appears as a plain generic material word, render it with a natural descriptive
   synonym: "зі склонаповненого нейлону" for GF grades, "з композитного нейлону" for
   composite grades.
+- GRAMMATICAL GENDER of a borrowed material noun governs the ending of every adjective and case
+  form built on it — verify the noun's actual gender rather than inventing an ending by analogy to
+  an unrelated word. Ukrainian "акрил" (acrylic) is masculine ("чорний акрил", genitive "чорного
+  акрила"); a neuter form such as "акрило" is not a stylistic variant, it is not a word. This
+  applies to any material noun, not only acrylic.
+- Do not restate a material's color/shade descriptor in the sentence immediately following the one
+  that already named it — refer to the material alone, or with a pronoun, the second time (e.g.
+  having called something "dark acrylic" once, the next sentence says "acrylic," not "dark
+  acrylic" again).
 - ANTI-RUSSICISM (Ukrainian output is the pipeline MASTER — every locale translates from it, so
   a Russicism here is not a local style slip, it propagates everywhere): write standard
   normative Ukrainian, not surzhyk. Known patterns to avoid:
