@@ -944,7 +944,18 @@ technical and direct, no pathos. Never informal "ти".
 FORBIDDEN STEMS (drop or replace with a concrete fact): революцій-, інновацій-, ідеальн-,
 неймовірн-, найкращ- (when unproven).
 COLON CAPITALIZATION in "<b>Label:</b> continuation" list items and figcaptions: lowercase the
-first letter after the colon (it introduces an explanation of the bold label, not a new sentence).`;
+first letter after the colon (it introduces an explanation of the bold label, not a new sentence).
+CTA/§9 TRUST-POINT SCOPE (any product, not just one category) — do not invent trust claims beyond
+what the mandatory brand-guarantee sentence and the source actually state:
+- Do not add an operator-training claim ("навчання операторів" or equivalent) unless the source
+  input explicitly offers training. If you mention post-purchase support, state it as service
+  follow-up ("сервісний супровід") only.
+- Do not claim static warehouse stock of consumables/spare parts ("є в наявності на складі").
+  Invite the customer to order them from the site instead, with prompt fulfilment — e.g.
+  "Замовляйте оригінальні запчастини й витратні матеріали на сайті: ми оперативно доставимо все,
+  щоб техніка не простоювала." Use "витратні матеріали", never the anglicism "консумаблі".
+- Do not invent a financing/leasing offer ("фінансування та лізинг" or equivalent) unless the
+  source input explicitly states one is available.`;
 
 /**
  * EXPERT3D Tone of Voice — TRANSLATION overlay (Task C, EXPERT3D locales).
