@@ -75,6 +75,7 @@ const LABELS = {
     deleteTableTooltip: 'Delete table',
     sourceModeTooltip: 'Source code',
     fullscreenTooltip: 'Fullscreen',
+    exitFullscreenTooltip: 'Exit fullscreen',
     findReplaceTooltip: 'Find and replace (Ctrl+F)',
     feedbackTooltip: 'Suggest an improvement — the current HTML is copied to the clipboard for the "before" field',
     feedbackCopied: 'HTML copied — paste it into the "before" field',
@@ -137,6 +138,7 @@ const LABELS = {
     deleteTableTooltip: 'Видалити таблицю',
     sourceModeTooltip: 'Вихідний код',
     fullscreenTooltip: 'На весь екран',
+    exitFullscreenTooltip: 'Вийти з повноекранного режиму',
     findReplaceTooltip: 'Знайти і замінити (Ctrl+F)',
     feedbackTooltip: 'Запропонувати покращення — поточний HTML скопіюється в буфер для поля «ДО»',
     feedbackCopied: 'HTML скопійовано — вставте його в поле «ДО»',
@@ -471,7 +473,7 @@ export class HtmlEditorComponent {
       this.sourceMode.set(false);
     } else {
       // Seeds the doc the lifecycle effect builds the view from, below.
-      this.sourceHtml = beautifyHtml(this.editor?.getHTML() ?? '');
+      this.sourceHtml = beautifyHtml(this.buildCopyHtml());
       this.sourceMode.set(true);
     }
   }

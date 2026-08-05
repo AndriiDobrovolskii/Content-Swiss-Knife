@@ -1,5 +1,5 @@
-<div class="absolute inset-0 overflow-y-auto p-6 space-y-6 bg-slate-50 dark:bg-slate-900"
-     [class.fixed]="fullscreen()" [class.z-50]="fullscreen()" [class.overflow-y-auto]="fullscreen()">
+<div class="inset-0 overflow-y-auto p-6 space-y-6 bg-slate-50 dark:bg-slate-900"
+     [ngClass]="fullscreen() ? 'fixed z-50' : 'absolute'">
 
   <div>
     <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -25,7 +25,11 @@
       </button>
     </div>
   } @else {
-    <div class="max-w-4xl space-y-4">
+    <div class="space-y-4"
+         [class.max-w-4xl]="!fullscreen()"
+         [class.w-full]="fullscreen()"
+         [class.mx-auto]="fullscreen()"
+         [style.max-width]="fullscreen() ? '1920px' : null">
 
       <!-- Toolbar -->
       <div class="flex flex-wrap items-center gap-1 p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300">
@@ -144,7 +148,7 @@
 
         <button (click)="findReplaceOpen() ? closeFindReplace() : openFindReplace()" [class.bg-slate-200]="findReplaceOpen()" [class.dark:bg-slate-600]="findReplaceOpen()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" [title]="t().findReplaceTooltip"><i class="fa-solid fa-magnifying-glass"></i></button>
         <button (click)="toggleSourceMode()" [class.bg-slate-200]="sourceMode()" [class.dark:bg-slate-600]="sourceMode()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" [title]="t().sourceModeTooltip"><i class="fa-solid fa-code"></i></button>
-        <button (click)="toggleFullscreen()" [class.bg-slate-200]="fullscreen()" [class.dark:bg-slate-600]="fullscreen()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" [title]="t().fullscreenTooltip"><i class="fa-solid" [class.fa-expand]="!fullscreen()" [class.fa-compress]="fullscreen()"></i></button>
+        <button (click)="toggleFullscreen()" [class.bg-slate-200]="fullscreen()" [class.dark:bg-slate-600]="fullscreen()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm" [title]="fullscreen() ? t().exitFullscreenTooltip : t().fullscreenTooltip"><i class="fa-solid" [class.fa-expand]="!fullscreen()" [class.fa-compress]="fullscreen()"></i></button>
         @if (feedbackUrl()) {
           <button (click)="copyAndOpenFeedback()" class="w-7 h-7 flex items-center justify-center rounded hover:bg-amber-100 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 text-sm" [title]="t().feedbackTooltip"><i class="fa-regular fa-lightbulb"></i></button>
         }
@@ -163,7 +167,8 @@
       <div class="relative">
         @if (!sourceMode()) {
           <div #editorHost
-            class="min-h-[200px] overflow-y-auto p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-200"
+            class="html-editor-canvas min-h-[200px] overflow-y-auto p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-200"
+            [class.is-fullscreen]="fullscreen()"
             [style.max-height]="fullscreen() ? 'calc(100vh - 14rem)' : '400px'"></div>
         } @else {
           <div #sourceHost
