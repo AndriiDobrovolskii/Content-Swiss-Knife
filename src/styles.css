@@ -29,6 +29,40 @@ html.dark { color-scheme: dark; }
 .dark .tiptap th, .dark .tiptap td { border-color: #475569; }
 .dark .tiptap th { background: rgba(255, 255, 255, 0.04); }
 
+/* Fullscreen WYSIWYG canvas (html-editor.component.html): distraction-free layout.
+   Prose elements stay in a readable column; tables/figures are left uncapped so
+   they can bleed to the full canvas width (already 100%-width by the table rule
+   above, and by the figure/video inline styles TipTap round-trips verbatim).
+   Covers every block type StarterKit's schema accepts (h1-h6, pre), not just the
+   ones the toolbar exposes buttons for (H2-H4) — pasted-in HTML can still contain
+   the rest, and TipTap will parse it into the doc regardless of toolbar UI.
+   Assumes table/figure/pre stay at the paragraph's nesting level, as every real
+   generated artifact does (CLAUDE.md's figure/table rules require a sibling <p>
+   lead-in, never a table nested inside a list item or blockquote) — the TipTap
+   schema doesn't structurally forbid that nesting (listItem/blockquote accept
+   `block+`), so a manually-restructured edit that nests a table inside a <ul>/
+   <blockquote> would inherit that ancestor's 860px cap instead of bleeding. Not
+   worth a CSS break-out hack for a shape the generator itself never produces. */
+.html-editor-canvas.is-fullscreen .tiptap h1,
+.html-editor-canvas.is-fullscreen .tiptap h2,
+.html-editor-canvas.is-fullscreen .tiptap h3,
+.html-editor-canvas.is-fullscreen .tiptap h4,
+.html-editor-canvas.is-fullscreen .tiptap h5,
+.html-editor-canvas.is-fullscreen .tiptap h6,
+.html-editor-canvas.is-fullscreen .tiptap p,
+.html-editor-canvas.is-fullscreen .tiptap ul,
+.html-editor-canvas.is-fullscreen .tiptap ol,
+.html-editor-canvas.is-fullscreen .tiptap blockquote {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.html-editor-canvas.is-fullscreen .tiptap pre {
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* highlight.js — GitHub Dark overrides (Tailwind dark: class strategy) */
 .dark .hljs                          { background: #0d1117; color: #e6edf3; }
 .dark .hljs-comment,

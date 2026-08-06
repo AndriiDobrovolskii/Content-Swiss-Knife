@@ -515,6 +515,12 @@ export class AppComponent {
   repairedArtifactsCount = computed(() => this.repairReport().filter(r => r.status !== 'clean').length);
   repairUnresolvedCount = computed(() => this.repairReport().filter(r => r.status === 'unresolved').length);
 
+  // Collapsible-state for the two report cards. Set once per run by the effect below, then
+  // driven purely by the user's own (toggle) clicks — never re-bound to the counts directly,
+  // so a manual collapse is never fought by change detection.
+  acceptancePanelOpen = signal(false);
+  repairPanelOpen = signal(false);
+
   // Per-tool output presence — each tool's layout reads ONLY its own slice.
   hasGeneratorOutput = computed(() => !!this.content().mainHtmlUa);
   hasSeoOutput = computed(() => !!this.content().seoData);
@@ -667,6 +673,15 @@ export class AppComponent {
 
     effect(() => {
       localStorage.setItem('seo_gen_ui_lang', this.uiLanguage());
+    });
+
+    // Auto-open the report cards on the generating→done edge when there's something actionable
+    // (unresolved errors); otherwise leave them collapsed. Fires only on that transition, so a
+    // user's own (toggle) click afterward is never overwritten.
+    effect(() => {
+      if (this.isGenerating()) return;
+      this.acceptancePanelOpen.set(this.validationErrorCount() > 0);
+      this.repairPanelOpen.set(this.repairUnresolvedCount() > 0);
     });
   }
 
@@ -1064,7 +1079,14 @@ export class AppComponent {
     }
   }
 
-  async downloadZip() { await downloadPackage(this.content(), this.activeProductName()); }
+  async downloadZip() {
+    const reports = this.orchestrator.repairReport();
+    const meta = this.orchestrator.repairReportMeta();
+    const extraFiles = reports.length > 0 && meta
+      ? [{ name: 'repair_gate_report.md', content: formatRepairReportMarkdown(reports, meta) }]
+      : undefined;
+    await downloadPackage(this.content(), this.activeProductName(), extraFiles);
+  }
   async downloadText() { downloadTextPackage(this.content(), this.activeProductName()); }
 
   copyToClipboard(text: string, event?: Event) {

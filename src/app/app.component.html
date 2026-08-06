@@ -1233,18 +1233,22 @@
 
       <div class="flex-1 overflow-y-auto p-8 relative">
         @if (validationIssues().length > 0 && !isGenerating()) {
-          <div class="max-w-5xl mx-auto mb-6 rounded-xl border p-4 text-sm"
+          <details class="max-w-5xl mx-auto mb-6 rounded-xl border p-4 text-sm"
                [class]="validationErrorCount() > 0
                  ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
-                 : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200'">
-            <div class="flex items-center gap-2 font-bold mb-2">
-              <i class="fa-solid" [class]="validationErrorCount() > 0 ? 'fa-circle-exclamation' : 'fa-triangle-exclamation'"></i>
-              <span>{{ uiLabels().validationTitle }}</span>
-              <span class="font-normal opacity-80">
-                — {{ validationErrorCount() }} {{ uiLabels().validationErrorsLabel }}, {{ validationWarningCount() }} {{ uiLabels().validationWarningsLabel }}
-              </span>
-            </div>
-            <ul class="space-y-1">
+                 : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200'"
+               [open]="acceptancePanelOpen()"
+               (toggle)="acceptancePanelOpen.set($any($event.target).open)">
+            <summary class="cursor-pointer">
+              <div class="flex items-center gap-2 font-bold mb-2">
+                <i class="fa-solid" [class]="validationErrorCount() > 0 ? 'fa-circle-exclamation' : 'fa-triangle-exclamation'"></i>
+                <span>{{ uiLabels().validationTitle }}</span>
+                <span class="font-normal opacity-80">
+                  — {{ validationErrorCount() }} {{ uiLabels().validationErrorsLabel }}, {{ validationWarningCount() }} {{ uiLabels().validationWarningsLabel }}
+                </span>
+              </div>
+            </summary>
+            <ul class="mt-2 space-y-1">
               @for (issue of validationIssues(); track $index) {
                 <li class="flex items-start gap-2">
                   <i class="fa-solid fa-circle mt-1.5 text-[8px]"
@@ -1253,33 +1257,37 @@
                 </li>
               }
             </ul>
-          </div>
+          </details>
         }
 
         @if (repairReport().length > 0 && (repairedArtifactsCount() > 0 || validationWarningCount() > 0) && !isGenerating()) {
-          <div class="max-w-5xl mx-auto mb-6 rounded-xl border p-4 text-sm"
+          <details class="max-w-5xl mx-auto mb-6 rounded-xl border p-4 text-sm"
                [class]="repairUnresolvedCount() > 0
                  ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
-                 : 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200'">
-            <div class="flex items-center gap-2 font-bold mb-2">
-              <i class="fa-solid fa-wrench"></i>
-              <span>{{ uiLabels().repairReportTitle }}</span>
-              <span class="font-normal opacity-80">
-                — {{ repairedArtifactsCount() }} {{ uiLabels().repairReportArtifactsFixed }}
-                @if (repairUnresolvedCount() > 0) {
-                  , {{ repairUnresolvedCount() }} {{ uiLabels().repairReportStillFailing }}
-                }
-                @if (repairedArtifactsCount() === 0 && validationWarningCount() > 0) {
-                  , {{ validationWarningCount() }} {{ uiLabels().repairReportWarningsOnly }}
-                }
-              </span>
-              <button type="button"
-                      class="ml-auto text-xs px-2 py-1 rounded border border-current opacity-80 hover:opacity-100"
-                      (click)="downloadRepairReportMd()">
-                <i class="fa-solid fa-download"></i> {{ uiLabels().repairReportDownload }}
-              </button>
-            </div>
-            <div class="space-y-3">
+                 : 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200'"
+               [open]="repairPanelOpen()"
+               (toggle)="repairPanelOpen.set($any($event.target).open)">
+            <summary class="cursor-pointer">
+              <div class="flex items-center gap-2 font-bold mb-2">
+                <i class="fa-solid fa-wrench"></i>
+                <span>{{ uiLabels().repairReportTitle }}</span>
+                <span class="font-normal opacity-80">
+                  — {{ repairedArtifactsCount() }} {{ uiLabels().repairReportArtifactsFixed }}
+                  @if (repairUnresolvedCount() > 0) {
+                    , {{ repairUnresolvedCount() }} {{ uiLabels().repairReportStillFailing }}
+                  }
+                  @if (repairedArtifactsCount() === 0 && validationWarningCount() > 0) {
+                    , {{ validationWarningCount() }} {{ uiLabels().repairReportWarningsOnly }}
+                  }
+                </span>
+                <button type="button"
+                        class="ml-auto text-xs px-2 py-1 rounded border border-current opacity-80 hover:opacity-100"
+                        (click)="$event.stopPropagation(); downloadRepairReportMd()">
+                  <i class="fa-solid fa-download"></i> {{ uiLabels().repairReportDownload }}
+                </button>
+              </div>
+            </summary>
+            <div class="mt-2 space-y-3">
               @for (report of repairReport(); track report.label) {
                 @if (report.status !== 'clean' || report.finalIssues.some(i => i.severity === 'warning')) {
                   <details class="text-sm">
@@ -1324,7 +1332,7 @@
                 }
               }
             </div>
-          </div>
+          </details>
         }
 
         @if (appMode() !== 'generator' && !content().mainHtmlUa && !content().seoData && !content().slugData && !isGenerating()) {
