@@ -1377,7 +1377,10 @@ export class ContentOrchestratorService {
     this.progressMessage.set('Cleaning HTML structure locally…');
     await this.withProgress(async () => {
       await new Promise(resolve => setTimeout(resolve, 0));
-      this.optimizerOutput.set(cleanHtmlStructure(htmlInput));
+      // Same composition as the LLM optimize() path (see above): cleanHtmlStructure builds
+      // the section.specs envelope for legacy tables, finalizeTablesForDisplay then decorates
+      // it. Without this second call the Fast button never reached the store's §7 theme.
+      this.optimizerOutput.set(finalizeTablesForDisplay(cleanHtmlStructure(htmlInput)));
       this.progressMessage.set('Structure Cleaned!');
     }, 'Error while cleaning.', 'Cleaning failed');
   }

@@ -30,6 +30,64 @@ describe('cleanHtmlStructure — microdata stripping', () => {
   });
 });
 
+describe('cleanHtmlStructure — span microdata unwrapping', () => {
+  it('unwraps a bare <span itemprop> in body prose to plain text', () => {
+    const html = `<p>The <span itemprop="name">Product</span> is great.</p>`;
+    const doc = parse(cleanHtmlStructure(html));
+    expect(doc.querySelector('span')).toBeNull();
+    expect(doc.querySelector('p')!.textContent).toBe('The Product is great.');
+  });
+
+  it('unwraps a span itemprop even when it carries other attributes like class', () => {
+    const html = `<p><span itemprop="name" class="title" id="x">Product</span></p>`;
+    const doc = parse(cleanHtmlStructure(html));
+    expect(doc.querySelector('span')).toBeNull();
+    expect(doc.querySelector('p')!.textContent).toBe('Product');
+  });
+
+  it('unwraps a span itemscope/itemtype microdata carrier', () => {
+    const html = `<p><span itemscope itemtype="https://schema.org/PropertyValue">Value</span></p>`;
+    const doc = parse(cleanHtmlStructure(html));
+    expect(doc.querySelector('span')).toBeNull();
+    expect(doc.querySelector('p')!.textContent).toBe('Value');
+  });
+
+  it('unwraps a span itemprop nested inside a spec-table cell while keeping the cell', () => {
+    const html = `<table><tbody><tr><td itemprop="value"><span itemprop="unitText">mm</span></td></tr></tbody></table>`;
+    const doc = parse(cleanHtmlStructure(html));
+    expect(doc.querySelector('span')).toBeNull();
+    const td = doc.querySelector('td')!;
+    expect(td.hasAttribute('itemprop')).toBe(false);
+    expect(td.textContent).toBe('mm');
+  });
+});
+
+describe('cleanHtmlStructure — stray spacer <br> removal', () => {
+  it('removes a <br> sitting directly between two block elements', () => {
+    const html = `<p>A</p><br><h2>B</h2>`;
+    const doc = parse(cleanHtmlStructure(html));
+    expect(doc.querySelector('br')).toBeNull();
+  });
+
+  it('removes a <br> inside a <div>/<section> that is not inside prose', () => {
+    const html = `<div><p>Intro</p><br><table><tbody><tr><td>A</td></tr></tbody></table></div>`;
+    const doc = parse(cleanHtmlStructure(html));
+    expect(doc.querySelector('br')).toBeNull();
+  });
+
+  it('preserves a <br> legitimately inside a <p> mid-sentence', () => {
+    const html = `<p>Line one<br>Line two</p>`;
+    const doc = parse(cleanHtmlStructure(html));
+    expect(doc.querySelector('p br')).not.toBeNull();
+  });
+
+  it('fully removes an empty <p><br></p> spacer paragraph (no orphan <br> left behind)', () => {
+    const html = `<p>Real content.</p><p><br></p><h2>Next</h2>`;
+    const doc = parse(cleanHtmlStructure(html));
+    expect(doc.querySelector('br')).toBeNull();
+  });
+});
+
 describe('cleanHtmlStructure — table simplification', () => {
   const dirtyTable = `
     <div class="table-responsive">
@@ -138,6 +196,7 @@ describe('cleanHtmlStructure — image figure wrapping', () => {
 describe('cleanHtmlStructure — idempotency', () => {
   it('produces the same output when run twice', () => {
     const html = `<div itemscope itemtype="https://schema.org/Product">
+      <p><span itemprop="name">Product</span></p>
       <div class="table-responsive"><table class="table"><thead><tr><th scope="col">A</th></tr></thead>
       <tbody><tr><th scope="row">Row</th><td>Val</td></tr></tbody></table></div>
       <img src="a.jpg" alt="A"></div>`;

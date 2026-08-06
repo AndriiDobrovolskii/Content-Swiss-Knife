@@ -1,6 +1,7 @@
 
 import { ensureRel0 } from './video-url';
 import { wrapImageFigures } from './image-figure';
+import { wrapLegacySpecTables } from './legacy-specs-wrap';
 
 const SCHEMA_TYPE_SELECTOR = (name: string) => `[itemtype$="/${name}"]`;
 
@@ -143,6 +144,23 @@ export const cleanHtmlStructure = (html: string): string => {
     }
   });
 
+  // 5a. Stray Spacer <br> Removal
+  // A <br> is legitimate content only inside inline/text-flow elements — a manual line
+  // break mid-sentence. Anywhere else (directly inside a <div>, <section>, <table>, or the
+  // document body) it exists purely as manual spacing between block elements, which the
+  // CMS theme's own spacing already handles — see CLAUDE.md "No <br> for spacing". This also
+  // sweeps up the bare <br> the conversion above just produced from an empty <p><br></p>.
+  const BR_ALLOWED_PARENTS = new Set([
+    'P', 'LI', 'TD', 'TH', 'SPAN', 'A', 'STRONG', 'B', 'EM', 'I',
+    'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'FIGCAPTION',
+  ]);
+  doc.querySelectorAll('br').forEach(br => {
+    const parentTag = br.parentElement?.tagName;
+    if (parentTag && !BR_ALLOWED_PARENTS.has(parentTag)) {
+      br.remove();
+    }
+  });
+
   // Replace all <b> tags with <strong> tags
   doc.querySelectorAll('b').forEach(b => {
     const strong = doc.createElement('strong');
@@ -247,6 +265,14 @@ export const cleanHtmlStructure = (html: string): string => {
     img.setAttribute('style', 'max-width: 100%; height: auto;');
   });
 
+  // 7a. Span Microdata Unwrap
+  // A <span> carrying itemscope/itemtype/itemprop exists only to hold that attribute —
+  // unlike <div>/<table>/<td>/<p>, it has no content role of its own. Stripping just the
+  // attribute (as 7b does for everything else) would leave a purposeless empty wrapper, so
+  // this removes the tag itself, unconditionally, regardless of any other attributes
+  // (class, id, style, …) it carries.
+  doc.querySelectorAll('span[itemscope], span[itemtype], span[itemprop]').forEach(unwrap);
+
   // 7b. Generic Microdata Strip
   // Mop up any remaining Schema.org attributes (e.g. on spec-table tr/th/td)
   // left after the targeted unwrapping/simplification passes above.
@@ -256,11 +282,17 @@ export const cleanHtmlStructure = (html: string): string => {
     el.removeAttribute('itemprop');
   });
 
+  // 7c. Legacy Spec-Table Envelope
+  // Build the <section class="specs">…</section><hr> envelope around legacy (pre-app),
+  // div-wrapped spec tables when the input never had one — see legacy-specs-wrap.ts. No-op
+  // when a section.specs already exists or no legacy wrapper divs are found.
+  const withSpecsEnvelope = wrapLegacySpecTables(doc.body.innerHTML);
+
   // 8. Figure Wrapping
   // Delegate to the same canonical <figure>/<figcaption> convention the
   // Generator pipeline uses. Never invents a <figcaption> — it only reuses one
   // already present as a trailing sibling of the <img>.
-  return wrapImageFigures(doc.body.innerHTML);
+  return wrapImageFigures(withSpecsEnvelope);
 };
 
 /**
