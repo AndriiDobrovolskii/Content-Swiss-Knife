@@ -21,8 +21,8 @@ dist-ssr
 Knowlege/
 
 # Local usage/cost tracking database — machine-specific, not part of the codebase
-server/usage/*.db
-server/usage/*.db-*
+data/*.db
+data/*.db-*
 
 # Angular build cache
 .angular/
