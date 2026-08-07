@@ -38,9 +38,10 @@ import { validateGeneratedHtml } from '../src/utils/output-validator';
  * "165mm") so `unit-spacing` stays quiet for the right reason.
  *
  * Shaped after fullDoc() in src/render/render-description.spec.ts — 3 figures, a video, a nested
- * <h3>, and both conditional sections — so the matrix exercises every branch the renderer has.
+ * <h3>, and both conditional sections (compatibility, packageContents) — so the matrix exercises
+ * every branch the renderer has.
  */
-function conformanceDoc(locale: string, admitsOperatingTips: boolean): ProductDescriptionDoc {
+function conformanceDoc(locale: string): ProductDescriptionDoc {
   const section = (heading: string, ref?: number): ProductDescriptionDoc['functionality'][number] => ({
     heading,
     blocks: [
@@ -115,13 +116,8 @@ function conformanceDoc(locale: string, admitsOperatingTips: boolean): ProductDe
     ],
   };
 
-  // The third figure lives in §5 for most stores and in §5b for Center 3D Print, which is the one
-  // store whose Style B voice has an operating-tips block. Branching here is the point: it is the
-  // per-store rule the matrix exists to prove, and both sections render in the same slot, so the
-  // output differs only by the heading — exactly what `admitsOperatingTips` claims.
-  const fifth = { heading: 'Compatibility', blocks: [{ kind: 'figure' as const, ref: 2 }] };
-  if (admitsOperatingTips) doc.operatingTips = fifth;
-  else doc.compatibility = fifth;
+  // The third figure lives in §5 compatibility for every store.
+  doc.compatibility = { heading: 'Compatibility', blocks: [{ kind: 'figure' as const, ref: 2 }] };
 
   return doc;
 }
@@ -166,7 +162,7 @@ describe('conformance matrix — coverage', () => {
 
 describe.each(RENDERABLE)('conformance — $storeName / $locale', ({ storeName, locale }) => {
   const rules = getRenderRules(storeName);
-  const doc = conformanceDoc(locale, rules.admitsOperatingTips);
+  const doc = conformanceDoc(locale);
   const html = renderDescription(doc, renderContextFor(storeName, 'formlabs', 'fuse-1'));
 
   it('the fixture is a valid document', () => {
@@ -228,13 +224,7 @@ describe.each(RENDERABLE)('conformance — $storeName / $locale', ({ storeName, 
     expect(html).toContain('title="Formlabs Fuse 1 overview"');
   });
 
-  /** §5b is Center 3D Print only — every other store renders the same block as §5 compatibility. */
-  it('places the conditional section in the slot this store’s rules select', () => {
-    // Same heading and the same slot either way — §5b renders where §5 does. What differs is WHICH
-    // field the document had to use, and only Center 3D Print may use operatingTips.
+  it('renders the §5 compatibility section for every store', () => {
     expect(html).toContain('<h2>Compatibility</h2>');
-    expect(rules.admitsOperatingTips).toBe(storeName === 'Center 3D Print');
-    expect(doc.operatingTips === undefined).toBe(!rules.admitsOperatingTips);
-    expect(doc.compatibility === undefined).toBe(rules.admitsOperatingTips);
   });
 });

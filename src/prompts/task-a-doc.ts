@@ -20,11 +20,6 @@
  * frozen prompts, because [FORMAT] in the master system prompt mandates HTML.
  */
 import { buildPromptA } from './task-a';
-// Interpolated into the instruction rather than retyped. It is the SINGLE SOURCE OF TRUTH for
-// detecting the §5b block downstream — tov-second-person.ts:78 exempts that block from the
-// second-person rule only when the heading starts with one of these — so a hand-copied string here
-// would drift and silently un-exempt the block, flagging the imperative prose it mandates.
-import { OPERATING_TIPS_H2_MARKERS } from '../prompt-core/constants';
 import type { PromptPayload } from '../prompt-core/payload';
 import type { ProductInput } from '../app/types';
 
@@ -63,7 +58,6 @@ SHAPE — emit exactly these keys:
     "items": [ { "scenario": "", "text": "" } ]                      // 4–8 entries
   },
   "compatibility": <Subsection>,                                     // §5 — omit when absent
-  "operatingTips": <Subsection>,                                     // §5b — Center 3D Print only
   "packageContents": { "heading": "", "items": ["", ""] },           // §6 — omit when absent
   "specs": {                                                         // §7
     "heading": "",
@@ -107,17 +101,7 @@ HARD RULES:
   digit AND "text" begins with one, the two words collide: "Топографічне зніманняДальність".
   End the "lead" with ":" or ". ", or begin the "text" with a space.
 - Do not invent a "section", "hr", "h2" or any other structural field. Section order, headings
-  level, tables, <hr> and figure markup are the renderer's job, not yours.
-- IF YOUR STORE GUIDELINES ASK FOR AN H2 that this schema has no field for — most often
-  "${OPERATING_TIPS_H2_MARKERS[0]}" — DO NOT emit an HTML tag and do not skip the content.
-  Put that section into "operatingTips" as a Subsection. The renderer emits the <h2> for you and
-  places it immediately before the commercial-closing section, which is what those guidelines ask
-  for. Its "heading" MUST BE the exact wording your guidelines give for this language — one of:
-  ${OPERATING_TIPS_H2_MARKERS.join(' | ')}. Do NOT append the product name: per [HEADING FORM]
-  this heading carries none.
-  A heading that only paraphrases those words is not recognised as this block downstream.
-  Keep the guidelines' own condition: include it only for production hardware with real
-  handling/safety considerations, and omit "operatingTips" entirely otherwise.`;
+  level, tables, <hr> and figure markup are the renderer's job, not yours.`;
 
 /**
  * Task A returning a Doc contract instead of an HTML one.

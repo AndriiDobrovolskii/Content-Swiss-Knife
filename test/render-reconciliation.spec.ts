@@ -91,6 +91,16 @@ interface CorpusItem {
   ctx?: RenderContext;
 }
 
+/**
+ * §5b `operatingTips` was removed from the schema and the renderer (PDP scope narrowed to
+ * pre-purchase content). `center-3d-print-ortur-h20-20w` is a real, already-published Center 3D
+ * Print page whose production HTML still carries that section — the renderer will never reproduce
+ * it again by design, so this corpus item can no longer reconcile byte-for-byte. The three fixture
+ * files stay committed (historical record; `scaffold-doc.spec.ts`'s field-level checks still use
+ * them), but this suite must not claim reconciliation it cannot deliver.
+ */
+const SUPERSEDED_SLUGS = new Set(['center-3d-print-ortur-h20-20w']);
+
 function loadCorpus(): CorpusItem[] {
   if (!existsSync(CORPUS_DIR)) return [];
   return readdirSync(CORPUS_DIR)
@@ -100,11 +110,12 @@ function loadCorpus(): CorpusItem[] {
       const slug = file.replace(/\.uk-UA\.html$/, '');
       const docPath = join(CORPUS_DIR, `${slug}.doc.json`);
       const ctxPath = join(CORPUS_DIR, `${slug}.ctx.json`);
+      const superseded = SUPERSEDED_SLUGS.has(slug);
       return {
         slug,
         html: readFileSync(join(CORPUS_DIR, file), 'utf8'),
-        doc: existsSync(docPath) ? JSON.parse(readFileSync(docPath, 'utf8')) : undefined,
-        ctx: existsSync(ctxPath) ? JSON.parse(readFileSync(ctxPath, 'utf8')) : undefined,
+        doc: !superseded && existsSync(docPath) ? JSON.parse(readFileSync(docPath, 'utf8')) : undefined,
+        ctx: !superseded && existsSync(ctxPath) ? JSON.parse(readFileSync(ctxPath, 'utf8')) : undefined,
       };
     });
 }
@@ -124,7 +135,9 @@ describe('render reconciliation — corpus coverage', () => {
     if (pending.length > 0) {
       console.warn(
         `\n[reconciliation] ${reconcilable.length}/${corpus.length} corpus items reconcilable.\n` +
-          pending.map(p => `  PENDING ${p.slug} — missing ${!p.doc ? '.doc.json' : ''}${!p.doc && !p.ctx ? ' and ' : ''}${!p.ctx ? '.ctx.json' : ''}`).join('\n') +
+          pending.map(p => SUPERSEDED_SLUGS.has(p.slug)
+            ? `  PENDING ${p.slug} — superseded: production's §5b operating-tips section no longer has a schema field`
+            : `  PENDING ${p.slug} — missing ${!p.doc ? '.doc.json' : ''}${!p.doc && !p.ctx ? ' and ' : ''}${!p.ctx ? '.ctx.json' : ''}`).join('\n') +
           `\n  See test/render-reconciliation.report.md for why these are not yet authored.\n`,
       );
     }

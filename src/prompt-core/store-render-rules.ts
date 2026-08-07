@@ -19,7 +19,7 @@
  * (`C3D_TOV_BASE_OVERLAY`, `EXPERT3D_*`) stay in constants.ts: they are prompt text consumed by
  * frozen files, and relocating them would force a frozen-file edit for no gain.
  */
-import { getStore, getKillerSpecsHeaders, isCenter3dPrintStore } from './constants';
+import { getStore, getKillerSpecsHeaders } from './constants';
 // Type-only, so this does NOT create a runtime import cycle with render-description.ts (which
 // imports this module for real). TypeScript erases the import entirely.
 import type { RenderContext } from '../render/render-description';
@@ -39,13 +39,6 @@ export interface StoreRenderRules {
    * header text the model already wrote for that document. Do not add a default here.
    */
   killerSpecsHeaders(locale: string): [param: string, benefit: string] | undefined;
-  /**
-   * Whether §5b operating tips can appear — Center 3D Print's Style B block.
-   *
-   * Name-based via isCenter3dPrintStore, not group-based: Drukarka 3D shares group 'EU' and keeps
-   * the default voice, so a group check would leak Style B onto it.
-   */
-  admitsOperatingTips: boolean;
 }
 
 /** The rule set for one store. Unknown names fall back to getStore()'s default profile. */
@@ -56,7 +49,6 @@ export function getRenderRules(storeName: string): StoreRenderRules {
     imageBaseUrl: store.imageBaseUrl,
     locales: store.languages,
     killerSpecsHeaders: locale => getKillerSpecsHeaders(locale, storeName),
-    admitsOperatingTips: isCenter3dPrintStore(storeName),
   };
 }
 

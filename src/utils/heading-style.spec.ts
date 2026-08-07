@@ -72,10 +72,6 @@ describe('validateHeadingStyle', () => {
       expect(rules(h2('Матеріали та сумісне обладнання'))).toEqual([]);
     });
 
-    it('§8: the operating-tips heading', () => {
-      expect(rules(h2('Поради щодо експлуатації Ortur H20'))).toEqual([]);
-    });
-
     it('§9: the closing question', () => {
       expect(rules(h2('Чому варто купити Ortur H20 у Center 3D Print?'))).toEqual([]);
     });
@@ -308,10 +304,9 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
       expect(issues.map(i => i.path)).toEqual(['doc.functionality[1].heading', 'doc.functionality[2].heading']);
     });
 
-    it('other sections are never candidates — a §7/§9/tips-shaped string never reaches this check because it never sits in functionality[]', () => {
+    it('other sections are never candidates — a §7/§9-shaped string never reaches this check because it never sits in functionality[]', () => {
       const doc = baseDoc([], {
         applications: { heading: 'Сфери застосування', items: [] },
-        operatingTips: { heading: 'Поради щодо експлуатації Ortur H20', blocks: [] },
         specs: { heading: 'Технічні характеристики', categories: [] },
       });
       expect(rules(doc).filter(i => i.rule === 'h2-nominal-heading')).toEqual([]);
@@ -410,18 +405,17 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
     });
 
     it('tolerates the unit-spacing normalization the artifact applies to the name', () => {
-      const doc = baseDoc([], { operatingTips: { heading: 'Поради щодо експлуатації Ortur H20 20 W', blocks: [] } });
+      const doc = baseDoc([], { compatibility: { heading: 'Сумісність з Ortur H20 20 W', blocks: [] } });
       const issues = validateHeadingStyleDoc(doc, 'uk-UA', C3D, 'Ortur H20 20W')
         .filter(i => i.rule === 'heading-product-name-stuffing');
       expect(issues).toHaveLength(1);
-      expect(issues[0].path).toBe('doc.operatingTips.heading');
+      expect(issues[0].path).toBe('doc.compatibility.heading');
     });
 
-    it('checks every section heading — applications, compatibility, operatingTips, packageContents, specs, cta', () => {
+    it('checks every section heading — applications, compatibility, packageContents, specs, cta', () => {
       const doc = baseDoc([], {
         applications: { heading: `Застосування ${NAME}`, items: [] },
         compatibility: { heading: `Сумісність з ${NAME}`, blocks: [] },
-        operatingTips: { heading: `Поради щодо ${NAME}`, blocks: [] },
         packageContents: { heading: `Комплект ${NAME}`, items: [] },
         specs: { heading: `Характеристики ${NAME}`, categories: [] },
         cta: { heading: `Чому купити ${NAME}?`, text: 'Buy.' },
@@ -430,16 +424,15 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
       const paths = issues.map(i => i.path).sort();
       expect(paths).toEqual([
         'doc.applications.heading', 'doc.compatibility.heading', 'doc.cta.heading',
-        'doc.operatingTips.heading', 'doc.packageContents.heading', 'doc.specs.heading',
+        'doc.packageContents.heading', 'doc.specs.heading',
       ]);
     });
   });
 
   describe('null/undefined safety', () => {
-    it('does not throw on a doc with no compatibility, operatingTips or packageContents', () => {
+    it('does not throw on a doc with no compatibility or packageContents', () => {
       const doc = baseDoc(['Як працює Ortur H20']);
       expect(doc.compatibility).toBeUndefined();
-      expect(doc.operatingTips).toBeUndefined();
       expect(doc.packageContents).toBeUndefined();
       expect(() => validateHeadingStyleDoc(doc, 'uk-UA', C3D, 'Ortur H20')).not.toThrow();
     });

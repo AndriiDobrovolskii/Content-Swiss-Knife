@@ -10,9 +10,8 @@
  * spend a repair cycle; as a warning it costs an editor one glance. Promote to 'error' only after
  * the false-positive rate has been measured on real generations.
  *
- * A SIBLING of tov-second-person.ts rather than an extension of it: that module's walker
- * deliberately skips PAST the operating-tips <h2> to exclude the block's body text, whereas this
- * one has to inspect that heading. Same house idioms — DOMParser guard, store gate, locale gate.
+ * A SIBLING of tov-second-person.ts, sharing the same house idioms — DOMParser guard, store gate,
+ * locale gate.
  *
  * Pure function, no LLM.
  */
@@ -22,7 +21,6 @@ import type { ProductDescriptionDoc, Subsection } from '../domain/description-do
 import {
   FUNCTIONAL_H2_OPENERS,
   MANDATED_NOMINAL_H2,
-  OPERATING_TIPS_H2_MARKERS,
   isCenter3dPrintStore,
 } from '../prompt-core/constants';
 import { productShort } from '../prompt-core/product-name-core';
@@ -227,7 +225,6 @@ export function validateHeadingStyle(
     const lower = text.toLowerCase();
 
     if (text.includes('?')) continue;                                                  // §9 closing question
-    if (OPERATING_TIPS_H2_MARKERS.some(m => lower.startsWith(m.toLowerCase()))) continue; // §8 tips
     if (mandatedNominal.some(m => lower.startsWith(m.toLowerCase()))) continue;         // §5/§6/§7
     if (startsWithFunctionalOpener(text, localeKey)) continue;
     if (looksVerbal(text)) continue;
@@ -282,16 +279,15 @@ function subsectionHeadings(sub: Subsection, path: string, level: 'h2' | 'h3'): 
  * Every heading in the document, in document order, tagged h2/h3 by nesting depth.
  *
  * Unlike the HTML sibling's `doc.querySelectorAll('h2, h3')`, this does not need a
- * section.specs-wrapper check or a MANDATED_NOMINAL_H2/OPERATING_TIPS_H2_MARKERS skip-list to
- * find its way to "which headings are §3" — the Doc's structure already says so directly:
- * functionality[] IS §3, specs.heading IS §7, and so on. See validateHeadingStyleDoc below.
+ * section.specs-wrapper check or a MANDATED_NOMINAL_H2 skip-list to find its way to "which
+ * headings are §3" — the Doc's structure already says so directly: functionality[] IS §3,
+ * specs.heading IS §7, and so on. See validateHeadingStyleDoc below.
  */
 function collectHeadings(doc: ProductDescriptionDoc): DocHeading[] {
   const out: DocHeading[] = [];
   doc.functionality.forEach((s, i) => out.push(...subsectionHeadings(s, `doc.functionality[${i}]`, 'h2')));
   out.push({ text: doc.applications.heading, level: 'h2', path: 'doc.applications.heading' });
   if (doc.compatibility) out.push(...subsectionHeadings(doc.compatibility, 'doc.compatibility', 'h2'));
-  if (doc.operatingTips) out.push(...subsectionHeadings(doc.operatingTips, 'doc.operatingTips', 'h2'));
   if (doc.packageContents) out.push({ text: doc.packageContents.heading, level: 'h2', path: 'doc.packageContents.heading' });
   out.push({ text: doc.specs.heading, level: 'h2', path: 'doc.specs.heading' });
   out.push({ text: doc.cta.heading, level: 'h2', path: 'doc.cta.heading' });
@@ -378,8 +374,8 @@ function checkProductNameStuffingDoc(
  *
  * The Style B nominal-heading check (`h2-nominal-heading`) is scoped to `functionality[].heading`
  * ONLY — the Doc-model equivalent of "§3 <h2> ONLY" from the HTML sibling's own detail message.
- * The HTML version needed a §7-wrapper check plus MANDATED_NOMINAL_H2/OPERATING_TIPS_H2_MARKERS/
- * "?"-suffix skip conditions to reconstruct which headings belong to §3; the Doc model already
+ * The HTML version needed a §7-wrapper check plus MANDATED_NOMINAL_H2/"?"-suffix skip conditions
+ * to reconstruct which headings belong to §3; the Doc model already
  * segregates §3 into its own `functionality[]` field, so none of that reconstruction is needed —
  * every OTHER section's heading (§4–§7, tips, §9) is structurally never a `functionality[]`
  * heading and is therefore never a h2-nominal-heading candidate in the first place. The skip
@@ -422,7 +418,6 @@ export function validateHeadingStyleDoc(
     const path = `doc.functionality[${i}].heading`;
 
     if (text.includes('?')) return;                                                    // §9-shaped, defensive
-    if (OPERATING_TIPS_H2_MARKERS.some(m => lower.startsWith(m.toLowerCase()))) return; // tips-shaped, defensive
     if (mandatedNominal.some(m => lower.startsWith(m.toLowerCase()))) return;           // §5/§6/§7-shaped, defensive
     if (startsWithFunctionalOpener(text, localeKey)) return;
     if (looksVerbal(text)) return;

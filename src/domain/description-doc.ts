@@ -147,23 +147,6 @@ export interface ProductDescriptionDoc {
   };
   /** §5 — conditional. */
   compatibility?: Subsection;
-  /**
-   * §5b — conditional, and store-specific: Center 3D Print's "Style B" operating-tips block.
-   *
-   * NOT a rename of `compatibility`, and not interchangeable with it. The master prompt scopes §5
-   * to "ONLY physical cross-compatibility" — compatible materials and hardware — and explicitly
-   * routes software, drivers, OS and connectivity out to §3. Operating tips are neither, so they
-   * had no slot at all; the first corpus artifact was modelled with them on `compatibility`
-   * because that field rendered in the right position, which reconciled while describing the
-   * document incorrectly.
-   *
-   * The block is first-class rather than ad-hoc: OPERATING_TIPS_H2_MARKERS in
-   * prompt-core/constants.ts is its single source of truth, and tov-second-person.ts matches
-   * against that same array so the prompt and the linter cannot drift.
-   *
-   * Renders in §5's slot, immediately after `compatibility` when both are present.
-   */
-  operatingTips?: Subsection;
   /** §6 — conditional. */
   packageContents?: { heading: string; items: string[] };
   /** §7 */
@@ -203,5 +186,4 @@ export function forEachBlockInOrder(
   doc.functionality.forEach(walkSubsection);
   walkBlocks(doc.applications.blocks ?? []);
   if (doc.compatibility) walkSubsection(doc.compatibility);
-  if (doc.operatingTips) walkSubsection(doc.operatingTips);
 }

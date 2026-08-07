@@ -79,13 +79,21 @@ const BulletItemSchema = z.object({ lead: NonEmpty, text: Prose }).refine(
 /**
  * Block is a flat union — a figure references the manifest by index rather than nesting, so there
  * is no recursion here and no need for z.lazy.
+ *
+ * Parameterized on the bullets floor: §5 compatibility is source-bounded (a datasheet may confirm
+ * only 2 physical accessories) and gets a relaxed floor of 2, while every other bullets-bearing
+ * field (keyBenefits, functionality) is model-authored, not source-count-bound, and keeps 3.
  */
-const BlockSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('paragraph'), text: Prose }),
-  z.object({ kind: z.literal('bullets'), items: z.array(BulletItemSchema).min(3).max(8) }),
-  z.object({ kind: z.literal('figure'), ref: z.number().int().nonnegative() }),
-  z.object({ kind: z.literal('video'), ref: z.number().int().nonnegative() }),
-]);
+function makeBlockSchema(minBulletItems: number) {
+  return z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('paragraph'), text: Prose }),
+    z.object({ kind: z.literal('bullets'), items: z.array(BulletItemSchema).min(minBulletItems).max(8) }),
+    z.object({ kind: z.literal('figure'), ref: z.number().int().nonnegative() }),
+    z.object({ kind: z.literal('video'), ref: z.number().int().nonnegative() }),
+  ]);
+}
+const BlockSchema = makeBlockSchema(3);
+const RelaxedBlockSchema = makeBlockSchema(2);
 
 /** §4 admits prose and figures only — see the note on `applications.blocks`. */
 const ApplicationsBlockSchema = z.discriminatedUnion('kind', [
@@ -103,10 +111,14 @@ const ApplicationsBlockSchema = z.discriminatedUnion('kind', [
  * document would parse as valid — the cap would be a lie. Strict mode turns that into the error it
  * should be, and as a bonus rejects hallucinated fields anywhere in a subsection.
  */
-const LeafSubsectionSchema = z.object({
-  heading: NonEmpty,
-  blocks: z.array(BlockSchema),
-}).strict();
+function makeLeafSubsectionSchema(blockSchema: typeof BlockSchema) {
+  return z.object({
+    heading: NonEmpty,
+    blocks: z.array(blockSchema),
+  }).strict();
+}
+const LeafSubsectionSchema = makeLeafSubsectionSchema(BlockSchema);
+const RelaxedLeafSubsectionSchema = makeLeafSubsectionSchema(RelaxedBlockSchema);
 
 /**
  * Depth 1 — rendered as <h2>; its children render as <h3>.
@@ -117,12 +129,17 @@ const LeafSubsectionSchema = z.object({
  * What must never be empty is BOTH at once — a heading with no content under it is a defect, and
  * the refinement below says so.
  */
-const SubsectionSchema = LeafSubsectionSchema.extend({
-  subsections: z.array(LeafSubsectionSchema).optional(),
-}).refine(
-  s => s.blocks.length > 0 || (s.subsections?.length ?? 0) > 0,
-  { message: 'A subsection needs at least one block or at least one nested subsection.' },
-);
+function makeSubsectionSchema(leafSchema: typeof LeafSubsectionSchema) {
+  return leafSchema.extend({
+    subsections: z.array(leafSchema).optional(),
+  }).refine(
+    s => s.blocks.length > 0 || (s.subsections?.length ?? 0) > 0,
+    { message: 'A subsection needs at least one block or at least one nested subsection.' },
+  );
+}
+const SubsectionSchema = makeSubsectionSchema(LeafSubsectionSchema);
+// §5 compatibility only — a datasheet may confirm just 2 physical accessories. See RelaxedBlockSchema.
+const RelaxedSubsectionSchema = makeSubsectionSchema(RelaxedLeafSubsectionSchema);
 
 export const ProductDescriptionDocSchema = z.object({
   schemaVersion: z.literal('3.0'),
@@ -145,10 +162,7 @@ export const ProductDescriptionDocSchema = z.object({
     blocks: z.array(ApplicationsBlockSchema).optional(),
     items: z.array(z.object({ scenario: NonEmpty, text: Prose })).min(4).max(8),
   }),
-  compatibility: SubsectionSchema.optional(),
-  // §5b — same shape as §5, deliberately a separate field. See the note on ProductDescriptionDoc
-  // .operatingTips for why this is a missing slot rather than a rename of `compatibility`.
-  operatingTips: SubsectionSchema.optional(),
+  compatibility: RelaxedSubsectionSchema.optional(),
   packageContents: z.object({ heading: NonEmpty, items: z.array(NonEmpty).min(1) }).optional(),
   specs: z.object({
     heading: NonEmpty,

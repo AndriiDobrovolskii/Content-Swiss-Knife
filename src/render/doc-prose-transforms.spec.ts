@@ -68,7 +68,6 @@ function docWithEveryField(): ProductDescriptionDoc {
       ],
     },
     compatibility: { heading: 'compat-heading', blocks: [{ kind: 'paragraph', text: 'compat-para' }] },
-    operatingTips: { heading: 'tips-heading', blocks: [{ kind: 'paragraph', text: 'tips-para' }] },
     packageContents: { heading: 'pkg-heading', items: ['pkg-1', 'pkg-2'] },
     specs: {
       heading: 'specs-heading',
@@ -141,11 +140,9 @@ describe('mapDocText — completeness', () => {
   it('leaves an absent optional section absent rather than inventing one', () => {
     const doc = docWithEveryField();
     delete doc.compatibility;
-    delete doc.operatingTips;
     delete doc.packageContents;
     const mapped = mapDocText(doc, () => '@');
     expect(mapped.compatibility).toBeUndefined();
-    expect(mapped.operatingTips).toBeUndefined();
     expect(mapped.packageContents).toBeUndefined();
   });
 });

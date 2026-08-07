@@ -174,7 +174,7 @@ export function isExpert3dStore(name: string): boolean {
 
 /**
  * Center 3D Print — the single storefront running the "Style B" Tone of Voice (verb-led benefit
- * bullets, functional/question H2s, an operating-tips block, a consultative CTA).
+ * bullets, functional/question H2s, a consultative CTA).
  * The single predicate gating every C3D-only ToV injection (Task A voice block, Task C
  * translation overlay, per-locale overlays).
  *
@@ -284,9 +284,8 @@ export const KILLER_SPECS_HEADERS: Record<string, [param: string, benefit: strin
 
 /**
  * §2 killer-specs headers — CENTER 3D PRINT OVERRIDE. Style B confines direct second-person
- * address to the operating-tips block and the CTA (see C3D_TOV_BASE_OVERLAY SIGNATURE MOVE #3
- * and C3D_UK_LOCALE_TOV's REGISTER line); everywhere else the benefit is stated impersonally,
- * from the machine's point of view. The default pair ("Ваша перевага" / "Twoja korzyść" /
+ * address to the CTA (see C3D_UK_LOCALE_TOV's REGISTER line); everywhere else the benefit is
+ * stated impersonally, from the machine's point of view. The default pair ("Ваша перевага" / "Twoja korzyść" /
  * "Ihr Vorteil" / "Your Advantage") therefore violates this store's own voice, in §2, on every
  * product — and it is injected DETERMINISTICALLY by table-finalize.ts, never written by the
  * model, so no prompt rule can reach it.
@@ -1005,8 +1004,8 @@ bold label, not a new sentence). For de-DE and all English keep the default capi
  * master+task prefix stays byte-stable (cache hit) for every other store and C3D just gets one
  * additional cached suffix (its own cache slot) — same mechanism as EXPERT3D_TOV_BASE_OVERLAY.
  *
- * Encodes ONLY what is store-specific: bullet grammar, heading style, the operating-tips block,
- * the CTA shape, and the Style-A anti-patterns. Rules that already exist globally are deliberately
+ * Encodes ONLY what is store-specific: bullet grammar, heading style, the CTA shape, and the
+ * Style-A anti-patterns. Rules that already exist globally are deliberately
  * NOT restated here — SENTENCE_LENGTH_RULES (whose uk-UA ceiling of 20 is STRICTER than this ToV's
  * 25 — restating the looser figure would create a conflict), NUMBER_FORMAT_RULES,
  * UNIT_LOCALIZATION_RULES and PRODUCT_NAME_LOCALIZATION all stay authoritative.
@@ -1060,8 +1059,8 @@ Rewrite such content as a verb-led bullet and SPLIT the dash into two sentences.
 
 SIGNATURE MOVE #2 — FUNCTIONAL / QUESTION HEADINGS (§3 <h2> ONLY).
 SCOPE NARROWED: this applies to the FUNCTIONALITY section's <h2> and nowhere else. §4, §5, §6,
-§7 and the operating-tips block take SHORT NOMINAL labels («Сфери застосування лідар-сканера»,
-«Сумісні аксесуари та кріплення», «Поради щодо експлуатації», «Технічні характеристики»).
+§7 take SHORT NOMINAL labels («Сфери застосування лідар-сканера»,
+«Сумісні аксесуари та кріплення», «Технічні характеристики»).
 A nominal heading in those sections is CORRECT, not a Style A regression.
 Inside §3, describe a FUNCTION or answer a user query rather than naming a bare topic:
   GOOD: "How selective laser sintering works" - "What software drives the device" -
@@ -1082,22 +1081,7 @@ drop or merge spec categories to avoid writing a nominal phrase.
 When the SOURCE spec list is FLAT (no categories given), group it into 3-6 §7 categories of AT
 LEAST 3 rows each, naming every category in the target output language.
 
-SIGNATURE MOVE #3 — "TIPS FOR OPERATING [Product]" ADVISORY BLOCK (register shift).
-This is the ONLY place that addresses the operator directly.
-- Emit an H2 "Tips for operating" (no product name, per [HEADING FORM]) IMMEDIATELY BEFORE
-  the final commercial-closing
-  section, WHEN the product is production hardware with real handling/safety considerations
-  (printers, post-processing, powder, resin). Skip it for products with none.
-- 3-5 bullets, each = BOLD IMPERATIVE OPENER ending with a period + supporting instruction.
-  Second person, formal register.
-- Practical and safety-oriented; cite MSDS / PPE / manufacturer limits where the source supports it.
-  Never invent a safety figure the source does not state.
-  <li><b>Maintain the specified room conditions. </b>Keep temperature at 18–28 °C and humidity
-  no higher than 30 %.</li>
-Everywhere OUTSIDE this block (and the CTA), stay impersonal / benefit-3rd-person — do NOT scatter
-second-person address through the body.
-
-SIGNATURE MOVE #4 — CONSULTATIVE CTA WITH A DIRECT ASK.
+SIGNATURE MOVE #3 — CONSULTATIVE CTA WITH A DIRECT ASK.
 The closing paragraph is consultative and ENDS WITH A DIRECT INVITATION, not a passive status line.
   GOOD ending: "Contact our specialists to discuss lead times, configuration and how [Product]
                fits your production requirements."
@@ -1105,6 +1089,8 @@ The closing paragraph is consultative and ENDS WITH A DIRECT INVITATION, not a p
 Keep the mandatory brand-guarantee sentence and the trust points from the master [CONTENT
 STRUCTURE]. Mention where applicable: official representative, fair price, authorized service,
 warranty, pre-purchase consultation, commissioning/integration.
+The CTA is the ONLY place that addresses the reader directly. Everywhere else, stay impersonal /
+benefit-3rd-person — do NOT scatter second-person address through the body.
 
 PUNCTUATION LIMITS (store-specific; all other typography rules stay as defined globally):
 - Em/en dash as a RHETORICAL device: avoid; at most 1 per 400 words. Use a period or comma instead.
@@ -1205,8 +1191,7 @@ SELF-CHECK BEFORE OUTPUT:
 - [ ] Every bold bullet opener is at most 10 words, with the numbers in the sentences after it.
 - [ ] Figcaption lead-ins are verb-led and period-terminated.
 - [ ] Zero "!", zero body emoji, dashes within budget.
-- [ ] The operating-tips block is present (if handling/safety-relevant) with imperative bullets;
-      direct second-person address appears ONLY there and in the CTA.
+- [ ] Direct second-person address appears ONLY in the CTA.
 - [ ] The closing H2 uses the "worth buying" form, keeps the brand-guarantee sentence, and ends
       with a direct "contact us"-type ask.`;
 
@@ -1257,7 +1242,7 @@ HEADINGS — TRANSLATE THE FORM THAT ARRIVES, AND ONLY THAT FORM.
         de "Welche Software das Gerät steuert" · ru «Какое ПО поддерживает устройство»
      BAD: pl "Oprogramowanie i automatyzacja" · de "Software und Automatisierung" ·
           ru «ПО и автоматизация» — bare noun topics inside §3, the banned form.
-3. §4-§7 and the operating-tips block arrive NOMINAL and stay nominal — «Сфери застосування…»,
+3. §4-§7 arrive NOMINAL and stay nominal — «Сфери застосування…»,
    «Сумісні аксесуари…», «Технічні характеристики» → pl "Zastosowania…", "Dane techniczne";
    de "Anwendungsbereiche", "Technische Daten". Do NOT convert these into question form.
 SUB-HEADINGS (<h3>) in the specifications section (§7) and the functionality section (§3) are
@@ -1285,12 +1270,7 @@ CAPITALIZATION rule describes the form those items USED to take — with no colo
 it has nothing to apply to, so do not reintroduce a colon in order to satisfy it. Every other
 consumables rule (section set, tables, the 2500-character cap) still applies unchanged.
 
-OPERATING-TIPS BLOCK: if the source has a "Tips for operating" H2, translate its heading
-functionally (pl "Wskazówki dotyczące eksploatacji …", de "Hinweise zum Betrieb von …",
-ru «Советы по эксплуатации …») and keep each bullet's opener as a BOLD IMPERATIVE ending in a
-period, in the target language's FORMAL register (pl the impersonal "Należy …" form, de
-Sie-Imperativ, uk/ru formal «Ви»/«Вы»-form).
-Direct second-person address stays confined to this block and the CTA — do not spread it elsewhere.
+Direct second-person address stays confined to the CTA — do not spread it elsewhere.
 
 FIGCAPTIONS: keep verb-led, period-terminated lead-ins; do not restore "LABEL:" form.
 
@@ -1304,28 +1284,9 @@ direct invitation to contact the specialists — never a flat availability state
 brand-guarantee sentence.`;
 
 /**
- * Localized openers of the Style B operating-tips H2, one per language Center 3D Print publishes.
- * SINGLE SOURCE OF TRUTH for detecting that block in generated HTML — the same strings appear as
- * prose instructions inside the C3D overlays above, and tov-second-person.ts matches against this
- * array so the two can never drift apart.
- *
- * Prefix match. The heading used to continue with the product name ("Поради щодо експлуатації
- * Ortur Laser Master 3"); [HEADING FORM] now forbids that, so it is usually the bare marker.
- * Prefix matching covers both, which is why these values did not have to change.
- */
-export const OPERATING_TIPS_H2_MARKERS = [
-  'Tips for operating',
-  'Поради щодо експлуатації',
-  'Советы по эксплуатации',
-  'Wskazówki dotyczące eksploatacji',
-  'Hinweise zum Betrieb',
-];
-
-/**
  * Question / functional <h2> openers, per locale. SINGLE SOURCE OF TRUTH — interpolated into
  * C3D_UK_LOCALE_TOV's HEADING PATTERNS block AND imported by heading-style.ts, so the rule the
- * model is given and the rule the linter enforces are literally the same array. Same mechanism
- * as OPERATING_TIPS_H2_MARKERS above.
+ * model is given and the rule the linter enforces are literally the same array.
  */
 export const FUNCTIONAL_H2_OPENERS: Record<string, string[]> = {
   'uk-ua': ['Як', 'Що', 'Які', 'Яке', 'Який', 'Яка', 'Яким', 'Яких', 'Де', 'Чому', 'Скільки', 'Коли'],
@@ -1381,15 +1342,9 @@ VERB STARTERS for benefit bullets (3rd-person present, machine as subject) — r
   ЗАБОРОНЕНО: <p>Брендування та маркування: наносить логотипи…; декоративне гравіювання:
   відтворює візерунки…</p>
 
-IMPERATIVE STARTERS for the operating-tips block (formal «ви»-form):
-Дотримуйтеся, Працюйте, Дочекайтеся, Перевіряйте, Забезпечте, Зберігайте, Уникайте.
-  H2: «Поради щодо експлуатації» (без назви товару — див. [HEADING FORM])
-  <li><b>Дотримуйтеся умов у приміщенні. </b>Забезпечте температуру 18–28 °C та вологість не
-  вище 30 %.</li>
-
-HEADING PATTERNS для <h2> — ЛИШЕ §3 (функційні/питальні). §4-§7 та блок порад мають КОРОТКІ
+HEADING PATTERNS для <h2> — ЛИШЕ §3 (функційні/питальні). §4-§7 мають КОРОТКІ
 ІМЕННИКОВІ заголовки: «Сфери застосування лідар-сканера», «Сумісні аксесуари та кріплення»,
-«Поради щодо експлуатації», «Комплект постачання», «Технічні характеристики». Це правильна
+«Комплект постачання», «Технічні характеристики». Це правильна
 форма, а не повернення до Style A.
 Дозволені зачини для §3: ${FUNCTIONAL_H2_OPENERS['uk-ua'].map(o => `«${o} …»`).join(', ')} —
 або особова дієслівна форма на початку.
@@ -1418,7 +1373,7 @@ COMMERCIAL-CLOSING H2 — use the soft «варто» form, which REPLACES the m
 The paragraph ends with a direct ask, e.g. «Зв'яжіться з нашими спеціалістами, щоб обговорити
 терміни поставки, конфігурацію та відповідність [Product] вашим виробничим вимогам.»
 
-REGISTER: формальне «ви» з'являється ТІЛЬКИ у блоці порад щодо експлуатації та в CTA. У решті
+REGISTER: формальне «ви» з'являється ТІЛЬКИ в CTA. У решті
 тексту — безособово, вигода подається від 3-ї особи (машина як суб'єкт дії).
 Anti-anglicism rules stay as defined globally (друк, не «прінт»; ПЗ, не «софт»).`;
 
@@ -1437,18 +1392,10 @@ Upraszcza, Pozwala.
   drukować wielkogabarytowe wyroby i rozmieszczać wiele detali w jednej budowie.</li>
 NIGDY: <li><b>Pojemność komory:</b> …</li> — rzeczownik z dwukropkiem to zakazany styl A.
 
-IMPERATIVE STARTERS for the operating-tips block — użyj formy bezosobowej «Należy …» (to jest
-polski odpowiednik formalnego trybu rozkazującego; NIE stosuj bezpośredniego „ty"):
-Należy przestrzegać, Należy zapewnić, Należy odczekać, Należy sprawdzać, Należy przechowywać,
-Należy unikać.
-  H2: «Wskazówki dotyczące eksploatacji» (bez nazwy produktu — patrz [HEADING FORM])
-  <li><b>Należy przestrzegać warunków w pomieszczeniu. </b>Temperatura 18–28 °C, wilgotność
-  nie wyższa niż 30 %.</li>
-
 HEADING PATTERNS dla <h2> — TYLKO §3: «Jak działa …», «Jak [zespół] [podnosi / zapewnia X]»,
 «Jakie oprogramowanie obsługuje urządzenie», «Jakim normom odpowiada urządzenie».
-§4-§7 oraz blok wskazówek mają KRÓTKIE nagłówki RZECZOWNIKOWE: «Zastosowania skanera»,
-«Kompatybilne akcesoria i mocowania», «Wskazówki dotyczące eksploatacji», «Zawartość zestawu»,
+§4-§7 mają KRÓTKIE nagłówki RZECZOWNIKOWE: «Zastosowania skanera»,
+«Kompatybilne akcesoria i mocowania», «Zawartość zestawu»,
 «Dane techniczne». To forma poprawna, a nie powrót do Style A — dawny wymóg
 «Gdzie stosuje się [Product]» został WYCOFANY, bo umieszczał nazwę produktu w nagłówku.
 WYJĄTEK: <h3> w §3 i §7 pozostają zwięzłymi etykietami rzeczownikowymi («Moduł lasera»,
@@ -1461,7 +1408,7 @@ pl-PL template already uses the «warto» form — keep it; the name is the SHOR
 «Prosimy o kontakt z naszymi specjalistami, aby omówić terminy dostawy, konfigurację i zgodność
 [Product] z Państwa wymaganiami produkcyjnymi.»
 
-REGISTER: bezpośredni zwrot do czytelnika wyłącznie w bloku wskazówek i w CTA; w pozostałym
+REGISTER: bezpośredni zwrot do czytelnika wyłącznie w CTA; w pozostałym
 tekście — bezosobowo, korzyść w 3. osobie.`;
 
 /**

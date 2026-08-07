@@ -328,8 +328,8 @@ function checkSubsection(sub: Subsection, path: string, check: (t: string, p: st
  * per-locale ceiling (SENTENCE_LENGTH_BANDS), same sentence splitter (splitSentences).
  *
  * SCOPE — every prose-bearing field: hook, killerSpecs[].why, every Block reachable from
- * keyBenefits / functionality (incl. nested subsections) / applications.blocks / compatibility /
- * operatingTips, applications.items[].text, packageContents?.items (the HTML sibling scores <li>
+ * keyBenefits / functionality (incl. nested subsections) / applications.blocks / compatibility,
+ * applications.items[].text, packageContents?.items (the HTML sibling scores <li>
  * as well as <p>, and packageContents renders as a plain <ul>, so its items are in scope the same
  * way), and cta.text.
  *
@@ -344,8 +344,8 @@ function checkSubsection(sub: Subsection, path: string, check: (t: string, p: st
  * forEachBlockInOrder helper, because forEachBlockInOrder's `visit(block)` callback carries no
  * positional information — this validator needs a `path` per block for the repair ladder to
  * address, which forEachBlockInOrder cannot supply. The traversal order below matches
- * forEachBlockInOrder's own (keyBenefits, functionality, applications.blocks, compatibility,
- * operatingTips) field-for-field.
+ * forEachBlockInOrder's own (keyBenefits, functionality, applications.blocks, compatibility)
+ * field-for-field.
  *
  * @param doc     the ProductDescriptionDoc under validation
  * @param locale  BCP47; an unmapped locale returns no issues rather than guessing a ceiling
@@ -370,7 +370,6 @@ export function validateSentenceLengthDoc(
   doc.functionality.forEach((s, i) => checkSubsection(s, `functionality[${i}]`, check));
   (doc.applications.blocks ?? []).forEach((b, i) => checkBlock(b, `applications.blocks[${i}]`, check));
   if (doc.compatibility) checkSubsection(doc.compatibility, 'compatibility', check);
-  if (doc.operatingTips) checkSubsection(doc.operatingTips, 'operatingTips', check);
 
   doc.applications.items.forEach((it, i) => check(it.text, `applications.items[${i}].text`));
   doc.packageContents?.items.forEach((item, i) => check(item, `packageContents.items[${i}]`));
