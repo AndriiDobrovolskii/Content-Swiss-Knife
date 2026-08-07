@@ -443,12 +443,20 @@ export interface RepairArtifactReport {
     rejected: number;
     rejections: string[];
   };
+  /**
+   * Fixes applied by a deterministic normalizer BEFORE the gate's own validate() ever ran (e.g.
+   * normalizeBulletLeadPunctuation) — zero LLM cost, zero repair attempts spent, and the affected
+   * rule never appears as a failure anywhere else in this report. Without this field that work is
+   * invisible: it looks identical to "the model just got it right the first time."
+   */
+  preValidationFixes?: { rule: string; count: number }[];
 }
 
 export function toArtifactReport(
   label: string,
   result: RepairGateResult<unknown>,
   blockPatches?: Omit<NonNullable<RepairArtifactReport['blockPatches']>, 'resolved'>,
+  preValidationFixes?: RepairArtifactReport['preValidationFixes'],
 ): RepairArtifactReport {
   const finalErrors = result.finalIssues.filter(i => i.severity === 'error').length;
   const status: RepairArtifactReport['status'] =
@@ -463,6 +471,7 @@ export function toArtifactReport(
     // `resolved` comes from the gate, which is the only place that can compare findings before and
     // after; the executor can only count what it spliced.
     blockPatches: blockPatches ? { ...blockPatches, resolved: result.blockScopedResolved } : undefined,
+    preValidationFixes: preValidationFixes?.length ? preValidationFixes : undefined,
   };
 }
 
@@ -470,6 +479,20 @@ export interface RepairReportMeta {
   product: string;
   store: string;
   generatedAt: string; // ISO timestamp
+}
+
+/**
+ * Suffix naming the reason a rule has no cheap repair path: no strategy is registered for it at
+ * all (`resolveLadder` falls all the way through to its `['full-regen']` fallback), so every
+ * occurrence — fixed, persisted or introduced — cost a full-document regeneration rather than a
+ * targeted patch. Empty string when a registered strategy exists, so callers can append it
+ * unconditionally without an extra branch.
+ */
+function noStrategyNote(issue: ValidationIssue): string {
+  const ladder = resolveLadder(issue);
+  return ladder.length === 1 && ladder[0] === 'full-regen'
+    ? ' (no targeted repair strategy — relies on full-document regeneration)'
+    : '';
 }
 
 /**
@@ -532,6 +555,21 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
     // sentence over its ceiling, and only this number says so.
     lines.push(`- Local block findings resolved: ${blockWork.reduce((n, r) => n + r.blockPatches!.resolved, 0)}`);
     lines.push(`- Local block patches rejected: ${blockWork.reduce((n, r) => n + r.blockPatches!.rejected, 0)}`);
+  }
+  // Fixes applied before the gate's own validate() ever ran (e.g. normalizeBulletLeadPunctuation)
+  // — zero repair attempts spent, and the affected rule never shows up as a failure anywhere else
+  // in this report. Without this line that work is indistinguishable from "the model got it right
+  // the first time." Omitted entirely when nothing was normalized, same as the block-patch lines.
+  const preValidationTotals = new Map<string, number>();
+  for (const report of reports) {
+    for (const fix of report.preValidationFixes ?? []) {
+      preValidationTotals.set(fix.rule, (preValidationTotals.get(fix.rule) ?? 0) + fix.count);
+    }
+  }
+  if (preValidationTotals.size > 0) {
+    const breakdown = [...preValidationTotals.entries()].map(([rule, count]) => `${rule}: ${count}`).join(', ');
+    const total = [...preValidationTotals.values()].reduce((a, b) => a + b, 0);
+    lines.push(`- Pre-validation normalizations applied: ${total} (${breakdown})`);
   }
   lines.push('');
 
@@ -660,22 +698,37 @@ export function formatRepairReportMarkdown(reports: RepairArtifactReport[], meta
     for (const attempt of report.attempts) {
       lines.push(`**Attempt ${attempt.attempt}**`);
       for (const issue of attempt.resolved) {
-        lines.push(`- ✅ fixed: \`${issue.rule}\` — ${issue.detail}`);
+        lines.push(`- ✅ fixed: \`${issue.rule}\` — ${issue.detail}${noStrategyNote(issue)}`);
       }
       for (const issue of attempt.persisted) {
-        lines.push(`- ❌ still failing: \`${issue.rule}\` — ${issue.detail}`);
+        lines.push(`- ❌ still failing: \`${issue.rule}\` — ${issue.detail}${noStrategyNote(issue)}`);
       }
       // Rendered inside this attempt's block, not as a flat list at the end of the artifact, so the
       // causal story reads at a glance: "attempt 1 fixed the title but broke the description".
       for (const issue of attempt.introduced) {
-        lines.push(`- ⚠️ introduced: \`${issue.rule}\` — ${issue.detail}`);
+        lines.push(`- ⚠️ introduced: \`${issue.rule}\` — ${issue.detail}${noStrategyNote(issue)}`);
+      }
+      // The arithmetic behind a "fixed then discarded" verdict, stated at the instance that
+      // produced it rather than only as general guidance in the recurring-failures footer above.
+      // Scoped to attempts that did NOT ship AND introduced something — a later attempt simply
+      // being edged out by a still-later, better one (no regression of its own) is not this case.
+      if (attempt.attempt !== report.shippedAttempt && attempt.introduced.length > 0) {
+        const errorsBefore = attempt.resolved.length + attempt.persisted.length;
+        const errorsAfter = attempt.persisted.length + attempt.introduced.length;
+        const introducedRules = [...new Set(attempt.introduced.map(i => i.rule))].join(', ');
+        const net = errorsAfter - errorsBefore;
+        lines.push(
+          `- Discarded: fixed ${attempt.resolved.length} error(s), introduced ${attempt.introduced.length} ` +
+          `new error(s) (${introducedRules}) — net change ${net >= 0 ? '+' : ''}${net}, not strictly better ` +
+          `than the ${errorsBefore} error(s) this attempt started from.`,
+        );
       }
       lines.push('');
     }
     if (report.status === 'unresolved') {
       lines.push(`**Shipped with unresolved errors:**`);
       for (const issue of report.finalIssues.filter(i => i.severity === 'error')) {
-        lines.push(`- \`${issue.rule}\` — ${issue.detail}`);
+        lines.push(`- \`${issue.rule}\` — ${issue.detail}${noStrategyNote(issue)}`);
       }
       lines.push('');
     }
