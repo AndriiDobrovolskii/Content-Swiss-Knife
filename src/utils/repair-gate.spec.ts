@@ -1290,9 +1290,9 @@ describe('heading-product-name-stuffing — one ladder serving two artifact shap
 // This exercises the REAL validateSlugs against runRepairGate, the composition now wired into
 // content-orchestrator.service.ts, so a future edit that silently drops that wiring fails here.
 describe('validateSlugs feeding a real repair loop', () => {
-  const slugArtifact = (name: string): SlugResponse => ({
+  const slugArtifact = (name: string, slug = 'ortur-f10-laser-engraver-10-w'): SlugResponse => ({
     site_name: 'EXPERT3D',
-    slugs: [{ language: 'en-ES', name, slug: 'ortur-f10-laser-engraver-10-w' }],
+    slugs: [{ language: 'en-ES', name, slug }],
   });
 
   it('a slug-name-designator-lost error triggers full regeneration instead of only being reported', async () => {
@@ -1320,5 +1320,55 @@ describe('validateSlugs feeding a real repair loop', () => {
     const payload = appendRepairFeedback(BASE_PAYLOAD, issues);
 
     expect(payload.userContent).toContain('Ortur F10 10W');
+  });
+
+  it('ships a regen that fixed the designator but introduced a cleanable slug-charset issue, instead of discarding it', async () => {
+    // The exact shape of the 2026-08-07 EXPERT3D Ortur R2 1.3W IR report (repair_gate_report.md):
+    // attempt 1 fixed slug-name-designator-lost on all locales but its rewritten slug used a
+    // decimal point next to a letter ("f10.10w"), which fails SLUG_PATTERN — 1 fixed, 1
+    // introduced, a tied error count that used to discard the whole, otherwise-correct, attempt
+    // and re-ship the original designator-lost name. slug-charset already has a registered,
+    // deterministic `slugify()` strategy; Phase B runs it on the regen's own output before the
+    // attempt is scored, so the cleaned attempt now wins outright instead of tying.
+    const produce = vi.fn()
+      .mockResolvedValueOnce(slugArtifact('Ortur F10 Laser Engraver 10 W')) // drops the invariant core
+      .mockResolvedValueOnce(slugArtifact('Ortur F10 10W Laser Engraver', 'ortur-f10.10w-laser-engraver'));
+
+    const result = await runRepairGate<SlugResponse>({
+      label: 'Slugs',
+      maxRepairs: 1,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate: json => validateSlugs(json, 'Ortur F10 10W'),
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(produce).toHaveBeenCalledTimes(2);
+    expect(result.repairsUsed).toBe(1); // exactly one full regeneration — cleanup is not a second attempt
+    expect(result.shippedAttempt).toBe(1); // used to be 0 — the discard this closes
+    expect(result.finalIssues).toEqual([]);
+    expect(result.artifact.slugs[0].name).toBe('Ortur F10 10W Laser Engraver');
+    expect(result.artifact.slugs[0].slug).toBe('ortur-f10-10w-laser-engraver'); // cleaned by slugify
+    expect(result.attempts).toHaveLength(1); // one RepairAttemptRecord, not one per cleanup pass
+    expect(result.attempts[0].introduced).toEqual([]); // cleaned before bookkeeping, so nothing to report
+  });
+
+  it('does not call validate an extra time when a regen needs no deterministic cleanup', async () => {
+    const produce = vi.fn()
+      .mockResolvedValueOnce(slugArtifact('Ortur F10 Laser Engraver 10 W'))
+      .mockResolvedValueOnce(slugArtifact('Ortur F10 10W Laser Engraver')); // clean on retry, nothing to clean up
+    const validate = vi.fn((json: SlugResponse) => validateSlugs(json, 'Ortur F10 10W'));
+
+    const result = await runRepairGate<SlugResponse>({
+      label: 'Slugs',
+      maxRepairs: 1,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.finalIssues).toEqual([]);
+    expect(validate).toHaveBeenCalledTimes(2); // initial + the one post-regen validate, no cleanup re-validate
   });
 });
