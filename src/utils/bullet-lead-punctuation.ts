@@ -84,3 +84,46 @@ export function validateBulletLeadPunctuationDoc(
 
   return issues;
 }
+
+/**
+ * Fixes every collision `validateBulletLeadPunctuationDoc` would report, deterministically —
+ * no LLM involved. Safe because the defect has exactly one correct repair: this rule's own
+ * `detail` message already tells the model to "End the lead-in with ':' or '. '", and there is no
+ * judgement call in choosing between them, so there is nothing here for an LLM to get wrong that a
+ * fixed rule can't.
+ *
+ * Deliberately reuses the validator's own traversal (`forEachBlockInOrder` + `applications.items`)
+ * rather than inventing a wider one: this function's coverage must equal the validator's coverage
+ * exactly, so every case the rule can catch is eliminated and nothing outside the rule's scope
+ * (§7 spec rows, the §6 package list — neither is `BulletItem`-shaped) is touched.
+ *
+ * Appends `": "` — colon AND a trailing space — not a bare colon. `collides()`'s own
+ * `ENDS_WITHOUT_SEPARATOR` only fires when `lead` already ends in a letter or digit, so a lead
+ * ending in `,`, `-`, or any other punctuation is never touched here (it never collided in the
+ * first place). And the space has to live inside the bold span: `renderBullets()` joins
+ * `<b>{lead}</b>{text}` with zero injected separator (this file's own header), so a bare `":"`
+ * would still glue the colon to the next word. `": "` matches the house convention already used
+ * elsewhere in real output (`<b>Лазерний модуль: </b>`).
+ */
+export function normalizeBulletLeadPunctuation(
+  doc: ProductDescriptionDoc,
+): { doc: ProductDescriptionDoc; fixed: number } {
+  const clone = structuredClone(doc);
+  let fixed = 0;
+
+  const fixLead = (item: { lead?: string; scenario?: string; text: string }, key: 'lead' | 'scenario'): void => {
+    const lead = item[key] ?? '';
+    if (!collides(lead, item.text)) return;
+    item[key] = `${lead}: `;
+    fixed++;
+  };
+
+  forEachBlockInOrder(clone, block => {
+    if (block.kind !== 'bullets') return;
+    for (const item of block.items) fixLead(item, 'lead');
+  });
+
+  for (const item of clone.applications.items) fixLead(item, 'scenario');
+
+  return { doc: clone, fixed };
+}

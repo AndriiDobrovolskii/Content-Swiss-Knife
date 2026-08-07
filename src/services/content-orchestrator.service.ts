@@ -22,7 +22,7 @@ import {
 import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
 import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
-import { validateBulletLeadPunctuationDoc } from '../utils/bullet-lead-punctuation';
+import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation } from '../utils/bullet-lead-punctuation';
 import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
 import { validateHeadingStyle, validateHeadingStyleDoc } from '../utils/heading-style';
@@ -401,10 +401,20 @@ export class ContentOrchestratorService {
     const produce = async (payload: PromptPayload): Promise<DocAttempt> => {
       const initial = isFirstAttempt;
       isFirstAttempt = false;
-      return this.produceTaskADoc({
+      const attempt = await this.produceTaskADoc({
         payload, useThinking: opts.useThinking, isInitialAttempt: initial, input: opts.input,
         contextLabel: opts.contextLabel, docTaskLabel: opts.docTaskLabel,
       });
+      // Deterministic, zero-cost, and provably complete for this rule (see the function's own
+      // doc comment) — runs on EVERY attempt, not just the first, so a full-regen that
+      // reintroduces a collision gets cleaned up too. Applied before validate() ever sees the
+      // Doc, so this class of error should never reach the repair gate as a failure at all.
+      if (!attempt.doc) return attempt;
+      const { doc, fixed } = normalizeBulletLeadPunctuation(attempt.doc);
+      if (fixed > 0) {
+        console.info(`[bullet-lead-punctuation] ${opts.label}: ${fixed} lead(s) normalized before validation`);
+      }
+      return { ...attempt, doc };
     };
 
     const result = await runRepairGate<DocAttempt>({
