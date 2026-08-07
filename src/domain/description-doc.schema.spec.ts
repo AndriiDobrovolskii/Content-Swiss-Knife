@@ -171,3 +171,43 @@ describe('a bullet lead and its text need a separator', () => {
     expect(errorsFor(docWithBullet(lead, text))).toEqual([]);
   });
 });
+
+/**
+ * §5 compatibility's bullets floor is relaxed to 2, unlike every other bullets-bearing field. A
+ * datasheet may confirm only 2 physical accessories; §5's prompt instruction (master-system-prompt.ts)
+ * now routes a 1-item case to prose instead, so the schema only needs to accept the 2-item edge case
+ * the prompt cannot avoid without fabricating a 3rd source-confirmed item.
+ */
+describe('§5 compatibility — relaxed bullets floor (min 2, not min 3)', () => {
+  const bulletsBlock = (n: number) => ({
+    kind: 'bullets' as const,
+    items: Array.from({ length: n }, (_, i) => ({ lead: `Пункт ${i + 1}:`, text: ` опис ${i + 1}.` })),
+  });
+
+  it('accepts a compatibility bullets block with only 2 items', () => {
+    const doc = validDoc();
+    doc.compatibility = { heading: 'Сумісність', blocks: [bulletsBlock(2)] };
+    expect(errorsFor(doc)).toEqual([]);
+  });
+
+  it('still rejects a compatibility bullets block with only 1 item', () => {
+    const doc = validDoc();
+    doc.compatibility = { heading: 'Сумісність', blocks: [bulletsBlock(1)] };
+    const issues = errorsFor(doc);
+    expect(issues.join('\n')).toMatch(/at least 2 element/i);
+  });
+
+  it('does NOT relax the floor for functionality — a 2-item bullets block there still fails', () => {
+    const doc = validDoc();
+    doc.functionality = [{ heading: 'Технологія', blocks: [bulletsBlock(2)] }];
+    const issues = errorsFor(doc);
+    expect(issues.join('\n')).toMatch(/at least 3 element/i);
+  });
+
+  it('does NOT relax the floor for keyBenefits — a 2-item bullets block there still fails', () => {
+    const doc = validDoc();
+    doc.keyBenefits = [bulletsBlock(2)];
+    const issues = errorsFor(doc);
+    expect(issues.join('\n')).toMatch(/at least 3 element/i);
+  });
+});

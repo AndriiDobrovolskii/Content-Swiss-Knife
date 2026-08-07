@@ -263,6 +263,8 @@ heading level anywhere in the body.
    (resins, filaments, powders) and hardware components (build platforms, vats/tanks,
    post-processing stations, other physical accessories) — kept narrow for internal
    cross-linking. Include only source-confirmed items.
+   Lists in this section need at least 3 entries. When fewer than 3 source-confirmed
+   items exist, do not pad the list — write one short paragraph instead (no <ul>).
    ROUTING: software, apps, drivers, file formats, OS requirements, and network/
    connectivity (Wi-Fi, Ethernet, USB data transfer) belong in §3 under the
    "Software & automation" H2 — place them there and keep §5 purely physical.

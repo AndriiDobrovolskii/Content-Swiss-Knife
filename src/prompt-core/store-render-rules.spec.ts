@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { getRenderRules, renderContextFor } from './store-render-rules';
-import { STORE_REGISTRY, getKillerSpecsHeaders, isCenter3dPrintStore } from './constants';
+import { STORE_REGISTRY, getKillerSpecsHeaders } from './constants';
 
 const STORE_NAMES = Object.keys(STORE_REGISTRY);
 
@@ -75,16 +75,6 @@ describe('killerSpecsHeaders — the Center 3D Print ToV override', () => {
       l => !getRenderRules(name).killerSpecsHeaders(l),
     );
     expect(unresolved).toEqual([]);
-  });
-});
-
-describe('admitsOperatingTips — §5b is Center 3D Print only', () => {
-  it.each(STORE_NAMES)('%s matches isCenter3dPrintStore', name => {
-    expect(getRenderRules(name).admitsOperatingTips).toBe(isCenter3dPrintStore(name));
-  });
-
-  it('is true for exactly one store in the registry', () => {
-    expect(STORE_NAMES.filter(n => getRenderRules(n).admitsOperatingTips)).toEqual(['Center 3D Print']);
   });
 });
 

@@ -62,7 +62,7 @@ function collisionIssue(context: string, lead: string, text: string): Validation
  * @param context reporting label, e.g. "Doc (base)"
  * @returns one `bullet-lead-collision` error per bold-lead/text pair that would render glued
  *          together — checks every `bullets` Block (keyBenefits, §3 functionality incl. nested
- *          subsections, §5/§5b compatibility/operatingTips) via `forEachBlockInOrder`, plus §4
+ *          subsections, §5 compatibility) via `forEachBlockInOrder`, plus §4
  *          `applications.items[]`, which is not Block-shaped and so outside that traversal.
  */
 export function validateBulletLeadPunctuationDoc(

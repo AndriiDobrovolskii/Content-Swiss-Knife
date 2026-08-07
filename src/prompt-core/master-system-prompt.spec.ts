@@ -89,3 +89,24 @@ describe('MASTER_SYSTEM_PROMPT — [VIDEO]: a real anchor and a real obligation'
     }
   });
 });
+
+/**
+ * §5 LIST COMPATIBILITY — item-count floor. Added after a real generation
+ * (Ortur R2 1.3W IR, 2 confirmed compatible accessories) failed outright: the schema requires at
+ * least 3 items in a bullets list, but §5 told the model only to include source-confirmed items,
+ * with no floor — unlike §4 Applications, which states its own "Write 4–8 entries". The model
+ * correctly wrote 2 items rather than fabricate a 3rd, the schema rejected the document, and the
+ * repair loop had no way to satisfy a constraint that required inventing data. See
+ * description-doc.schema.spec.ts's "§5 compatibility — relaxed bullets floor" for the schema-side
+ * half of this fix.
+ */
+describe('MASTER_SYSTEM_PROMPT — §5 LIST COMPATIBILITY: item-count floor', () => {
+  it('states the 3-item floor for lists in this section', () => {
+    expect(normalized).toMatch(/Lists in this section need at least 3 entries/i);
+  });
+
+  it('routes a sub-3-item case to a paragraph instead of padding the list', () => {
+    expect(normalized).toMatch(/When fewer than 3 source-confirmed\s+items exist, do not pad the list/i);
+    expect(normalized).toMatch(/write one short paragraph instead \(no <ul>\)/i);
+  });
+});

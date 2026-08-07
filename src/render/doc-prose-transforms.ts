@@ -113,7 +113,6 @@ export function mapDocText(doc: ProductDescriptionDoc, fn: TextTransform): Produ
       items: doc.applications.items.map(i => ({ scenario: fn(i.scenario), text: fn(i.text) })),
     },
     ...(doc.compatibility ? { compatibility: mapSubsection(doc.compatibility, fn) } : {}),
-    ...(doc.operatingTips ? { operatingTips: mapSubsection(doc.operatingTips, fn) } : {}),
     ...(doc.packageContents
       ? { packageContents: { heading: fn(doc.packageContents.heading), items: doc.packageContents.items.map(fn) } }
       : {}),

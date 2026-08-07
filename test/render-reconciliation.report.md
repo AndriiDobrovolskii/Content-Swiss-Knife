@@ -123,7 +123,7 @@ rendering". That relocation is PR-3's work, not PR-2's.
 
 | Item | Store | Doc authored | Normalized HTML | Tag parity | Visible text | Validator errors |
 |---|---|---|---|---|---|---|
-| `center-3d-print-ortur-h20-20w` | Center 3D Print | ✅ | ✅ | ✅ | ✅ | ✅ 0 |
+| `center-3d-print-ortur-h20-20w` | Center 3D Print | ✅ | superseded — see 4.4 | superseded | superseded | superseded |
 | `expert3d-ortur-h20-20w` | EXPERT3D | ✅ | ✅ | ✅ | ✅ | ✅ 0 |
 
 Both artifacts are committed under `test/fixtures/corpus/`. `render-reconciliation.spec.ts`
@@ -185,6 +185,21 @@ artifacts still reconcile across all five checks.
 
 This is the fifth renderer/model correction the corpus produced, and the first found by reading the
 prompt rather than by hitting a wall while authoring.
+
+### 4.4 SUPERSEDED — `operatingTips` (§5b) removed entirely
+
+`ProductDescriptionDoc.operatingTips`, `OPERATING_TIPS_H2_MARKERS`, the §5b clause in
+`TASK_A_DOC_INSTRUCTION`, and Center 3D Print's "SIGNATURE MOVE #3" ToV instruction have all been
+removed. Decision: the PDP stays scoped to pre-purchase value/benefits/selection content; operating
+and safety tips are post-purchase and no longer ship in the generated description.
+
+`center-3d-print-ortur-h20-20w` is a real, already-published Center 3D Print page whose production
+HTML still contains the "Поради щодо експлуатації" section documented in §4.3 above — the renderer
+will never reproduce it again by design, so this corpus item can no longer reconcile byte-for-byte
+and is excluded from the reconciliation gate (`SUPERSEDED_SLUGS` in `render-reconciliation.spec.ts`).
+The three fixture files stay committed as a historical record and are still exercised by
+`scaffold-doc.spec.ts`'s field-level checks (`hook`, `killerSpecs`, `specs`, `figures`, `videos`),
+none of which touch `operatingTips`.
 
 ---
 

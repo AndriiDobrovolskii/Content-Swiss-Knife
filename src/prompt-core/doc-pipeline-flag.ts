@@ -33,13 +33,11 @@ import { STORE_REGISTRY } from './constants';
  *
  * Center 3D Print came next, and it was the last store that needed CODE before it could be
  * enrolled rather than just evidence. It is the only store with a ToV override
- * (`KILLER_SPECS_HEADERS_C3D`) and the only user of the §5b `operatingTips` slot, and its overlay
- * instructs the model to "Emit an H2 'Tips for operating [Product]'" — which the Doc contract
- * forbids, while the correct action (populate `operatingTips`) was stated nowhere. Resolved in
- * `TASK_A_DOC_INSTRUCTION`, whose §5b clause interpolates `OPERATING_TIPS_H2_MARKERS` so the
- * heading stays detectable by `tov-second-person.ts`.
+ * (`KILLER_SPECS_HEADERS_C3D`). An earlier §5b `operatingTips` slot and its "Tips for operating
+ * [Product]" instruction have since been removed entirely — the PDP stays scoped to pre-purchase
+ * content; post-purchase operating/safety tips no longer ship in the description.
  *
- * `Drukarka 3D` needed no code at all — 2 locales, default voice, no override, no §5b — and
+ * `Drukarka 3D` needed no code at all — 2 locales, default voice, no override — and
  * completes the rollout.
  *
  * EVERY LIVE STORE IS NOW ON THIS LIST. The one absentee is `Expert-3DPrinter`, a placeholder that

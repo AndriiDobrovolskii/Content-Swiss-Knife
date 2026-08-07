@@ -1,7 +1,7 @@
 /**
  * tov-second-person.spec.ts
  *
- * Style B confines direct second-person address to the operating-tips block and the CTA.
+ * Style B confines direct second-person address to the CTA.
  *
  * RUN:  npm run test
  */
@@ -52,23 +52,15 @@ describe('validateSecondPersonScope', () => {
     expect(issues[0].detail).toContain('Ваша');
   });
 
-  it('allows second person inside the operating-tips block', () => {
-    expect(validateSecondPersonScope(TIPS_BLOCK, 'uk-UA', C3D)).toEqual([]);
+  it('flags second person that would once have sat in the exempt operating-tips block', () => {
+    expect(validateSecondPersonScope(TIPS_BLOCK, 'uk-UA', C3D)).toHaveLength(1);
   });
 
   it('allows second person inside <p class="cta">', () => {
     expect(validateSecondPersonScope(CTA_BLOCK, 'uk-UA', C3D)).toEqual([]);
   });
 
-  it('ends the tips exemption at the next <h2> or <hr>', () => {
-    const afterH2 = doc(TIPS_BLOCK, `<h2>Де застосовують Ortur</h2>`, `<p>Пасує вашому цеху.</p>`);
-    expect(validateSecondPersonScope(afterH2, 'uk-UA', C3D)).toHaveLength(1);
-
-    const afterHr = doc(TIPS_BLOCK, `<hr>`, `<p>Пасує вашому цеху.</p>`);
-    expect(validateSecondPersonScope(afterHr, 'uk-UA', C3D)).toHaveLength(1);
-  });
-
-  it('handles a full document: tips + CTA exempt, body flagged', () => {
+  it('handles a full document: only the CTA is exempt', () => {
     const html = doc(
       `<p>Верстат знижує витрати на виготовлення.</p>`,
       `<table><thead><tr><th>Параметр</th><th>Ваша перевага</th></tr></thead></table>`,
@@ -78,8 +70,8 @@ describe('validateSecondPersonScope', () => {
       CTA_BLOCK,
     );
     const issues = validateSecondPersonScope(html, 'uk-UA', C3D);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].detail).toContain('Ваша');
+    expect(issues).toHaveLength(2);
+    expect(issues.map(i => i.detail).join(' ')).toContain('Ваша');
   });
 
   it('reports each distinct form once, with context', () => {
@@ -87,11 +79,6 @@ describe('validateSecondPersonScope', () => {
     const issues = validateSecondPersonScope(html, 'uk-UA', C3D);
     expect(issues).toHaveLength(2); // "ваш" and "ваша", not three hits
     expect(issues[0].detail).toContain('Context:');
-  });
-
-  it('recognizes the Russian tips heading too', () => {
-    const ru = `<h2>Советы по эксплуатации Ortur</h2><ul><li>Проверяйте ваши настройки.</li></ul>`;
-    expect(validateSecondPersonScope(ru, 'ru-UA', C3D)).toEqual([]);
   });
 
   describe('scoping', () => {
@@ -175,16 +162,6 @@ describe('validateSecondPersonScopeDoc — Doc-reading sibling', () => {
     expect(paths).toEqual(['keyBenefits[0].items[0].lead', 'keyBenefits[0].items[0].text']);
   });
 
-  it('allows second person inside the operatingTips subsection', () => {
-    const doc = baseDoc({
-      operatingTips: {
-        heading: 'Поради щодо експлуатації Ortur Laser Master 3',
-        blocks: [{ kind: 'bullets', items: [{ lead: 'Дотримуйтеся умов у приміщенні. ', text: 'Забезпечте вашу вентиляцію.' }] }],
-      },
-    });
-    expect(validateSecondPersonScopeDoc(doc, 'uk-UA', C3D)).toEqual([]);
-  });
-
   it('allows second person inside cta.text but NOT cta.heading', () => {
     const doc = baseDoc({
       cta: { heading: 'Це ваш найкращий вибір?', text: "Обговоримо ваші виробничі вимоги." },
@@ -221,22 +198,10 @@ describe('validateSecondPersonScopeDoc — Doc-reading sibling', () => {
     expect(issues[0].detail).toContain('Context:');
   });
 
-  it('recognizes the Russian tips heading too (operatingTips still exempt for ru-UA)', () => {
-    const doc = baseDoc({
-      locale: 'ru-UA',
-      operatingTips: {
-        heading: 'Советы по эксплуатации Ortur',
-        blocks: [{ kind: 'bullets', items: [{ lead: 'Совет. ', text: 'Проверяйте ваши настройки.' }] }],
-      },
-    });
-    expect(validateSecondPersonScopeDoc(doc, 'ru-UA', C3D)).toEqual([]);
-  });
-
   describe('null/undefined safety — a doc missing every optional field', () => {
-    it('does not throw when compatibility, operatingTips and packageContents are all absent', () => {
+    it('does not throw when compatibility and packageContents are both absent', () => {
       const doc = baseDoc();
       expect(doc.compatibility).toBeUndefined();
-      expect(doc.operatingTips).toBeUndefined();
       expect(doc.packageContents).toBeUndefined();
       expect(() => validateSecondPersonScopeDoc(doc, 'uk-UA', C3D)).not.toThrow();
     });

@@ -17,7 +17,6 @@ import { describe, it, expect } from 'vitest';
 
 import { buildPromptADoc, TASK_A_DOC_INSTRUCTION } from './task-a-doc';
 import { buildPromptA } from './task-a';
-import { OPERATING_TIPS_H2_MARKERS } from '../prompt-core/constants';
 import type { ProductInput } from '../app/types';
 
 function input(overrides: Partial<ProductInput> = {}): ProductInput {
@@ -130,34 +129,3 @@ describe('TASK_A_DOC_INSTRUCTION — plain-text vs prose fields', () => {
   });
 });
 
-describe('TASK_A_DOC_INSTRUCTION — the §5b operating-tips conflict', () => {
-  /**
-   * C3D_TOV_BASE_OVERLAY tells the model to "Emit an H2 'Tips for operating [Product]'". This
-   * instruction forbids inventing an h2. Both reach the model — the overlay rides along as
-   * systemBlocks[2] — so the resolution must be stated, or the model picks one and the §5b block
-   * is lost with nothing to detect it.
-   */
-  it('routes the operating-tips H2 to the operatingTips field', () => {
-    expect(TASK_A_DOC_INSTRUCTION).toMatch(/operatingTips/);
-    expect(TASK_A_DOC_INSTRUCTION).toMatch(/DO NOT emit an HTML tag/i);
-  });
-
-  it('still forbids inventing an h2 — the two rules must coexist, not replace each other', () => {
-    expect(TASK_A_DOC_INSTRUCTION).toMatch(/Do not invent a "section", "hr", "h2"/);
-  });
-
-  /**
-   * Interpolated, not retyped. tov-second-person.ts:78 exempts the §5b block from the
-   * second-person rule ONLY when the heading starts with one of these markers, so a paraphrased
-   * heading silently flags every imperative bullet the C3D voice mandates there.
-   */
-  it('carries every localized marker verbatim from the single source of truth', () => {
-    for (const marker of OPERATING_TIPS_H2_MARKERS) {
-      expect(TASK_A_DOC_INSTRUCTION, marker).toContain(marker);
-    }
-  });
-
-  it('keeps the guidelines’ own condition, so a product with no tips omits the field', () => {
-    expect(TASK_A_DOC_INSTRUCTION).toMatch(/omit "operatingTips" entirely/);
-  });
-});

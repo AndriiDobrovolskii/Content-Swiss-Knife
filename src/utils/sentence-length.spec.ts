@@ -353,7 +353,7 @@ describe('validateSentenceLengthDoc — Doc-reading sibling', () => {
     expect(runDoc(baseDoc({ hook: withBold }))[0].detail).not.toContain('<b>');
   });
 
-  it('walks functionality (incl. nested subsections), applications.blocks, compatibility and operatingTips — matching forEachBlockInOrder\'s field coverage', () => {
+  it('walks functionality (incl. nested subsections), applications.blocks and compatibility — matching forEachBlockInOrder\'s field coverage', () => {
     const doc = baseDoc({
       functionality: [{
         heading: 'H',
@@ -362,14 +362,12 @@ describe('validateSentenceLengthDoc — Doc-reading sibling', () => {
       }],
       applications: { heading: 'A', blocks: [{ kind: 'paragraph', text: TOO_LONG.replace('20 Вт', '21 Вт') }], items: [] },
       compatibility: { heading: 'C', blocks: [{ kind: 'paragraph', text: TOO_LONG.replace('20 Вт', '22 Вт') }] },
-      operatingTips: { heading: 'T', blocks: [{ kind: 'paragraph', text: TOO_LONG.replace('20 Вт', '23 Вт') }] },
     });
     const issues = runDoc(doc);
     expect(issues.map(i => i.path).sort()).toEqual([
       'applications.blocks[0]',
       'compatibility.blocks[0]',
       'functionality[0].subsections[0].blocks[0]',
-      'operatingTips.blocks[0]',
     ]);
   });
 
@@ -443,10 +441,9 @@ describe('validateSentenceLengthDoc — Doc-reading sibling', () => {
   });
 
   describe('null/undefined safety', () => {
-    it('does not throw on a doc missing compatibility, operatingTips and packageContents', () => {
+    it('does not throw on a doc missing compatibility and packageContents', () => {
       const doc = baseDoc();
       expect(doc.compatibility).toBeUndefined();
-      expect(doc.operatingTips).toBeUndefined();
       expect(doc.packageContents).toBeUndefined();
       expect(() => runDoc(doc)).not.toThrow();
       expect(runDoc(doc)).toEqual([]);
