@@ -20,7 +20,6 @@ export interface ContentTemplate {
   id: string;
   name: string;
   description: string;
-  niche: string;
   geo: WebsiteGroup[];
   structure?: TemplateStructure;
 }
@@ -135,7 +134,6 @@ export const CONTENT_TEMPLATES: ContentTemplate[] = [
     id: 'consumables-resin',
     name: 'Прості товари (до 4000 символів)',
     description: 'Simplified consumables schema (filament/resin/adhesive) — focuses on material properties, mechanical strength, and finish, with a 4000-character visible-text ceiling.',
-    niche: 'Витратні матеріали / Аксесуари',
     geo: ['UA', 'EU', 'ES', 'US']
   }
 ];
