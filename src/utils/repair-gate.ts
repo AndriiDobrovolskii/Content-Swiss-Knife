@@ -340,6 +340,34 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     issues = validate(artifact);
     repairsUsed++;
 
+    // ── Deterministic cleanup, applied to THIS attempt's output before it is scored ──
+    //
+    // Full regeneration carries no preservation property: it is free to fix the issue it was asked
+    // about and introduce an unrelated one in the same breath (the concrete case this closes:
+    // slug-name-designator-lost fixed, slug-charset introduced, in the same rewrite). When the
+    // introduced issue happens to have a registered tier-0 strategy, running it here — once, before
+    // the strictly-better comparison below — recovers a genuinely-improved attempt that comparison
+    // would otherwise discard wholesale on a tied error count.
+    //
+    // Safe by construction, not merely convenient: every registered `deterministic` strategy either
+    // returns a value proven to satisfy the rule again (slugify's own contract — see
+    // repair-strategy.ts) or leaves the field untouched, so this can only remove mechanically fixable
+    // noise, never add it. Does NOT spend a repair attempt or its own budget — repairsUsed already
+    // incremented above from the produce() call, and exactly one RepairAttemptRecord is still pushed
+    // below, built from the post-cleanup issue set. Skipped entirely, cleanup and re-validate alike,
+    // when nothing on this attempt is tier-0-fixable — the identity check on `cleaned` mirrors the
+    // pre-loop ladder's own "did anything change" gate (this file, the pre-ladder pass above).
+    const cleanupPlan = issues
+      .filter(i => i.path && REPAIR_STRATEGIES.get(i.rule)?.deterministic)
+      .map(issue => ({ issue, tier: 'deterministic' as RepairTier }));
+    if (cleanupPlan.length > 0) {
+      const cleaned = await applyTier('deterministic', artifact, cleanupPlan);
+      if (cleaned !== artifact) {
+        artifact = cleaned;
+        issues = validate(artifact);
+      }
+    }
+
     const afterKeys = new Set(issues.map(issueKey));
     const beforeKeys = new Set(issuesBefore.map(issueKey));
     attempts.push({
