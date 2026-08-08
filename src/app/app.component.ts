@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../services/content-orchestrator.service';
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
-import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, ContentTemplate, ImageManifestEntry, TabDescriptor } from './types';
+import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, TemplateStructure, ImageManifestEntry, TabDescriptor } from './types';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
@@ -175,6 +175,7 @@ const TRANSLATIONS = {
     analyzingKeywords: 'Analyzing...',
     contentTemplate: 'Content Template',
     selectTemplate: 'Select Template...',
+    consumablesTemplateNiche: 'Consumables / Accessories',
     customTemplate: 'Custom Template Structure',
     titlePattern: 'Title Pattern',
     headingStructure: 'Heading Structure (comma separated)',
@@ -343,6 +344,7 @@ const TRANSLATIONS = {
     analyzingKeywords: 'Аналіз...',
     contentTemplate: 'Шаблон контенту',
     selectTemplate: 'Оберіть шаблон...',
+    consumablesTemplateNiche: 'Витратні матеріали / Аксесуари',
     customTemplate: 'Власна структура шаблону',
     titlePattern: 'Патерн заголовка',
     headingStructure: 'Структура підзаголовків (через кому)',
@@ -437,7 +439,7 @@ export class AppComponent {
   // --- TEMPLATE STATE ---
   availableTemplates = CONTENT_TEMPLATES;
   selectedTemplateId = signal<string>('');
-  customTemplate = signal<Partial<ContentTemplate['structure']>>({});
+  customTemplate = signal<Partial<TemplateStructure>>({});
   showCustomTemplate = signal<boolean>(false);
 
   // --- OPTIMIZER STATE ---
@@ -814,7 +816,7 @@ export class AppComponent {
     this.showCustomTemplate.update(v => !v);
   }
 
-  updateCustomTemplate(field: keyof ContentTemplate['structure'], event: Event) {
+  updateCustomTemplate(field: keyof TemplateStructure, event: Event) {
     const value = (event.target as HTMLInputElement | HTMLTextAreaElement).value;
     this.customTemplate.update(current => {
       if (field === 'headingStructure') {

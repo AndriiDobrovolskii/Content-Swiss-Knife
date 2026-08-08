@@ -335,7 +335,7 @@ function charLength(s: string): number {
 // ── Consumables char-limit helpers ─────────────────────────────────────────
 
 /** Hard limit on visible text for consumable products (templateId = 'consumables-resin'). */
-const CONSUMABLES_MAX_STRIPPED_CHARS = 2500;
+const CONSUMABLES_MAX_STRIPPED_CHARS = 4000;
 
 /**
  * Strip HTML tags and decode common entities to get the visible character count
@@ -460,7 +460,7 @@ export function validateGeneratedHtml(
         detail: `Visible text is ${len} chars; ceiling ${CONSUMABLES_MAX_STRIPPED_CHARS} (you are ${over} over). ` +
           `You cannot count characters, so make STRUCTURAL cuts: remove ${liToCut} entire <li> items ` +
           `(start with §C5 Storage, then §C3 Applications), shorten the §C1 hook to one sentence, drop adjectives in §C2. ` +
-          `Aim for ~2100 for safety. NEVER remove or alter any spec-table row or numeric value.`,
+          `Aim for ~3400 for safety. NEVER remove or alter any spec-table row or numeric value.`,
         context,
       });
     }

@@ -206,7 +206,7 @@
             (change)="onTemplateChange($event)">
             <option value="" [selected]="!selectedTemplateId()" class="dark:bg-slate-800">{{ uiLabels().selectTemplate }}</option>
             @for (template of availableTemplates; track template.id) {
-              <option [value]="template.id" [selected]="selectedTemplateId() === template.id" class="dark:bg-slate-800">{{ template.name }} ({{ template.niche }})</option>
+              <option [value]="template.id" [selected]="selectedTemplateId() === template.id" class="dark:bg-slate-800">{{ template.name }} ({{ uiLabels().consumablesTemplateNiche }})</option>
             }
           </select>
 
@@ -446,7 +446,7 @@
             (change)="onTemplateChange($event)">
             <option value="" class="dark:bg-slate-800">{{ uiLabels().selectTemplate }}</option>
             @for (template of availableTemplates; track template.id) {
-              <option [value]="template.id" class="dark:bg-slate-800">{{ template.name }} ({{ template.niche }})</option>
+              <option [value]="template.id" class="dark:bg-slate-800">{{ template.name }} ({{ uiLabels().consumablesTemplateNiche }})</option>
             }
           </select>
         </div>

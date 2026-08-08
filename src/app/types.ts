@@ -9,18 +9,19 @@ export interface WebsiteOption {
   url: string;
 }
 
+export interface TemplateStructure {
+  titlePattern: string;
+  headingStructure: string[];
+  bodyFocus: string;
+  keywordStrategy: string;
+}
+
 export interface ContentTemplate {
   id: string;
   name: string;
   description: string;
-  niche: string;
   geo: WebsiteGroup[];
-  structure: {
-    titlePattern: string;
-    headingStructure: string[];
-    bodyFocus: string;
-    keywordStrategy: string;
-  };
+  structure?: TemplateStructure;
 }
 
 export interface ImageManifestEntry {
@@ -130,43 +131,10 @@ export const WEBSITE_OPTIONS: WebsiteOption[] = [
 
 export const CONTENT_TEMPLATES: ContentTemplate[] = [
   {
-    id: 'standard-3d-printer',
-    name: 'Standard 3D Printer',
-    description: 'Optimized for FDM/SLA 3D printers with focus on technical specs and use cases.',
-    niche: '3D Printers',
-    geo: ['UA', 'EU', 'ES', 'US'],
-    structure: {
-      titlePattern: '[Brand] [Model] - Professional 3D Printer',
-      headingStructure: ['Overview', 'Key Features', 'Technical Specifications', 'What\'s in the Box', 'Why Choose Us'],
-      bodyFocus: 'Emphasize reliability, print volume, and material compatibility.',
-      keywordStrategy: 'Focus on "buy [model]", "[model] price", and "best 3d printer for [niche]".'
-    }
-  },
-  {
-    id: 'industrial-scanner',
-    name: 'Industrial 3D Scanner',
-    description: 'High-precision scanning focus for metrology and engineering.',
-    niche: '3D Scanners',
-    geo: ['UA', 'EU', 'US'],
-    structure: {
-      titlePattern: '[Brand] [Model] High-Precision 3D Scanner',
-      headingStructure: ['Metrology Grade Scanning', 'Advanced Features', 'Software Integration', 'Applications', 'Technical Data'],
-      bodyFocus: 'Focus on accuracy, resolution, and speed of data acquisition.',
-      keywordStrategy: 'Focus on "industrial 3d scanner", "metrology equipment", and "reverse engineering scanner".'
-    }
-  },
-  {
     id: 'consumables-resin',
-    name: 'Consumables: Resin/Filament',
-    description: 'Focus on material properties, mechanical strength, and finish.',
-    niche: 'Consumables',
-    geo: ['UA', 'EU', 'ES', 'US'],
-    structure: {
-      titlePattern: '[Brand] [Material] [Color] [Weight]',
-      headingStructure: ['Material Properties', 'Printing Settings', 'Mechanical Characteristics', 'Compatibility'],
-      bodyFocus: 'Focus on surface finish, strength, and ease of printing.',
-      keywordStrategy: 'Focus on "[material] filament", "high strength resin", and "[brand] consumables".'
-    }
+    name: 'Прості товари (до 4000 символів)',
+    description: 'Simplified consumables schema (filament/resin/adhesive) — focuses on material properties, mechanical strength, and finish, with a 4000-character visible-text ceiling.',
+    geo: ['UA', 'EU', 'ES', 'US']
   }
 ];
 
