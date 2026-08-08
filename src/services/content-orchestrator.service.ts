@@ -22,7 +22,7 @@ import {
 import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
 import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
-import { validateBulletLeadPunctuationDoc } from '../utils/bullet-lead-punctuation';
+import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation } from '../utils/bullet-lead-punctuation';
 import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
 import { validateHeadingStyle, validateHeadingStyleDoc } from '../utils/heading-style';
@@ -185,6 +185,21 @@ export class ContentOrchestratorService {
     string,
     Omit<NonNullable<RepairArtifactReport['blockPatches']>, 'resolved'>
   >();
+
+  /**
+   * Per-artifact pre-validation-normalization tallies for the current run, keyed by the gate's
+   * label — same shape and lifecycle as blockPatchTally, for the same reason: runDocGate's
+   * produce() closure is the only place that sees both the normalizer's return value and which
+   * gate call it belongs to, and toArtifactReport needs the sum once the gate finishes.
+   */
+  private bulletLeadFixTally = new Map<string, number>();
+
+  /** toArtifactReport's preValidationFixes shape for one gate label, or undefined when nothing
+   *  was normalized for it — matches `blockPatchTally.get(label)`'s "undefined when absent" contract. */
+  private preValidationFixesFor(label: string): RepairArtifactReport['preValidationFixes'] {
+    const count = this.bulletLeadFixTally.get(label);
+    return count ? [{ rule: 'bullet-lead-collision', count }] : undefined;
+  }
 
   /**
    * `input.specs` is usually pasted verbatim from a manufacturer sheet (typically English), but
@@ -401,10 +416,23 @@ export class ContentOrchestratorService {
     const produce = async (payload: PromptPayload): Promise<DocAttempt> => {
       const initial = isFirstAttempt;
       isFirstAttempt = false;
-      return this.produceTaskADoc({
+      const attempt = await this.produceTaskADoc({
         payload, useThinking: opts.useThinking, isInitialAttempt: initial, input: opts.input,
         contextLabel: opts.contextLabel, docTaskLabel: opts.docTaskLabel,
       });
+      // Deterministic, zero-cost, and provably complete for this rule (see the function's own
+      // doc comment) — runs on EVERY attempt, not just the first, so a full-regen that
+      // reintroduces a collision gets cleaned up too. Applied before validate() ever sees the
+      // Doc, so this class of error should never reach the repair gate as a failure at all.
+      if (!attempt.doc) return attempt;
+      const { doc, fixed } = normalizeBulletLeadPunctuation(attempt.doc);
+      if (fixed > 0) {
+        // Accumulated, not replaced — mirrors blockPatchTally: this closure runs once per
+        // produce() call, and a report showing only the last attempt would understate the total.
+        this.bulletLeadFixTally.set(opts.label, (this.bulletLeadFixTally.get(opts.label) ?? 0) + fixed);
+        console.info(`[bullet-lead-punctuation] ${opts.label}: ${fixed} lead(s) normalized before validation`);
+      }
+      return { ...attempt, doc };
     };
 
     const result = await runRepairGate<DocAttempt>({
@@ -506,6 +534,7 @@ export class ContentOrchestratorService {
     this.validationIssues.set([]);
     this.repairReport.set([]);
     this.blockPatchTally.clear();
+    this.bulletLeadFixTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -669,7 +698,7 @@ export class ContentOrchestratorService {
       if (useDocPipeline) assertDocRendered(htmlAResult.artifact, 'HTML (base)', htmlAResult.finalIssues);
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlAResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
-      this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult, this.blockPatchTally.get('HTML (base)'))]);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult, this.blockPatchTally.get('HTML (base)'), this.preValidationFixesFor('HTML (base)'))]);
       // Deterministic §7 category merge (dissolve <3-row categories into "Загальні відомості",
       // placed first) — runs once here, before this HTML is used for Slug/SEO grounding or
       // handed to Task C, so every downstream consumer sees the same, already-merged master.
@@ -944,6 +973,7 @@ export class ContentOrchestratorService {
     this.validationIssues.set([]);
     this.repairReport.set([]);
     this.blockPatchTally.clear();
+    this.bulletLeadFixTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
@@ -1083,7 +1113,7 @@ export class ContentOrchestratorService {
       if (useDocPipelineUa) assertDocRendered(htmlUaResult.artifact, 'HTML (uk-UA)', htmlUaResult.finalIssues);
       const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlUaResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
-      this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult, this.blockPatchTally.get('HTML (uk-UA)'))]);
+      this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult, this.blockPatchTally.get('HTML (uk-UA)'), this.preValidationFixesFor('HTML (uk-UA)'))]);
       // Deterministic §7 category merge — see the identical hook in generate() for rationale.
       const mergedHtmlUa = mergeSmallSpecCategories(htmlUa);
       const finalHtmlUa = isConsumables ? trimConsumablesToLimit(mergedHtmlUa) : mergedHtmlUa;
@@ -1221,6 +1251,7 @@ export class ContentOrchestratorService {
     this.validationIssues.set([]);
     this.repairReport.set([]);
     this.blockPatchTally.clear();
+    this.bulletLeadFixTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
@@ -1258,6 +1289,7 @@ export class ContentOrchestratorService {
     this.validationIssues.set([]);
     this.repairReport.set([]);
     this.blockPatchTally.clear();
+    this.bulletLeadFixTally.clear();
     this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
 
     await this.withProgress(async () => {
@@ -1480,6 +1512,7 @@ export class ContentOrchestratorService {
     this.validationIssues.set([]);
     this.repairReport.set([]);
     this.blockPatchTally.clear();
+    this.bulletLeadFixTally.clear();
     this.repairReportMeta.set(null);
     this.optimizerOutput.set('');
     this.translatorOutput.set('');

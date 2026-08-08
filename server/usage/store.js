@@ -1,12 +1,19 @@
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Overridable so tests can exercise the real DDL against ':memory:' instead of the live database.
 // Production never sets it, so the default path is unchanged.
-const DB_PATH = process.env.USAGE_DB_PATH || path.join(__dirname, 'data.db');
+//
+// Lives under project-root data/, NOT server/ — `npm run server` runs `node --watch server/index.js`,
+// which restarts the whole process on any file write under server/. WAL mode (below) writes to this
+// file on every insertUsage() call, so keeping it inside server/ meant one fast call finishing while
+// a slow one was still streaming would restart the server and kill the slow call's connection.
+const DB_PATH = process.env.USAGE_DB_PATH || path.join(__dirname, '../../data/usage.db');
 
+if (DB_PATH !== ':memory:') fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 const db = new Database(DB_PATH);
 if (DB_PATH !== ':memory:') db.pragma('journal_mode = WAL');
 

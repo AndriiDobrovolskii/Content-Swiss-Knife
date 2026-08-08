@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runRepairGate, appendRepairFeedback, formatRepairReportMarkdown, toArtifactReport, RepairArtifactReport } from './repair-gate';
+import { runRepairGate, appendRepairFeedback, formatRepairReportMarkdown, toArtifactReport, RepairArtifactReport, RepairGateResult } from './repair-gate';
 import { validateSlugs } from './slug-validator';
 import type { SlugResponse } from '../app/types';
 import { PromptPayload } from '../prompt-core/payload';
@@ -1214,6 +1214,139 @@ describe('formatRepairReportMarkdown — local block patches', () => {
 
   it('omits the section entirely when the block tier never ran', () => {
     expect(formatRepairReportMarkdown([clean('HTML (uk-UA)')], META)).not.toContain('## Local patches');
+  });
+});
+
+describe('toArtifactReport — preValidationFixes', () => {
+  const okResult = (): RepairGateResult<unknown> => ({
+    artifact: {}, finalIssues: [], repairsUsed: 0, attempts: [], blockScopedResolved: 0, shippedAttempt: 0,
+  });
+
+  it('carries the supplied fixes through', () => {
+    const report = toArtifactReport('HTML (uk-UA)', okResult(), undefined, [{ rule: 'bullet-lead-collision', count: 6 }]);
+    expect(report.preValidationFixes).toEqual([{ rule: 'bullet-lead-collision', count: 6 }]);
+  });
+
+  it('is undefined when nothing is supplied', () => {
+    const report = toArtifactReport('HTML (uk-UA)', okResult());
+    expect(report.preValidationFixes).toBeUndefined();
+  });
+
+  it('is undefined for an empty array, not an empty array — matches blockPatches\' "absent means nothing happened" contract', () => {
+    const report = toArtifactReport('HTML (uk-UA)', okResult(), undefined, []);
+    expect(report.preValidationFixes).toBeUndefined();
+  });
+});
+
+describe('formatRepairReportMarkdown — explaining why, not just what', () => {
+  const META = { product: 'Ortur R2 1.3W IR (1064 nm)', store: 'EXPERT3D', generatedAt: '2026-08-07T09:09:04.553Z' };
+
+  it('annotates a still-failing issue with no registered strategy — no cheap repair path existed', () => {
+    // bullet-lead-collision has and needs no registered strategy (see bullet-lead-punctuation.ts) —
+    // it always falls straight through resolveLadder's ['full-regen'] fallback.
+    const persisted: ValidationIssue = {
+      severity: 'error', rule: 'bullet-lead-collision',
+      detail: 'The bold lead-in "X" has no separator...', context: 'HTML (uk-UA)',
+    };
+    const reports: RepairArtifactReport[] = [{
+      label: 'HTML (uk-UA)', repairsUsed: 1, finalIssues: [persisted], status: 'unresolved', shippedAttempt: 1,
+      attempts: [{ attempt: 1, issuesBefore: [persisted], issuesAfter: [persisted], resolved: [], persisted: [persisted], introduced: [] }],
+    }];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    expect(md).toContain('❌ still failing: `bullet-lead-collision`');
+    expect(md).toContain('(no targeted repair strategy — relies on full-document regeneration)');
+  });
+
+  it('does not annotate an issue that DOES have a registered strategy', () => {
+    // slug-charset is registered (tier 0, deterministic) — a persisted occurrence means the
+    // strategy ran and still failed, which is a different, worse signal; the note must not claim
+    // "no strategy" when one exists and simply didn't land.
+    const persisted: ValidationIssue = {
+      severity: 'error', rule: 'slug-charset', detail: 'bad charset', context: 'Slug (en-ES)',
+      path: 'slugs[0].slug',
+    };
+    const reports: RepairArtifactReport[] = [{
+      label: 'Slugs', repairsUsed: 1, finalIssues: [persisted], status: 'unresolved', shippedAttempt: 1,
+      attempts: [{ attempt: 1, issuesBefore: [persisted], issuesAfter: [persisted], resolved: [], persisted: [persisted], introduced: [] }],
+    }];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    expect(md).toContain('❌ still failing: `slug-charset`');
+    expect(md).not.toContain('no targeted repair strategy');
+  });
+
+  it('states the fixed/introduced arithmetic behind a discarded attempt', () => {
+    // The exact shape of the 2026-08-07 Ortur R2 1.3W IR report: attempt 1 fixed 4
+    // slug-name-designator-lost errors and introduced 4 slug-charset errors — net tie, discarded,
+    // attempt 0 (4 errors) shipped instead.
+    const fixed = Array.from({ length: 4 }, (_, i) => ({ ...makeIssue('slug-name-designator-lost'), context: `Slug (L${i})` }));
+    const introduced = Array.from({ length: 4 }, (_, i) => ({ ...makeIssue('slug-charset'), context: `Slug (L${i})` }));
+    const original = fixed.map(i => ({ ...i })); // what's still shipping — attempt 0's own 4 errors
+    const reports: RepairArtifactReport[] = [{
+      label: 'Slugs', repairsUsed: 1, finalIssues: original, status: 'unresolved', shippedAttempt: 0,
+      attempts: [{ attempt: 1, issuesBefore: original, issuesAfter: introduced, resolved: fixed, persisted: [], introduced }],
+    }];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    expect(md).toContain(
+      '- Discarded: fixed 4 error(s), introduced 4 new error(s) (slug-charset) — net change +0, ' +
+      'not strictly better than the 4 error(s) this attempt started from.',
+    );
+  });
+
+  it('does not print a discard line for the attempt that actually shipped', () => {
+    const resolved = [makeIssue('meta-title-length')];
+    const reports: RepairArtifactReport[] = [{
+      label: 'SEO metadata', repairsUsed: 1, finalIssues: [], status: 'repaired', shippedAttempt: 1,
+      attempts: [{ attempt: 1, issuesBefore: resolved, issuesAfter: [], resolved, persisted: [], introduced: [] }],
+    }];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    expect(md).not.toContain('- Discarded:');
+  });
+
+  it('does not print a discard line for a later attempt merely edged out, with nothing of its own introduced', () => {
+    const ruleA = makeIssue('rule-a');
+    const reports: RepairArtifactReport[] = [{
+      label: 'test', repairsUsed: 2, finalIssues: [ruleA], status: 'unresolved', shippedAttempt: 1,
+      attempts: [
+        { attempt: 1, issuesBefore: [ruleA, makeIssue('rule-b')], issuesAfter: [ruleA], resolved: [makeIssue('rule-b')], persisted: [ruleA], introduced: [] },
+        { attempt: 2, issuesBefore: [ruleA], issuesAfter: [ruleA], resolved: [], persisted: [ruleA], introduced: [] },
+      ],
+    }];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    expect(md).not.toContain('- Discarded:');
+  });
+
+  it('adds a pre-validation-normalizations summary line when a normalizer fixed something before validation ran', () => {
+    const reports: RepairArtifactReport[] = [{
+      label: 'HTML (uk-UA)', repairsUsed: 0, finalIssues: [], status: 'clean', shippedAttempt: 0, attempts: [],
+      preValidationFixes: [{ rule: 'bullet-lead-collision', count: 6 }],
+    }];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    expect(md).toContain('- Pre-validation normalizations applied: 6 (bullet-lead-collision: 6)');
+  });
+
+  it('sums pre-validation fixes for the same rule across artifacts', () => {
+    const reports: RepairArtifactReport[] = [
+      { label: 'HTML (base)', repairsUsed: 0, finalIssues: [], status: 'clean', shippedAttempt: 0, attempts: [], preValidationFixes: [{ rule: 'bullet-lead-collision', count: 2 }] },
+      { label: 'HTML (uk-UA)', repairsUsed: 0, finalIssues: [], status: 'clean', shippedAttempt: 0, attempts: [], preValidationFixes: [{ rule: 'bullet-lead-collision', count: 6 }] },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    expect(md).toContain('- Pre-validation normalizations applied: 8 (bullet-lead-collision: 8)');
+  });
+
+  it('omits the pre-validation-normalizations line entirely when nothing was normalized', () => {
+    const reports: RepairArtifactReport[] = [
+      { label: 'HTML (base)', repairsUsed: 0, finalIssues: [], status: 'clean', shippedAttempt: 0, attempts: [] },
+    ];
+
+    const md = formatRepairReportMarkdown(reports, META);
+    expect(md).not.toContain('Pre-validation normalizations');
   });
 });
 

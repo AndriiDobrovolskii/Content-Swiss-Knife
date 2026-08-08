@@ -1303,12 +1303,12 @@
                         <li>
                           <div class="font-semibold">Attempt {{ attempt.attempt }}</div>
                           <ul class="ml-4 list-disc">
-                            @for (issue of attempt.resolved; track issue.rule) {
+                            @for (issue of attempt.resolved; track issue.rule + issue.detail + $index) {
                               <li class="text-green-700 dark:text-green-400">
                                 {{ uiLabels().repairReportFixed }}: [{{ issue.rule }}] {{ issue.detail }}
                               </li>
                             }
-                            @for (issue of attempt.persisted; track issue.rule) {
+                            @for (issue of attempt.persisted; track issue.rule + issue.detail + $index) {
                               <li class="text-red-700 dark:text-red-400">
                                 {{ uiLabels().repairReportPersisted }}: [{{ issue.rule }}] {{ issue.detail }}
                               </li>
@@ -1319,7 +1319,7 @@
                       @if (report.finalIssues.some(i => i.severity === 'warning')) {
                         <li>
                           <ul class="ml-4 list-disc">
-                            @for (issue of report.finalIssues; track issue.rule) {
+                            @for (issue of report.finalIssues; track issue.rule + issue.detail + $index) {
                               @if (issue.severity === 'warning') {
                                 <li class="text-amber-700 dark:text-amber-400">[{{ issue.rule }}] {{ issue.detail }}</li>
                               }

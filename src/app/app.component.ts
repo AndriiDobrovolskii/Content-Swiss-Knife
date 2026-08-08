@@ -1034,6 +1034,27 @@ export class AppComponent {
         this.orchestrator.repairReportMeta.set(null);
         break;
 
+      case 'ua-generator':
+        this.selectedWebsite.set(null);
+        this.productName.set('');
+        this.description.set('');
+        this.specs.set('');
+        this.supplementalContent.set('');
+        this.customInstructions.set('');
+        this.activeTab.set('html');
+        this.clearGenImgManifest();
+        this.orchestrator.content.update(c => ({
+          ...c,
+          mainHtmlUa: '',
+          translations: {},
+          faqArtifacts: {},
+          website: undefined,
+        }));
+        this.orchestrator.validationIssues.set([]);
+        this.orchestrator.repairReport.set([]);
+        this.orchestrator.repairReportMeta.set(null);
+        break;
+
       case 'seo-generator':
         this.seoSelectedWebsite.set(null);
         this.seoProductName.set('');
