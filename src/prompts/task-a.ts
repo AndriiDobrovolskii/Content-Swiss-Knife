@@ -32,7 +32,7 @@ OUTPUT: pure HTML body only (no JSON, no Markdown, no code fences).
 This product is a CONSUMABLE MATERIAL (filament / resin / adhesive).
 Apply the CONSUMABLES SIMPLIFIED SCHEMA below. Do NOT use Schema v3.0 §1–§9.
 No Killer Specs table. No Functionality section. No CTA-TRUST block.
-Hard visible-text limit: ≤ 2500 characters (strip all HTML tags before counting).
+Hard visible-text limit: ≤ 4000 characters (strip all HTML tags before counting).
 
 ${CONSUMABLES_SIMPLIFIED_SCHEMA}`;
 
@@ -141,7 +141,7 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
 
   // Reinforcement in the user turn so the model can't miss the mode switch.
   const consumablesMode = isConsumables
-    ? '\n[CONSUMABLES MODE ACTIVE] Apply §C1–§C6 only. Hard limit ≤ 2500 stripped chars.'
+    ? '\n[CONSUMABLES MODE ACTIVE] Apply §C1–§C6 only. Hard limit ≤ 4000 stripped chars.'
     : '';
 
   const userContent =

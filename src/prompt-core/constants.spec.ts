@@ -254,7 +254,7 @@ describe('Center 3D Print ToV — consumables mode (§C)', () => {
     expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('CONSUMABLES MODE (§C1-§C6)');
   });
 
-  it('carries the 2500-character budget guard that caps supporting sentences at one', () => {
+  it('carries the 4000-character budget guard that caps supporting sentences at one', () => {
     expect(C3D_TOV_BASE_OVERLAY).toContain('BUDGET GUARD');
     expect(C3D_TOV_BASE_OVERLAY).toMatch(/EXACTLY ONE supporting sentence/);
   });
