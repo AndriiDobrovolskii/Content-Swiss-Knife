@@ -67,7 +67,7 @@ const VIDEO_FIGCAPTION_STYLE = 'text-align: center; font-size: 14px; color: #666
  * other replacements and corrupt them. This ordering is the security property that lets prose()
  * safely re-admit a tag afterwards.
  */
-function esc(s: string): string {
+export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
@@ -88,7 +88,7 @@ function esc(s: string): string {
  * the input is already rejected upstream by PROSE_FORBIDDEN. Balancing the tags here would add
  * parsing logic to a module whose whole value is that it has none.
  */
-function prose(s: string): string {
+export function prose(s: string): string {
   return esc(s).replace(/&lt;(\/?)(b|strong)&gt;/g, '<$1$2>');
 }
 

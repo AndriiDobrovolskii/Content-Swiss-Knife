@@ -52,8 +52,8 @@ db.exec(`
     store TEXT,
     locale TEXT,
     product_name TEXT,
-    -- 'doc' | 'html' — which pipeline produced it, so the rollout can be compared against the path
-    -- it replaced rather than against nothing.
+    -- 'doc' | 'html' | 'consumables-doc' — which pipeline produced it, so the rollout can be
+    -- compared against the path it replaced rather than against nothing.
     pipeline TEXT NOT NULL,
     -- 'ok' | 'repaired' | 'failed-schema' | 'failed-json-syntax'
     outcome TEXT NOT NULL,

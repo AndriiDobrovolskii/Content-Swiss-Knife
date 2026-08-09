@@ -67,7 +67,7 @@ export class LlmService implements LlmProvider {
     store?: string;
     locale?: string;
     productName?: string;
-    pipeline: 'doc' | 'html';
+    pipeline: 'doc' | 'html' | 'consumables-doc';
     outcome: 'ok' | 'repaired' | 'failed-schema' | 'failed-json-syntax';
     repairsUsed?: number;
   }): Promise<void> {
