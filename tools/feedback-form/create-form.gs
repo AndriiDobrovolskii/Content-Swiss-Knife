@@ -8,8 +8,9 @@
  * It is not part of the Angular build — it is a paste-and-run artifact.
  * Setup steps live in tools/feedback-form/README.md.
  *
- * After the run, check the execution log: it prints the form URL and the two
- * `entry.*` IDs that go into src/environments/environment*.ts.
+ * After the run, check the execution log: it prints the form URL and the `entry.*` IDs
+ * (author/tool plus the auto-filled app-state snapshot fields) that go into
+ * src/environments/environment*.ts.
  */
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,12 @@
 //   TELEGRAM_BOT_TOKEN — leave unset to disable Telegram notifications entirely.
 //   TELEGRAM_CHAT_ID   — target chat; required together with the token.
 //   TELEGRAM_TOPIC_ID  — forum topic id; unset when the chat has no topics.
+//   WORKSECTION_DOMAIN        — e.g. "youraccount.worksection.com". Leave unset to disable
+//                                Worksection task creation entirely.
+//   WORKSECTION_API_KEY       — admin API key from Worksection → profile → API. Required
+//                                together with WORKSECTION_DOMAIN and WORKSECTION_PROJECT_ID.
+//   WORKSECTION_PROJECT_ID    — id of the project new tasks are created in.
+//   WORKSECTION_ASSIGNEE_EMAIL — optional; unset leaves the task unassigned.
 
 /** Read one Script Property; '' when it is not set. */
 function setting_(name) {
@@ -43,6 +50,21 @@ var Q_TARGET = 'Що саме ви редагуєте?';
 var Q_BEFORE = 'ДО — що ви отримуєте зараз';
 var Q_AFTER = 'ПІСЛЯ — що має вийти';
 var Q_FREQUENCY = 'Наскільки часто це трапляється?';
+
+// Auto-filled app-state snapshot (never typed by hand — see src/app/app.component.ts
+// activeSnapshotContext and src/utils/feedback-url.ts). Kept behind a page break in the form UI;
+// see the "Технічна інформація" section item below.
+var Q_SNAPSHOT_SITE = 'Сайт';
+var Q_SNAPSHOT_TEMPLATE = 'Шаблон';
+var Q_SNAPSHOT_PRODUCT = 'Назва продукту (снепшот)';
+var Q_SNAPSHOT_INPUT_TEXT = 'Вхідний текст (снепшот)';
+var Q_SNAPSHOT_SPECS = 'Специфікації (снепшот)';
+var Q_SNAPSHOT_SUPPLEMENTAL = 'Додатковий контент (снепшот)';
+var Q_SNAPSHOT_CUSTOM_INSTRUCTIONS = 'Кастомні інструкції (снепшот)';
+var Q_SNAPSHOT_LLM_DEEP = 'LLM Deep';
+var Q_SNAPSHOT_LLM_FAST = 'LLM Fast';
+var Q_SNAPSHOT_THINKING = 'Deep thinking увімкнено';
+var Q_SNAPSHOT_SESSION = 'Сесія';
 
 /** Keep in sync with TOOL_LABEL in src/app/app.component.ts. */
 var TOOLS = [
@@ -136,8 +158,7 @@ function setUp() {
   Logger.log('');
   Logger.log('  feedbackForm: {');
   Logger.log("    baseUrl: '" + form.getPublishedUrl() + "',");
-  Logger.log("    entryAuthor: '" + entries.author + "',");
-  Logger.log("    entryTool: '" + entries.tool + "',");
+  logEntryIdBlock_(entries);
   Logger.log('  },');
   Logger.log('');
   Logger.log('=== Посилання ===');
@@ -217,23 +238,89 @@ function createForm_() {
     .setChoiceValues(FREQUENCIES)
     .setRequired(true);
 
+  addSnapshotQuestions_(form);
+
   return form;
 }
 
+/**
+ * The auto-filled app-state snapshot — site, template, product, description-equivalent, specs,
+ * LLM settings — prefilled by the app itself (src/utils/feedback-url.ts), never typed by the
+ * editor. Google Forms has no truly hidden field, so these live behind their own page: a
+ * respondent who never scrolls past ДО/ПІСЛЯ/frequency never has to look at them, at the cost of
+ * one extra "Далі" click before Submit.
+ *
+ * None of these questions are required — a submission from html-editor's toolbar button, or an
+ * older cached build, legitimately leaves most of them blank.
+ */
+function addSnapshotQuestions_(form) {
+  form.addPageBreakItem()
+    .setTitle('👇 Технічна інформація — нічого тут не міняйте, тисніть «Далі» 👇')
+    .setHelpText('Ці поля підставляються застосунком автоматично.');
+
+  var auto = 'Підставляється автоматично.';
+
+  form.addTextItem().setTitle(Q_SNAPSHOT_SITE).setHelpText(auto).setRequired(false);
+  form.addTextItem().setTitle(Q_SNAPSHOT_TEMPLATE).setHelpText(auto).setRequired(false);
+  form.addTextItem().setTitle(Q_SNAPSHOT_PRODUCT).setHelpText(auto).setRequired(false);
+  form.addParagraphTextItem().setTitle(Q_SNAPSHOT_INPUT_TEXT).setHelpText(auto).setRequired(false);
+  form.addParagraphTextItem().setTitle(Q_SNAPSHOT_SPECS).setHelpText(auto).setRequired(false);
+  form.addParagraphTextItem().setTitle(Q_SNAPSHOT_SUPPLEMENTAL).setHelpText(auto).setRequired(false);
+  form.addParagraphTextItem().setTitle(Q_SNAPSHOT_CUSTOM_INSTRUCTIONS).setHelpText(auto).setRequired(false);
+  form.addTextItem().setTitle(Q_SNAPSHOT_LLM_DEEP).setHelpText(auto).setRequired(false);
+  form.addTextItem().setTitle(Q_SNAPSHOT_LLM_FAST).setHelpText(auto).setRequired(false);
+  form.addTextItem().setTitle(Q_SNAPSHOT_THINKING).setHelpText(auto).setRequired(false);
+  form.addTextItem().setTitle(Q_SNAPSHOT_SESSION).setHelpText(auto).setRequired(false);
+}
+
+/** Title → ids key, for every entry.* the app prefills. Single source of truth for
+ *  collectEntryIds_/reportEntryIds_ so the two can never drift apart. */
+var ENTRY_QUESTIONS_ = [
+  { title: Q_AUTHOR, key: 'author' },
+  { title: Q_TOOL, key: 'tool' },
+  { title: Q_SNAPSHOT_SITE, key: 'site' },
+  { title: Q_SNAPSHOT_TEMPLATE, key: 'template' },
+  { title: Q_SNAPSHOT_PRODUCT, key: 'productName' },
+  { title: Q_SNAPSHOT_INPUT_TEXT, key: 'inputText' },
+  { title: Q_SNAPSHOT_SPECS, key: 'specs' },
+  { title: Q_SNAPSHOT_SUPPLEMENTAL, key: 'supplementalContent' },
+  { title: Q_SNAPSHOT_CUSTOM_INSTRUCTIONS, key: 'customInstructions' },
+  { title: Q_SNAPSHOT_LLM_DEEP, key: 'llmDeep' },
+  { title: Q_SNAPSHOT_LLM_FAST, key: 'llmFast' },
+  { title: Q_SNAPSHOT_THINKING, key: 'thinkingEnabled' },
+  { title: Q_SNAPSHOT_SESSION, key: 'sessionId' },
+];
+
 function collectEntryIds_(form) {
-  var ids = { author: '', tool: '' };
+  var ids = {};
+  ENTRY_QUESTIONS_.forEach(function (q) { ids[q.key] = ''; });
+
+  var byTitle = {};
+  ENTRY_QUESTIONS_.forEach(function (q) { byTitle[q.title] = q.key; });
 
   form.getItems().forEach(function (item) {
-    if (item.getTitle() === Q_AUTHOR) ids.author = entryIdFor_(form, item);
-    else if (item.getTitle() === Q_TOOL) ids.tool = entryIdFor_(form, item);
+    var key = byTitle[item.getTitle()];
+    if (key) ids[key] = entryIdFor_(form, item);
   });
 
-  if (!ids.author || !ids.tool) {
-    Logger.log('УВАГА: не вдалося визначити entry ID автоматично.');
-    Logger.log('Відкрийте форму → ⋮ → «Отримати заповнене посилання», заповніть два поля');
+  var missing = ENTRY_QUESTIONS_.filter(function (q) { return !ids[q.key]; });
+  if (missing.length) {
+    Logger.log('УВАГА: не вдалося визначити entry ID автоматично для: '
+      + missing.map(function (q) { return q.title; }).join(', '));
+    Logger.log('Відкрийте форму → ⋮ → «Отримати заповнене посилання», заповніть поле(-я)');
     Logger.log('і візьміть entry.* з отриманого URL вручну.');
   }
   return ids;
+}
+
+/** Prints one `ids` map in the exact `entry*` shape src/environments/environment*.ts expects —
+ *  shared by setUp()'s "paste this in" block and reportEntryIds_()'s drift check, so the two
+ *  can never format the keys differently. */
+function logEntryIdBlock_(ids) {
+  ENTRY_QUESTIONS_.forEach(function (q) {
+    var tsKey = 'entry' + q.key.charAt(0).toUpperCase() + q.key.slice(1);
+    Logger.log("    " + tsKey + ": '" + ids[q.key] + "',   // " + q.title);
+  });
 }
 
 /**
@@ -365,6 +452,16 @@ function onFeedbackSubmit(e) {
     MailApp.sendEmail(recipient, 'CSK: Новий запит на автоматизацію', summaryText);
   }
 
+  // Independently guarded, like mail/Telegram/screenshots below: a Worksection outage or a
+  // missing WORKSECTION_* Script Property must never take the rest of the trigger down with it.
+  if (summary) {
+    try {
+      createWorksectionTask_(summary);
+    } catch (err) {
+      Logger.log('!!! Worksection: createWorksectionTask_ впав: ' + err);
+    }
+  }
+
   var chatId = setting_('TELEGRAM_CHAT_ID');
   if (!setting_('TELEGRAM_BOT_TOKEN') || !chatId) return;
 
@@ -413,8 +510,14 @@ function stampStatusAndSummarise_(e) {
   var sheetUrl = sheet.getParent().getUrl();
   linesText.push('Таблиця: ' + sheetUrl);
 
+  // Column A of a form-linked response sheet is always the submission timestamp, regardless of
+  // the header's localized label — read by position, not by matching a header string that
+  // could read "Timestamp" or "Позначка часу" depending on the sheet's locale. Used as the
+  // Worksection task's dedup/correlation "Ref:" line (post_task has no external-id param).
+  var timestamp = String(values[0]);
+
   // Returns data, not formatted output: mail and chat want very different things out of it.
-  return { text: linesText.join('\n'), fields: fields, sheetUrl: sheetUrl };
+  return { text: linesText.join('\n'), fields: fields, sheetUrl: sheetUrl, timestamp: timestamp };
 }
 
 function fieldValue_(fields, header) {
@@ -593,6 +696,155 @@ function sendTelegram_(method, payload) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Worksection
+// ---------------------------------------------------------------------------
+
+/**
+ * `[Improvement] [Tool] target`, capped at Worksection's 255-char title limit.
+ *
+ * `target` is free text an editor typed (product name or site), not a value this script
+ * controls — stray `\r`/`\n` in it would otherwise land in the title, and Worksection can
+ * reject task creation on unprintable characters there.
+ */
+function formatWorksectionTitle_(fields) {
+  var tool = fieldValue_(fields, Q_TOOL) || '?';
+  var target = fieldValue_(fields, Q_SNAPSHOT_PRODUCT) || fieldValue_(fields, Q_SNAPSHOT_SITE) || 'Без назви';
+  var cleanTarget = target.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return ('[Improvement] [' + tool + '] ' + cleanTarget).substring(0, 255);
+}
+
+/**
+ * Two-tier task body: a short bolded summary worth seeing without opening the sheet, then the
+ * same generic field dump the mail already gets (`create-form.gs` reads the response row by
+ * header, not a fixed field list — so any question added later flows into this dump with no
+ * code change here, exactly like email/Telegram already do). Closes with a `Ref:` line tying
+ * back to the row's own submission timestamp — post_task has no external-id/idempotency
+ * parameter, so this is what makes a duplicate submission searchable/mergeable by hand in
+ * Worksection, and doubles as the correlation key to any screenshot on the same response row.
+ */
+function formatWorksectionText_(fields, sheetUrl, timestamp) {
+  var summaryLines = [
+    '*Хто:* ' + (fieldValue_(fields, Q_AUTHOR) || '—'),
+    '*Де:* ' + (fieldValue_(fields, Q_TOOL) || '—'),
+    '*Сайт:* ' + (fieldValue_(fields, Q_SNAPSHOT_SITE) || '—'),
+    '*Шаблон:* ' + (fieldValue_(fields, Q_SNAPSHOT_TEMPLATE) || '—'),
+    '*LLM Deep:* ' + (fieldValue_(fields, Q_SNAPSHOT_LLM_DEEP) || '—'),
+    '*LLM Fast:* ' + (fieldValue_(fields, Q_SNAPSHOT_LLM_FAST) || '—')
+  ];
+
+  var dump = fields.map(function (f) { return f.header + ':\n' + f.value; }).join('\n\n');
+
+  return summaryLines.join('\n')
+    + '\n\n---\n\n' + dump
+    + '\n\n---\n\nТаблиця: ' + sheetUrl
+    + '\nRef: ' + timestamp;
+}
+
+/**
+ * Assembles the admin-token-signed query string AND computes its hash from the exact same
+ * string — the classic Worksection integration bug is hashing one encoding of the params
+ * (e.g. space as `+`) while sending another (`%20`), which Worksection rejects with an opaque
+ * auth failure. Keeping both in one function makes that drift impossible.
+ */
+function buildWorksectionRequest_(action, params, apiKey) {
+  var queryString = 'action=' + action + '&' + Object.keys(params)
+    .map(function (k) { return k + '=' + encodeURIComponent(params[k]); })
+    .join('&');
+  var digestBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, queryString + apiKey);
+  var hash = digestBytes
+    .map(function (b) { return ((b + 256) % 256).toString(16).padStart(2, '0'); })
+    .join('');
+  return queryString + '&hash=' + hash;
+}
+
+/**
+ * Creates one Worksection task from a submitted response. Skips silently (like Telegram) when
+ * the WORKSECTION_* Script Properties aren't set — this integration is opt-in.
+ *
+ * Sent as a POST with the signed query string in the body, not appended to the URL: `text`
+ * carries the whole field dump, easily 4-6 KB, and appending that much to a URL risks
+ * Worksection's own web server rejecting the request with 414 URI Too Long before the
+ * application-level auth check even runs. The hash is computed over the same bytes regardless
+ * of transport, so POSTing the query string changes nothing about the signature.
+ */
+function createWorksectionTask_(summary) {
+  var domain = setting_('WORKSECTION_DOMAIN');
+  var apiKey = setting_('WORKSECTION_API_KEY');
+  var projectId = setting_('WORKSECTION_PROJECT_ID');
+  if (!domain || !apiKey || !projectId) return false;
+
+  var params = {
+    id_project: projectId,
+    title: formatWorksectionTitle_(summary.fields),
+    text: formatWorksectionText_(summary.fields, summary.sheetUrl, summary.timestamp)
+  };
+  var assignee = setting_('WORKSECTION_ASSIGNEE_EMAIL');
+  if (assignee) params.email_user_to = assignee;
+
+  var authString = buildWorksectionRequest_('post_task', params, apiKey);
+
+  try {
+    var response = UrlFetchApp.fetch('https://' + domain + '/api/admin/v2/', {
+      method: 'post',
+      payload: authString,
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() !== 200) {
+      Logger.log('!!! Worksection відхилив post_task (HTTP ' + response.getResponseCode() + ')');
+      return false;
+    }
+
+    var body = JSON.parse(response.getContentText());
+    if (body.status === 'ok') return true;
+
+    // Never log authString/hash/apiKey here — the response body is Worksection's own error
+    // message, not a credential, but the request we sent is.
+    Logger.log('!!! Worksection відхилив post_task: ' + (body.message || JSON.stringify(body)));
+    return false;
+  } catch (err) {
+    Logger.log('!!! Worksection: запит post_task не вдався: ' + err);
+    return false;
+  }
+}
+
+/**
+ * Run this from the editor to check the Worksection setup without submitting the form.
+ * Verdict goes to View → Execution log. Creates one real (throwaway) task in the configured
+ * project — delete it there once confirmed.
+ */
+function testWorksection() {
+  var missing = [];
+  if (!setting_('WORKSECTION_DOMAIN')) missing.push('WORKSECTION_DOMAIN');
+  if (!setting_('WORKSECTION_API_KEY')) missing.push('WORKSECTION_API_KEY');
+  if (!setting_('WORKSECTION_PROJECT_ID')) missing.push('WORKSECTION_PROJECT_ID');
+
+  if (missing.length) {
+    Logger.log('Не задано у Script Properties: ' + missing.join(', '));
+    Logger.log('Project Settings → Script Properties → Add script property.');
+    return;
+  }
+
+  var sampleFields = [
+    { header: Q_AUTHOR, value: 'Тест' },
+    { header: Q_TOOL, value: 'Generator' },
+    { header: Q_SNAPSHOT_SITE, value: 'test-site.com' },
+    { header: Q_SNAPSHOT_LLM_DEEP, value: 'anthropic / claude-sonnet-5 / medium' },
+    { header: Q_TARGET, value: 'Перевірка звʼязку' }
+  ];
+
+  var ok = createWorksectionTask_({
+    fields: sampleFields,
+    sheetUrl: '(тестовий запуск — таблиці немає)',
+    timestamp: new Date().toISOString()
+  });
+
+  Logger.log(ok
+    ? '✅ Таск створено. Перевірте потрібний проєкт у Worksection і видаліть тестовий таск.'
+    : 'Не створено. Причина — у рядку вище.');
+}
+
 /**
  * Report on the LIVE form: current entry ids, the questions as they stand now, and the column
  * order of the response sheet. Creates nothing and changes nothing — run it after editing the
@@ -659,11 +911,10 @@ function reportEntryIds_(form) {
     // A mismatch means the button opens the form with that field empty: Forms ignores an
     // unknown entry rather than complaining. Changing a question's TYPE is enough to cause it.
     var ids = collectEntryIds_(form);
-    Logger.log("    entryAuthor: '" + ids.author + "',   // " + Q_AUTHOR);
-    Logger.log("    entryTool:   '" + ids.tool + "',   // " + Q_TOOL);
+    logEntryIdBlock_(ids);
   } catch (err) {
     Logger.log('Не вдалося: ' + err);
-    Logger.log('Обхід: форма → ⋮ → «Отримати заповнене посилання», заповніть два поля,');
+    Logger.log('Обхід: форма → ⋮ → «Отримати заповнене посилання», заповніть поля,');
     Logger.log('візьміть entry.* з отриманого URL.');
   }
   Logger.log('');
