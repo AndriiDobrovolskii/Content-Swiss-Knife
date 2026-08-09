@@ -18,8 +18,9 @@ import { HtmlEditorComponent } from './components/html-editor/html-editor.compon
 import { ModelSettingsComponent } from './components/model-settings/model-settings.component';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
 import { FeedbackContextService } from '../services/feedback-context.service';
-import { buildFeedbackUrl } from '../utils/feedback-url';
+import { buildFeedbackUrl, FeedbackContext } from '../utils/feedback-url';
 import { environment } from '../environments/environment';
+import { ModelSettingsService, SlotSettings } from '../services/model-settings.service';
 import saveAs from 'file-saver';
 
 interface InputImage {
@@ -397,6 +398,7 @@ export class AppComponent {
   private historyService = inject(HistoryService);
   private llmService = inject(LlmService);
   private feedback = inject(FeedbackContextService);
+  private modelSettings = inject(ModelSettingsService);
 
   // App Mode
   appMode = signal<AppMode>('generator');
@@ -416,8 +418,82 @@ export class AppComponent {
   feedbackUrl = computed(() => buildFeedbackUrl(environment.feedbackForm, {
     author: this.feedback.editorName(),
     tool: TOOL_LABEL[this.appMode()],
+    ...this.activeSnapshotContext(),
   }));
   feedbackPopupBlocked = signal<boolean>(false);
+
+  /** Minted once per page load, not reactive — identifies repeated form opens from one sitting
+   *  for de-duplication/analytics in the response sheet. Must stay a plain field: a computed or
+   *  a value read inside one would mint a new id on every change-detection pass instead of once. */
+  readonly feedbackSessionId = crypto.randomUUID().slice(0, 8);
+
+  private formatSlotSettings(slot: SlotSettings): string {
+    return `${slot.provider} / ${slot.model} / ${slot.level}`;
+  }
+
+  /** Everything currently selected for whichever tool is active, snapshotted for the
+   *  improvement-request form's auto-filled fields. Mirrors activeProductName's per-mode switch —
+   *  each tool keeps its own isolated input signals, so this reads whichever set applies. */
+  activeSnapshotContext = computed<FeedbackContext>(() => {
+    const settings = this.modelSettings.snapshot();
+    const base: FeedbackContext = {
+      llmDeep: this.formatSlotSettings(settings.deep),
+      llmFast: this.formatSlotSettings(settings.fast),
+      sessionId: this.feedbackSessionId,
+    };
+    const bool = (v: boolean) => v ? 'так' : 'ні';
+
+    switch (this.appMode()) {
+      case 'generator':
+      case 'ua-generator': {
+        const templateId = this.selectedTemplateId();
+        const hasCustomTemplate = Object.keys(this.customTemplate()).length > 0;
+        const template = hasCustomTemplate
+          ? `${templateId || '(none)'} [custom]`
+          : templateId || undefined;
+        return {
+          ...base,
+          site: this.selectedWebsite()?.name,
+          template,
+          productName: this.productName(),
+          inputText: this.description(),
+          specs: this.specs(),
+          supplementalContent: this.supplementalContent(),
+          customInstructions: this.customInstructions(),
+          thinkingEnabled: bool(this.generatorUseThinking()),
+        };
+      }
+      case 'seo-generator':
+        return {
+          ...base,
+          site: this.seoSelectedWebsite()?.name,
+          productName: this.seoProductName(),
+          inputText: this.seoDescription(),
+          thinkingEnabled: bool(this.seoUseThinking()),
+        };
+      case 'slug-generator':
+        return {
+          ...base,
+          site: this.slugSelectedWebsite()?.name,
+          productName: this.slugProductName(),
+        };
+      case 'optimizer':
+        return { ...base, inputText: this.optimizerInputHtml(), thinkingEnabled: bool(this.optimizerUseThinking()) };
+      case 'translator':
+        return { ...base, inputText: this.translatorInput(), thinkingEnabled: bool(this.translatorUseThinking()) };
+      case 'copywriter':
+        return {
+          ...base,
+          site: this.selectedWebsite()?.name,
+          inputText: this.copywriterInput(),
+          thinkingEnabled: bool(this.copywriterUseThinking()),
+        };
+      case 'readability':
+        return { ...base, inputText: this.readabilityInput() };
+      default:
+        return base;
+    }
+  });
 
   // Dark Mode
   darkMode = signal<boolean>(false);
