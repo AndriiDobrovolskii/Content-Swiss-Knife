@@ -60,9 +60,11 @@ export const DOC_PIPELINE_STORES: readonly string[] = [
  * A §C1–§C6 artifact cannot be expressed as a ProductDescriptionDoc at all: both MANDATORY fields
  * have no source in it — there is no `<thead>` killer-specs table for §2a, and no
  * `<section class="specs">` for §7 (§C4 "Склад комплекту" is a bare `div.table-responsive` sitting
- * inside an `<h2>` group, a position the model has no slot for). Consumables need their own
- * document model; until they have one, they stay on the HTML path. See the §C tests in
- * test/tools/scaffold-doc.spec.ts.
+ * inside an `<h2>` group, a position the model has no slot for). Consumables now have their own
+ * document model — see ConsumablesDescriptionDoc (src/domain/consumables-doc.ts) and
+ * usesConsumablesDocPipeline() below — but this function's exclusion stays exactly as-is:
+ * ProductDescriptionDoc still cannot express §C shape, and that fact does not change. See the §C
+ * tests in test/tools/scaffold-doc.spec.ts.
  */
 export function usesDocPipeline(storeName: string, templateId?: string): boolean {
   if (templateId === 'consumables-resin') return false;
@@ -70,4 +72,20 @@ export function usesDocPipeline(storeName: string, templateId?: string): boolean
   // A store with no image base cannot render — renderContextFor() throws rather than emit relative
   // <img src>. Checked here too so a registry edit cannot turn an enabled store into a hard failure.
   return !!STORE_REGISTRY[storeName]?.imageBaseUrl;
+}
+
+/**
+ * Separate, independent gate for the NEW consumables document model (ConsumablesDescriptionDoc +
+ * renderConsumablesDoc). Flipped to true for the live probe — the same evidence bar that settled
+ * DOC_PIPELINE_STORES above: one real product, schema-valid JSON from a real model call, zero
+ * validator errors after render. If a real generation surfaces a defect this pass cannot repair,
+ * flip this back to false — that alone restores the plain-HTML path with no other code change.
+ *
+ * No store dimension here: consumables is selected by templateId, not by which storefront it's
+ * generated for, so there is nothing analogous to DOC_PIPELINE_STORES to enumerate.
+ */
+export const CONSUMABLES_DOC_PIPELINE_ENABLED = true;
+
+export function usesConsumablesDocPipeline(templateId?: string): boolean {
+  return templateId === 'consumables-resin' && CONSUMABLES_DOC_PIPELINE_ENABLED;
 }
