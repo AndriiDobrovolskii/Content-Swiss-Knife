@@ -11,7 +11,7 @@
  * WHY IT HAPPENED: video was the only media type in the pipeline with no manifest, no count and
  * no validator. Images get a COUNT=N HARD RULE block that dominates the tail of the user turn and
  * whose placement rules claim §2–§5; the master prompt's [VIDEO] rule was five lines that pointed
- * at a section ("Deep Dive") which does not exist in Schema v3.0. Under the 28,000-char cap the
+ * at a section ("Deep Dive") which does not exist in Schema v3.0. Under the 25,000-char cap the
  * model is told to compress, and the one element with no slot, no count and no tier is what goes.
  *
  * THE TWO LAYERS:

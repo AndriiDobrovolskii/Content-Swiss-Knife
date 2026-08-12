@@ -581,7 +581,7 @@
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               {{ uiLabels().textToRewrite }} <span class="text-red-500">*</span>
             </label>
-            <span class="text-sm" [class.text-green-500]="copywriterInput().length <= 32000" [class.text-red-400]="copywriterInput().length > 32000">{{ copywriterInput().length.toLocaleString() }} characters</span>
+            <span class="text-sm" [class.text-green-500]="copywriterInput().length <= 25000" [class.text-yellow-500]="copywriterInput().length > 25000 && copywriterInput().length <= 30000" [class.text-orange-500]="copywriterInput().length > 30000 && copywriterInput().length <= 32000" [class.text-red-400]="copywriterInput().length > 32000">{{ copywriterInput().length.toLocaleString() }} characters</span>
           </div>
           <textarea
             class="flex-1 w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -616,7 +616,7 @@
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               {{ uiLabels().rawHtmlInput }}
             </label>
-            <span class="text-sm" [class.text-green-500]="optimizerInputHtml().length <= 32000" [class.text-red-400]="optimizerInputHtml().length > 32000">{{ optimizerInputHtml().length.toLocaleString() }} characters</span>
+            <span class="text-sm" [class.text-green-500]="optimizerInputHtml().length <= 25000" [class.text-yellow-500]="optimizerInputHtml().length > 25000 && optimizerInputHtml().length <= 30000" [class.text-orange-500]="optimizerInputHtml().length > 30000 && optimizerInputHtml().length <= 32000" [class.text-red-400]="optimizerInputHtml().length > 32000">{{ optimizerInputHtml().length.toLocaleString() }} characters</span>
           </div>
           <textarea
             class="flex-1 w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none font-mono text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -686,7 +686,7 @@
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               {{ uiLabels().contentToTrans }}
             </label>
-            <span class="text-sm" [class.text-green-500]="translatorInput().length <= 32000" [class.text-red-400]="translatorInput().length > 32000">{{ translatorInput().length.toLocaleString() }} characters</span>
+            <span class="text-sm" [class.text-green-500]="translatorInput().length <= 25000" [class.text-yellow-500]="translatorInput().length > 25000 && translatorInput().length <= 30000" [class.text-orange-500]="translatorInput().length > 30000 && translatorInput().length <= 32000" [class.text-red-400]="translatorInput().length > 32000">{{ translatorInput().length.toLocaleString() }} characters</span>
           </div>
           <textarea
             class="w-full flex-1 min-h-[300px] p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-mono text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -715,7 +715,7 @@
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               Text to Analyze
             </label>
-            <span class="text-sm" [class.text-green-500]="readabilityInput().length <= 32000" [class.text-red-400]="readabilityInput().length > 32000">{{ readabilityInput().length.toLocaleString() }} characters</span>
+            <span class="text-sm" [class.text-green-500]="readabilityInput().length <= 25000" [class.text-yellow-500]="readabilityInput().length > 25000 && readabilityInput().length <= 30000" [class.text-orange-500]="readabilityInput().length > 30000 && readabilityInput().length <= 32000" [class.text-red-400]="readabilityInput().length > 32000">{{ readabilityInput().length.toLocaleString() }} characters</span>
           </div>
           <textarea
             class="flex-1 w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-pink-500 outline-none resize-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -1140,7 +1140,7 @@
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-bold text-pink-600 dark:text-pink-400 uppercase tracking-widest flex items-center gap-2">
               <i class="fa-solid fa-wand-magic-sparkles"></i> {{ uiLabels().readabilityOptimized }}
-              <span class="normal-case font-normal text-sm" [class.text-green-500]="(readabilityResult()?.optimizedText ?? '').length <= 32000" [class.text-red-400]="(readabilityResult()?.optimizedText ?? '').length > 32000">{{ (readabilityResult()?.optimizedText ?? '').length.toLocaleString() }} characters</span>
+              <span class="normal-case font-normal text-sm" [class.text-green-500]="(readabilityResult()?.optimizedText ?? '').length <= 25000" [class.text-yellow-500]="(readabilityResult()?.optimizedText ?? '').length > 25000 && (readabilityResult()?.optimizedText ?? '').length <= 30000" [class.text-orange-500]="(readabilityResult()?.optimizedText ?? '').length > 30000 && (readabilityResult()?.optimizedText ?? '').length <= 32000" [class.text-red-400]="(readabilityResult()?.optimizedText ?? '').length > 32000">{{ (readabilityResult()?.optimizedText ?? '').length.toLocaleString() }} characters</span>
             </h3>
             <button
               (click)="copyToClipboard(readabilityResult()?.optimizedText || '')"
@@ -1353,7 +1353,7 @@
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
                   <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
                     {{ uiLabels().livePreview }}
-                    <span class="normal-case font-normal text-sm" [class.text-green-500]="content().mainHtmlUa.length <= 32000" [class.text-red-400]="content().mainHtmlUa.length > 32000">{{ content().mainHtmlUa.length.toLocaleString() }} characters</span>
+                    <span class="normal-case font-normal text-sm" [class.text-green-500]="content().mainHtmlUa.length <= 25000" [class.text-yellow-500]="content().mainHtmlUa.length > 25000 && content().mainHtmlUa.length <= 30000" [class.text-orange-500]="content().mainHtmlUa.length > 30000 && content().mainHtmlUa.length <= 32000" [class.text-red-400]="content().mainHtmlUa.length > 32000">{{ content().mainHtmlUa.length.toLocaleString() }} characters</span>
                   </h3>
                   <div [innerHTML]="content().mainHtmlUa | safeHtml"></div>
                 </div>
@@ -1381,7 +1381,7 @@
                   <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
                     <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
                       <span>{{ uiLabels().livePreview }} ({{ tab.taskKey }})</span>
-                      <span class="normal-case font-normal text-sm" [class.text-green-500]="transContent.length <= 32000" [class.text-red-400]="transContent.length > 32000">{{ transContent.length.toLocaleString() }} characters</span>
+                      <span class="normal-case font-normal text-sm" [class.text-green-500]="transContent.length <= 25000" [class.text-yellow-500]="transContent.length > 25000 && transContent.length <= 30000" [class.text-orange-500]="transContent.length > 30000 && transContent.length <= 32000" [class.text-red-400]="transContent.length > 32000">{{ transContent.length.toLocaleString() }} characters</span>
                     </h3>
                     <div [innerHTML]="transContent | safeHtml"></div>
                   </div>
@@ -1409,7 +1409,7 @@
                 <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
                   <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
                     <span>FAQ – {{ uiLabels().livePreview }}</span>
-                    <span class="normal-case font-normal text-sm" [class.text-green-500]="faqHtml.length <= 32000" [class.text-red-400]="faqHtml.length > 32000">{{ faqHtml.length.toLocaleString() }} characters</span>
+                    <span class="normal-case font-normal text-sm" [class.text-green-500]="faqHtml.length <= 25000" [class.text-yellow-500]="faqHtml.length > 25000 && faqHtml.length <= 30000" [class.text-orange-500]="faqHtml.length > 30000 && faqHtml.length <= 32000" [class.text-red-400]="faqHtml.length > 32000">{{ faqHtml.length.toLocaleString() }} characters</span>
                   </h3>
                   <div class="space-y-4">
                     @for (item of parseFaqItems(faqHtml); track $index) {
@@ -1612,7 +1612,7 @@
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
               <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
                 <span>{{ uiLabels().livePreview }}</span>
-                <span class="normal-case font-normal text-sm" [class.text-green-500]="optimizerOutput().length <= 32000" [class.text-red-400]="optimizerOutput().length > 32000">{{ optimizerOutput().length.toLocaleString() }} characters</span>
+                <span class="normal-case font-normal text-sm" [class.text-green-500]="optimizerOutput().length <= 25000" [class.text-yellow-500]="optimizerOutput().length > 25000 && optimizerOutput().length <= 30000" [class.text-orange-500]="optimizerOutput().length > 30000 && optimizerOutput().length <= 32000" [class.text-red-400]="optimizerOutput().length > 32000">{{ optimizerOutput().length.toLocaleString() }} characters</span>
               </h3>
               <div [innerHTML]="optimizerOutput() | safeHtml"></div>
             </div>
@@ -1652,7 +1652,7 @@
               <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 prose prose-sm max-w-none prose-slate dark:prose-invert">
                 <h3 class="text-slate-400 dark:text-slate-500 uppercase text-xs font-bold tracking-wider mb-6 pb-2 border-b dark:border-slate-700 flex items-center gap-2">
                   <span>{{ uiLabels().livePreview }}</span>
-                  <span class="normal-case font-normal text-sm" [class.text-green-500]="translatorOutput().length <= 32000" [class.text-red-400]="translatorOutput().length > 32000">{{ translatorOutput().length.toLocaleString() }} characters</span>
+                  <span class="normal-case font-normal text-sm" [class.text-green-500]="translatorOutput().length <= 25000" [class.text-yellow-500]="translatorOutput().length > 25000 && translatorOutput().length <= 30000" [class.text-orange-500]="translatorOutput().length > 30000 && translatorOutput().length <= 32000" [class.text-red-400]="translatorOutput().length > 32000">{{ translatorOutput().length.toLocaleString() }} characters</span>
                 </h3>
                 <div [innerHTML]="translatorOutput() | safeHtml"></div>
               </div>
@@ -1662,7 +1662,7 @@
               <div class="bg-slate-800 dark:bg-slate-950 text-slate-200 px-4 py-2 text-xs font-mono flex justify-between items-center gap-3">
                 <span>{{ uiLabels().transResult }}</span>
                 @if (!translatorOutput().includes('<')) {
-                  <span class="font-normal text-sm" [class.text-green-500]="translatorOutput().length <= 32000" [class.text-red-400]="translatorOutput().length > 32000">{{ translatorOutput().length.toLocaleString() }} characters</span>
+                  <span class="font-normal text-sm" [class.text-green-500]="translatorOutput().length <= 25000" [class.text-yellow-500]="translatorOutput().length > 25000 && translatorOutput().length <= 30000" [class.text-orange-500]="translatorOutput().length > 30000 && translatorOutput().length <= 32000" [class.text-red-400]="translatorOutput().length > 32000">{{ translatorOutput().length.toLocaleString() }} characters</span>
                 }
               </div>
               <pre class="p-4 overflow-x-auto text-xs font-mono bg-slate-50 dark:bg-slate-900 leading-relaxed whitespace-pre-wrap"><code [appHighlightCode]="translatorOutput()" class="hljs language-xml"></code></pre>
@@ -1686,7 +1686,7 @@
             <div class="flex justify-between items-center mb-4">
               <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <i class="fa-solid fa-check-circle text-indigo-600 dark:text-indigo-400"></i> {{ uiLabels().rewriteResult }}
-                <span class="text-sm font-normal" [class.text-green-500]="copywriterOutput().length <= 32000" [class.text-red-400]="copywriterOutput().length > 32000">{{ copywriterOutput().length.toLocaleString() }} characters</span>
+                <span class="text-sm font-normal" [class.text-green-500]="copywriterOutput().length <= 25000" [class.text-yellow-500]="copywriterOutput().length > 25000 && copywriterOutput().length <= 30000" [class.text-orange-500]="copywriterOutput().length > 30000 && copywriterOutput().length <= 32000" [class.text-red-400]="copywriterOutput().length > 32000">{{ copywriterOutput().length.toLocaleString() }} characters</span>
               </h2>
               <button (click)="copyToClipboard(copywriterOutput(), $event)" class="text-indigo-600 dark:text-indigo-400 hover:underline text-sm font-medium transition-transform active:scale-90">
                 <i class="fa-regular fa-copy mr-1"></i> {{ uiLabels().copyRewrite }}
