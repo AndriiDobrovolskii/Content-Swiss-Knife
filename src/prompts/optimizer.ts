@@ -29,7 +29,7 @@ rewrite it. Zero exceptions.
 
 OUTPUT CONTRACT: emit exactly one artifact — the rewritten HTML body. The first character of your
 output is the opening "<" of the §1 hook paragraph; the last character is the final closing tag of
-§9. Global hard cap: 32,000 characters including all spaces, text, and HTML tags. Where a preamble,
+§9. Global hard cap: 25,000 characters including all spaces, text, and HTML tags. Where a preamble,
 explanation, JSON wrapper, or Markdown fence would appear, write the HTML itself.
 
 OUTPUT LANGUAGE (HARD CONSTRAINT): determine the output language SOLELY from the language of
@@ -83,7 +83,7 @@ PHASE 1 — STRUCTURAL CLEANUP (apply before restructuring):
   match this document's own output language — never invent a category label in a different
   language than the rest of the output.
 
-LENGTH COMPRESSION: plan against the 32,000-character cap before writing. When the input HTML
+LENGTH COMPRESSION: plan against the 25,000-character cap before writing. When the input HTML
 approaches or exceeds the cap, condense organically: summarize wordy narrative paragraphs, merge
 repetitive marketing claims into one factual sentence each, and keep bullet points punchy.
 Compression happens in narrative prose only — every technical specification, number, unit, and

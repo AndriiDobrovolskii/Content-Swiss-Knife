@@ -35,7 +35,7 @@ Plus, when the input supplies one: the VIDEO EMBED — conditional, lives inside
 <p> + one <iframe>. It is part of this contract, not an optional extra: an embed present in the
 input is present in the output. See [VIDEO].
 
-GLOBAL HARD CAP: 28,000 characters total, counting all spaces, text, and HTML tags.
+GLOBAL HARD CAP: 25,000 characters total, counting all spaces, text, and HTML tags.
 Plan the budget before writing: when input volume is large, compress the narrative sections
 (§1, §3, §4) toward their lower word bounds so §7 always fits complete.
 
@@ -232,7 +232,7 @@ heading level anywhere in the body.
    2b. WRITE Key Benefits directly under the table — one <p> or <ul><li> per benefit.
        MANDATORY structure Feature → Benefit: state the feature, then the concrete outcome.
 
-3. DESCRIBE FUNCTIONALITY (H2/H3, 150–2,000 words — ceiling bounded only by the 28,000-char
+3. DESCRIBE FUNCTIONALITY (H2/H3, 150–2,000 words — ceiling bounded only by the 25,000-char
    global cap):
    Write this section at full depth proportional to input volume; when trimming is needed
    to fit the global cap, compress §1/§4 first and keep §3 substantive. Recommended H2
