@@ -19,8 +19,14 @@ vi.mock('@google/genai', () => ({
   },
 }));
 
-// Retry would re-run a throwing call and turn one assertion failure into four.
-vi.mock('../server/utils/retry.js', () => ({ withRetry: (fn: any) => fn() }));
+// Retry would re-run a throwing call and turn one assertion failure into four. Backed by a
+// vi.fn() (not a bare factory) so the fallback-wiring tests below can inspect what `generate()`
+// passed as the `fallback` argument, or make the mock actually invoke it.
+const withRetryMock = vi.fn((fn: any, _maxRetries?: any, _baseDelayMs?: any, _fallback?: any, _maxPolicyRetries?: any) => fn());
+vi.mock('../server/utils/retry.js', () => ({
+  withRetry: (fn: any, maxRetries?: any, baseDelayMs?: any, fallback?: any, maxPolicyRetries?: any) =>
+    withRetryMock(fn, maxRetries, baseDelayMs, fallback, maxPolicyRetries),
+}));
 
 const { GeminiProvider } = await import('../server/providers/gemini.js');
 
@@ -209,5 +215,46 @@ describe('GeminiProvider request bounds', () => {
     await new GeminiProvider('k')
       .generate(PAYLOAD, 'text', { model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 8192 });
     expect(calls[0].config.httpOptions.timeout).toBe(120_000);
+  });
+});
+
+/**
+ * Same-provider model fallback: when a sustained 503/429 exhausts withRetry's policy budget, it
+ * invokes the `fallback` thunk `generate()` handed it. See server/utils/retry.js and the
+ * 2026-08-17 incident this was added for (sustained Gemini 503 "high demand").
+ */
+describe('GeminiProvider same-provider fallback', () => {
+  beforeEach(() => {
+    calls.length = 0;
+    nextResponse = reply('<p>ok</p>');
+    withRetryMock.mockReset();
+    withRetryMock.mockImplementation((fn: any) => fn());
+  });
+
+  it('does not build a fallback when the configured slot already is the fallback model', async () => {
+    await new GeminiProvider('k')
+      .generate(PAYLOAD, 'creative', { model: 'gemini-3.1-pro-preview', level: 'medium', maxOutputTokens: 65536 });
+
+    expect(withRetryMock.mock.calls[0][3]).toBeUndefined();
+  });
+
+  it('builds a fallback to the alternate model when the slot differs', async () => {
+    await new GeminiProvider('k')
+      .generate(PAYLOAD, 'creative', { model: 'gemini-3.6-flash', level: 'medium', maxOutputTokens: 65536 });
+
+    expect(typeof withRetryMock.mock.calls[0][3]).toBe('function');
+  });
+
+  it('invokes the fallback against the alternate model and logs both model names', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    withRetryMock.mockImplementationOnce((fn: any, _max: any, _base: any, fallback: any) => (fallback ? fallback() : fn()));
+
+    await new GeminiProvider('k')
+      .generate(PAYLOAD, 'creative', { model: 'gemini-3.6-flash', level: 'medium', maxOutputTokens: 65536 });
+
+    expect(calls[0].model).toBe('gemini-3.1-pro-preview');
+    const message = warn.mock.calls.map(c => c.join(' ')).join('\n');
+    expect(message).toContain('gemini-3.6-flash');
+    expect(message).toContain('gemini-3.1-pro-preview');
   });
 });

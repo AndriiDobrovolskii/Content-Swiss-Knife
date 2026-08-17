@@ -85,9 +85,39 @@ function isTransportFailure(error) {
   return false;
 }
 
-export async function withRetry(operation, maxRetries = 3, baseDelayMs = 3000) {
+/**
+ * Backoff cap. Without it the exponential series keeps doubling forever, which only matters once
+ * `maxPolicyRetries` (below) got wide enough to reach it — at the original 3-attempt budget the
+ * series never got past 6s and a cap was moot.
+ */
+const MAX_DELAY_MS = 30_000;
+
+/**
+ * `maxRetries` is deliberately left as the TRANSPORT budget (unchanged, default 3) and
+ * `maxPolicyRetries` is a new, separate, wider budget (default 6) for the policy class alone.
+ *
+ * WHY TWO BUDGETS, NOT ONE WIDER ONE. server/utils/timeouts.js already documents, in detail, the
+ * worst case for a genuinely wedged call: a timeout surfaces as a transport failure, and
+ * DEEP_TIMEOUT_MS (20 min) × withRetry's attempt count × the repair gate's own retry budget is
+ * called out there as "close to 4 hours in the worst case" at the current 3-attempt budget.
+ * Raising that budget globally to chase a 2026-08-17 run of sustained Gemini 503s (Google
+ * answering "busy", not a dead connection) would double that worst case to ~8 hours for a call
+ * that is simply never going to answer. The 503/429 class is where the actual problem lives, so
+ * only that class gets more room; a hung connection still fails in the same bounded time it always
+ * has.
+ *
+ * `fallback` is an optional thunk the caller may supply. It is invoked at most once, only when the
+ * budget was exhausted by a POLICY failure (never transport, never a deterministic error — a dead
+ * connection or a malformed request isn't fixed by trying a different model). Provider-independent
+ * by construction: this file never learns what the thunk represents, only that there's one more
+ * thing to try.
+ */
+export async function withRetry(operation, maxRetries = 3, baseDelayMs = 3000, fallback, maxPolicyRetries = 6) {
+  const attemptCap = Math.max(maxRetries, maxPolicyRetries);
   let lastError;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  let exhaustedOnPolicy = false;
+
+  for (let attempt = 1; attempt <= attemptCap; attempt++) {
     try {
       return await operation();
     } catch (error) {
@@ -105,21 +135,29 @@ export async function withRetry(operation, maxRetries = 3, baseDelayMs = 3000) {
 
       // Gateway statuses sit with transport rather than policy: nothing considered the request.
       const isTransport = status === 502 || status === 504 || isTransportFailure(error);
+      exhaustedOnPolicy = isRateLimited;
 
-      if ((isRateLimited || isTransport) && attempt < maxRetries) {
+      const limit = isRateLimited ? maxPolicyRetries : maxRetries;
+
+      if ((isRateLimited || isTransport) && attempt < limit) {
         // Jitter is capped by the base delay so a test can pass a 1 ms base and not wait a second
         // per attempt. In production baseDelayMs is 3000, so this is the original 0–1000 ms.
         const jitter = Math.random() * Math.min(1000, baseDelayMs);
-        const delay = baseDelayMs * Math.pow(2, attempt - 1) + jitter;
+        const delay = Math.min(MAX_DELAY_MS, baseDelayMs * Math.pow(2, attempt - 1)) + jitter;
         // Name the actual class. This line used to say "rate-limited" unconditionally, which would
         // now mislabel every transport retry and hide the very thing worth noticing.
         const reason = isRateLimited ? 'rate-limited' : `transport failure (${describeError(error)})`;
-        console.warn(`[Retry] Attempt ${attempt}/${maxRetries} ${reason}. Retrying in ${Math.round(delay)}ms…`);
+        console.warn(`[Retry] Attempt ${attempt}/${limit} ${reason}. Retrying in ${Math.round(delay)}ms…`);
         await new Promise(r => setTimeout(r, delay));
         continue;
       }
-      throw error;
+      break; // budget exhausted for this failure's class, or a deterministic error
     }
+  }
+
+  if (exhaustedOnPolicy && fallback) {
+    console.warn(`[Retry] Exhausted ${maxPolicyRetries} attempts on a policy failure. Falling back to the alternate model…`);
+    return fallback();
   }
   throw lastError;
 }
