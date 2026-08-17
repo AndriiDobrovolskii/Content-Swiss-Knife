@@ -80,9 +80,19 @@ const BulletItemSchema = z.object({ lead: NonEmpty, text: Prose }).refine(
  * Block is a flat union — a figure references the manifest by index rather than nesting, so there
  * is no recursion here and no need for z.lazy.
  *
- * Parameterized on the bullets floor: §5 compatibility is source-bounded (a datasheet may confirm
- * only 2 physical accessories) and gets a relaxed floor of 2, while every other bullets-bearing
- * field (keyBenefits, functionality) is model-authored, not source-count-bound, and keeps 3.
+ * Parameterized on the bullets floor: §5 compatibility gets a relaxed floor of 2 (source-bounded —
+ * a datasheet may confirm just 2 physical accessories). keyBenefits is model-authored but ALSO
+ * relaxed to 2, based on empirical evidence of repair-budget exhaustion (2026-08-17): a live run
+ * shipped a "bullets" Block with only 2 items, the ladder had no cheaper repair than a full
+ * document regeneration (see doc-schema-issues.ts / repair-strategy.ts), and the budget ran out
+ * before the model produced a valid Doc.
+ *
+ * functionality remains strictly at 3 pending its own evidence of the same failure — a
+ * DELIBERATE, ACCEPTED GAP, not an oversight. TASK_A_DOC_INSTRUCTION's escape hatch ("use a
+ * paragraph Block instead of an under-filled bullets Block") is worded generically and applies to
+ * functionality too, so the mitigation is already in place at the prompt layer; only the schema
+ * safety net is narrower here than for keyBenefits. Revisit immediately if this same crash recurs
+ * on functionality.
  */
 function makeBlockSchema(minBulletItems: number) {
   return z.discriminatedUnion('kind', [
@@ -148,7 +158,8 @@ export const ProductDescriptionDocSchema = z.object({
 
   hook: Prose,
   killerSpecs: z.array(KillerSpecSchema).min(3).max(4),
-  keyBenefits: z.array(BlockSchema).min(1),
+  // RelaxedBlockSchema (floor 2), not BlockSchema — see the comment on RelaxedBlockSchema above.
+  keyBenefits: z.array(RelaxedBlockSchema).min(1),
   functionality: z.array(SubsectionSchema).min(1),
   applications: z.object({
     heading: NonEmpty,

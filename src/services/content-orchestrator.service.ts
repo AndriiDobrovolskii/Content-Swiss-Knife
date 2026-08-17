@@ -690,7 +690,13 @@ export class ContentOrchestratorService {
     // doesn't reliably hit "exactly N images" on the first pass, and a dropped image is a
     // hard error (see checkImageManifestCoverage). Translations don't need this: they inherit
     // whatever the master ends up shipping via masterImageManifest below.
-    const masterRepairBudget = imgManifest ? Math.max(repairBudget, 3) : repairBudget;
+    //
+    // A smaller floor of 2 applies even without an image manifest: a full-document regeneration
+    // is the only repair instrument the Doc pipeline has for a schema-shape failure today (see
+    // doc-schema-issues.ts / repair-strategy.ts), and a single attempt (this.maxRepairs()'s
+    // default of 1) proved too narrow a window for that reroll to land — a live run exhausted it
+    // on a "keyBenefits" bullets Block with too few items (2026-08-17).
+    const masterRepairBudget = Math.max(repairBudget, imgManifest ? 3 : 2);
 
     await this.withProgress(async () => {
       const { seoLangs, transLangs } = getLangsForStore(input.website.name);

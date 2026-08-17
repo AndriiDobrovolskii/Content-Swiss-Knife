@@ -178,7 +178,7 @@ describe('a bullet lead and its text need a separator', () => {
  * now routes a 1-item case to prose instead, so the schema only needs to accept the 2-item edge case
  * the prompt cannot avoid without fabricating a 3rd source-confirmed item.
  */
-describe('§5 compatibility — relaxed bullets floor (min 2, not min 3)', () => {
+describe('relaxed bullets floor (min 2, not min 3) — §5 compatibility and keyBenefits', () => {
   const bulletsBlock = (n: number) => ({
     kind: 'bullets' as const,
     items: Array.from({ length: n }, (_, i) => ({ lead: `Пункт ${i + 1}:`, text: ` опис ${i + 1}.` })),
@@ -204,10 +204,24 @@ describe('§5 compatibility — relaxed bullets floor (min 2, not min 3)', () =>
     expect(issues.join('\n')).toMatch(/at least 3 element/i);
   });
 
-  it('does NOT relax the floor for keyBenefits — a 2-item bullets block there still fails', () => {
+  /**
+   * Flipped 2026-08-17: keyBenefits now shares the relaxed floor with §5 compatibility — see the
+   * comment on RelaxedBlockSchema in description-doc.schema.ts. A live run shipped a keyBenefits
+   * bullets Block with only 2 items and the repair budget exhausted before the model produced a
+   * valid Doc (there is no cheaper repair instrument than full regeneration for this failure
+   * today — see doc-schema-issues.ts). functionality (above) deliberately still rejects at 2,
+   * pending its own evidence of the same failure.
+   */
+  it('accepts a keyBenefits bullets block with only 2 items', () => {
     const doc = validDoc();
     doc.keyBenefits = [bulletsBlock(2)];
+    expect(errorsFor(doc)).toEqual([]);
+  });
+
+  it('still rejects a keyBenefits bullets block with only 1 item', () => {
+    const doc = validDoc();
+    doc.keyBenefits = [bulletsBlock(1)];
     const issues = errorsFor(doc);
-    expect(issues.join('\n')).toMatch(/at least 3 element/i);
+    expect(issues.join('\n')).toMatch(/at least 2 element/i);
   });
 });

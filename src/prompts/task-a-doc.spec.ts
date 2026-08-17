@@ -98,6 +98,21 @@ describe('TASK_A_DOC_INSTRUCTION — the output contract', () => {
     expect(TASK_A_DOC_INSTRUCTION).toMatch(/index/i);
     expect(TASK_A_DOC_INSTRUCTION).toMatch(/filename only|file.*only/i);
   });
+
+  /**
+   * Added 2026-08-17: a live run shipped a keyBenefits "bullets" Block with only 2 items, which
+   * the repair gate could only fail on — there is no cheaper repair instrument than a full
+   * document regeneration for a schema-shape violation today (see doc-schema-issues.ts /
+   * repair-strategy.ts), and the budget ran out before a valid Doc landed. Worded field-agnostic
+   * ("a topic", not "a benefit"): Block is shared by keyBenefits, functionality and
+   * applications.blocks alike, and wording the escape hatch around "benefit" risks the model
+   * reading it as scoped to keyBenefits only.
+   */
+  it('gives the model a paragraph escape hatch instead of an under-filled bullets Block', () => {
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/bullets.*must have at least 3 items/i);
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/paragraph.*instead/i);
+    expect(TASK_A_DOC_INSTRUCTION).not.toMatch(/\bbenefit\b/i);
+  });
 });
 
 /**

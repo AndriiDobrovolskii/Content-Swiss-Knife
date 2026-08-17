@@ -50,7 +50,7 @@ SHAPE — emit exactly these keys:
   "localizedName": "<product name as it should read in this language>",
   "hook": "<§1, one paragraph>",
   "killerSpecs": [ { "label": "", "value": "", "why": "" } ],        // §2a — 3–4 entries
-  "keyBenefits": [ <Block> ],                                        // §2b — at least 1
+  "keyBenefits": [ <Block> ],           // §2b — at least 1; a "bullets" Block needs 3-8 items
   "functionality": [ <Subsection> ],                                 // §3 — at least 1
   "applications": {                                                  // §4
     "heading": "",
@@ -101,7 +101,10 @@ HARD RULES:
   digit AND "text" begins with one, the two words collide: "Топографічне зніманняДальність".
   End the "lead" with ":" or ". ", or begin the "text" with a space.
 - Do not invent a "section", "hr", "h2" or any other structural field. Section order, headings
-  level, tables, <hr> and figure markup are the renderer's job, not yours.`;
+  level, tables, <hr> and figure markup are the renderer's job, not yours.
+- A "bullets" Block MUST have at least 3 items. If you cannot provide at least 3 genuinely
+  distinct sub-points for a topic, use a "paragraph" Block instead — never emit a "bullets" Block
+  with fewer than 3 items.`;
 
 /**
  * Task A returning a Doc contract instead of an HTML one.
