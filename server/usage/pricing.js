@@ -32,7 +32,17 @@ const DEFAULT_PRICES = {
 
 const FALLBACK_PRICE = { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 };
 
+// Gemini 3.7 Flash — introductory rate through 2026-12-31, standard rate after.
+// Evaluated per lookup (not at module load) so a long-running server picks up the
+// switch without a restart.
+function gemini37FlashPrice() {
+  const standard = { in: 1.50, out: 7.50, cw: 0, cr: 0.15 };
+  const promo = { in: 0.75, out: 3.75, cw: 0, cr: 0.075 };
+  return new Date() < new Date('2027-01-01T00:00:00Z') ? promo : standard;
+}
+
 function getPrices(model) {
+  if (model === 'gemini-3.7-flash') return gemini37FlashPrice();
   if (DEFAULT_PRICES[model]) return DEFAULT_PRICES[model];
   for (const key of Object.keys(DEFAULT_PRICES)) {
     if (model.includes(key) || key.includes(model)) return DEFAULT_PRICES[key];

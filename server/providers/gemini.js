@@ -9,7 +9,7 @@ import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, VISION_TIMEOUT_MS, timeoutForMode } f
 // Used when a caller doesn't pass a slot (direct unit-test calls, or a request that
 // predates the settings menu). Gemini 3.1 Pro cannot disable thinking at all.
 const FALLBACK_DEEP = () => resolveSlot('gemini', { model: 'gemini-3.1-pro-preview' });
-const FALLBACK_FAST = () => resolveSlot('gemini', { model: 'gemini-3.6-flash', level: 'minimal' });
+const FALLBACK_FAST = () => resolveSlot('gemini', { model: 'gemini-3.7-flash', level: 'minimal' });
 
 export class GeminiProvider {
   constructor(apiKey) {

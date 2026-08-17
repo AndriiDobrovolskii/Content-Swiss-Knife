@@ -18,7 +18,7 @@ describe('ModelSettingsService defaults', () => {
   it('ships the mixed Anthropic-deep / Gemini-fast configuration', () => {
     expect(boot().snapshot()).toEqual({
       deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
-      fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
+      fast: { provider: 'gemini', model: 'gemini-3.7-flash', level: 'minimal' },
     });
   });
 
@@ -65,7 +65,7 @@ describe('ModelSettingsService mixed providers', () => {
     s.setFastProvider('gemini');
 
     expect(s.deepModel()).toBe('gemini-3.1-pro-preview');
-    expect(s.fastModel()).toBe('gemini-3.6-flash');
+    expect(s.fastModel()).toBe('gemini-3.7-flash');
   });
 
   it('offers each slot only its own provider models', () => {
@@ -73,7 +73,7 @@ describe('ModelSettingsService mixed providers', () => {
     s.setFastProvider('gemini');
 
     expect(s.deepModels().map(m => m.id)).toContain('claude-sonnet-5');
-    expect(s.fastModels().map(m => m.id)).toEqual(['gemini-3.1-pro-preview', 'gemini-3.6-flash']);
+    expect(s.fastModels().map(m => m.id)).toEqual(['gemini-3.1-pro-preview', 'gemini-3.7-flash', 'gemini-3.6-flash']);
   });
 
   it('ignores a model that does not belong to that slot provider', () => {
@@ -142,7 +142,9 @@ describe('ModelSettingsService legacy storage', () => {
   beforeEach(() => localStorage.clear());
 
   // Written by the version that had one provider for both slots. Silently reverting such a
-  // user to Anthropic would look like the settings menu forgot their choice.
+  // user to Anthropic would look like the settings menu forgot their choice. The Fast model
+  // itself still migrates 3.6 → 3.7 (see the migration test below) — that is orthogonal to
+  // provider resolution.
   it('reads a single top-level provider as the provider of both slots', () => {
     const s = boot({
       provider: 'gemini',
@@ -152,7 +154,7 @@ describe('ModelSettingsService legacy storage', () => {
 
     expect(s.snapshot()).toEqual({
       deep: { provider: 'gemini', model: 'gemini-3.1-pro-preview', level: 'high' },
-      fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
+      fast: { provider: 'gemini', model: 'gemini-3.7-flash', level: 'minimal' },
     });
   });
 
@@ -160,7 +162,33 @@ describe('ModelSettingsService legacy storage', () => {
     const s = boot({ provider: 'skynet', deep: {}, fast: {} });
     expect(s.deepProvider()).toBe('anthropic');
     expect(s.deepModel()).toBe('claude-sonnet-5');
-    expect(s.fastModel()).toBe('gemini-3.6-flash');
+    expect(s.fastModel()).toBe('gemini-3.7-flash');
+  });
+
+  // One-time migration: a browser that persisted the old Fast default (or an explicit 3.6
+  // Flash pick — restore() cannot tell the two apart, see model-settings.service.ts) is moved
+  // onto 3.7 Flash, and the migration is written back so it only runs once.
+  it('migrates a stored gemini-3.6-flash fast model to gemini-3.7-flash', () => {
+    const s = boot({
+      deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
+      fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'low' },
+    });
+
+    expect(s.fastModel()).toBe('gemini-3.7-flash');
+    expect(s.fastLevel()).toBe('low');
+
+    const persisted = JSON.parse(localStorage.getItem(KEY)!);
+    expect(persisted.fast.model).toBe('gemini-3.7-flash');
+  });
+
+  it('leaves a stored gemini-3.7-flash fast model untouched', () => {
+    const s = boot({
+      deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
+      fast: { provider: 'gemini', model: 'gemini-3.7-flash', level: 'high' },
+    });
+
+    expect(s.fastModel()).toBe('gemini-3.7-flash');
+    expect(s.fastLevel()).toBe('high');
   });
 
   // A returning user configured all-Anthropic before the default went mixed. That is an

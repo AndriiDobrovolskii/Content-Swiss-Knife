@@ -33,9 +33,10 @@ describe('model catalog integrity', () => {
 
   // The whole point of the catalog: Gemini 3.1 Pro's API rejects 'minimal', so the settings
   // menu must never render it. Regression guard against someone "unifying" the level lists.
-  it('excludes minimal from Gemini 3.1 Pro but keeps it on 3.6 Flash', () => {
+  it('excludes minimal from Gemini 3.1 Pro but keeps it on 3.6 and 3.7 Flash', () => {
     expect(findModel('gemini', 'gemini-3.1-pro-preview')!.levels).not.toContain('minimal');
     expect(findModel('gemini', 'gemini-3.6-flash')!.levels).toContain('minimal');
+    expect(findModel('gemini', 'gemini-3.7-flash')!.levels).toContain('minimal');
   });
 
   // Gemini 3.1 Pro cannot turn thinking off at all.
@@ -72,6 +73,7 @@ describe('catalog is one file, not two copies', () => {
 describe('clampLevel', () => {
   it('passes through a level the model accepts', () => {
     expect(clampLevel('gemini', 'gemini-3.6-flash', 'minimal')).toBe('minimal');
+    expect(clampLevel('gemini', 'gemini-3.7-flash', 'minimal')).toBe('minimal');
     expect(clampLevel('anthropic', 'claude-sonnet-5', 'high')).toBe('high');
   });
 
@@ -115,6 +117,8 @@ describe('resolveSlot (server-side request validation)', () => {
   it('accepts a valid slot unchanged', () => {
     expect(serverSupport.resolveSlot('gemini', { model: 'gemini-3.6-flash', level: 'minimal' }))
       .toEqual({ model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 65536 });
+    expect(serverSupport.resolveSlot('gemini', { model: 'gemini-3.7-flash', level: 'minimal' }))
+      .toEqual({ model: 'gemini-3.7-flash', level: 'minimal', maxOutputTokens: 65536 });
   });
 
   // A client on an older bundle must degrade, not break.
@@ -128,7 +132,7 @@ describe('resolveSlot (server-side request validation)', () => {
   // the catalog's first entry — a premium model — and quietly translate on Sonnet.
   it('falls back to a fast-tier model for the fast slot', () => {
     expect(serverSupport.resolveSlot('anthropic', undefined, 'fast').model).toBe('claude-haiku-4-5');
-    expect(serverSupport.resolveSlot('gemini', undefined, 'fast').model).toBe('gemini-3.6-flash');
+    expect(serverSupport.resolveSlot('gemini', undefined, 'fast').model).toBe('gemini-3.7-flash');
   });
 
   it('falls back to a premium model for the deep slot', () => {
