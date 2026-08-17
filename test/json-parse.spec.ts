@@ -195,4 +195,38 @@ describe('parseJsonResponse — what it refuses to do', () => {
   it('accepts a repaired top-level array', () => {
     expect(parseJsonResponse("['друк', 'сканування',]")).toEqual(['друк', 'сканування']);
   });
+
+  /**
+   * TAGGED SO `withRetry` (server/utils/retry.js) CAN RETRY IT WITHOUT MATCHING ON MESSAGE TEXT.
+   * A truncated body means the exchange was incomplete, not that the request was wrong — unlike a
+   * provider's own MAX_TOKENS-style ceiling guard, which stays untagged and fail-fast. Both throw
+   * branches of `assertNotTruncated` must carry the code, not just one.
+   */
+  it('tags an unclosed-container truncation with a retry-recognizable code', () => {
+    try {
+      parseJsonResponse('{"a":{"b":[1');
+      expect.unreachable();
+    } catch (e) {
+      expect((e as any).code).toBe('ERR_INCOMPLETE_JSON');
+    }
+  });
+
+  it('tags a mid-string truncation with the same code', () => {
+    try {
+      parseJsonResponse('{"hook":"половина речен');
+      expect.unreachable();
+    } catch (e) {
+      expect((e as any).code).toBe('ERR_INCOMPLETE_JSON');
+    }
+  });
+
+  /** The MAX_TOKENS-style provider guards are a different, deliberately un-retried failure. */
+  it('does not tag an ordinary (non-truncation) parse failure with the truncation code', () => {
+    try {
+      parseJsonResponse('I could not complete that request.');
+      expect.unreachable();
+    } catch (e) {
+      expect((e as any).code).toBeUndefined();
+    }
+  });
 });
