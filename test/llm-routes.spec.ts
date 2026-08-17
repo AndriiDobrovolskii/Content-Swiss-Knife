@@ -125,7 +125,7 @@ describe('request validation', () => {
   // model of the right tier, so an unknown Fast-slot model never lands on a premium one.
   it('falls back to a same-tier catalog model when the requested model is unknown', () => {
     const fast = resolve({ provider: 'gemini', fast: { model: 'gemini-99-ultra', level: 'high' } }, 'fast');
-    expect(fast.slot!.model).toBe('gemini-3.6-flash');
+    expect(fast.slot!.model).toBe('gemini-3.7-flash');
     expect(fast.slot!.level).toBe('high');
 
     const deep = resolve({ provider: 'gemini', deep: { model: 'gemini-99-ultra', level: 'high' } }, 'deep');

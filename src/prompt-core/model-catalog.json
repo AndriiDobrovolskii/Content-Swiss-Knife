@@ -43,6 +43,14 @@
           "maxOutputTokens": 65536
         },
         {
+          "id": "gemini-3.7-flash",
+          "label": "Gemini 3.7 Flash",
+          "tier": "fast",
+          "levels": ["minimal", "low", "medium", "high"],
+          "defaultLevel": "medium",
+          "maxOutputTokens": 65536
+        },
+        {
           "id": "gemini-3.6-flash",
           "label": "Gemini 3.6 Flash",
           "tier": "fast",

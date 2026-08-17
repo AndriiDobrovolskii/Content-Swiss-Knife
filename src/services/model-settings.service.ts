@@ -35,12 +35,16 @@ interface LegacySettings {
  * is transcription, not reasoning, and this matches FALLBACK_FAST in server/providers/gemini.js
  * so a request carrying settings and one carrying none route identically.
  *
- * Only a browser with no stored settings lands here: restore() honours an existing choice, so
- * changing this never moves a user who already picked something.
+ * Fast runs Gemini 3.7 Flash (superseded 3.6 on 2026-08-13: same thinking levels, half the
+ * price during its introductory window — see server/usage/pricing.js). A browser with no
+ * stored settings lands here directly; one with a stored 3.6 Flash choice is moved onto 3.7 by
+ * the one-time migration in restore() below, since 3.6 was never a deliberate alternative to
+ * offer against a strictly cheaper, newer same-tier model — unlike a provider choice (Anthropic
+ * vs Gemini), which restore() still never overrides.
  */
 const DEFAULTS: ModelSettings = {
   deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
-  fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
+  fast: { provider: 'gemini', model: 'gemini-3.7-flash', level: 'minimal' },
 };
 
 /**
@@ -166,6 +170,12 @@ export class ModelSettingsService {
    *
    * A payload written before providers went per-slot carries one top-level `provider`; it is
    * read as the provider of both slots, which is exactly what that user had configured.
+   *
+   * One-time migration: a stored Fast slot still on `gemini-3.6-flash` is moved onto
+   * `gemini-3.7-flash` before validation, then re-persisted so this only fires once per
+   * browser. This can't distinguish "the user deliberately picked 3.6 Flash" from "3.6 Flash
+   * was only ever carried along because persist() writes the whole snapshot on any change" —
+   * both get moved. A user who wants to stay on 3.6 has to reselect it once after this ships.
    */
   private restore() {
     let raw: string | null = null;
@@ -184,10 +194,16 @@ export class ModelSettingsService {
       return;
     }
 
+    const fastRaw = { ...stored.fast };
+    const migratedFromGemini36Flash = fastRaw?.model === 'gemini-3.6-flash';
+    if (migratedFromGemini36Flash) fastRaw.model = 'gemini-3.7-flash';
+
     this.apply({
       deep: this.validateSlot(stored.deep, stored.provider, DEFAULTS.deep, 'premium'),
-      fast: this.validateSlot(stored.fast, stored.provider, DEFAULTS.fast, 'fast'),
+      fast: this.validateSlot(fastRaw, stored.provider, DEFAULTS.fast, 'fast'),
     });
+
+    if (migratedFromGemini36Flash) this.persist();
   }
 
   private validateSlot(
