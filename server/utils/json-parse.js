@@ -127,15 +127,21 @@ function assertNotTruncated(text) {
   }
 
   if (inString) {
-    throw new Error(
+    const err = new Error(
       `[json-parse] response truncated: unterminated string at end of input ` +
       `(${text.length} chars). The model stopped mid-value — do not trust a partial artifact.`
     );
+    // Tagged so withRetry (server/utils/retry.js) can retry this specific failure without
+    // matching on message text — see the classifier's comment for why a code beats a substring.
+    err.code = 'ERR_INCOMPLETE_JSON';
+    throw err;
   }
   if (depth > 0) {
-    throw new Error(
+    const err = new Error(
       `[json-parse] response truncated: ${depth} unclosed container(s) at end of input ` +
       `(${text.length} chars). The model stopped early — do not trust a partial artifact.`
     );
+    err.code = 'ERR_INCOMPLETE_JSON';
+    throw err;
   }
 }

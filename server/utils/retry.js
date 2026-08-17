@@ -3,12 +3,19 @@
  *
  * Provider-independent retry/backoff for every LLM call (architecture rule #5).
  *
- * TWO CLASSES OF FAILURE, AND BOTH ARE RETRYABLE.
+ * THREE FAILURE CHARACTERS, ALL RETRYABLE.
  *
  * - POLICY — the provider answered and said no: 429, 503, "overloaded", RESOURCE_EXHAUSTED.
  * - TRANSPORT — nobody answered at all: connection reset, DNS failure, socket or body timeout.
  *   Node/undici surfaces these as a bare `TypeError: fetch failed`, with the real reason on
  *   `error.cause.code`.
+ * - INCOMPLETE JSON — the provider claims the response is fine (no policy/transport signal, no
+ *   MAX_TOKENS-style ceiling guard) but the body handed back is structurally cut off. See
+ *   `server/utils/json-parse.js`'s `assertNotTruncated`, written as defence-in-depth for exactly
+ *   this — "a cut stream, a proxy timeout, or a future provider [that] sets nothing at all". This
+ *   is a momentary exchange failure, not a request problem, so it belongs with TRANSPORT in
+ *   character — but unlike a dead connection, a different model plausibly *won't* glitch on the
+ *   same generation, so it is also fallback-eligible like POLICY. See `isIncompleteJson` below.
  *
  * Only the policy half used to be handled. On 2026-08-01 a real EXPERT3D run died after four
  * successful calls — ~40 K output tokens already paid for — when the fifth failed with
@@ -16,10 +23,15 @@
  * 1 of 3. That was backwards. A transport failure is the MORE retryable of the two: it is usually a
  * momentary blip, and nothing about the request itself is wrong.
  *
- * WHAT MUST STILL FAIL FAST. A deterministic error (400, a safety block, a truncation guard) cannot
- * be fixed by sending the same request again — retrying it only makes every genuine failure three
- * times slower and three times more expensive. Bare 500 is deliberately NOT retried: a provider 500
- * is often a malformed request, unlike 502/504 which are gateway-level and transient.
+ * WHAT MUST STILL FAIL FAST. A deterministic error (400, a safety block, a provider's own
+ * MAX_TOKENS/stop_reason:max_tokens/finish_reason:length ceiling guard) cannot be fixed by sending
+ * the same request again — retrying it only makes every genuine failure three times slower and
+ * three times more expensive. Bare 500 is deliberately NOT retried: a provider 500 is often a
+ * malformed request, unlike 502/504 which are gateway-level and transient. The INCOMPLETE JSON
+ * class above is deliberately narrower than "any truncation guard": a provider hitting its own
+ * output ceiling is a structural, likely-to-recur failure and stays in this fail-fast list
+ * untouched — only `json-parse.js`'s own detector, which fires precisely when no such ceiling was
+ * reported, is retried.
  */
 
 import { describeError } from './describe-error.js';
@@ -107,15 +119,18 @@ const MAX_DELAY_MS = 30_000;
  * has.
  *
  * `fallback` is an optional thunk the caller may supply. It is invoked at most once, only when the
- * budget was exhausted by a POLICY failure (never transport, never a deterministic error — a dead
- * connection or a malformed request isn't fixed by trying a different model). Provider-independent
- * by construction: this file never learns what the thunk represents, only that there's one more
- * thing to try.
+ * budget was exhausted by a failure worth trying a different model over — POLICY or INCOMPLETE
+ * JSON (see the file header), never plain TRANSPORT and never a deterministic error: a dead
+ * connection or a malformed request isn't fixed by trying a different model, but a provider being
+ * overloaded or glitching on one particular generation plausibly is. Provider-independent by
+ * construction: this file never learns what the thunk represents, only that there's one more thing
+ * to try.
  */
 export async function withRetry(operation, maxRetries = 3, baseDelayMs = 3000, fallback, maxPolicyRetries = 6) {
   const attemptCap = Math.max(maxRetries, maxPolicyRetries);
   let lastError;
-  let exhaustedOnPolicy = false;
+  let exhaustedFallbackEligible = false;
+  let exhaustedLimit;
 
   for (let attempt = 1; attempt <= attemptCap; attempt++) {
     try {
@@ -135,18 +150,33 @@ export async function withRetry(operation, maxRetries = 3, baseDelayMs = 3000, f
 
       // Gateway statuses sit with transport rather than policy: nothing considered the request.
       const isTransport = status === 502 || status === 504 || isTransportFailure(error);
-      exhaustedOnPolicy = isRateLimited;
+
+      // A provider that reports its response complete (no 429/503, no MAX_TOKENS-style guard) can
+      // still hand back a body that is structurally cut off — see json-parse.js's
+      // assertNotTruncated, written as defence-in-depth for exactly this. Unlike the provider's
+      // own ceiling guards (which stay fail-fast — the same ceiling will likely recur), this means
+      // the EXCHANGE was incomplete, not the REQUEST was wrong, so it's retried like a transport
+      // blip and is fallback-eligible like a policy failure: a different model may simply not
+      // glitch on this generation.
+      const isIncompleteJson = error?.code === 'ERR_INCOMPLETE_JSON';
+
+      exhaustedFallbackEligible = isRateLimited || isIncompleteJson;
 
       const limit = isRateLimited ? maxPolicyRetries : maxRetries;
+      exhaustedLimit = limit;
 
-      if ((isRateLimited || isTransport) && attempt < limit) {
+      if ((isRateLimited || isTransport || isIncompleteJson) && attempt < limit) {
         // Jitter is capped by the base delay so a test can pass a 1 ms base and not wait a second
         // per attempt. In production baseDelayMs is 3000, so this is the original 0–1000 ms.
         const jitter = Math.random() * Math.min(1000, baseDelayMs);
         const delay = Math.min(MAX_DELAY_MS, baseDelayMs * Math.pow(2, attempt - 1)) + jitter;
         // Name the actual class. This line used to say "rate-limited" unconditionally, which would
         // now mislabel every transport retry and hide the very thing worth noticing.
-        const reason = isRateLimited ? 'rate-limited' : `transport failure (${describeError(error)})`;
+        const reason = isRateLimited
+          ? 'rate-limited'
+          : isIncompleteJson
+            ? 'an incomplete JSON body'
+            : `transport failure (${describeError(error)})`;
         console.warn(`[Retry] Attempt ${attempt}/${limit} ${reason}. Retrying in ${Math.round(delay)}ms…`);
         await new Promise(r => setTimeout(r, delay));
         continue;
@@ -155,8 +185,8 @@ export async function withRetry(operation, maxRetries = 3, baseDelayMs = 3000, f
     }
   }
 
-  if (exhaustedOnPolicy && fallback) {
-    console.warn(`[Retry] Exhausted ${maxPolicyRetries} attempts on a policy failure. Falling back to the alternate model…`);
+  if (exhaustedFallbackEligible && fallback) {
+    console.warn(`[Retry] Exhausted retry budget (${exhaustedLimit} attempts). Falling back to the alternate model…`);
     return fallback();
   }
   throw lastError;

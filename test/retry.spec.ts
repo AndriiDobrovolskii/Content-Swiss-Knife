@@ -339,4 +339,86 @@ describe('withRetry — same-provider fallback', () => {
     const message = warn.mock.calls.map(c => c.join(' ')).join('\n');
     expect(message).toContain('Falling back');
   });
+
+  it('logs the budget that actually applied, not always maxPolicyRetries', async () => {
+    const err = Object.assign(new Error('slow down'), { status: 503 });
+    const { operation } = failingTimes(99, err);
+    const fallback = vi.fn().mockResolvedValue('fallback-ok');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await withRetry(operation, 1, 1, fallback, 4);
+
+    const message = warn.mock.calls.map(c => c.join(' ')).join('\n');
+    expect(message).toContain('Exhausted retry budget (4 attempts)');
+  });
+});
+
+/**
+ * `[json-parse] response truncated: ...` tagged with `error.code === 'ERR_INCOMPLETE_JSON'` (see
+ * server/utils/json-parse.js). Added after a live 2026-08-17 run: `finishReason` was not
+ * `MAX_TOKENS` — no provider-level ceiling guard fired — yet the JSON body was structurally cut
+ * off. That means the EXCHANGE was incomplete, not the REQUEST was wrong, so unlike a provider's
+ * own MAX_TOKENS-style guard (which stays fail-fast — see the block above), this is retried.
+ */
+function incompleteJsonError(): Error {
+  return Object.assign(
+    new Error('[json-parse] response truncated: 1 unclosed container(s) at end of input (1311 chars).'),
+    { code: 'ERR_INCOMPLETE_JSON' },
+  );
+}
+
+describe('withRetry — an incomplete JSON body (json-parse truncation) is retried', () => {
+  it('retries and succeeds', async () => {
+    const { operation, attempts } = failingTimes(1, incompleteJsonError());
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(withRetry(operation, 3, 1)).resolves.toBe('ok');
+    expect(attempts()).toBe(2);
+  });
+
+  it('exhausts at maxRetries (the transport-sized budget), not the wider maxPolicyRetries', async () => {
+    const { operation, attempts } = failingTimes(99, incompleteJsonError());
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(withRetry(operation, 2, 1, undefined, 6)).rejects.toThrow(/response truncated/);
+    expect(attempts()).toBe(2);
+  });
+
+  it('is fallback-eligible: fallback fires once its (smaller) budget is exhausted', async () => {
+    const { operation } = failingTimes(99, incompleteJsonError());
+    const fallback = vi.fn().mockResolvedValue('fallback-ok');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(withRetry(operation, 2, 1, fallback, 6)).resolves.toBe('fallback-ok');
+    expect(fallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs the transport-sized budget on exhaustion, not maxPolicyRetries', async () => {
+    const { operation } = failingTimes(99, incompleteJsonError());
+    const fallback = vi.fn().mockResolvedValue('fallback-ok');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await withRetry(operation, 2, 1, fallback, 6);
+
+    const message = warn.mock.calls.map(c => c.join(' ')).join('\n');
+    expect(message).toContain('Exhausted retry budget (2 attempts)');
+  });
+
+  /**
+   * THE BOUNDARY THAT MUST NOT MOVE. A provider's own ceiling guard (e.g.
+   * `[gemini] output truncated: hit maxOutputTokens...`) carries no `.code` and must keep failing
+   * fast with no fallback — that failure is structural and will very likely recur, unlike a
+   * json-parse-detected truncation.
+   */
+  it('does not retry or fall back on a provider-level (MAX_TOKENS-style) truncation message', async () => {
+    const { operation, attempts } = failingTimes(
+      99,
+      new Error('[gemini] output truncated: hit maxOutputTokens'),
+    );
+    const fallback = vi.fn().mockResolvedValue('fallback-ok');
+
+    await expect(withRetry(operation, 3, 1, fallback, 6)).rejects.toThrow(/truncated/);
+    expect(attempts()).toBe(1);
+    expect(fallback).not.toHaveBeenCalled();
+  });
 });
