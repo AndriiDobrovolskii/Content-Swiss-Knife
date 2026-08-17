@@ -63,9 +63,9 @@ export class AnthropicProvider {
   async generate(payload, mode = 'text', slot) {
     const { systemBlocks = [], userContent = '' } = normalizePayload(payload);
     const isCreative = mode === 'creative' || mode === 'creative-json';
-    const { model, level, maxOutputTokens } = slot || (isCreative ? FALLBACK_DEEP() : FALLBACK_FAST());
+    const primary = slot || (isCreative ? FALLBACK_DEEP() : FALLBACK_FAST());
 
-    return withRetry(async () => {
+    const attempt = ({ model, level, maxOutputTokens }) => async () => {
       const config = {
         model,
         // The model's real output ceiling. max_tokens caps thinking + response text combined
@@ -112,7 +112,22 @@ export class AnthropicProvider {
       const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
       const result = (mode === 'json' || mode === 'creative-json') ? parseJsonResponse(text) : text;
       return { result, usage };
-    });
+    };
+
+    // Same-provider model fallback for a sustained policy failure (see withRetry's `fallback`
+    // param). Skipped when the alternate model IS the one already configured, since retrying it
+    // would just fail identically.
+    const alt = isCreative ? FALLBACK_DEEP() : FALLBACK_FAST();
+    const fallback = alt.model !== primary.model
+      ? () => {
+          console.warn(`[Fallback] anthropic/${primary.model} (${primary.level}) exhausted its retry budget; trying anthropic/${alt.model} (${alt.level})…`);
+          // A small hedge, not the full policy budget — this is meant to be a last resort, not a
+          // second multi-minute wait on a model that was just switched to.
+          return withRetry(attempt(alt), 2, 3000, undefined, 2);
+        }
+      : undefined;
+
+    return withRetry(attempt(primary), undefined, undefined, fallback);
   }
 
   async analyzeImage(base64Data, mimeType, prompt, useThinking = false, slot) {

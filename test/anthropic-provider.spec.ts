@@ -31,7 +31,13 @@ vi.mock('@anthropic-ai/sdk', () => ({
   },
 }));
 
-vi.mock('../server/utils/retry.js', () => ({ withRetry: (fn: any) => fn() }));
+// Backed by a vi.fn() (not a bare factory) so the fallback-wiring tests below can inspect what
+// `generate()` passed as the `fallback` argument, or make the mock actually invoke it.
+const withRetryMock = vi.fn((fn: any, _maxRetries?: any, _baseDelayMs?: any, _fallback?: any, _maxPolicyRetries?: any) => fn());
+vi.mock('../server/utils/retry.js', () => ({
+  withRetry: (fn: any, maxRetries?: any, baseDelayMs?: any, fallback?: any, maxPolicyRetries?: any) =>
+    withRetryMock(fn, maxRetries, baseDelayMs, fallback, maxPolicyRetries),
+}));
 
 const { AnthropicProvider } = await import('../server/providers/anthropic.js');
 
@@ -201,5 +207,46 @@ describe('AnthropicProvider request bounds', () => {
   it('gives a thinking vision call the vision timeout, not the deep one', async () => {
     await new AnthropicProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', true, DEEP);
     expect(createCalls[0].options.timeout).toBe(600_000);
+  });
+});
+
+/**
+ * Same-provider model fallback: when a sustained 503/429 exhausts withRetry's policy budget, it
+ * invokes the `fallback` thunk `generate()` handed it. See server/utils/retry.js and the
+ * 2026-08-17 incident this was added for (sustained provider "high demand" errors).
+ */
+describe('AnthropicProvider same-provider fallback', () => {
+  beforeEach(() => {
+    streamCalls.length = 0;
+    nextMessage = message('<p>ok</p>');
+    withRetryMock.mockReset();
+    withRetryMock.mockImplementation((fn: any) => fn());
+  });
+
+  // DEEP/FAST above already equal what FALLBACK_DEEP()/FALLBACK_FAST() resolve to (no env
+  // overrides in the test run), so they're the natural no-op case: switching to "the alternate
+  // model" would just mean the same model again.
+  it('does not build a fallback when the configured slot already is the fallback model', async () => {
+    await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'creative', DEEP);
+    expect(withRetryMock.mock.calls[0][3]).toBeUndefined();
+  });
+
+  it('builds a fallback to the alternate model when the slot differs', async () => {
+    await new AnthropicProvider('k')
+      .generate(CACHED_PAYLOAD, 'creative', { model: 'claude-sonnet-4-6', level: 'medium', maxOutputTokens: 32000 });
+    expect(typeof withRetryMock.mock.calls[0][3]).toBe('function');
+  });
+
+  it('invokes the fallback against the alternate model and logs both model names', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    withRetryMock.mockImplementationOnce((fn: any, _max: any, _base: any, fallback: any) => (fallback ? fallback() : fn()));
+
+    await new AnthropicProvider('k')
+      .generate(CACHED_PAYLOAD, 'creative', { model: 'claude-sonnet-4-6', level: 'medium', maxOutputTokens: 32000 });
+
+    expect(streamCalls[0].config.model).toBe('claude-sonnet-5');
+    const message2 = warn.mock.calls.map(c => c.join(' ')).join('\n');
+    expect(message2).toContain('claude-sonnet-4-6');
+    expect(message2).toContain('claude-sonnet-5');
   });
 });

@@ -240,3 +240,103 @@ describe('withRetry — backoff', () => {
     expect(message).not.toContain('rate-limited');
   });
 });
+
+/**
+ * `maxPolicyRetries` — a wider, SEPARATE budget for 429/503-class failures, added after a
+ * 2026-08-17 run died to sustained Gemini 503 "high demand" errors that outlasted the original
+ * 3-attempt budget in well under a minute. The transport budget (`maxRetries`) is deliberately
+ * untouched — see the comment on `withRetry` itself for why a single wider budget was rejected.
+ */
+describe('withRetry — policy failures get a wider, separate budget', () => {
+  it('retries a policy failure past the transport budget, up to maxPolicyRetries', async () => {
+    const err = Object.assign(new Error('slow down'), { status: 503 });
+    const { operation, attempts } = failingTimes(99, err);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // maxRetries=1 (transport budget) would fail-fast a transport error immediately; a policy
+    // failure must still climb all the way to maxPolicyRetries=4 regardless.
+    await expect(withRetry(operation, 1, 1, undefined, 4)).rejects.toThrow(/slow down/);
+    expect(attempts()).toBe(4);
+  });
+
+  it('still exhausts a transport failure at maxRetries, unaffected by a wide maxPolicyRetries', async () => {
+    const { operation, attempts } = failingTimes(99, fetchFailed('ECONNRESET'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(withRetry(operation, 3, 1, undefined, 6)).rejects.toThrow(/fetch failed/);
+    expect(attempts()).toBe(3);
+  });
+
+  it('caps backoff delay at MAX_DELAY_MS once the series would otherwise exceed it', async () => {
+    const delays: number[] = [];
+    const sleepSpy = vi.spyOn(global, 'setTimeout').mockImplementation(((fn: any, ms?: number) => {
+      delays.push(ms ?? 0);
+      fn();
+      return 0 as any;
+    }) as any);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const err = Object.assign(new Error('slow down'), { status: 503 });
+    const { operation } = failingTimes(99, err);
+    await expect(withRetry(operation, 1, 10_000, undefined, 6)).rejects.toThrow();
+
+    sleepSpy.mockRestore();
+    // 10000 * 2^(attempt-1) for attempts 1..5 would be 10000, 20000, 40000, 80000, 160000 — every
+    // value past the cap must be clamped to at most MAX_DELAY_MS (30000) plus jitter (<=1000ms).
+    expect(delays).toHaveLength(5);
+    for (const d of delays) expect(d).toBeLessThanOrEqual(31_000);
+  });
+});
+
+describe('withRetry — same-provider fallback', () => {
+  it('invokes fallback exactly once after a policy failure exhausts its budget', async () => {
+    const err = Object.assign(new Error('slow down'), { status: 503 });
+    const { operation } = failingTimes(99, err);
+    const fallback = vi.fn().mockResolvedValue('fallback-ok');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(withRetry(operation, 1, 1, fallback, 2)).resolves.toBe('fallback-ok');
+    expect(fallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not invoke fallback after a transport failure exhausts its budget', async () => {
+    const { operation } = failingTimes(99, fetchFailed('ECONNRESET'));
+    const fallback = vi.fn().mockResolvedValue('fallback-ok');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(withRetry(operation, 2, 1, fallback, 6)).rejects.toThrow(/fetch failed/);
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it('does not invoke fallback after a deterministic (fail-fast) error', async () => {
+    const err: any = new Error('invalid request: bad model name');
+    err.status = 400;
+    const { operation, attempts } = failingTimes(99, err);
+    const fallback = vi.fn().mockResolvedValue('fallback-ok');
+
+    await expect(withRetry(operation, 1, 1, fallback, 6)).rejects.toThrow(/invalid request/);
+    expect(fallback).not.toHaveBeenCalled();
+    expect(attempts()).toBe(1);
+  });
+
+  it('propagates the fallback\'s own rejection, not the primary error', async () => {
+    const err = Object.assign(new Error('slow down'), { status: 503 });
+    const { operation } = failingTimes(99, err);
+    const fallback = vi.fn().mockRejectedValue(new Error('fallback also failed'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(withRetry(operation, 1, 1, fallback, 2)).rejects.toThrow(/fallback also failed/);
+  });
+
+  it('logs that it is falling back only when the fallback actually fires', async () => {
+    const err = Object.assign(new Error('slow down'), { status: 503 });
+    const { operation } = failingTimes(99, err);
+    const fallback = vi.fn().mockResolvedValue('fallback-ok');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await withRetry(operation, 1, 1, fallback, 2);
+
+    const message = warn.mock.calls.map(c => c.join(' ')).join('\n');
+    expect(message).toContain('Falling back');
+  });
+});
