@@ -281,9 +281,12 @@ server.on('error', (error) => {
   process.exit(1);
 });
 
-// Railway stops a container with SIGTERM before killing it. Without this, a request generating
-// mid-shutdown (a long Doc-pipeline call) sees its socket cut and surfaces as a bare 502 — the
-// same symptom as the crash/edge-timeout cases above, but self-inflicted by our own redeploys.
+// Railway stops a container with SIGTERM before killing it. This only helps short calls
+// (vision, pdf, fast-mode generate) that finish inside the platform's SIGKILL grace period —
+// a Doc-pipeline call can run up to DEEP_TIMEOUT_MS (20 min, server/utils/timeouts.js), which
+// no grace period covers, so a redeploy mid-generation still loses that request. What actually
+// stops fresh requests from landing on a dying container is the healthcheck-gated rollover
+// (see /health above); this just lets in-flight short requests finish instead of being cut.
 process.on('SIGTERM', () => {
   console.log('[Server] SIGTERM received, shutting down gracefully...');
   server.close(() => {
