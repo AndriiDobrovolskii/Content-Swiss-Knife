@@ -13,6 +13,19 @@ import { warmProviders } from './providers/factory.js';
 
 config();
 
+// An uncaught error leaves the process in an undefined state (leaked sockets, half-written
+// state) — logging and carrying on risks every request after this one failing in stranger ways
+// than the original error. Exit non-zero so Railway restarts the container from a clean slate,
+// same reasoning as the EADDRINUSE exit below.
+process.on('uncaughtException', (error) => {
+  console.error('[Server] Uncaught exception:', error);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Server] Unhandled rejection:', reason);
+  process.exit(1);
+});
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 const LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
@@ -22,6 +35,14 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const serper = new SerperRetrieval(process.env.SERPER_API_KEY);
+
+// Lets Railway's healthcheck (and any external monitor) tell "process alive" apart from
+// "process gone" — without this, a crashed/OOM-killed container looks identical to a normal
+// 502 from a single failed /api/llm call. Configure this path in Railway → Settings → Deploy →
+// Healthcheck Path so a new deploy isn't cut over to until it answers here.
+app.get('/health', (req, res) => {
+  res.json({ ok: true, uptime: process.uptime() });
+});
 
 // Bind the env fallback once; the per-request logic lives in ./llm-request.js so it can be
 // tested without booting Express or holding API keys.
@@ -258,4 +279,15 @@ server.on('error', (error) => {
     console.error('[Server] listen error:', error.message);
   }
   process.exit(1);
+});
+
+// Railway stops a container with SIGTERM before killing it. Without this, a request generating
+// mid-shutdown (a long Doc-pipeline call) sees its socket cut and surfaces as a bare 502 — the
+// same symptom as the crash/edge-timeout cases above, but self-inflicted by our own redeploys.
+process.on('SIGTERM', () => {
+  console.log('[Server] SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('[Server] HTTP server closed');
+    process.exit(0);
+  });
 });
