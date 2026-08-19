@@ -1,5 +1,6 @@
 import { PromptPayload } from '../prompt-core/payload';
 import { UNIT_LOCALIZATION_RULES, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
+import { UA_TRANSLATION_STYLE_GUIDE } from '../prompt-core/ua-translation-style-guide';
 
 /**
  * Standalone Translator tool — a PURE, store-agnostic translation prompt builder.
@@ -105,7 +106,26 @@ function normalizeLabel(label: string): string {
   return label.trim().toLowerCase();
 }
 
-function buildInstruction(targetLangLabel: string): string {
+/**
+ * What the caller intends to DO with the translation — required, and deliberately not an optional
+ * `styleGuide?: boolean`.
+ *
+ * - `'user-facing-content'`: a human will read this. Ukrainian targets additionally receive
+ *   UA_TRANSLATION_STYLE_GUIDE.
+ * - `'internal-matching-only'`: the output is machine input, never displayed. Today's only such
+ *   caller is groundingSpecs(), whose result is anchor text that validateSpecsGrounding matches
+ *   spec rows against by STEMMED LABEL (specs-grounding.ts, signal 1 of 3). The style guide's
+ *   anti-calque rules exist to change wording, which degrades that match and turns correctly
+ *   grounded rows into false "hallucinated row" errors.
+ *
+ * REQUIRED ON PURPOSE. An optional flag defaulting to off is fail-open in the direction that
+ * matters: a user-facing feature added later would call the two-argument form, silently get no
+ * style guide, and ship degraded Ukrainian with nothing to catch it. A required union makes the
+ * compiler demand the decision at every call site.
+ */
+export type TranslationContext = 'user-facing-content' | 'internal-matching-only';
+
+function buildInstruction(targetLangLabel: string, context: TranslationContext): string {
   const config = LANG_CONFIG[normalizeLabel(targetLangLabel)];
   const heading = config
     ? `TRANSLATE THE INPUT INTO ${config.name.toUpperCase()}.`
@@ -113,7 +133,13 @@ function buildInstruction(targetLangLabel: string): string {
   const notes = config
     ? `\n\n[TARGET-LANGUAGE ORTHOGRAPHY]\n${config.notes}`
     : '';
-  return `${heading}${notes}\n\n${UNIT_LOCALIZATION_RULES}`;
+  // Ukrainian + user-facing only — see TranslationContext. The LANG_CONFIG notes above stay:
+  // the guide subsumes them but does not contradict them, and they carry the unit/separator
+  // pointer the guide assumes is already present.
+  const styleGuide = context === 'user-facing-content' && normalizeLabel(targetLangLabel) === 'ukrainian'
+    ? `\n\n${UA_TRANSLATION_STYLE_GUIDE}`
+    : '';
+  return `${heading}${notes}\n\n${UNIT_LOCALIZATION_RULES}${styleGuide}`;
 }
 
 /**
@@ -121,12 +147,17 @@ function buildInstruction(targetLangLabel: string): string {
  * @param text  the text/HTML fragment to translate (becomes userContent — never cached).
  * @param targetLangLabel  one of TRANSLATOR_LANGUAGES (case-insensitive); an unknown label falls
  *   back to a safe generic instruction instead of throwing.
+ * @param context  what the output is for — see TranslationContext. Gates the Ukrainian style guide.
  */
-export function buildTranslatePrompt(text: string, targetLangLabel: string): PromptPayload {
+export function buildTranslatePrompt(
+  text: string,
+  targetLangLabel: string,
+  context: TranslationContext,
+): PromptPayload {
   return {
     systemBlocks: [
       { text: TRANSLATOR_SYSTEM_BLOCK, cache: true },
-      { text: buildInstruction(targetLangLabel), cache: true },
+      { text: buildInstruction(targetLangLabel, context), cache: true },
     ],
     userContent: text,
   };
