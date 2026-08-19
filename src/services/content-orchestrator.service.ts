@@ -231,7 +231,10 @@ export class ContentOrchestratorService {
     if (isAlreadyCyrillic(input.specs)) return { text: input.specs };
     try {
       const translated = await this.llm.generateText(
-        buildTranslatePrompt(input.specs, 'Ukrainian'),
+        // 'internal-matching-only' — NOT a display translation. This output is anchor text for
+        // validateSpecsGrounding, which matches spec rows by stemmed label; the Ukrainian style
+        // guide's anti-calque rules would reword exactly what has to stay matchable.
+        buildTranslatePrompt(input.specs, 'Ukrainian', 'internal-matching-only'),
         false, // fast model — a cheap lookup call, not master generation
         { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
       );
@@ -1597,7 +1600,7 @@ export class ContentOrchestratorService {
     this.progressMessage.set(`Translating to ${targetLang}…`);
     await this.withProgress(async () => {
       // Store-agnostic pure translation — NOT the generation pipeline's store-coupled Task C.
-      const prompt = buildTranslatePrompt(content, targetLang);
+      const prompt = buildTranslatePrompt(content, targetLang, 'user-facing-content');
       let translated = await this.llm.generateText(prompt, useThinking, { taskLabel: 'Translator', lang: targetLang });
       translated = stripCodeFences(translated);
       // No figure rewrapping and no store-specific URL/contact replacement here — the Translator

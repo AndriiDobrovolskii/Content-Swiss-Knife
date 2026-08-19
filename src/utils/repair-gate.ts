@@ -224,9 +224,16 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
         // generate(), destroying an artifact that had already been generated and paid for. "Loud"
         // has to mean "this issue is not patchable — use the expensive instrument", not "lose the
         // work". Exhausting the ladder resolves it to full-regen from here on.
+        //
+        // Worded by severity because the two outcomes genuinely differ: exhausting an ERROR's
+        // ladder lands it on full-regen, but resolveLadder never gives a WARNING a full-regen rung
+        // (see its doc comment), so exhausting one just ends the attempt. The old message claimed
+        // full regeneration for both and described something that cannot happen for a warning.
         console.error(
           `[repair-gate] ${opts.label}: cannot address "${issue.path}" for rule "${issue.rule}" — ` +
-          'falling back to full regeneration for this issue.',
+          (issue.severity === 'error'
+            ? 'falling back to full regeneration for this issue.'
+            : 'this warning is left reported but unrepaired (warnings never reach full regeneration).'),
           err,
         );
         exhaust(issue);

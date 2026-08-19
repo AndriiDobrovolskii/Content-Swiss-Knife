@@ -1414,6 +1414,77 @@ describe('heading-product-name-stuffing — one ladder serving two artifact shap
     expect(result.finalIssues).toEqual([]);
     expect(produce).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * THE REPORTED BUG, end to end. `doc.cta.heading` carries no array index, which the old path
+   * grammar could not parse — the gate logged `cannot address "doc.cta.heading"` and exhausted the
+   * ladder, leaving a real [HEADING FORM] violation in the §9 closing permanently unrepaired
+   * (a warning never reaches full regeneration, and runDocGate wires no repairBlocks, so the
+   * field-scoped rung is this rule's only working instrument on a Doc). Nothing covered it.
+   */
+  it('resolves a Doc "doc.cta.heading" path — a non-indexed object hop — via the field-scoped rung', async () => {
+    type DocLike = { doc: { cta: { heading: string; text: string } } };
+    const stuffed = 'Чому купити Ortur F10 10 W Standard Package в EXPERT3D?';
+    const fixed = 'Чому купити Ortur F10 10W в EXPERT3D?';
+    const produce = vi.fn().mockResolvedValue({ doc: { cta: { heading: stuffed, text: 'Buy.' } } });
+    const repairField = vi.fn().mockResolvedValue(fixed);
+    const repairBlocks = vi.fn();
+    const validate = vi.fn()
+      .mockReturnValueOnce([headingWarning('doc.cta.heading')])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate<DocLike>({
+      label: 'Doc (base)', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField, repairBlocks,
+    });
+
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect(repairBlocks).not.toHaveBeenCalled();
+    expect(result.artifact.doc.cta.heading).toBe(fixed);
+    expect(result.artifact.doc.cta.text).toBe('Buy.');   // sibling field untouched
+    expect(result.finalIssues).toEqual([]);
+    expect(produce).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * A genuinely unaddressable path must still degrade safely rather than crash or burn the budget.
+   * `doc.functionality.heading` is the dropped-index caller bug the walker deliberately still
+   * rejects — the severity decides what "exhausted" costs.
+   */
+  it('exhausts a WARNING with an unresolvable path without attempting full regeneration', async () => {
+    type DocLike = { doc: { functionality: { heading: string }[] } };
+    const produce = vi.fn().mockResolvedValue({ doc: { functionality: [{ heading: 'X' }] } });
+    const repairField = vi.fn();
+    const validate = vi.fn().mockReturnValue([headingWarning('doc.functionality.heading')]);
+
+    const result = await runRepairGate<DocLike>({
+      label: 'Doc (base)', maxRepairs: 2, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    expect(repairField).not.toHaveBeenCalled();
+    expect(produce).toHaveBeenCalledTimes(1);          // no regeneration for a warning
+    expect(result.repairsUsed).toBe(0);
+    expect(result.finalIssues).toHaveLength(1);        // reported, honestly, rather than silently dropped
+  });
+
+  it('still sends an ERROR with an unresolvable path to full regeneration', async () => {
+    type DocLike = { doc: { functionality: { heading: string }[] } };
+    const produce = vi.fn()
+      .mockResolvedValueOnce({ doc: { functionality: [{ heading: 'X' }] } })
+      .mockResolvedValue({ doc: { functionality: [{ heading: 'OK' }] } });
+    const validate = vi.fn()
+      .mockReturnValueOnce([{ ...headingWarning('doc.functionality.heading'), severity: 'error' as const }])
+      .mockReturnValue([]);
+
+    const result = await runRepairGate<DocLike>({
+      label: 'Doc (base)', maxRepairs: 2, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback,
+    });
+
+    expect(produce).toHaveBeenCalledTimes(2);
+    expect(result.finalIssues).toEqual([]);
+  });
 });
 
 // ── Slug generation used to have NO repair gate at all (2026-08 EXPERT3D Ortur F10 10W) ──

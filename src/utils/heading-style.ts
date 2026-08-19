@@ -165,16 +165,46 @@ function checkProductNameStuffing(
     if (heading.tagName === 'H2' && shortPattern?.test(text)) named.push(heading);
   }
 
-  // Budget of two: the first §3 heading and the §9 commercial closing.
-  for (const heading of named.slice(2)) {
+  // Budget of two: the first §3 heading and the §9 commercial closing — those two SPECIFICALLY,
+  // not "whichever two come first". `named.slice(2)` used to imply the latter, which blamed the
+  // wrong heading whenever a stray §4–§7 heading also named the product: the §9 closing sorts last
+  // in document order, so it fell outside the first two and was reported while the actual offender
+  // passed. Harmless while the finding was unrepairable; not harmless now that repair-strategy.ts
+  // can address it, because the ladder would rewrite a correct CTA and leave the real one alone.
+  //
+  // IDENTIFYING §9 HERE IS A HEURISTIC, unlike the Doc sibling below, which reads `doc.cta` as a
+  // field. "Last <h2>" alone is not enough — in a document that never emitted a §9 that is
+  // «Технічні характеристики» (§7), and blessing it would license the full product name in exactly
+  // the heading the XGRIDS regression was about. So the candidate must be last AND question-shaped:
+  // the commercial closing is a mandated "why-buy" question in every Task C variant, and this file
+  // already uses the same `?` signal defensively in validateHeadingStyleDoc below.
+  const lastH2 = headings.filter(h => h.tagName === 'H2').at(-1);
+  const closing = lastH2 && named.includes(lastH2) && (lastH2.textContent ?? '').includes('?')
+    ? lastH2
+    : undefined;
+  const blessed = new Set([named[0], closing].filter(Boolean));
+
+  // TWO is still a budget, not a pair of assigned seats: at two or fewer product-named <h2>s
+  // nothing is flagged, exactly as before. Identity only decides WHO is at fault once a third
+  // appears. Flagging a §4–§7 heading while the artifact is still within budget would rewrite
+  // headings that have always passed — a stricter rule than anyone asked for, and one that now
+  // costs a field-scoped LLM call because repair-strategy.ts can address these paths.
+  const flagged = named.length > 2 ? named.filter(h => !blessed.has(h)) : [];
+
+  for (const heading of flagged) {
     const text = (heading.textContent ?? '').replace(/\s+/g, ' ').trim();
     issues.push({
       severity: 'warning',
       rule: 'heading-product-name-stuffing',
+      // NO POSITIONAL ORDINAL. It used to read "is the Nth <h2> naming the product; at most TWO
+      // may", which was coherent only while slice(2) guaranteed N >= 3. Now that the two slots are
+      // reserved by identity, a flagged heading can be the 2nd — and "you are the 2nd of at most 2"
+      // gives the model no reason to change anything. This string is spliced verbatim into
+      // REPAIR_STRATEGIES' fieldInstruction, so an incoherent detail is an incoherent repair prompt.
       detail:
-        `"${text}" is the ${named.indexOf(heading) + 1}th <h2> naming the product; at most TWO ` +
-        `may — the first §3 heading and the §9 closing. Replace this one's product name with a ` +
-        `generic category noun ("пристрій", "лідар-сканер") or drop it entirely.`,
+        `"${text}" names the product in an <h2> that is neither the first §3 heading nor the §9 ` +
+        `closing — those two are the only headings allowed to. Replace this one's product name ` +
+        `with a generic category noun ("пристрій", "лідар-сканер") or drop it entirely.`,
       context: `${locale} — heading form`,
       path: blockPathFor(heading),
     });
@@ -255,14 +285,18 @@ export function validateHeadingStyle(
  *
  *  `path` is prefixed with `doc.` — relative to `runDocGate`'s `{ doc, issues }` wrapper
  *  (`DocAttempt`), which is what `runRepairGate`'s path addressing actually walks, not the Doc
- *  itself (see repair-strategy.ts's path-addressing note). Only the single-hop
- *  `doc.functionality[i].heading` shape is addressable by that grammar today — every other path
- *  here (`doc.specs.heading`, `doc.cta.heading`, any h3 `...subsections[j].heading`) still throws
- *  "unsupported path" if ever handed to a registered strategy, which is caught and treated as
- *  "cannot patch this one" rather than a crash. That is a known, deliberate gap, not an oversight:
- *  extending the shared path grammar to arbitrary nesting was rejected because it would also have
- *  to accept a bare `arrayProp.leafProp` (no index) as valid, which repair-strategy.spec.ts locks
- *  in as a thrown error on purpose (see its comment on why that stays a caller-bug signal). */
+ *  itself (see repair-strategy.ts's path-addressing note).
+ *
+ *  EVERY shape emitted here is addressable. That was not always true: the shared path grammar once
+ *  required a bracketed array index, so only `doc.functionality[i].heading` parsed and
+ *  `doc.specs.heading`, `doc.cta.heading` and any h3 `...subsections[j].heading` threw
+ *  "unsupported path" — caught as "cannot patch this one" rather than crashing, but leaving the
+ *  warning-only heading rule permanently unrepairable on a Doc, since its field-scoped rung is the
+ *  only instrument it has there. A live run put the full product name in the §9 CTA heading and hit
+ *  exactly that dead end. repair-strategy.ts now walks arbitrary segments and rejects the
+ *  dropped-index caller bug by inspecting the data instead of the string, so adding a path shape
+ *  here no longer needs a grammar change — but it does still need the value at that path to be a
+ *  string, which is what `applyTier` reads before calling a strategy. */
 interface DocHeading {
   text: string;
   level: 'h2' | 'h3';
@@ -349,17 +383,26 @@ function checkProductNameStuffingDoc(
     if (heading.level === 'h2' && shortPattern?.test(text)) named.push(heading);
   }
 
-  // Budget of two: the first §3 heading and the §9 commercial closing.
-  for (const heading of named.slice(2)) {
+  // Budget of two: the first §3 heading and the §9 commercial closing — see the HTML sibling's
+  // note on why this is not `named.slice(2)`. Exact here rather than heuristic: collectHeadings()
+  // stamps the CTA with its own field path, so no question-mark sniffing is needed.
+  const blessed = new Set(
+    [named[0], named.find(h => h.path === 'doc.cta.heading')].filter(Boolean),
+  );
+  // At or under budget, nothing is flagged — see the HTML sibling's note.
+  const flagged = named.length > 2 ? named.filter(h => !blessed.has(h)) : [];
+
+  for (const heading of flagged) {
     const text = (heading.text ?? '').replace(/\s+/g, ' ').trim();
     issues.push({
       severity: 'warning',
       rule: 'heading-product-name-stuffing',
+      // No positional ordinal — see the HTML sibling's note on why it became incoherent.
       detail:
-        `The heading at ${heading.path} ("${text}") is the ${named.indexOf(heading) + 1}th ` +
-        `heading naming the product; at most TWO may — the first §3 heading and the §9 closing. ` +
-        `Replace this one's product name with a generic category noun ("пристрій", "лідар-сканер") ` +
-        `or drop it entirely.`,
+        `The heading at ${heading.path} ("${text}") names the product but is neither the first §3 ` +
+        `heading nor the §9 closing — those two are the only headings allowed to. Replace this ` +
+        `one's product name with a generic category noun ("пристрій", "лідар-сканер") or drop it ` +
+        `entirely.`,
       context: `${locale} — heading form`,
       path: heading.path,
     });
