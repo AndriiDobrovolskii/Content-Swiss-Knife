@@ -76,6 +76,15 @@ describe('path addressing', () => {
     expect(() => setAtPath(artifact, 'seo_data[9].meta_title', 'v')).toThrow(/out of range/);
   });
 
+  it('throws on an array addressed without an index, in BOTH directions', () => {
+    // The dropped-index caller bug. It used to be rejected by the path grammar; now it is rejected
+    // by the data, which is what lets genuine object hops (below) through without letting this in.
+    // A read must throw too — quietly returning undefined here is the silent no-op the whole
+    // loud-failure contract exists to prevent.
+    expect(() => getAtPath(artifact, 'seo_data.meta_title')).toThrow(/unsupported path/);
+    expect(() => setAtPath(artifact, 'seo_data.meta_title', 'x')).toThrow(/unsupported path/);
+  });
+
   it('replaces exactly one leaf and keeps every sibling by reference', () => {
     // Monotonicity by identity: anything that changed identity was rewritten by something else.
     const next = setAtPath(artifact, 'seo_data[0].meta_title', 'SHORT');
@@ -83,6 +92,71 @@ describe('path addressing', () => {
     expect(next.seo_data[1]).toBe(artifact.seo_data[1]); // untouched sibling, same reference
     expect(next.site_name).toBe(artifact.site_name);
     expect(artifact.seo_data[0].meta_title).toBe('A');    // input not mutated
+  });
+});
+
+/**
+ * runDocGate holds a `{ doc, issues }` wrapper, and heading-style.ts emits SIX Doc heading shapes
+ * against it. Before the segment walker only `doc.functionality[i].heading` parsed, so a finding on
+ * `doc.cta.heading` threw "unsupported path" and the warning-only heading rule — whose field-scoped
+ * rung is its only working instrument on a Doc — could report but never repair. Observed live:
+ * the model put the full product name in the §9 CTA heading and the ladder could not reach it.
+ */
+describe('path addressing — Doc shapes (the doc.cta.heading regression)', () => {
+  const docArtifact = {
+    doc: {
+      functionality: [
+        { heading: 'F0', subsections: [{ heading: 'S0' }, { heading: 'S1' }] },
+        { heading: 'F1' },
+      ],
+      specs: { heading: 'Технічні характеристики' },
+      cta: { heading: 'Чому купити Ortur H20 20 W Standard Package в EXPERT3D?' },
+    },
+    issues: [],
+  };
+
+  it('reads a plain object hop with no array anywhere', () => {
+    expect(getAtPath(docArtifact, 'doc.cta.heading')).toBe(docArtifact.doc.cta.heading);
+    expect(getAtPath(docArtifact, 'doc.specs.heading')).toBe('Технічні характеристики');
+  });
+
+  it('writes a plain object hop and leaves untouched branches by reference', () => {
+    const next = setAtPath(docArtifact, 'doc.cta.heading', 'Чому купити Ortur H20 в EXPERT3D?');
+    expect(next.doc.cta.heading).toBe('Чому купити Ortur H20 в EXPERT3D?');
+    expect(next.doc.specs).toBe(docArtifact.doc.specs);           // sibling, same reference
+    expect(next.doc.functionality).toBe(docArtifact.doc.functionality);
+    expect(next.issues).toBe(docArtifact.issues);
+    expect(docArtifact.doc.cta.heading).toContain('Standard Package'); // input not mutated
+  });
+
+  it('round-trips arbitrary depth with several array hops', () => {
+    const path = 'doc.functionality[0].subsections[1].heading';
+    expect(getAtPath(docArtifact, path)).toBe('S1');
+    const next = setAtPath(docArtifact, path, 'Безпека');
+    expect(getAtPath(next, path)).toBe('Безпека');
+    expect(next.doc.functionality[1]).toBe(docArtifact.doc.functionality[1]);
+    expect(next.doc.functionality[0].subsections[0]).toBe(docArtifact.doc.functionality[0].subsections[0]);
+  });
+
+  it('still throws when the array index is dropped from a Doc path', () => {
+    // Same caller bug as seo_data.meta_title, one hop deeper — the walker must not have made
+    // arbitrary nesting mean "anything goes".
+    expect(() => getAtPath(docArtifact, 'doc.functionality.heading')).toThrow(/unsupported path/);
+  });
+
+  /**
+   * The walk is N hops deep now, so any hop can be missing. A Doc without a `cta` must produce a
+   * named error, never `TypeError: Cannot read properties of undefined`.
+   */
+  it('degrades to undefined on a read through a missing intermediate', () => {
+    const noCta = { doc: { functionality: [] }, issues: [] };
+    expect(getAtPath(noCta, 'doc.cta.heading')).toBeUndefined();
+  });
+
+  it('throws a NAMED error — not a TypeError — on a write through a missing intermediate', () => {
+    const noCta = { doc: { functionality: [] }, issues: [] };
+    expect(() => setAtPath(noCta, 'doc.cta.heading', 'x')).toThrow(/cannot resolve "cta"/);
+    expect(() => setAtPath(noCta, 'doc.cta.heading', 'x')).not.toThrow(TypeError);
   });
 });
 

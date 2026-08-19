@@ -33,42 +33,100 @@ export interface RepairStrategy {
 
 // ── Path addressing ────────────────────────────────────────────────────────────
 //
-// Three forms:
-//   arrayProp[i].leafProp        'seo_data[2].meta_title', 'slugs[0].slug'
-//   arrayProp[i]                 'slugs[0]'  — element-level replacement
-//   wrapperProp.arrayProp[i]...  'doc.functionality[2].heading' — ONE optional leading
-//                                 object-property hop before the array form, added for
-//                                 runDocGate's `{ doc, issues }` wrapper: a Doc validator's
-//                                 own path (e.g. `functionality[2].heading`, relative to the
-//                                 Doc) is not relative to the artifact runRepairGate<DocAttempt>
-//                                 actually holds, so its emitter prefixes it with the wrapper's
-//                                 own property name.
-// Anything else throws. A malformed path from a future rule must fail loudly rather than be
-// mistaken for "nothing to fix". Deliberately NOT a general dotted-path walker: an unbracketed
-// path like "seo_data.meta_title" stays unsupported (see repair-strategy.spec.ts) because it is
-// almost always a caller bug — the array index was dropped, not intentionally omitted — and a
-// walker that quietly accepted it would turn that bug into a silent no-op instead of a thrown
-// error. The one addition here is a SINGLE named hop, not arbitrary nesting.
+// A path is dot-separated segments, each either `prop` or `prop[i]`:
+//   seo_data[2].meta_title       leaf inside an array element
+//   slugs[0]                     element-level replacement
+//   doc.functionality[2].heading runDocGate's `{ doc, issues }` wrapper: a Doc validator's own
+//                                path is relative to the Doc, not to the artifact
+//                                runRepairGate<DocAttempt> actually holds, so its emitter
+//                                prefixes it with the wrapper's own property name.
+//   doc.cta.heading              plain object hops, no array anywhere
+//   doc.functionality[0].subsections[1].heading      arbitrary depth, several array hops
+//
+// WHY THIS IS A WALKER NOW, AND WHY THAT IS STILL SAFE. This used to be one regex allowing exactly
+// one array index and one optional leading hop, because a general dotted walker looked like it
+// would have to accept "seo_data.meta_title" — a dropped array index, almost always a caller bug,
+// which must fail loudly rather than become a silent no-op. That restriction cost real defects:
+// heading-style.ts emits six Doc heading shapes and only `doc.functionality[i].heading` parsed, so
+// findings on `doc.cta.heading`, `doc.specs.heading` and any nested `subsections[j].heading` could
+// be reported but never repaired (the field-scoped rung is the ONLY instrument the warning-only
+// heading rule has on a Doc — see REPAIR_STRATEGIES' heading-product-name-stuffing entry).
+//
+// The dropped-index bug is now caught by the DATA rather than by the string: a segment carrying no
+// index whose value IS an array throws "unsupported path". That rejects "seo_data.meta_title"
+// exactly as before while letting "doc.cta.heading" — object hops all the way down — resolve. Two
+// grammar-level rejections remain, since no data can decide them: a malformed segment, and a
+// single segment with no index ("nonsense"), which is a bare property name rather than an address.
+//
+// Every hop guards for a missing intermediate. The walk is N deep now, so a Doc without a `cta`
+// must produce a named error, never a TypeError from dereferencing undefined.
+//
+// ONE SEMANTIC TIGHTENING came with this: the array-without-index check applies to the LAST segment
+// too, so a path whose leaf is an array (`doc.figures`) now throws where the old code returned the
+// array and let applyTier advance quietly on "not a string". No rule emits such a path today —
+// every `path` in the codebase addresses a string leaf — and a rule that started to would be making
+// the same dropped-index mistake, so failing loudly is the intended reading.
 
-const PATH_RE = /^(?:([A-Za-z_$][\w$]*)\.)?([A-Za-z_$][\w$]*)\[(\d+)\](?:\.([A-Za-z_$][\w$]*))?$/;
+interface Segment { prop: string; index?: number }
 
-function parsePath(path: string): { wrapperProp?: string; arrayProp: string; index: number; leafProp?: string } {
-  const m = PATH_RE.exec(path);
-  if (!m) throw new Error(`repair-strategy: unsupported path "${path}" (expected arrayProp[i], arrayProp[i].leafProp, or wrapperProp.arrayProp[i].leafProp)`);
-  return { wrapperProp: m[1], arrayProp: m[2], index: Number(m[3]), leafProp: m[4] };
+const SEGMENT_RE = /^([A-Za-z_$][\w$]*)(?:\[(\d+)\])?$/;
+
+function parsePath(path: string): Segment[] {
+  const raw = path.split('.');
+  const segments: Segment[] = [];
+  for (const part of raw) {
+    const m = SEGMENT_RE.exec(part);
+    if (!m) throw new Error(`repair-strategy: unsupported path "${path}" (segment "${part}" is not prop or prop[i])`);
+    segments.push({ prop: m[1], index: m[2] === undefined ? undefined : Number(m[2]) });
+  }
+  // A lone property name is an address to nothing — "nonsense" names no field of any artifact this
+  // gate repairs. Kept a hard error so a caller bug cannot degrade into a silent no-op.
+  if (segments.length === 1 && segments[0].index === undefined) {
+    throw new Error(`repair-strategy: unsupported path "${path}" (a single segment must carry an index, e.g. "slugs[0]")`);
+  }
+  return segments;
+}
+
+/**
+ * Descends one segment. `mutating` selects the contract: reads degrade to undefined on a missing
+ * hop, writes throw — a silent no-op would let a failed repair look like a successful one.
+ * Returns undefined only in the read case.
+ */
+function step(container: unknown, seg: Segment, path: string, mutating: boolean): unknown {
+  if (container === null || container === undefined) {
+    if (!mutating) return undefined;
+    throw new Error(`repair-strategy: cannot resolve "${seg.prop}" in path "${path}" — the containing value is missing`);
+  }
+  const value = (container as Record<string, unknown>)[seg.prop];
+
+  if (seg.index === undefined) {
+    // The dropped-index caller bug — see the note above. Loud in BOTH directions: a read that
+    // quietly returned undefined here is exactly the silent no-op this check exists to prevent.
+    if (Array.isArray(value)) {
+      throw new Error(`repair-strategy: unsupported path "${path}" ("${seg.prop}" is an array addressed without an index)`);
+    }
+    return value;
+  }
+
+  if (!Array.isArray(value)) {
+    if (!mutating) return undefined;
+    throw new Error(`repair-strategy: "${seg.prop}" is not an array on the artifact`);
+  }
+  if (value[seg.index] === undefined) {
+    if (!mutating) return undefined;
+    throw new Error(`repair-strategy: index ${seg.index} is out of range for "${seg.prop}"`);
+  }
+  return value[seg.index];
 }
 
 /** Reads the value a `path` addresses, or undefined when any hop is missing. */
 export function getAtPath(artifact: unknown, path: string): unknown {
-  const { wrapperProp, arrayProp, index, leafProp } = parsePath(path);
-  const base = wrapperProp
-    ? (artifact as Record<string, unknown> | null)?.[wrapperProp]
-    : artifact;
-  const arr = (base as Record<string, unknown> | null)?.[arrayProp];
-  if (!Array.isArray(arr)) return undefined;
-  const element = arr[index];
-  if (element === undefined) return undefined;
-  return leafProp ? (element as Record<string, unknown>)[leafProp] : element;
+  let current: unknown = artifact;
+  for (const seg of parsePath(path)) {
+    current = step(current, seg, path, false);
+    if (current === undefined) return undefined;
+  }
+  return current;
 }
 
 /**
@@ -80,22 +138,28 @@ export function getAtPath(artifact: unknown, path: string): unknown {
  * successful one.
  */
 export function setAtPath<T>(artifact: T, path: string, value: unknown): T {
-  const { wrapperProp, arrayProp, index, leafProp } = parsePath(path);
-  const root = artifact as unknown as Record<string, unknown>;
-  const base = (wrapperProp ? root?.[wrapperProp] : root) as Record<string, unknown> | undefined;
-  const arr = base?.[arrayProp];
-  if (!Array.isArray(arr)) throw new Error(`repair-strategy: "${arrayProp}" is not an array on the artifact`);
-  if (arr[index] === undefined) throw new Error(`repair-strategy: index ${index} is out of range for "${arrayProp}"`);
+  const segments = parsePath(path);
 
-  const nextArr = arr.slice();
-  nextArr[index] = leafProp
-    ? { ...(arr[index] as Record<string, unknown>), [leafProp]: value }
-    : value;
-  if (!wrapperProp) return { ...root, [arrayProp]: nextArr } as unknown as T;
-  return {
-    ...root,
-    [wrapperProp]: { ...(base as Record<string, unknown>), [arrayProp]: nextArr },
-  } as unknown as T;
+  const write = (container: unknown, depth: number): unknown => {
+    const seg = segments[depth];
+    const last = depth === segments.length - 1;
+    // Validates this hop and surfaces the same errors a read would skip past.
+    const child = step(container, seg, path, true);
+    // Named for the hop that is actually missing, not the one below it: with `doc.cta` absent,
+    // "cannot resolve \"cta\"" points at the gap, while descending first would blame "heading".
+    if (!last && (child === null || child === undefined)) {
+      throw new Error(`repair-strategy: cannot resolve "${seg.prop}" in path "${path}" — the value is missing`);
+    }
+    const next = last ? value : write(child, depth + 1);
+    const base = container as Record<string, unknown>;
+
+    if (seg.index === undefined) return { ...base, [seg.prop]: next };
+    const arr = (base[seg.prop] as unknown[]).slice();
+    arr[seg.index] = next;
+    return { ...base, [seg.prop]: arr };
+  };
+
+  return write(artifact, 0) as T;
 }
 
 // ── Tier-0 primitives ──────────────────────────────────────────────────────────

@@ -169,15 +169,77 @@ describe('validateHeadingStyle — product-name stuffing', () => {
     expect(stuffing(html)).toEqual([]);
   });
 
-  it('flags the third <h2> that names the product', () => {
+  it('flags the <h2>s that name the product outside the two reserved slots', () => {
     const html =
       h2('Як працює 3D-сканер XGRIDS L2 Pro') +
       h2('Яке ПЗ підтримує XGRIDS L2 Pro') +
       h2('Сфери застосування XGRIDS L2 Pro') +
       h2('Чому варто купити XGRIDS L2 Pro у Center 3D Print?');
     const issues = stuffing(html);
+    // The two middle headings — the first §3 heading and the §9 closing keep their slots. Under the
+    // old positional budget the count was the same but the SET differed: the CTA was flagged and
+    // «Яке ПЗ підтримує» passed.
     expect(issues).toHaveLength(2);
-    expect(issues[0].detail).toContain('at most TWO');
+    expect(issues.map(i => i.detail).join(' ')).toContain('Яке ПЗ підтримує XGRIDS L2 Pro');
+    expect(issues.map(i => i.detail).join(' ')).toContain('Сфери застосування XGRIDS L2 Pro');
+    expect(issues[0].detail).toContain('neither the first §3 heading nor the §9 closing');
+  });
+
+  /**
+   * The budget's two slots are the first §3 heading and the §9 closing SPECIFICALLY — not
+   * "whichever two come first". The §9 closing sorts last, so the old positional `named.slice(2)`
+   * blessed the first two and flagged the CTA whenever a stray §4–§7 heading also named the
+   * product: the one heading the rule explicitly permits was reported, and the actual offender
+   * passed. Latent while the finding was unrepairable; live once repair-strategy.ts could address
+   * it, because the ladder would then rewrite a correct CTA and leave the real one in place.
+   */
+  it('blames the stray §7 heading, NOT the §9 closing, when a third <h2> names the product', () => {
+    const html =
+      h2('Як працює 3D-сканер XGRIDS L2 Pro') +
+      h2('Механізми безпеки та захисту') +
+      h2('Технічні характеристики XGRIDS L2 Pro') +
+      h2('Чому варто купити XGRIDS L2 Pro у Center 3D Print?');
+    const issues = stuffing(html);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].detail).toContain('Технічні характеристики XGRIDS L2 Pro');
+    expect(issues[0].detail).not.toContain('Чому варто купити');
+    // `detail` is spliced verbatim into the field-scoped repair prompt, so it has to be coherent
+    // as an instruction. The old positional wording ("is the Nth <h2>; at most TWO may") held only
+    // while slice(2) guaranteed N >= 3 — here the flagged heading is the 2nd, and telling the model
+    // "you are the 2nd of at most 2" gives it no reason to rewrite anything.
+    expect(issues[0].detail).not.toMatch(/\bis the \d+th\b/);
+    expect(issues[0].detail).toContain('neither the first §3 heading nor the §9 closing');
+  });
+
+  /**
+   * "Last <h2>" alone would be unsafe: with no §9 emitted, the last <h2> is «Технічні
+   * характеристики» (§7), and blessing it would license the product name in exactly the heading
+   * the XGRIDS regression was about. The closing must be question-shaped as well as last.
+   */
+  it('does not bless a trailing §7 heading just for being last when there is no §9', () => {
+    // Three named headings so the budget actually engages. With no §9 emitted, the last <h2> is
+    // «Технічні характеристики …» — last, but not question-shaped, so it gets no reserved slot and
+    // is flagged alongside the other extra. Blessing on position alone would have licensed the
+    // product name in exactly the heading the XGRIDS regression was about.
+    const html =
+      h2('Як працює 3D-сканер XGRIDS L2 Pro') +
+      h2('Яке ПЗ підтримує XGRIDS L2 Pro') +
+      h2('Технічні характеристики XGRIDS L2 Pro');
+    const issues = stuffing(html);
+    expect(issues).toHaveLength(2);
+    const flagged = issues.map(i => i.detail).join(' ');
+    expect(flagged).toContain('Технічні характеристики XGRIDS L2 Pro');
+    expect(flagged).toContain('Яке ПЗ підтримує XGRIDS L2 Pro');
+  });
+
+  it('stays silent at two product-named <h2>s even when neither is the §9 closing', () => {
+    // The budget is TWO, not two assigned seats. Identity decides who is at fault only once a third
+    // heading appears — flagging while still within budget would rewrite headings that always
+    // passed, and now costs a repair call because these paths became addressable.
+    const html =
+      h2('Як працює 3D-сканер XGRIDS L2 Pro') +
+      h2('Технічні характеристики XGRIDS L2 Pro');
+    expect(stuffing(html)).toEqual([]);
   });
 
   it('gives <h3> a budget of zero — pushing the keyword down a level is still stuffing', () => {
@@ -357,14 +419,50 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
       expect(stuffing(doc)).toEqual([]);
     });
 
-    it('flags the third heading that names the product, across different section types', () => {
+    it('flags the headings that name the product outside the two reserved slots', () => {
       const doc = baseDoc(['Як працює 3D-сканер XGRIDS L2 Pro', 'Яке ПЗ підтримує XGRIDS L2 Pro'], {
         applications: { heading: 'Сфери застосування XGRIDS L2 Pro', items: [] },
         cta: { heading: 'Чому варто купити XGRIDS L2 Pro у Center 3D Print?', text: 'Buy.' },
       });
       const issues = stuffing(doc);
       expect(issues).toHaveLength(2);
-      expect(issues[0].detail).toContain('at most TWO');
+      expect(issues.map(i => i.path)).toEqual(['doc.functionality[1].heading', 'doc.applications.heading']);
+      expect(issues[0].detail).toContain('neither the first §3 heading nor the §9 closing');
+      // Never the §9 closing: it holds one of the two blessed slots by right.
+      expect(issues.map(i => i.path)).not.toContain('doc.cta.heading');
+    });
+
+    /**
+     * The reported bug, in its exact shape: the ladder logged
+     * `cannot address "doc.cta.heading"` because the CTA was flagged in place of the §7 heading
+     * that actually broke the budget. The Doc sibling identifies §9 structurally, so unlike the
+     * HTML sibling this needs no question-mark heuristic.
+     */
+    it('blames the stray §7 heading, NOT the §9 closing', () => {
+      const doc = baseDoc(['Як працює 3D-сканер XGRIDS L2 Pro', 'Механізми безпеки та захисту'], {
+        specs: { heading: 'Технічні характеристики XGRIDS L2 Pro', categories: [] },
+        cta: { heading: 'Чому варто купити XGRIDS L2 Pro у Center 3D Print?', text: 'Buy.' },
+      });
+      const issues = stuffing(doc);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].path).toBe('doc.specs.heading');
+      // Same coherence requirement as the HTML sibling — this detail becomes the repair prompt.
+      expect(issues[0].detail).not.toMatch(/\bis the \d+th\b/);
+      expect(issues[0].detail).toContain('neither the first §3 heading nor the §9 closing');
+    });
+
+    /**
+     * The change to identity-based slots fixes WHO is blamed; it must not also change WHETHER an
+     * in-budget artifact is flagged. Two product-named headings stay clean even when neither is the
+     * §9 closing — flagging here would rewrite headings that have always passed, and since
+     * repair-strategy.ts can now address `doc.specs.heading`, that rewrite would actually happen.
+     */
+    it('stays silent at two product-named headings even when neither is the §9 closing', () => {
+      const doc = baseDoc(['Як працює 3D-сканер XGRIDS L2 Pro'], {
+        specs: { heading: 'Технічні характеристики XGRIDS L2 Pro', categories: [] },
+        cta: { heading: 'Чому варто купити у Center 3D Print?', text: 'Buy.' },
+      });
+      expect(stuffing(doc)).toEqual([]);
     });
 
     it('gives a nested subsection heading a budget of zero — pushing the keyword down a level is still stuffing', () => {
