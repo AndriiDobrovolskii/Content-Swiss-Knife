@@ -96,8 +96,11 @@ HARD RULES:
   Writing "<b>Транспортування:</b>" into a "lead" does NOT produce bold text — the renderer already
   wraps that field in <b>, so your tags are escaped and the reader sees the angle brackets
   themselves. Put the plain words there and the renderer applies the formatting.
-- "value" in a spec row is a string, or an array of strings when the parameter genuinely has
-  several values. Never an empty array.
+- "value" in a §7 SPEC ROW ("specs.categories[].rows[].value") is a string, or an array of strings
+  when the parameter genuinely has several values. Never an empty array.
+  "value" in a §2a KILLER SPEC ("killerSpecs[].value") is ALWAYS a plain string, never an array —
+  even when it lists more than one item (e.g. "Large Tumbler Basket, Liner Kit"), join it into one
+  string. Only §7 spec rows may be an array.
 - A bullet's "lead" carries its own trailing punctuation and spacing; the renderer adds none.
   It joins them as <b>{lead}</b>{text} with nothing in between, so if "lead" ends with a letter or
   digit AND "text" begins with one, the two words collide: "Топографічне зніманняДальність".
