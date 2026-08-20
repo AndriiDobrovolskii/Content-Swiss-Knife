@@ -253,6 +253,33 @@ describe('validateSentenceLength — sentence boundaries', () => {
       + 'та від того, скільки проходів оператор задає для конкретної заготовки.';
     expect(run(p(glued)).length).toBe(1);
   });
+
+  it('splits after a single-letter unit symbol, instead of gluing two sentences into one', () => {
+    // Real report (Formlabs Fuse X1 Mix Kit 230 В, uk-UA): "230 В." was read as an initial-style
+    // abbreviation dot (the single-capital-letter guard, meant for "Т. Шевченко"), so the period
+    // never counted as a sentence end and two already-correct sentences merged into one 25-word
+    // finding the repair executor could never satisfy — there was nothing left to split. "В" here
+    // is the unit symbol for volts, not an initial.
+    const first = 'До складу комплекту входять змішувач Fuse X1 Mixer 230 В та вага Fuse X1 Scale 230 В.';
+    const second = 'Змішувач контролює обсяг регенерованого та свіжого порошку під час подачі.';
+    expect(countWords(first)).toBeLessThan(20);
+    expect(countWords(second)).toBeLessThan(20);
+    expect(countWords(`${first} ${second}`)).toBeGreaterThan(20);
+    expect(run(p(`${first} ${second}`))).toEqual([]);
+  });
+
+  it('still refuses to split on a genuine initial not preceded by a number', () => {
+    // The guard this bug lives in exists for real initials ("Т. Шевченко") and must keep working —
+    // only the numeral-preceded case (a unit symbol) should now split. ONE sentence, not two glued
+    // together: concatenating two already-complete sentences (as the unit-symbol test above does)
+    // would introduce its own legitimate break at the join, which is a different thing to prove and
+    // would pass even if the initial guard were broken.
+    const single =
+      'Автор ідеї Т. Шевченко запропонував новий метод обробки поверхні деталей із застосуванням '
+      + 'лазерного гравіювання високої точності на промисловому верстаті нового покоління.';
+    expect(countWords(single)).toBeGreaterThan(20);
+    expect(run(p(single)).length).toBe(1);
+  });
 });
 
 describe('validateSentenceLengthDoc — Doc-reading sibling', () => {
