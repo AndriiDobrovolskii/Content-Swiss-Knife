@@ -85,6 +85,8 @@ HARD RULES:
   "src" for a video is the full embed URL, copied VERBATIM from the manifest.
 - Every entry in "figures" and in "videos" must be referenced exactly once by a block — no entry
   unused, none referenced twice.
+- WHEN THERE IS NO VIDEO CONTENT (no [VIDEO MANIFEST] section below), you MUST still emit
+  "videos": [] — an empty array. Do NOT omit the "videos" key and do NOT write "videos": null.
 - PROSE FIELDS ADMIT <b> and <strong> AND NOTHING ELSE. No <p>, <ul>, <a>, <em>, no entities, no
   Markdown. Reserve <strong> for brands / main model / core USPs; use <b> for inline scannability.
   The prose fields are exactly: "hook", "why", every Block "text", "items[].text", every "caption".

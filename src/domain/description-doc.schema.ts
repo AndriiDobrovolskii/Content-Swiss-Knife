@@ -191,7 +191,18 @@ export const ProductDescriptionDocSchema = z.object({
   cta: z.object({ heading: NonEmpty, text: Prose }),
 
   figures: z.array(z.object({ file: NonEmpty, alt: NonEmpty, caption: Prose })),
-  videos: z.array(z.object({ src: NonEmpty, title: NonEmpty, caption: Prose })),
+  // .nullish().transform(v => v ?? []): unlike `figures`, the source manifest is often empty (most
+  // products have no video), and the prompt's [VIDEO MANIFEST] block is then omitted entirely (see
+  // buildVideoBlock in task-a.ts) — leaving the model with no positive instruction to emit
+  // "videos": [] rather than dropping the key or writing null. Tolerating both here means the
+  // overwhelmingly common no-video case never costs a repair-gate attempt.
+  //
+  // NOT `.default([])`: zod v3's `.default()` only substitutes for `undefined`, not an explicit
+  // `null` — a model that writes "videos": null would still fail `doc.videos.length` in the
+  // superRefine below. The transform normalizes both nullish values to [] uniformly.
+  videos: z.array(z.object({ src: NonEmpty, title: NonEmpty, caption: Prose }))
+    .nullish()
+    .transform(v => v ?? []),
 })
 // Cross-field: every figure ref must be in range, and no figure may be referenced twice or zero times.
 //

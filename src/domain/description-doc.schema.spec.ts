@@ -225,3 +225,23 @@ describe('relaxed bullets floor (min 2, not min 3) — §5 compatibility and key
     expect(issues.join('\n')).toMatch(/at least 2 element/i);
   });
 });
+
+/**
+ * Most products have no video, and buildVideoBlock (task-a.ts) then omits the [VIDEO MANIFEST]
+ * section entirely — leaving the model with no positive instruction to emit "videos": [] rather
+ * than dropping the key or writing null. See the comment on `videos` in description-doc.schema.ts.
+ */
+describe('videos tolerates a missing or null manifest', () => {
+  it('defaults an omitted "videos" key to an empty array', () => {
+    const doc = validDoc();
+    delete (doc as { videos?: unknown }).videos;
+    expect(errorsFor(doc)).toEqual([]);
+    expect(ProductDescriptionDocSchema.parse(doc).videos).toEqual([]);
+  });
+
+  it('defaults a null "videos" to an empty array', () => {
+    const doc = { ...validDoc(), videos: null } as unknown as ProductDescriptionDoc;
+    expect(errorsFor(doc)).toEqual([]);
+    expect(ProductDescriptionDocSchema.parse(doc).videos).toEqual([]);
+  });
+});
