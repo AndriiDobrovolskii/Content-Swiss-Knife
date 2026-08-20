@@ -100,6 +100,18 @@ describe('TASK_A_DOC_INSTRUCTION — the output contract', () => {
   });
 
   /**
+   * buildVideoBlock (task-a.ts) omits [VIDEO MANIFEST] entirely when the source has no video —
+   * the common case — so without this rule the model has no positive instruction to emit
+   * "videos": [] and drops the key, which the schema rejected as a missing required field. See
+   * the `videos` comment in description-doc.schema.ts.
+   */
+  it('tells the model to emit an empty "videos" array, not omit or null it, when there is no video', () => {
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/"videos":\s*\[\]/);
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/do not omit/i);
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/null/i);
+  });
+
+  /**
    * Added 2026-08-17: a live run shipped a keyBenefits "bullets" Block with only 2 items, which
    * the repair gate could only fail on — there is no cheaper repair instrument than a full
    * document regeneration for a schema-shape violation today (see doc-schema-issues.ts /
