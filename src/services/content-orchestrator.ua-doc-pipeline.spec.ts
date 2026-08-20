@@ -105,7 +105,16 @@ describe('generateUaContent() — Doc pipeline wiring', () => {
     expect(mockLlm.generateJson).toHaveBeenCalledWith(
       expect.anything(), expect.anything(), expect.objectContaining({ taskLabel: 'Doc (uk-UA)' }),
     );
-    expect(mockLlm.generateText).not.toHaveBeenCalled();
+    // generateText is now also legitimately used for the Doc pipeline's block-scoped
+    // sentence-too-long repair (docBlockRepairer, content-orchestrator.service.ts) — this fixture's
+    // hand-verified prose genuinely contains sentences over the uk-UA ceiling, so that rung fires.
+    // The invariant this test actually protects is narrower than "never called at all": no call may
+    // be the OLD base-generation shape (a plain HTML request, taskLabel "HTML (uk-UA)" — see the
+    // non-enrolled-store case below) — every call here must be a repair call instead.
+    for (const call of mockLlm.generateText.mock.calls) {
+      const meta = call[2] as { taskLabel?: string } | undefined;
+      expect(meta?.taskLabel).toMatch(/^Doc block repair — /);
+    }
 
     // renderDescription() actually ran on the mocked Doc — not just that generateJson was called
     // — checked via a heading string unique to this fixture (its CTA section).

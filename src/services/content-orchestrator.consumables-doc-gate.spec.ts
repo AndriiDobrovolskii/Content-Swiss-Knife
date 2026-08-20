@@ -285,6 +285,55 @@ describe('runConsumablesDocGate — validates the rendered HTML with templateId 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// sentence-too-long block-scoped repair — reuses the existing HTML executor (blockRepairer), not a
+// new module: this gate validates the RENDERED HTML (see the file header comment), so a
+// sentence-too-long finding here carries an HTML "block[N]" path, exactly like the plain-HTML
+// pipeline's own findings. This mainly proves the WIRING (repairBlocks is actually passed through),
+// since the executor itself is covered by block-tier.spec.ts.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('runConsumablesDocGate — sentence-too-long is repaired in place, not just reported', () => {
+  // hook renders as the very first block (`<p>${prose(doc.hook)}</p>`, render-consumables.ts) — the
+  // one field guaranteed to land at block[0] regardless of how many feature/application items exist.
+  // 27-word single sentence, no digits — same shape sentence-length.spec.ts and
+  // content-orchestrator.doc-gate.spec.ts already rely on to trip the uk-UA 20-word ceiling.
+  const LONG_HOOK =
+    'Цей матеріал дозволяє швидко точно акуратно та безпечно друкувати деталі складної форми високої ' +
+    'міцності товщиною шару для домашньої майстерні або невеликого виробництва без додаткового ' +
+    'постобробки поверхні.';
+  const SHORT_REPLACEMENT = 'Матеріал забезпечує стабільний друк і високу міцність шару.';
+
+  function docWithLongHook(): ConsumablesDescriptionDoc {
+    return { ...normalLengthDoc(), hook: LONG_HOOK };
+  }
+
+  it('applies a valid patch: the finding disappears and the shipped HTML carries the rewrite', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValueOnce(docWithLongHook());
+    mockLlm.generateText.mockResolvedValueOnce(`<patch block="0"><p>${SHORT_REPLACEMENT}</p></patch>`);
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asConsumablesDocGate(orchestrator).runConsumablesDocGate(baseGateOpts({ maxRepairs: 0 }));
+
+    expect(result.finalIssues.map(i => i.rule)).not.toContain('sentence-too-long');
+    expect(result.artifact).toContain(SHORT_REPLACEMENT);
+    expect(result.artifact).not.toContain(LONG_HOOK);
+  });
+
+  it('discards an invalid patch (invented number): the finding and the original text both survive', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValueOnce(docWithLongHook());
+    mockLlm.generateText.mockResolvedValueOnce('<patch block="0"><p>Матеріал забезпечує стабільність друку на 40 моделях.</p></patch>');
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asConsumablesDocGate(orchestrator).runConsumablesDocGate(baseGateOpts({ maxRepairs: 0 }));
+
+    expect(result.finalIssues.map(i => i.rule)).toContain('sentence-too-long');
+    expect(result.artifact).toContain(LONG_HOOK);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Call-site wiring — proves generate() actually routes to runConsumablesDocGate when
 // usesConsumablesDocPipeline() is true, not just that the private method works in isolation.
 // CONSUMABLES_DOC_PIPELINE_ENABLED is true as of the 2026-08-08 live probe (see
