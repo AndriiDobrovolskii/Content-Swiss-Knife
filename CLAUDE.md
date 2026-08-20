@@ -120,6 +120,12 @@ Any change to the prompt/generation is checked against these. If the output viol
 ## Workflow
 
 - Small atomic changes, one plan phase at a time. Each phase — its own branch/PR.
+- Every logical change ends with a commit — don't leave work uncommitted. A commit is one
+  complete, working change (build/lint/tests passing), not a fixup or a checkpoint; a run of
+  "fix typo", "fix again" commits means the prior commit shouldn't have landed yet.
+- If this is the first commit-producing change in the current task, create a new branch for it
+  first; every further related change becomes another commit on that same branch, not a new
+  branch each time. When the task is done, that branch's accumulated commits go out as one PR.
 - Before swapping a provider/prompt — capture a golden output for regression.
 - Keep a working rollback switch to the previous provider until the corresponding phase is complete.
 - In the PR, state which phase was closed (e.g. the PR-1/PR-2/PR-3 sequence tracked in `test/render-reconciliation.report.md`) and how the acceptance criteria were verified.
