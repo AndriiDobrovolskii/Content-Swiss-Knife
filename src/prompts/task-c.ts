@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { buildDeliveryRegionBlock, taskLangToIso, US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE } from '../prompt-core/constants';
+import { buildDeliveryRegionBlock, taskLangToIso, US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 const IMAGE_PRESERVATION_MANIFEST = `[IMAGE MANIFEST]
@@ -183,7 +183,9 @@ ${PRODUCT_NAME_LOCALIZATION}
 COMMERCIAL CLOSING H2: it is a "why-buy from store" question. Translate it naturally to ${targetLang}
 as such (e.g. "Why buy [Product-short] from [Store]?"). Keep trust signals + the brand-guarantee sentence in
 the body. Do NOT rewrite it into a transactional "Buy [Product] — price…" headline.
-No geographic, brand/store, or added-claim changes. Return ONLY raw HTML.`;
+No geographic, brand/store, or added-claim changes. Return ONLY raw HTML.
+
+${NO_LEAKED_REASONING_CLAUSE}`;
 }
 
 // ── Specialized variant instructions (localization-specific only; role/format inherited from master) ──
@@ -210,7 +212,9 @@ ${PRODUCT_NAME_LOCALIZATION}
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add marketing claims not in the source.
 - Translate alt="…" and title="…" attribute values.
-- Return ONLY the HTML content.`;
+- Return ONLY the HTML content.
+
+${NO_LEAKED_REASONING_CLAUSE}`;
 
 const US_UK_INSTRUCTION = `TASK C — UKRAINIAN TRANSLATION FOR US MARKET (pure HTML body only).
 Translate the input into high-converting Ukrainian for a product sold in the US market.
@@ -246,7 +250,9 @@ ${PRODUCT_NAME_LOCALIZATION}
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add new information.
 - Translate alt="…" and title="…".
-- Return ONLY the HTML content.`;
+- Return ONLY the HTML content.
+
+${NO_LEAKED_REASONING_CLAUSE}`;
 
 const EXPERT3D_ES_INSTRUCTION = `TASK C — CASTILIAN SPANISH LOCALIZATION FOR EXPERT3D (pure HTML body only).
 Translate/adapt into natural, persuasive Castilian Spanish (es-ES) for EXPERT3D in Valencia, Spain.
@@ -290,7 +296,9 @@ ${PRODUCT_NAME_LOCALIZATION}
 - Do NOT alter <img src="…"> URLs or change hrefs to "#".
 - Do NOT add information not in the source.
 - Translate alt="…" and title="…".
-- Return ONLY the HTML content.`;
+- Return ONLY the HTML content.
+
+${NO_LEAKED_REASONING_CLAUSE}`;
 
 const EXPERT3D_PT_INSTRUCTION = `TASK C — EUROPEAN PORTUGUESE LOCALIZATION FOR EXPERT3D (pure HTML body only).
 Translate/adapt into natural, persuasive European Portuguese (pt-PT) for EXPERT3D, sold to the
@@ -329,7 +337,9 @@ ${EXPERT3D_PT_LOCALE_TOV}
 - Do NOT alter <img src="…"> URLs or change hrefs to "#".
 - Do NOT add information not in the source.
 - Translate alt="…" and title="…".
-- Return ONLY the HTML content.`;
+- Return ONLY the HTML content.
+
+${NO_LEAKED_REASONING_CLAUSE}`;
 
 function usInstruction(targetLang: string): string {
   const isEnglish = targetLang.includes('American English');
@@ -378,5 +388,7 @@ ${labelsBlock}
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add new information.
 - Translate alt="…" and title="…".
-- Return ONLY the HTML content.`;
+- Return ONLY the HTML content.
+
+${NO_LEAKED_REASONING_CLAUSE}`;
 }

@@ -1,5 +1,6 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
 import { PromptPayload } from '../prompt-core/payload';
+import { NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 
 // ── Optimizer task instruction ─────────────────────────────────────────────
 // Reuses MASTER_SYSTEM_PROMPT's Schema v3.0 §1–§9 [CONTENT STRUCTURE] as the
@@ -31,6 +32,8 @@ OUTPUT CONTRACT: emit exactly one artifact — the rewritten HTML body. The firs
 output is the opening "<" of the §1 hook paragraph; the last character is the final closing tag of
 §9. Global hard cap: 25,000 characters including all spaces, text, and HTML tags. Where a preamble,
 explanation, JSON wrapper, or Markdown fence would appear, write the HTML itself.
+
+${NO_LEAKED_REASONING_CLAUSE}
 
 OUTPUT LANGUAGE (HARD CONSTRAINT): determine the output language SOLELY from the language of
 [INPUT HTML]'s own visible prose — its paragraphs, headings, and list items. Write 100% of the

@@ -52,12 +52,15 @@ import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dSt
 import { buildPromptC } from '../prompts/task-c';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
+import { validateTranslationIntegrity, withTranslateFeedback } from '../utils/translation-integrity';
+import { stripLeakedPreamble, scanForLeakedPreamble } from '../utils/llm-output-integrity';
 import { buildPromptFaq } from '../prompts/task-faq';
 import { buildOptimizerPrompt } from '../prompts/optimizer';
 import { buildReadabilityPrompt } from '../prompts/readability';
 import { buildKeywordsPrompt } from '../prompts/keywords';
 import { buildImageAltPrompt } from '../prompts/image-alt';
 import { buildCopywriterPrompt } from '../prompts/copywriter';
+import { validateCopywriterIntegrity, withCopywriterFeedback } from '../utils/copywriter-integrity';
 import { SlugResponse, SeoResponse } from '../app/types';
 import {
   runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta, RepairGateResult,
@@ -1536,7 +1539,14 @@ export class ContentOrchestratorService {
     this.suggestedKeywords.set([]);
     try {
       const keywords = await this.llm.generateJson<string[]>(buildKeywordsPrompt(name, description), false, { taskLabel: 'Keywords', productName: name });
-      this.suggestedKeywords.set(Array.isArray(keywords) ? keywords : []);
+      let list = Array.isArray(keywords) ? keywords : [];
+      // Low-stakes suggestion output, not shipped customer-facing content — a deterministic
+      // strip-and-warn is proportionate here; no repair-gate retry (see llm-output-integrity.ts).
+      if (scanForLeakedPreamble(list).length > 0) {
+        list = list.map(k => stripLeakedPreamble(k));
+        console.warn('[Keywords] stripped leaked preamble from one or more entries');
+      }
+      this.suggestedKeywords.set(list);
     } catch (e) {
       console.error(e);
       alert('Failed to generate keyword suggestions.');
@@ -1600,12 +1610,34 @@ export class ContentOrchestratorService {
     this.progressMessage.set(`Translating to ${targetLang}…`);
     await this.withProgress(async () => {
       // Store-agnostic pure translation — NOT the generation pipeline's store-coupled Task C.
-      const prompt = buildTranslatePrompt(content, targetLang, 'user-facing-content');
-      let translated = await this.llm.generateText(prompt, useThinking, { taskLabel: 'Translator', lang: targetLang });
-      translated = stripCodeFences(translated);
+      const isMarkup = content.trim().startsWith('<');
+      const result = await runRepairGate<string>({
+        label: 'Translator',
+        maxRepairs: 1,
+        basePayload: buildTranslatePrompt(content, targetLang, 'user-facing-content'),
+        produce: async payload =>
+          stripCodeFences(await this.llm.generateText(payload, useThinking, { taskLabel: 'Translator', lang: targetLang })),
+        validate: translated => validateTranslationIntegrity(translated, content),
+        withFeedback: withTranslateFeedback,
+      });
+
       // No figure rewrapping and no store-specific URL/contact replacement here — the Translator
       // preserves input structure verbatim and carries no store coupling.
-      this.translatorOutput.set(translated);
+      let artifact = result.artifact;
+      if (result.finalIssues.length > 0) {
+        // The one repair attempt above didn't clear the leaked-preamble check — apply the
+        // deterministic heuristic strip as a last resort before giving up. See
+        // translation-integrity.ts's header for why this can't just be a blind regex strip.
+        const healed = stripLeakedPreamble(artifact, isMarkup);
+        if (validateTranslationIntegrity(healed, content).length === 0) {
+          console.warn('[Translator] shipped after heuristic preamble strip — repair gate did not resolve it', { targetLang });
+          artifact = healed;
+        } else {
+          throw new Error('Translation failed an integrity check after repair — refusing to ship a corrupted result.');
+        }
+      }
+
+      this.translatorOutput.set(artifact);
       this.progressMessage.set('Translation Complete!');
     }, 'Error during translation.', 'Translation failed.');
   }
@@ -1614,10 +1646,29 @@ export class ContentOrchestratorService {
     this.copywriterOutput.set('');
     this.progressMessage.set('Rewriting content…');
     await this.withProgress(async () => {
-      const prompt = buildCopywriterPrompt(website, text);
-      let rewritten = await this.llm.generateText(prompt, useThinking, { taskLabel: 'Copywriter', store: website.name });
-      rewritten = stripCodeFences(rewritten);
-      this.copywriterOutput.set(rewritten);
+      const isMarkup = text.trim().startsWith('<');
+      const result = await runRepairGate<string>({
+        label: 'Copywriter',
+        maxRepairs: 1,
+        basePayload: buildCopywriterPrompt(website, text),
+        produce: async payload =>
+          stripCodeFences(await this.llm.generateText(payload, useThinking, { taskLabel: 'Copywriter', store: website.name })),
+        validate: rewritten => validateCopywriterIntegrity(rewritten, text),
+        withFeedback: withCopywriterFeedback,
+      });
+
+      let artifact = result.artifact;
+      if (result.finalIssues.length > 0) {
+        const healed = stripLeakedPreamble(artifact, isMarkup);
+        if (validateCopywriterIntegrity(healed, text).length === 0) {
+          console.warn('[Copywriter] shipped after heuristic preamble strip — repair gate did not resolve it', { store: website.name });
+          artifact = healed;
+        } else {
+          throw new Error('Rewrite failed an integrity check after repair — refusing to ship a corrupted result.');
+        }
+      }
+
+      this.copywriterOutput.set(artifact);
       this.progressMessage.set('Content Rewritten!');
     }, 'Error during rewriting.', 'Rewrite failed.');
   }
@@ -1627,6 +1678,14 @@ export class ContentOrchestratorService {
     this.progressMessage.set('Analyzing readability…');
     await this.withProgress(async () => {
       const result = await this.llm.generateJson(buildReadabilityPrompt(text), false, { taskLabel: 'Readability' });
+      // Low-stakes analysis output, not shipped customer-facing content — a deterministic
+      // strip-and-warn is proportionate here; no repair-gate retry (see llm-output-integrity.ts).
+      if (result && scanForLeakedPreamble(result).length > 0) {
+        if (typeof result.optimizedText === 'string') result.optimizedText = stripLeakedPreamble(result.optimizedText, result.optimizedText.trim().startsWith('<'));
+        if (Array.isArray(result.issues)) result.issues = result.issues.map((s: string) => stripLeakedPreamble(s));
+        if (Array.isArray(result.suggestions)) result.suggestions = result.suggestions.map((s: string) => stripLeakedPreamble(s));
+        console.warn('[Readability] stripped leaked preamble from one or more fields');
+      }
       this.readabilityScore.set(result);
       this.progressMessage.set('Analysis Complete!');
     }, 'Error during readability analysis.', 'Analysis failed.');

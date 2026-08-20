@@ -125,6 +125,45 @@ describe('GeminiProvider usage accounting', () => {
   });
 });
 
+/**
+ * #readText's explicit `parts.filter(p => !p.thought ...)` — mirrors AnthropicProvider's own
+ * explicit `.filter(b => b.type === 'text')` instead of trusting the SDK's `.text` convenience
+ * getter to keep excluding thought parts implicitly forever. No `thinkingConfig` call in this
+ * provider sets `includeThoughts`, so `parts` never carries a `thought: true` entry today — this
+ * proves the filter works if that ever changes, not that it currently fires in production.
+ */
+describe('GeminiProvider thought-part filtering', () => {
+  beforeEach(() => { calls.length = 0; });
+
+  it('excludes a thought part from the returned text', async () => {
+    nextResponse = reply('ignored-by-parts-path', {
+      candidates: [{
+        finishReason: 'STOP',
+        content: { parts: [{ thought: true, text: 'internal reasoning' }, { text: 'the real answer' }] },
+      }],
+    });
+    const { result } = await new GeminiProvider('k')
+      .generate(PAYLOAD, 'text', { model: 'gemini-3.6-flash', level: 'low', maxOutputTokens: 65536 });
+    expect(result).toBe('the real answer');
+  });
+
+  it('falls back to response.text only when parts is absent, not when parts filtered to empty', async () => {
+    // parts present but ONLY a thought part — must yield '', not fall through to response.text.
+    nextResponse = reply('should-not-be-used', {
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ thought: true, text: 'internal reasoning' }] } }],
+    });
+    const { result: onlyThought } = await new GeminiProvider('k')
+      .generate(PAYLOAD, 'text', { model: 'gemini-3.6-flash', level: 'low', maxOutputTokens: 65536 });
+    expect(onlyThought).toBe('');
+
+    // parts absent entirely — the legacy response.text fallback still applies.
+    nextResponse = reply('legacy path', { candidates: [{ finishReason: 'STOP' }] });
+    const { result: legacy } = await new GeminiProvider('k')
+      .generate(PAYLOAD, 'text', { model: 'gemini-3.6-flash', level: 'low', maxOutputTokens: 65536 });
+    expect(legacy).toBe('legacy path');
+  });
+});
+
 describe('GeminiProvider fails loud', () => {
   beforeEach(() => { calls.length = 0; });
 

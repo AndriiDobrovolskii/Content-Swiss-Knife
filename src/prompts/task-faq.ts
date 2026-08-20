@@ -1,4 +1,5 @@
 import { PromptPayload } from '../prompt-core/payload';
+import { NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 
 const TASK_FAQ_SYSTEM = `You are an experienced SEO specialist who professionally optimizes commercial sites
 in 3D printing, equipment, and additive manufacturing. You write expert, technically accurate, relevant
@@ -42,6 +43,8 @@ Each pair: <h3>Question text?</h3> followed immediately by the answer, composed 
 closing tag (wrapper divs, class attributes, and FAQPage/schema.org markup stay out — the CMS FAQ
 module supplies the schema). When zero questions are answerable from the sources, return an empty
 response.
+
+${NO_LEAKED_REASONING_CLAUSE}
 
 [CONTENT RULES]
 - Answer-first: the first sentence of each answer is a direct, clear answer to the question;

@@ -1,4 +1,5 @@
 import { SeoResponse } from '../app/types';
+import { LEAKED_PREAMBLE_PATTERN, normalizeForIntegrityCheck, scanForLeakedPreamble } from './llm-output-integrity';
 
 /**
  * Post-generation validation of the hard acceptance criteria from Schema v3.0.
@@ -521,6 +522,30 @@ export function validateGeneratedHtml(
     issues.push({ severity: 'error', rule: 'markdown-fence', detail: 'Output contains ``` markdown code fences.', context });
   }
 
+  // Leaked self-correction/reasoning narration — MASTER_SYSTEM_PROMPT's own [OUTPUT CONTRACT]
+  // promises an unconditional fixed shape (first character is the opening "<" of the §1 hook),
+  // unlike the standalone Translator's input-shape-gated check in translation-integrity.ts, so
+  // this runs unconditionally. Checked on the normalized string so a stray BOM/zero-width
+  // character ahead of real content doesn't false-positive.
+  const normalizedHtml = normalizeForIntegrityCheck(html);
+  if (!normalizedHtml.startsWith('<')) {
+    issues.push({
+      severity: 'error',
+      rule: 'leaked-preamble-structural',
+      detail: 'Output does not open with "<" — the §1 hook must be the first character emitted. ' +
+        'This shape matches a leaked preamble/self-correction fragment shipped ahead of the real content.',
+      context,
+    });
+  }
+  if (LEAKED_PREAMBLE_PATTERN.test(normalizedHtml)) {
+    issues.push({
+      severity: 'error',
+      rule: 'leaked-preamble-phrase',
+      detail: 'Output opens with a self-correction/meta phrase (e.g. "Wait,", "Actually,") that must never reach the emitted artifact.',
+      context,
+    });
+  }
+
   // <br> used for spacing (forbidden — semantic elements only).
   if (/<br\s*\/?>/i.test(html)) {
     issues.push({ severity: 'warning', rule: 'br-spacing', detail: 'Output contains <br> tags (use semantic spacing, not <br>).', context });
@@ -640,6 +665,20 @@ export function validateSeoMetadata(seo: SeoResponse | null, currencySymbol: str
     }
     if (currencySymbol && !desc.includes(currencySymbol)) {
       issues.push({ severity: 'warning', rule: 'meta-description-currency', detail: `meta_description does not include the currency symbol "${currencySymbol}".`, context: ctx });
+    }
+
+    // A leaked self-correction sentence inside a JSON string field doesn't break JSON.parse — it
+    // ships as corrupted content silently. Scans every string field on this entry (meta_title,
+    // meta_description, and any other field this JSON shape carries), not just the two checked
+    // above by name.
+    for (const fieldPath of scanForLeakedPreamble(entry)) {
+      issues.push({
+        severity: 'error',
+        rule: 'seo-meta-leaked-preamble',
+        detail: `Field "${fieldPath}" opens with a self-correction/meta phrase that must never reach emitted metadata.`,
+        context: ctx,
+        path: `seo_data[${i}].${fieldPath}`,
+      });
     }
   }
 

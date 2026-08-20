@@ -1,3 +1,5 @@
+import { NO_LEAKED_REASONING_CLAUSE, NO_LEAKED_REASONING_JSON_ADDENDUM } from '../prompt-core/constants';
+
 export function buildReadabilityPrompt(text: string): string {
   return `Act as a Professional Editor and Accessibility Specialist.
 Analyze the following text for clarity, readability, and accessibility.
@@ -13,6 +15,9 @@ Provide analysis in this JSON format:
   "suggestions": ["specific improvements"],
   "optimizedText": "rewritten version implementing the suggestions while preserving technical facts and SEO keywords"
 }
+
+${NO_LEAKED_REASONING_CLAUSE}
+${NO_LEAKED_REASONING_JSON_ADDENDUM}
 
 Return ONLY the raw JSON object.`;
 }

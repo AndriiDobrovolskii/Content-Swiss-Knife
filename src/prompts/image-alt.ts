@@ -1,9 +1,13 @@
+import { NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
+
 export function buildImageAltPrompt(): string {
   return `Generate professional, technical SEO alt text for this product image.
 
 OUTPUT CONTRACT: emit exactly one alt-text string — plain text, maximum 20 words, starting with the
 main subject noun and ending on a letter or digit (surrounding quotes, markup, and trailing
 punctuation omitted).
+
+${NO_LEAKED_REASONING_CLAUSE}
 
 Rules:
 1. Describe specifics: mention technical specs visible in the image (wavelengths, spot sizes,
