@@ -88,6 +88,21 @@ const UNIT_WORDS = new Set<string>([
   '°C', '°F', 'K', 'dpi', 'px', 'fps', 'ppm', '%', '×', 'x',
 ]);
 
+/**
+ * A single capital letter directly before the terminator, NOT immediately preceded by a number —
+ * "Т. Шевченко", "І. Франко". This is what the second isAbbrev branch in splitSentences exists for.
+ *
+ * Deliberately excludes the case a number sits right before it ("230 В.", "5 Т."): that is a unit
+ * symbol, not an initial — a person's initial is never glued to a preceding measurement. Ukrainian
+ * technical prose uses plenty of single-letter Cyrillic unit symbols this way (В for volts, А for
+ * amps, Т for tesla, Н for newtons, К for kelvin, …) and there is no closed list worth maintaining
+ * (ABBREVIATIONS' own comment already made this exact call for multi-letter units like "мм") — the
+ * numeral test generalizes it to every single-letter unit at once, initials included.
+ */
+function isTrailingInitial(beforeTerminator: string): boolean {
+  return /(?:^|\s)\p{Lu}$/u.test(beforeTerminator) && !/\d\s+\p{Lu}$/u.test(beforeTerminator);
+}
+
 function splitSentences(text: string): string[] {
   const out: string[] = [];
   let start = 0;
@@ -97,7 +112,7 @@ function splitSentences(text: string): string[] {
     const head = candidate.slice(0, -1).trimEnd().toLowerCase();
     const isAbbrev =
       ABBREVIATIONS.some(a => endsWithAbbrevToken(head, a))
-      || /(?:^|\s)\p{Lu}$/u.test(candidate.slice(0, -1));
+      || isTrailingInitial(candidate.slice(0, -1));
     if (isAbbrev) continue;
     out.push(text.slice(start, (match.index ?? 0) + 1).trim());
     start = end;
