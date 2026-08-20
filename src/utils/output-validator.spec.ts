@@ -206,6 +206,28 @@ describe('validateGeneratedHtml — Rule: markdown-fence', () => {
   });
 });
 
+describe('validateGeneratedHtml — Rules: leaked-preamble-structural / leaked-preamble-phrase', () => {
+  it('flags a leaked self-correction fragment shipped ahead of the real content', () => {
+    const html = 'Wait, corrected below. <p>Formlabs Fuse Sift X1</p>';
+    const issues = validateGeneratedHtml(html, 'test');
+    expect(findRule(issues, 'leaked-preamble-structural')?.severity).toBe('error');
+    expect(findRule(issues, 'leaked-preamble-phrase')?.severity).toBe('error');
+  });
+
+  it('does NOT flag clean HTML that opens with "<"', () => {
+    const html = '<section><p>Clean content here.</p></section>';
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'leaked-preamble-structural');
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'leaked-preamble-phrase');
+  });
+
+  it('does NOT flag output with a leading BOM ahead of otherwise-clean HTML (false-positive guard)', () => {
+    const bom = String.fromCharCode(0xfeff);
+    const html = `${bom}<section><p>Clean content here.</p></section>`;
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'leaked-preamble-structural');
+    expectNoRule(validateGeneratedHtml(html, 'test'), 'leaked-preamble-phrase');
+  });
+});
+
 describe('validateGeneratedHtml — Rule: br-spacing', () => {
   it('flags <br> self-closing', () => {
     const html = '<p>line1<br/>line2</p>';
@@ -873,6 +895,20 @@ describe('validateSeoMetadata — Rule: meta-description-currency', () => {
       validateSeoMetadata(makeSeo({ meta_description: 'No price ➔' }), ''),
       'meta-description-currency',
     );
+  });
+});
+
+describe('validateSeoMetadata — Rule: seo-meta-leaked-preamble', () => {
+  it('flags a leaked self-correction fragment inside meta_description without breaking JSON.parse', () => {
+    const seo = makeSeo({ meta_description: 'Actually, buy now for only $199 ➔' });
+    const issues = validateSeoMetadata(seo, '$');
+    const leak = findRule(issues, 'seo-meta-leaked-preamble');
+    expect(leak?.severity).toBe('error');
+    expect(leak?.path).toBe('seo_data[0].meta_description');
+  });
+
+  it('does NOT flag clean metadata', () => {
+    expectNoRule(validateSeoMetadata(makeSeo({}), '$'), 'seo-meta-leaked-preamble');
   });
 });
 

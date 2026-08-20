@@ -1,4 +1,4 @@
-import { getStore } from '../prompt-core/constants';
+import { getStore, NO_LEAKED_REASONING_CLAUSE, NO_LEAKED_REASONING_JSON_ADDENDUM } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 
 /**
@@ -12,7 +12,10 @@ export function resolveCurrencySymbol(storeName: string): string {
 }
 
 const TASK_B_SYSTEM = `You are an SEO specialist for 3D-technology e-commerce stores.
-Output is always raw JSON only — no preamble, no Markdown fences, no explanations.`;
+Output is always raw JSON only — no preamble, no Markdown fences, no explanations.
+
+${NO_LEAKED_REASONING_CLAUSE}
+${NO_LEAKED_REASONING_JSON_ADDENDUM}`;
 
 // NOTE: This block is STATIC (no interpolation) to keep the system-block prompt cache stable.
 // All per-request data (store, product, languages, context) lives in userContent.

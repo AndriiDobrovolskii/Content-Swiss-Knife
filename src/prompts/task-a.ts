@@ -1,6 +1,6 @@
 import { ProductInput, ImageManifestEntry, CONTENT_TEMPLATES } from '../app/types';
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { getStore, isExpert3dStore, isCenter3dPrintStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY, buildDeliveryRegionBlock, MASTER_LOCALE } from '../prompt-core/constants';
+import { getStore, isExpert3dStore, isCenter3dPrintStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY, buildDeliveryRegionBlock, MASTER_LOCALE, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 import { productShort } from '../prompt-core/product-name-core';
 import { extractVideoEmbeds } from '../utils/video-manifest';
@@ -10,6 +10,7 @@ import { extractVideoEmbeds } from '../utils/video-manifest';
 const TASK_A_INSTRUCTION =
   `TASK A — GENERATE BASE-LANGUAGE HTML DESCRIPTION
 OUTPUT: pure HTML body only (no JSON, no Markdown, no code fences).
+${NO_LEAKED_REASONING_CLAUSE}
 Rewrite the input into an attractive, high-fact-density description: ~80% linguistic uniqueness,
 100% technical fidelity. Add <hr> after each </section>. Follow [CONTENT STRUCTURE] exactly.
 Before writing, reconcile any conflicting component counts or repeated figures in the input per
@@ -29,6 +30,7 @@ directly after a </ul>: an image still needs its own lead-in <p>.`;
 const TASK_A_CONSUMABLES_INSTRUCTION =
   `TASK A — GENERATE BASE-LANGUAGE HTML DESCRIPTION (CONSUMABLES MODE)
 OUTPUT: pure HTML body only (no JSON, no Markdown, no code fences).
+${NO_LEAKED_REASONING_CLAUSE}
 This product is a CONSUMABLE MATERIAL (filament / resin / adhesive).
 Apply the CONSUMABLES SIMPLIFIED SCHEMA below. Do NOT use Schema v3.0 §1–§9.
 No Killer Specs table. No Functionality section. No CTA-TRUST block.

@@ -53,6 +53,18 @@ export class GeminiProvider {
     if (finish === 'SAFETY' || finish === 'PROHIBITED_CONTENT' || finish === 'BLOCKLIST') {
       throw new Error(`[gemini] ${what} blocked by safety filter (${finish}) on ${model}.`);
     }
+
+    // Explicit filter, not the SDK's `.text` convenience getter — mirrors AnthropicProvider's
+    // own explicit `.filter(b => b.type === 'text')`. No `thinkingConfig` call in this file sets
+    // `includeThoughts`, so `parts` never carries a `thought: true` entry today, but this makes
+    // the exclusion auditable here instead of relying on that staying true implicitly. Falls
+    // back to `response.text` only when `parts` itself is absent/empty (an unrecognized response
+    // shape) — never as a fallback for a `parts` array that legitimately filtered down to an
+    // empty string, which would silently reintroduce the risk this exists to close.
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (Array.isArray(parts) && parts.length > 0) {
+      return parts.filter(p => !p.thought && typeof p.text === 'string').map(p => p.text).join('');
+    }
     return response.text || '';
   }
 

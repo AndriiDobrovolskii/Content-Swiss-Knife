@@ -1,7 +1,8 @@
 import { WebsiteOption } from '../app/types';
-import { getStore, US_MEASUREMENT_RULES } from '../prompt-core/constants';
+import { getStore, US_MEASUREMENT_RULES, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
+import { PromptPayload } from '../prompt-core/payload';
 
-export function buildCopywriterPrompt(website: WebsiteOption, text: string): string {
+export function buildCopywriterPrompt(website: WebsiteOption, text: string): PromptPayload {
   const siteName = website.name;
   const store = getStore(siteName);
   let localizationContext = '';
@@ -28,7 +29,7 @@ export function buildCopywriterPrompt(website: WebsiteOption, text: string): str
     localizationContext = `### Context for ${siteName} (${website.group})`;
   }
 
-  return `[ROLE]
+  const systemText = `[ROLE]
 You are an expert copywriter and SEO specialist. Rewrite the given text to make it unique,
 engaging, and stylistically appropriate for the specific target market defined below.
 
@@ -52,6 +53,10 @@ ${localizationContext}
 2. Formatting: use <strong> for bold. NO markdown (**text**).
 3. NO markdown code blocks. Return RAW HTML string only.
 
-[SOURCE TEXT]
-${text}`;
+${NO_LEAKED_REASONING_CLAUSE}`;
+
+  return {
+    systemBlocks: [{ text: systemText, cache: true }],
+    userContent: `[SOURCE TEXT]\n${text}`,
+  };
 }

@@ -1,5 +1,5 @@
 import { PromptPayload } from '../prompt-core/payload';
-import { UNIT_LOCALIZATION_RULES, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
+import { UNIT_LOCALIZATION_RULES, TRANSLATOR_LANGUAGES, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 import { UA_TRANSLATION_STYLE_GUIDE } from '../prompt-core/ua-translation-style-guide';
 
 /**
@@ -23,6 +23,8 @@ Emit exactly one artifact: the translated text/HTML. The first character of your
 first character of the translation itself (for HTML input — the same opening tag the input starts
 with); the last character mirrors the input's final character. Where an introduction, explanation,
 commentary, or Markdown fence (\`\`\`html, \`\`\`xml) would appear, write the translation itself.
+
+${NO_LEAKED_REASONING_CLAUSE}
 
 [TRANSLATE ONLY — PRESERVE ALL CODE/MARKUP]
 - For input containing HTML/markup or any code: translate exactly three kinds of strings — visible

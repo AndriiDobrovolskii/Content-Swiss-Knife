@@ -580,6 +580,26 @@ content. Any unit NOT listed anywhere above: keep as in source, do not guess.
 [NUMBER SEPARATOR REMINDER] Decimal comma for uk/ru/pl/de/es-ES ("1.5 kW" → "1,5 кВт");
 decimal dot for en-GB/en-US/en-ES/es-MX. Separator rules live in [NUMBER FORMATTING].`;
 
+/**
+ * Shared clause forbidding leaked self-correction/chain-of-thought narration in the emitted
+ * artifact — every prompt builder in the app anchored its "no preamble" instruction at the
+ * FIRST character only, which stops a leading preamble but says nothing about a self-correction
+ * fragment inserted mid-output. Interpolated into every free-text/JSON prompt builder; see
+ * NO_LEAKED_REASONING_JSON_ADDENDUM for the JSON-specific companion line.
+ */
+export const NO_LEAKED_REASONING_CLAUSE =
+`[NO LEAKED REASONING] Never let self-correction, backtracking, or chain-of-thought narration
+reach the emitted artifact — not as a leading preamble, not mid-output, not as a trailing
+aside. Phrases like "Wait,", "Let me reconsider", "Actually,", "On second thought,",
+"correction:", or any sentence that revises or comments on your own prior words are forbidden
+anywhere in what you emit. If you catch yourself about to write one, silently discard the
+flawed span and continue directly with the correct content — the reader must never see the
+correction happen.`;
+
+export const NO_LEAKED_REASONING_JSON_ADDENDUM =
+`This applies inside every JSON string value too: a self-correction sentence embedded inside a
+field like "optimizedText" is still a leak even though it does not break JSON.parse.`;
+
 export const METRIC_MEASUREMENT_RULES = `[MEASUREMENT] Use standard Metric units (mm, kg, °C).
 SPACING IS MANDATORY: a single space between number and unit everywhere (body, table cells, alt text).
 ✅ "10 W", "1.75 mm", "200 °C", "-5 °C – 50 °C"   ❌ "10W", "1.75mm", "200°C"

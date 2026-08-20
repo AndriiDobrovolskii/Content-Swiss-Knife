@@ -1,4 +1,4 @@
-import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES } from './constants';
+import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES, NO_LEAKED_REASONING_CLAUSE } from './constants';
 
 /**
  * STATIC system prompt shared by Task A / B / C and all translations.
@@ -20,6 +20,8 @@ Emit exactly ONE artifact: the HTML product-description body. The first characte
 output is the opening "<" of the §1 hook paragraph; the last character is the final closing
 tag of §9. Where you would write a preamble ("Here is the description…") or a Markdown fence,
 write the HTML itself instead.
+
+${NO_LEAKED_REASONING_CLAUSE}
 
 The artifact contains these sections, in this fixed order:
   §1 HOOK ............................ mandatory, 40–75 words, 2–4 sentences, plain <p>
