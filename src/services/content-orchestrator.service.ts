@@ -66,6 +66,7 @@ import {
   runRepairGate, appendRepairFeedback, toArtifactReport, RepairArtifactReport, RepairReportMeta, RepairGateResult,
 } from '../utils/repair-gate';
 import { createBlockRepairExecutor } from '../utils/block-tier';
+import { createDocBlockRepairExecutor } from '../utils/doc-tier';
 import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
@@ -170,22 +171,52 @@ export class ContentOrchestratorService {
         lang: locale,
       }),
       languageLabel: `${isoToHumanLang(locale)} (${locale})`,
-      onResult: summary => {
-        if (summary.applied === 0 && summary.rejected === 0) return;
-        // Accumulated, not replaced: the rung can run on more than one ladder pass, and a report
-        // showing only the last pass would understate what was rewritten.
-        const running = this.blockPatchTally.get(taskLabel) ?? { applied: 0, rejected: 0, rejections: [] };
-        this.blockPatchTally.set(taskLabel, {
-          applied: running.applied + summary.applied,
-          rejected: running.rejected + summary.rejected,
-          rejections: [...running.rejections, ...summary.rejections],
-        });
-        console.info(
-          `[block-repair] ${taskLabel}: ${summary.applied} applied, ${summary.rejected} rejected`,
-          summary.rejections,
-        );
-      },
+      onResult: summary => this.recordBlockPatchSummary(taskLabel, summary),
     });
+  }
+
+  /**
+   * The block-scoped repair rung for one locale, Doc pipeline sibling of blockRepairer.
+   *
+   * Always the fast model and never extended thinking — same reasoning as blockRepairer: the task
+   * is rewriting a handful of prose fields against an explicit instruction, not composing anything.
+   */
+  private docBlockRepairer(locale: string, taskLabel: string, input: ProductInput) {
+    return createDocBlockRepairExecutor({
+      generate: payload => this.llm.generateText(payload, false, {
+        taskLabel: `Doc block repair — ${taskLabel}`,
+        productName: input.name,
+        store: input.website.name,
+        lang: locale,
+      }),
+      languageLabel: `${isoToHumanLang(locale)} (${locale})`,
+      onResult: summary => this.recordBlockPatchSummary(taskLabel, summary),
+    });
+  }
+
+  /**
+   * Shared by blockRepairer and docBlockRepairer: both funnel into the same taskLabel-keyed tally,
+   * so the "Local patches" section of the repair report (repair-gate.ts's formatRepairReportMarkdown)
+   * cannot tell which executor produced a patch, and does not need to — the report is keyed by
+   * artifact label, not by pipeline.
+   */
+  private recordBlockPatchSummary(
+    taskLabel: string,
+    summary: { applied: number; rejected: number; rejections: string[] },
+  ): void {
+    if (summary.applied === 0 && summary.rejected === 0) return;
+    // Accumulated, not replaced: the rung can run on more than one ladder pass, and a report
+    // showing only the last pass would understate what was rewritten.
+    const running = this.blockPatchTally.get(taskLabel) ?? { applied: 0, rejected: 0, rejections: [] };
+    this.blockPatchTally.set(taskLabel, {
+      applied: running.applied + summary.applied,
+      rejected: running.rejected + summary.rejected,
+      rejections: [...running.rejections, ...summary.rejections],
+    });
+    console.info(
+      `[block-repair] ${taskLabel}: ${summary.applied} applied, ${summary.rejected} rejected`,
+      summary.rejections,
+    );
   }
 
   /**
@@ -495,21 +526,29 @@ export class ContentOrchestratorService {
         ];
       },
       withFeedback: appendRepairFeedback,
-      // Field-scoped rung now live for `heading-product-name-stuffing` (repair-strategy.ts) — a
+      // Field-scoped rung live for `heading-product-name-stuffing` (repair-strategy.ts) — a
       // warning-severity rule that never reaches full regeneration (resolveLadder never appends
-      // 'full-regen' after a warning's own ladder), so this is the ONLY instrument that can ever
-      // fix it. No repairBlocks — block-scoped repair for the Doc path is still out of scope; no
-      // registered Doc-emitted rule uses that rung yet.
+      // 'full-regen' after a warning's own ladder), so this is one of the instruments that can fix
+      // it.
       //
       // maxFieldRepairs is intentionally left at the default (repair-gate.ts's own `?? 3`) rather
       // than 0 — that used to be an explicit, documented choice to keep the ladder off entirely
       // because nothing on the Doc path had a strategy to run. That is no longer true: this now
-      // activates the ladder for every Doc-emitted rule with a registered strategy — today just
-      // `heading-product-name-stuffing` — not a blanket reopening. Re-verify this note if a second
-      // Doc-path strategy is ever registered.
+      // activates the ladder for every Doc-emitted rule with a registered strategy — today
+      // `heading-product-name-stuffing` and `sentence-too-long`.
       repairField: async payload => stripCodeFences(await this.llm.generateText(
         payload, false, { taskLabel: `${opts.label} heading repair`, productName: opts.input.name, store: opts.input.website.name, lang: opts.localeIso },
       )),
+      // Block-scoped rung, Doc-shaped. `sentence-too-long`'s ladder is ['block-scoped',
+      // 'block-scoped'] (repair-strategy.ts) — this is what runs it: doc-tier.ts's executor patches
+      // the Doc directly (there is no HTML yet at this point — rendering happens once, after the
+      // gate settles, see this method's own doc comment above), so the rendered artifact ships with
+      // the fix already applied rather than shipping the warning to the final report unrepaired.
+      repairBlocks: async (attempt, issues) => {
+        if (!attempt.doc) return attempt;
+        const doc = await this.docBlockRepairer(opts.localeIso, opts.label, opts.input)(attempt.doc, issues);
+        return doc === attempt.doc ? attempt : { ...attempt, doc };
+      },
       onAttempt: opts.onAttempt,
     });
 
@@ -662,6 +701,16 @@ export class ContentOrchestratorService {
         ];
       },
       withFeedback: appendRepairFeedback,
+      // Block-scoped rung, reusing the HTML executor unchanged: this gate validates the RENDERED
+      // HTML (see produce() above), not the Doc — the Doc is a local variable inside produce() and
+      // is never carried in the gate's artifact state, so there is nothing Doc-shaped to patch here.
+      // The Doc is never persisted separately from the rendered HTML anywhere in this codebase, so
+      // patching the HTML directly is complete, not a shortcut around a "real" source of truth.
+      repairBlocks: async (attempt, issues) => {
+        if (!attempt.html) return attempt;
+        const html = await this.blockRepairer(opts.localeIso, opts.label, opts.input)(attempt.html, issues);
+        return html === attempt.html ? attempt : { ...attempt, html };
+      },
       onAttempt: opts.onAttempt,
     });
 

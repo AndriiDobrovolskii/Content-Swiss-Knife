@@ -314,10 +314,14 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
       //   - field-scoped calls getAtPath/setAtPath (repair-strategy.ts), which understands
       //     "doc.…[i].leaf" but returns undefined for "block[5]" (a plain string has no `.block`
       //     property) — applyTier reads that as "nothing to replace" and just advances the cursor.
-      //   - block-scoped calls repairBlocks (block-repair.ts's getBlock/setBlock), which
-      //     understands "block[5]" but never receives a Doc-shaped issue at all, because
-      //     runDocGate does not wire a repairBlocks executor (block-scoped repair for the Doc path
-      //     is still out of scope — see runDocGate's own comment).
+      //   - block-scoped calls repairBlocks, which for an HTML artifact is block-repair.ts's
+      //     getBlock/setBlock (understands "block[5]") and for a Doc artifact is doc-tier.ts's
+      //     Doc-shaped executor (runDocGate now wires one — see content-orchestrator.service.ts).
+      //     The Doc executor resolves paths against the UNWRAPPED ProductDescriptionDoc, so a
+      //     "doc."-prefixed wrapper-relative path (what this rule's own field-scoped rung already
+      //     resolved on the first pass) still no-ops on the second rung — harmless for the same
+      //     reason as before, just "wrong prefix for this executor" rather than "no executor
+      //     exists".
       // So on a Doc artifact this ladder resolves in one field-scoped pass; on an HTML artifact
       // the field-scoped pass harmlessly no-ops and the SECOND pass reaches block-scoped, which
       // does the real work via whichever gate's `repairBlocks: this.blockRepairer(...)` is wired

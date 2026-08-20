@@ -517,6 +517,63 @@ describe('runDocGate — full validator wiring (Center 3D Print / Style B, non-e
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// sentence-too-long block-scoped repair, wired via docBlockRepairer (content-orchestrator.service.ts)
+//
+// Every other test in this file uses makeMockLlm()'s default generateText stub, which throws — that
+// stub protects tests that don't expect ANY generateText call from a silent regression. The "full
+// validator wiring" test above already proves the throw is caught harmlessly (best-effort contract,
+// doc-tier.ts) when a fixture happens to trip sentence-too-long without expecting a repair. This
+// block instead overrides generateText to prove the OTHER half: a well-formed patch response
+// actually lands in the shipped artifact, and a bad one is safely discarded — the two outcomes
+// createDocBlockRepairExecutor's own spec (doc-tier.spec.ts) proves in isolation, exercised here
+// through the real gate end-to-end.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('runDocGate — sentence-too-long is repaired in place, not just reported', () => {
+  const LONG_SENTENCE =
+    'Цей потужний лазерний гравер дозволяє швидко точно акуратно та безпечно обробляти дерево ' +
+    'акрил шкіру тканину картон пластик і багато інших матеріалів для домашньої майстерні або ' +
+    'невеликого виробництва.';
+  const SHORT_REPLACEMENT = 'Цей лазерний гравер швидко та акуратно обробляє дерево, акрил і пластик.';
+
+  function docWithLongSentence(): ProductDescriptionDoc {
+    return {
+      ...makeDoc([{ label: 'Вага', value: '500 г' }]),
+      functionality: [{ heading: 'How it works', blocks: [{ kind: 'paragraph', text: LONG_SENTENCE }] }],
+    };
+  }
+
+  it('applies a valid patch: the finding disappears and the shipped HTML carries the rewrite', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValueOnce(docWithLongSentence());
+    mockLlm.generateText.mockResolvedValueOnce(
+      `<patch path="functionality[0].blocks[0]">${SHORT_REPLACEMENT}</patch>`,
+    );
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asDocGate(orchestrator).runDocGate(baseGateOpts({ maxRepairs: 0 }));
+
+    expect(result.finalIssues.map(i => i.rule)).not.toContain('sentence-too-long');
+    expect(result.artifact).toContain(SHORT_REPLACEMENT);
+    expect(result.artifact).not.toContain(LONG_SENTENCE);
+  });
+
+  it('discards an invalid patch (invented number): the finding and the original text both survive', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValueOnce(docWithLongSentence());
+    mockLlm.generateText.mockResolvedValueOnce(
+      '<patch path="functionality[0].blocks[0]">Гравер обробляє дерево, акрил і 40 інших матеріалів швидко.</patch>',
+    );
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asDocGate(orchestrator).runDocGate(baseGateOpts({ maxRepairs: 0 }));
+
+    expect(result.finalIssues.map(i => i.rule)).toContain('sentence-too-long');
+    expect(result.artifact).toContain(LONG_SENTENCE);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // FINAL-REVIEW FIX WAVE, IMPORTANT #5 — generate()'s own Doc branch, end-to-end
 //
 // content-orchestrator.ua-doc-pipeline.spec.ts already proves generateUaContent() (the standalone
