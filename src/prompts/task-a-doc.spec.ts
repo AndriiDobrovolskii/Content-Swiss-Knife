@@ -112,6 +112,18 @@ describe('TASK_A_DOC_INSTRUCTION — the output contract', () => {
   });
 
   /**
+   * A live run shipped killerSpecs[3].value as an array (["Large Tumbler Basket", "Liner Kit"]) —
+   * KillerSpecSchema.value is a plain string, unlike SpecRowSchema.value (specs.categories[].rows[]),
+   * which genuinely does admit string | string[]. The prompt's old wording ("value in a spec row is
+   * a string, or an array...") did not scope "spec row" away from killerSpecs, which is also
+   * conceptually a row of specs — this asserts the two are now told apart explicitly.
+   */
+  it('tells the model killerSpecs.value is always a plain string, unlike a §7 spec row value', () => {
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/killerSpecs\[\]\.value.*always a plain string|always a plain string.*killerSpecs/is);
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/never an array/i);
+  });
+
+  /**
    * Added 2026-08-17: a live run shipped a keyBenefits "bullets" Block with only 2 items, which
    * the repair gate could only fail on — there is no cheaper repair instrument than a full
    * document regeneration for a schema-shape violation today (see doc-schema-issues.ts /
