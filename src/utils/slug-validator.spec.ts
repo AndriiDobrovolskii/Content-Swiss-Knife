@@ -119,4 +119,19 @@ describe('validateSlugs — model-designator fidelity', () => {
   it('is inert without a source name, so the check cannot fire spuriously', () => {
     expect(designator(withNames('anything at all'), '')).toEqual([]);
   });
+
+  /**
+   * The EXPERT3D regression: a raw source name that is category-first even in English
+   * ("3D printer Elegoo Centauri Carbon 2"). Task Slug correctly translated the category noun
+   * per locale; the repair gate then reverted those correct translations back to English
+   * because this check computed the invariant core as the whole untranslated name. Confirms the
+   * fix in product-name-core.ts closes it at the validator level.
+   */
+  it('accepts a correct translation of a category-first source name', () => {
+    const issues = designator(withNames(
+      'Impresora 3D Elegoo Centauri Carbon 2',
+      '3D-принтер Elegoo Centauri Carbon 2',
+    ), '3D printer Elegoo Centauri Carbon 2');
+    expect(issues).toEqual([]);
+  });
 });
