@@ -32,6 +32,16 @@ describe('invariantCore', () => {
     // Packaging suffixes are never part of the designator.
     ['Ortur H20 20W Bundle', 'Ortur H20 20W'],
     ['xTool F2 Ultra Deluxe Bundle', 'xTool F2 Ultra'],
+    // LEADING category/packaging words: the source feed sometimes writes category-first even in
+    // English ("3D printer Elegoo …"). These must be skipped, not treated as a scan-ending token
+    // that falls through to the whole-name fallback — that fallback is what locked "3D printer"
+    // into the invariant core and made the slug validator reject its own correct translation.
+    ['3D printer Elegoo Centauri Carbon 2', 'Elegoo Centauri Carbon 2'],
+    ['3D scanner Shining3D EinScan Pro', 'Shining3D EinScan Pro'],
+    // "mm" is a lowercase unit token, not designator-shaped — excluded the same way "0.4 mm"
+    // is excluded from every other case in this table; unrelated to the leading-skip fix.
+    ['Filament Bambu Lab PETG 1.75 mm', 'Bambu Lab PETG 1.75'],
+    ['3D принтер Elegoo Centauri Carbon 2', 'Elegoo Centauri Carbon 2'],
   ])('%s → %s', (input, expected) => {
     expect(invariantCore(input)).toBe(expected);
   });
@@ -40,6 +50,9 @@ describe('invariantCore', () => {
     // Over-capture on purpose: masking too much is harmless, masking nothing is the bug.
     expect(invariantCore('заміна сопла')).toBe('заміна сопла');
     expect(invariantCore('cleaning kit')).toBe('cleaning kit');
+    // Nothing but leading category words, no brand/model at all: still falls back to the whole
+    // string rather than to '' — documents the fallback boundary explicitly.
+    expect(invariantCore('3D printer')).toBe('3D printer');
   });
 
   it('returns an empty string for empty input rather than throwing', () => {

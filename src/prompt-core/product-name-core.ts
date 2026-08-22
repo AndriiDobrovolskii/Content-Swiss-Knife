@@ -99,14 +99,29 @@ export function invariantCore(name: string): string {
   const tokens = name.trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return '';
 
-  const core: string[] = [];
-  for (const token of tokens) {
-    if (!looksLikeDesignator(token)) break;
-    core.push(token);
+  // A raw name can OPEN with a category/packaging word ("3D Printer Elegoo …", "Filament Bambu
+  // Lab …") when the source feed writes category-first even in English. Skip that leading run
+  // before scanning for the designator, so a token like "3D" (which never looks like a
+  // designator by itself) doesn't kill the scan at position 0 and fall through to the
+  // whole-name fallback below — CATEGORY_MODIFIER's own contract is that it "marks the start of
+  // the localizable part", not the end of the scan.
+  let start = 0;
+  while (
+    start < tokens.length &&
+    (CATEGORY_MODIFIER.test(tokens[start]) || DESCRIPTOR_STOPWORDS.has(tokens[start].toLowerCase()))
+  ) {
+    start++;
   }
 
-  // Nothing designator-shaped at the front (a fully lowercase or fully generic name): keep the
-  // whole string. Over-capture beats returning '' and silently disabling every caller.
+  const core: string[] = [];
+  for (let i = start; i < tokens.length; i++) {
+    if (!looksLikeDesignator(tokens[i])) break;
+    core.push(tokens[i]);
+  }
+
+  // Nothing designator-shaped found (a fully lowercase/generic name, or nothing but leading
+  // category words): keep the whole original string. Over-capture beats returning '' and
+  // silently disabling every caller.
   return core.length > 0 ? core.join(' ') : name.trim();
 }
 
