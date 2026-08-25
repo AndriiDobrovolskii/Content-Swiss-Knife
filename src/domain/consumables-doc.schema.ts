@@ -60,6 +60,9 @@ const SpecGroupSchema = z.object({
   rows: z.array(z.object({ label: NonEmpty, value: NonEmpty })).min(1),
 }).strict();
 
+/** Mirrors description-doc.schema.ts's own `figures` entry shape, plus `leadIn` — see ConsumablesFigure. */
+const FigureSchema = z.object({ file: NonEmpty, alt: NonEmpty, leadIn: Prose, caption: Prose }).strict();
+
 export const ConsumablesDescriptionDocSchema = z.object({
   schemaVersion: z.literal('C1'),
   locale: NonEmpty,
@@ -71,6 +74,7 @@ export const ConsumablesDescriptionDocSchema = z.object({
   specGroups: z.array(SpecGroupSchema).max(3),
   storage: BulletGroupSchema(2, 3),
   cta: Prose,
+  figures: z.array(FigureSchema),
 }).strict();
 
 /**

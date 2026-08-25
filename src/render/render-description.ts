@@ -127,8 +127,11 @@ function figurePositions(doc: ProductDescriptionDoc): Map<number, number> {
  * style. The first image in document order carries NO `loading` attribute at all (it is the LCP
  * image); every later one is lazy. See image-figure.ts and output-validator.ts's
  * `lcp-image-lazy` / `image-not-lazy` pair.
+ *
+ * Exported so render-consumables.ts can reuse it rather than re-deriving the same src-building and
+ * lazy-loading rule a second time — see that file's header comment.
  */
-function renderFigure(f: Figure, position: number, ctx: RenderContext): string {
+export function renderFigure(f: Figure, position: number, ctx: RenderContext): string {
   const lazy = position > 0 ? ' loading="lazy"' : '';
   return (
     `<figure style="${FIGURE_STYLE}">\n` +

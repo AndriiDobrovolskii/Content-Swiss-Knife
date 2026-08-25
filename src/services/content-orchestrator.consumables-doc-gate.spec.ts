@@ -60,6 +60,7 @@ function makeDoc(specGroups: ConsumablesDescriptionDoc['specGroups']): Consumabl
       items: [{ lead: 'A:', text: ' a' }, { lead: 'B:', text: ' b' }],
     },
     cta: 'Closing sentence.',
+    figures: [],
   };
 }
 
@@ -281,6 +282,52 @@ describe('runConsumablesDocGate — validates the rendered HTML with templateId 
     // validator — proves templateId: 'consumables-resin' actually reached validateGeneratedHtml
     // (the specs-shape/§C rules differ from the default v3.0 rule set it would otherwise apply).
     expect(result.finalIssues.filter((i: { severity: string }) => i.severity === 'error')).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Image manifest coverage — the exact regression a live run surfaced 2026-08-25: a consumables
+// product with uploaded images shipped with `image-manifest-missing` permanently unresolved,
+// because the Doc had nowhere to put a figure. Proves that gap is closed now that `figures` exists.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('runConsumablesDocGate — image manifest coverage now that figures are modelled', () => {
+  const MANIFEST: ImageManifestEntry[] = [{
+    id: '1', originalFilename: 'panel.jpg', urlFilename: 'panel.jpg',
+    previewUrl: '', visionDescription: '', altText: '', order: 0, status: 'done',
+  }];
+
+  it('reports image-manifest-missing when the doc carries no figures', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValueOnce(normalLengthDoc());
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asConsumablesDocGate(orchestrator).runConsumablesDocGate(
+      baseGateOpts({ maxRepairs: 0, imgManifest: MANIFEST }),
+    );
+
+    expect(result.finalIssues.some((i: { rule: string }) => i.rule === 'image-manifest-missing')).toBe(true);
+  });
+
+  it('clears image-manifest-missing and renders the <figure> when the doc includes a matching figure', async () => {
+    const mockLlm = makeMockLlm();
+    const doc: ConsumablesDescriptionDoc = {
+      ...normalLengthDoc(),
+      figures: [{
+        file: 'panel.jpg', alt: 'Panel mounted in the printer',
+        leadIn: 'The panel installs directly on the printer bed.', caption: 'Laser grid panel.',
+      }],
+    };
+    mockLlm.generateJson.mockResolvedValueOnce(doc);
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asConsumablesDocGate(orchestrator).runConsumablesDocGate(
+      baseGateOpts({ maxRepairs: 0, imgManifest: MANIFEST }),
+    );
+
+    expect(result.finalIssues.some((i: { rule: string }) => i.rule === 'image-manifest-missing')).toBe(false);
+    expect(result.artifact).toContain('panel.jpg');
+    expect(result.artifact).toContain('<figure');
   });
 });
 

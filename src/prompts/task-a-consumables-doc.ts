@@ -48,8 +48,18 @@ SHAPE — emit exactly these keys:
   "applications": { "heading": "", "items": [ { "lead": "", "text": "" } ] },  // §C3 — 3–4 items
   "specGroups": [ { "heading": "", "rows": [ { "label": "", "value": "" } ] } ], // §C4 — 0–3 groups
   "storage": { "heading": "", "items": [ { "lead": "", "text": "" } ] },       // §C5 — 2–3 items
-  "cta": "<§C6, plain closing paragraph after <hr>, 1–2 sentences, no heading>"
+  "cta": "<§C6, plain closing paragraph after <hr>, 1–2 sentences, no heading>",
+  "figures": [ { "file": "", "alt": "", "leadIn": "", "caption": "" } ]
 }
+
+IMAGES — [IMAGE MANIFEST] below always lists what to do. When it enumerates numbered image entries,
+"figures" MUST contain exactly one entry per manifest image, in the SAME order — no entry omitted,
+none invented, none duplicated. "file" is the FILENAME ONLY (e.g. "laser-grid-panel.jpg") — no
+folders, no URL, no domain; the renderer builds the src. "leadIn" is a substantive sentence
+introducing that image (not a caption restated as a sentence, not generic filler) — it renders as
+its own paragraph directly above the figure. "alt" and "caption" must not restate each other's
+wording. When [IMAGE MANIFEST] instead says "None — skip all <img>" or "None provided — do not emit
+<img> tags", emit "figures": [] — an empty array, never omitted, never null.
 
 "specGroups" MAY BE AN EMPTY ARRAY — emit [] when the source supplies no
 printing / mechanical / physical parameters. When present, each group's "heading" is NOT always

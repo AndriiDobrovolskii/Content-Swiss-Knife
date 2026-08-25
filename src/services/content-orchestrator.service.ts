@@ -40,7 +40,7 @@ import { renderDescription } from '../render/render-description';
 import { renderConsumablesDoc } from '../render/render-consumables';
 import type { RenderContext } from '../render/render-description';
 import { normalizeDocProse } from '../render/doc-prose-transforms';
-import { renderContextFor } from '../prompt-core/store-render-rules';
+import { renderContextFor, getRenderRules } from '../prompt-core/store-render-rules';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
 import type { ConsumablesDescriptionDoc } from '../domain/consumables-doc';
 import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, providerDetail } from '../render/doc-schema-issues';
@@ -639,13 +639,14 @@ export class ContentOrchestratorService {
     imgManifest?: ImageManifestEntry[];
     onAttempt: (n: number, c: number) => void;
   }): Promise<RepairGateResult<string>> {
-    // renderConsumablesDoc() does not read ctx.imageBaseUrl — figures are deliberately not modelled
-    // yet (see consumables-doc.ts). Built directly rather than via renderContextFor(), which throws
-    // for a store with an empty imageBaseUrl (Expert-3DPrinter): that guard exists for figure
-    // rendering, which does not apply here, and consumables generation must keep working for that
-    // store exactly as the plain-HTML path does today. Revisit once figures are modelled.
+    // Figures are modelled now (see consumables-doc.ts), so ctx.imageBaseUrl is load-bearing. Built
+    // directly rather than via renderContextFor(), which THROWS for a store with an empty
+    // imageBaseUrl (Expert-3DPrinter) — buildImageBlock (task-a.ts) already forces that store's
+    // manifest to "None — skip all <img>", so its consumables generations never populate `figures`
+    // and must keep working, exactly as the plain-HTML path does today. getRenderRules() answers
+    // '' for that store without throwing, which is what we want here.
     const ctx: RenderContext = {
-      imageBaseUrl: '',
+      imageBaseUrl: getRenderRules(opts.input.website.name).imageBaseUrl,
       storeName: opts.input.website.name,
       brandFolder: opts.input.brandFolder,
       modelFolder: opts.input.modelFolder,

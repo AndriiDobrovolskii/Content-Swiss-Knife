@@ -38,6 +38,7 @@ function validDoc(): ConsumablesDescriptionDoc {
       ],
     },
     cta: 'cta text',
+    figures: [],
   };
 }
 
@@ -167,12 +168,48 @@ describe('ConsumablesDescriptionDocSchema — prose vs. plain-text fields', () =
   });
 });
 
-describe('ConsumablesDescriptionDocSchema — strict shape', () => {
-  it('rejects a stray "figures" key — proves figures are not silently accepted', () => {
-    const doc = { ...validDoc(), figures: [] } as ConsumablesDescriptionDoc & { figures: unknown[] };
-    expect(errorsFor(doc).length).toBeGreaterThan(0);
+describe('ConsumablesDescriptionDocSchema — figures', () => {
+  it('accepts an empty figures array — most consumables products carry none', () => {
+    expect(errorsFor(validDoc())).toEqual([]);
   });
 
+  it('accepts a fully populated figure', () => {
+    const doc = validDoc();
+    doc.figures = [{
+      file: 'laser-grid-panel.jpg',
+      alt: 'Laser grid panel mounted in printer',
+      leadIn: 'The panel installs directly on the H2 series bed.',
+      caption: 'Laser grid panel with <b>honeycomb</b> cutting surface',
+    }];
+    expect(errorsFor(doc)).toEqual([]);
+  });
+
+  it('rejects a figure missing "leadIn"', () => {
+    const doc = validDoc();
+    doc.figures = [{ file: 'a.jpg', alt: 'alt text' } as unknown as ConsumablesDescriptionDoc['figures'][number]];
+    expect(errorsFor(doc).some(e => e.startsWith('figures.0'))).toBe(true);
+  });
+
+  it('rejects HTML tags in "file" and "alt" — plain-text fields, same rule as ProductDescriptionDoc figures', () => {
+    const doc = validDoc();
+    doc.figures = [{ file: '<b>a.jpg</b>', alt: 'alt', leadIn: 'Lead-in.', caption: 'Caption.' }];
+    expect(errorsFor(doc).some(e => e.startsWith('figures.0.file'))).toBe(true);
+  });
+
+  it('allows <b>/<strong> in "leadIn" and "caption" — Prose fields', () => {
+    const doc = validDoc();
+    doc.figures = [{ file: 'a.jpg', alt: 'alt', leadIn: 'A <b>bold</b> lead-in.', caption: 'A <strong>bold</strong> caption.' }];
+    expect(errorsFor(doc)).toEqual([]);
+  });
+
+  it('rejects a stray key on a figure', () => {
+    const doc = validDoc();
+    doc.figures = [{ file: 'a.jpg', alt: 'alt', leadIn: 'Lead-in.', caption: 'Caption.', extra: 'nope' } as unknown as ConsumablesDescriptionDoc['figures'][number]];
+    expect(errorsFor(doc).length).toBeGreaterThan(0);
+  });
+});
+
+describe('ConsumablesDescriptionDocSchema — strict shape', () => {
   it('rejects a stray key on a nested spec group', () => {
     const doc = validDoc();
     (doc.specGroups[0] as unknown as { extra: string }).extra = 'nope';
