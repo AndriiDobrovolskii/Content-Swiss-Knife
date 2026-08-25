@@ -12,9 +12,21 @@
  * Runtime validation lives in consumables-doc.schema.ts (zod). Rendering lives in
  * ../render/render-consumables.ts. Neither concern belongs in this file.
  */
-import type { Prose, BulletItem } from './description-doc';
+import type { Prose, BulletItem, Figure } from './description-doc';
 
-export type { Prose, BulletItem };
+export type { Prose, BulletItem, Figure };
+
+/**
+ * A §C figure — the base `Figure` shape (file/alt/caption) plus its own lead-in paragraph.
+ *
+ * NOT indexed via `Block{kind:'figure',ref}` like ProductDescriptionDoc's figures: §C has no
+ * nested sections for a figure to be interleaved into, so a flat array with an inline lead-in is
+ * the whole mechanism — see render-consumables.ts for where it renders.
+ */
+export interface ConsumablesFigure extends Figure {
+  /** Rendered as its own <p> directly above the <figure> — never adjacent figures without one. */
+  leadIn: Prose;
+}
 
 /**
  * §C4 — one table per parameter group ("Print Settings", "Mechanical Properties", "Physical
@@ -50,11 +62,17 @@ export interface ConsumablesDescriptionDoc {
   /** §C6 — plain closing paragraph after <hr>. No heading, no class="cta". */
   cta: Prose;
 
-  // Figures are deliberately NOT modelled yet (2026-08-08). task-a.ts's buildImageBlock runs
-  // unconditionally for consumables inputs too, so a generation CAN receive an image manifest, but
-  // CONSUMABLES_SIMPLIFIED_SCHEMA never states where a figure would go and the one real corpus
-  // fixture (3ddevice-formlabs-fuse1-uptime-kit) carries zero images. Modelling this without a real
-  // accepted artifact to reconcile against would be exactly the kind of speculative shape the main
-  // Doc migration's own report (test/render-reconciliation.report.md) warns against. Add it once a
-  // real consumables artifact with an image exists.
+  /**
+   * Flat manifest, 0+. Every uploaded image must appear exactly once — see
+   * checkImageManifestCoverage in output-validator.ts. Rendered as a block of `<p>` lead-in +
+   * `<figure>` pairs between §C1 (hook) and §C2 (features); see render-consumables.ts.
+   *
+   * Modelled 2026-08-25 after a live generation with real uploaded images (Bambu Lab Laser Grid
+   * Panel, EXPERT3D) proved the prior no-figures shape both leaves manifest images permanently
+   * unresolved in Generator mode and can crash UA Description mode outright (repair feedback asking
+   * for a `<figure>` the schema had nowhere to put pushed the model out of JSON entirely). The one
+   * real corpus fixture (3ddevice-formlabs-fuse1-uptime-kit) still carries zero images, so this
+   * array is simply empty for that case — the shape costs nothing when there is nothing to render.
+   */
+  figures: ConsumablesFigure[];
 }
