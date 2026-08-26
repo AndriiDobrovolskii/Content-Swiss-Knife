@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSlug, ensureUniqueSlugs, SLUG_PATTERN } from './slug-utils';
+import { normalizeSlug, ensureUniqueSlugs, SLUG_PATTERN, stripSlugStopwords } from './slug-utils';
 
 describe('normalizeSlug', () => {
   it('transliterates Ukrainian Cyrillic to latin', () => {
@@ -37,6 +37,51 @@ describe('normalizeSlug', () => {
 
   it('decimal slug matches SLUG_PATTERN', () => {
     expect(normalizeSlug('PETG 1.75 mm 1 kg Orange')).toMatch(SLUG_PATTERN);
+  });
+});
+
+describe('stripSlugStopwords', () => {
+  it('removes prepositions from each language group', () => {
+    expect(stripSlugStopwords('Impresora 3D para Elegoo')).toBe('Impresora 3D Elegoo');
+    expect(stripSlugStopwords('3D принтер для роботи')).toBe('3D принтер роботи');
+    expect(stripSlugStopwords('Drukarka 3D dla domu')).toBe('Drukarka 3D domu');
+    expect(stripSlugStopwords('Düse für Bambu Lab')).toBe('Düse Bambu Lab');
+    expect(stripSlugStopwords('Filamento con Bobina')).toBe('Filamento Bobina');
+  });
+
+  it('removes Title Case prepositions case-insensitively', () => {
+    expect(stripSlugStopwords('Impresora 3D Para Elegoo')).toBe('Impresora 3D Elegoo');
+    expect(stripSlugStopwords('Düse Für Bambu Lab')).toBe('Düse Bambu Lab');
+    expect(stripSlugStopwords('Принтер Для Роботи')).toBe('Принтер Роботи');
+  });
+
+  it('removes a preposition glued to punctuation', () => {
+    expect(stripSlugStopwords('Impresora 3D para, Elegoo')).toBe('Impresora 3D Elegoo');
+    expect(stripSlugStopwords('Принтер (для) роботи')).toBe('Принтер роботи');
+  });
+
+  it('removes a preposition embedded in an already-hyphenated slug', () => {
+    expect(normalizeSlug(stripSlugStopwords('impresora-3d-para-elegoo'))).toBe('impresora-3d-elegoo');
+  });
+
+  it('round-trips a hyphenated designator unchanged', () => {
+    expect(normalizeSlug(stripSlugStopwords('X1-Carbon'))).toBe('x1-carbon');
+    expect(normalizeSlug(stripSlugStopwords('xgrids-l2-pro-32-300'))).toBe('xgrids-l2-pro-32-300');
+  });
+
+  it('does not remove a stopword substring inside a longer token', () => {
+    expect(stripSlugStopwords('Українська назва')).toBe('Українська назва');
+  });
+
+  it('keeps an uppercase single-letter designator even when it matches a stopword', () => {
+    expect(stripSlugStopwords('Model Z 1.75 mm')).toBe('Model Z 1.75 mm');
+    expect(stripSlugStopwords('Type A')).toBe('Type A');
+  });
+
+  it('is idempotent and handles an empty string', () => {
+    expect(stripSlugStopwords('')).toBe('');
+    const once = stripSlugStopwords('Filamento con Bobina');
+    expect(stripSlugStopwords(once)).toBe(once);
   });
 });
 
