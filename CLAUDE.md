@@ -40,16 +40,6 @@ An Angular app that generates SEO/AEO/GEO-optimized product descriptions for 3D-
 
 ## Commands
 
-```bash
-npm install            # dependencies
-npm run dev            # local run (frontend + proxy)
-npm run build          # production build
-npm run lint           # tsc --noEmit — run before every commit
-npm run test           # vitest run (one-shot)
-npm run test:watch     # vitest watch mode
-npm run test:coverage  # vitest + V8 coverage report
-```
-
 **After every Claude Code session:** `bash arch-guard.sh` — verifies architecture rules #1, #3, #4 (Rule #2 has no automated check — see "Known accepted tech debt") and frozen-file checksums. Run `bash arch-guard.sh --rebaseline` only after an intentional frozen-file change that was explicitly approved.
 
 Before considering a task done: `npm run lint && npm run build` must pass with no errors.
@@ -75,12 +65,7 @@ Before considering a task done: `npm run lint && npm run build` must pass with n
 3. **Task C** (`buildPromptC`) — translates the uk-UA master into each **non-uk-UA** language defined for the store, including English. Always runs on the fast model.
 4. **FAQ / HowTo** (`buildPromptFaq` / `buildPromptHowTo`) — optional; runs only when `input.supplementalContent` is present. Produces schema-free HTML artifacts for the CMS native FAQ/HowTo module fields.
 
-All prompt builders return a `PromptPayload` (`src/prompt-core/payload.ts`):
-
-```ts
-{ systemBlocks: SystemBlock[];  // [0]=master (cache:true), [1]=task (cache:true)
-  userContent: string; }        // dynamic per call — never cached
-```
+All prompt builders return a `PromptPayload` (`src/prompt-core/payload.ts`).
 
 The `cache: true` flag on system blocks enables Anthropic prompt caching. Do not collapse `systemBlocks` into `userContent` — it breaks caching economics.
 
