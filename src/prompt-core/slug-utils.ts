@@ -26,6 +26,30 @@ function stripDiacritics(input: string): string {
     .replace(/ł/gi, 'l');
 }
 
+const SLUG_STOPWORDS = new Set([
+  'for', 'to', 'do', 'the', 'a',
+  'dla', 'na', 'z',
+  'für', 'zu', 'mit',
+  'для', 'на', 'с',
+  'para', 'de', 'con',
+]);
+
+// Splits on hyphens too: an already-composed `slug` field (per task-slug.ts's own worked
+// examples) arrives hyphen-joined, not space-separated, so a whitespace-only split would never
+// see individual words to filter. Re-joining with spaces and normalizing afterward makes the
+// hyphen/space split lossless for every non-stopword token.
+export function stripSlugStopwords(input: string): string {
+  return input
+    .split(/[\s-]+/)
+    .filter(token => {
+      const cleanToken = token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+      if (!cleanToken) return true;
+      if (cleanToken.length === 1 && cleanToken === cleanToken.toUpperCase()) return true;
+      return !SLUG_STOPWORDS.has(cleanToken.toLowerCase());
+    })
+    .join(' ');
+}
+
 export function normalizeSlug(input: string): string {
   return stripDiacritics(transliterateCyrillic(input))
     .toLowerCase()
