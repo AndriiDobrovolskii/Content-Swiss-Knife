@@ -7,12 +7,20 @@ const CYRILLIC_MAP: Record<string, string> = {
   ё: 'e', ъ: '', ы: 'y', э: 'e',
 };
 
-function transliterateCyrillic(input: string): string {
+// и/й/г are the shared letters Ukrainian and Russian romanize differently for the same
+// spelling (принтер → prynter vs printer). ё doesn't exist in the Ukrainian alphabet at all,
+// so overriding it to the more standard 'yo' (base map has 'e') only ever affects ru-UA.
+// ы/э/ъ already carry these exact values in CYRILLIC_MAP — no need to repeat them here.
+const RU_OVERRIDES: Record<string, string> = { г: 'g', и: 'i', й: 'y', ё: 'yo' };
+const RU_CYRILLIC_MAP: Record<string, string> = { ...CYRILLIC_MAP, ...RU_OVERRIDES };
+
+function transliterateCyrillic(input: string, language?: string): string {
+  const map = language?.startsWith('ru') ? RU_CYRILLIC_MAP : CYRILLIC_MAP;
   return input
     .split('')
     .map(ch => {
       const lower = ch.toLowerCase();
-      const mapped = CYRILLIC_MAP[lower];
+      const mapped = map[lower];
       return mapped !== undefined ? mapped : ch;
     })
     .join('');
@@ -50,8 +58,8 @@ export function stripSlugStopwords(input: string): string {
     .join(' ');
 }
 
-export function normalizeSlug(input: string): string {
-  return stripDiacritics(transliterateCyrillic(input))
+export function normalizeSlug(input: string, language?: string): string {
+  return stripDiacritics(transliterateCyrillic(input, language))
     .toLowerCase()
     .replace(/[^a-z0-9.]+/g, '-')
     .replace(/(?<!\d)\.(?!\d)/g, '-')

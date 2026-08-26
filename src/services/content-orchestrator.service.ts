@@ -1552,7 +1552,7 @@ export class ContentOrchestratorService {
   }
 
   private normalizeSlugResponse(raw: SlugResponse): SlugResponse {
-    const slugs = (raw.slugs ?? []).map(s => ({ ...s, slug: normalizeSlug(stripSlugStopwords(s.slug || s.name)) }));
+    const slugs = (raw.slugs ?? []).map(s => ({ ...s, slug: normalizeSlug(stripSlugStopwords(s.name), s.language) }));
     const unique = ensureUniqueSlugs(slugs);
     return {
       site_name: raw.site_name ?? '',

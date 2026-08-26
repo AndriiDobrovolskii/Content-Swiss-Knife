@@ -40,6 +40,44 @@ describe('normalizeSlug', () => {
   });
 });
 
+describe('normalizeSlug — locale-aware Cyrillic transliteration', () => {
+  it('defaults to the Ukrainian scheme (и→y) when no language is given', () => {
+    expect(normalizeSlug('принтер')).toBe('prynter');
+  });
+
+  it('uses the Russian scheme (и→i) for a ru-* language', () => {
+    expect(normalizeSlug('принтер', 'ru-UA')).toBe('printer');
+  });
+
+  it('diverges on г and й, not just и', () => {
+    expect(normalizeSlug('гарячий', 'uk-UA')).toBe('haryachyi');
+    expect(normalizeSlug('гарячий', 'ru-UA')).toBe('garyachiy');
+  });
+
+  it('never leaves й untransliterated (would otherwise split the word on a stray hyphen)', () => {
+    expect(normalizeSlug('швидкий', 'uk-UA')).toBe('shvydkyi');
+    expect(normalizeSlug('швидкий', 'ru-UA')).toBe('shvidkiy');
+  });
+
+  it('omitting language is equivalent to explicit uk-UA', () => {
+    expect(normalizeSlug('гарячий')).toBe(normalizeSlug('гарячий', 'uk-UA'));
+  });
+
+  it('overrides ё to the standard "yo" only for ru-*, since it does not exist in Ukrainian', () => {
+    expect(normalizeSlug('ё')).toBe('e');
+    expect(normalizeSlug('ё', 'ru-UA')).toBe('yo');
+  });
+
+  it('resolves the reported uk/ru collision: identical Cyrillic name, distinct slugs per locale', () => {
+    const name = '3D-принтер Creality Ender-5 Max';
+    const uk = normalizeSlug(stripSlugStopwords(name), 'uk-UA');
+    const ru = normalizeSlug(stripSlugStopwords(name), 'ru-UA');
+    expect(uk).not.toBe(ru);
+    expect(uk).toContain('prynter');
+    expect(ru).toContain('printer');
+  });
+});
+
 describe('stripSlugStopwords', () => {
   it('removes prepositions from each language group', () => {
     expect(stripSlugStopwords('Impresora 3D para Elegoo')).toBe('Impresora 3D Elegoo');
