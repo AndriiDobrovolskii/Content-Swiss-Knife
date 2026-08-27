@@ -60,6 +60,46 @@ describe('normalizeSlug', () => {
   });
 });
 
+describe('normalizeSlug — Cyrillic unit canonicalization', () => {
+  it('canonicalizes кг to kg, not the phonetic kh', () => {
+    expect(normalizeSlug('Філамент 1 кг')).toBe('filament-1-kg');
+  });
+
+  it('canonicalizes Вт to w, not the phonetic vt', () => {
+    expect(normalizeSlug('Потужність 20 Вт')).toBe('potuzhnist-20-w');
+  });
+
+  it('canonicalizes см to cm, not the phonetic sm', () => {
+    expect(normalizeSlug('Висота 15 см')).toBe('vysota-15-cm');
+  });
+
+  it('canonicalizes мкм to um, not the phonetic mkm', () => {
+    expect(normalizeSlug('Точність 20 мкм')).toBe('tochnist-20-um');
+  });
+
+  it('canonicalizes В (volt) to v, and А (ampere) to a', () => {
+    expect(normalizeSlug('Напруга 12 В')).toBe('napruha-12-v');
+    expect(normalizeSlug('Струм 5 А')).toBe('strum-5-a');
+  });
+
+  it('canonicalizes uk год/хв and ru ч/мин to h/min', () => {
+    expect(normalizeSlug('Час друку 2 год')).toBe('chas-druku-2-h');
+    expect(normalizeSlug('Час друку 2 ч', 'ru-UA')).toBe('chas-druku-2-h');
+  });
+
+  it('does not touch a unit-shaped substring inside an ordinary word', () => {
+    // "загартована" contains "г" (a unit token) but is not preceded by a digit+space, so it
+    // must fall through to the normal phonetic transliteration untouched.
+    expect(normalizeSlug('Bambu Lab загартована сталь')).toBe('bambu-lab-zahartovana-stal');
+  });
+
+  it('does not touch the full word "годин" even when it follows a number', () => {
+    // "год" is a unit token, but "годин" is a whole different word — the token match requires
+    // a non-letter/digit boundary right after it, which "и" fails.
+    expect(normalizeSlug('за 5 годин')).toBe('za-5-hodyn');
+  });
+});
+
 describe('normalizeSlug — locale-aware Cyrillic transliteration', () => {
   it('defaults to the Ukrainian scheme (и→y) when no language is given', () => {
     expect(normalizeSlug('принтер')).toBe('prynter');

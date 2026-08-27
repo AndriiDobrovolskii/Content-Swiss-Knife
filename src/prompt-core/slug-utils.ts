@@ -66,8 +66,42 @@ function commaDecimalToDot(input: string): string {
   return input.replace(/(\d),(\d)/g, '$1.$2');
 }
 
+// Reverse of UNIT_LOCALIZATION_RULES (constants.ts) — that table cyrillizes a Latin unit
+// abbreviation for uk-UA/ru-UA prose ("mm" → "мм"). transliterateCyrillic below romanizes
+// PHONETICALLY, letter by letter, which is right for words but wrong for a unit symbol that
+// merely happens to be spelled with the same letters as an unrelated word: "кг" (kilogram) is
+// "к"+"г" → "k"+"h" phonetically, giving the nonsense unit "kh" instead of "kg". Every unit here
+// must be converted to its Latin SI form BEFORE the phonetic pass ever sees it.
+const UNIT_MAP: Record<string, string> = {
+  мкм: 'um', мм: 'mm', см: 'cm', км: 'km', нм: 'nm', м: 'm',
+  кг: 'kg', мг: 'mg', г: 'g',
+  квт: 'kW', мвт: 'mW', вт: 'W',
+  кв: 'kV', мв: 'mV', в: 'V',
+  ма: 'mA', а: 'A',
+  кгц: 'kHz', мгц: 'MHz', ггц: 'GHz', гц: 'Hz',
+  мл: 'ml', л: 'l',
+  гб: 'GB', мб: 'MB', тб: 'TB',
+  год: 'h', хв: 'min', ч: 'h', мин: 'min', с: 's',
+};
+// Composite/locale-branching units from UNIT_LOCALIZATION_RULES (rpm "об/хв"↔"об/мин", capacity
+// "мА·год"↔"мА·ч", "kg/h" cyrillized part-by-part) are deliberately NOT covered here — they need
+// per-locale parsing this single token map can't express safely. Left as source text (i.e.
+// whatever transliterateCyrillic does with them next), which is the existing pre-PR-0b behavior,
+// not a regression.
+const UNIT_TOKENS = Object.keys(UNIT_MAP).sort((a, b) => b.length - a.length);
+const UNIT_RE = new RegExp(`(?<=[0-9][\\s\\u00A0]+)(${UNIT_TOKENS.join('|')})(?![\\p{L}\\p{N}])`, 'giu');
+
+// Anchored on a preceding digit + whitespace so a unit token is only ever replaced right after a
+// number (the shape every real spec value has) — never as a substring of an ordinary word like
+// "загартована" (which contains "г") or "годин" (which starts with "год"). Uses \p{L}/\p{N}
+// instead of \b: JS's \b is ASCII-only, so it does not see a boundary between a space and a
+// Cyrillic letter (both are non-word to the regex engine) and would silently fail to anchor here.
+function canonicalizeUnitsForSlug(input: string): string {
+  return input.replace(UNIT_RE, match => UNIT_MAP[match.toLowerCase()]);
+}
+
 export function normalizeSlug(input: string, language?: string): string {
-  return stripDiacritics(transliterateCyrillic(commaDecimalToDot(input), language))
+  return stripDiacritics(transliterateCyrillic(canonicalizeUnitsForSlug(commaDecimalToDot(input)), language))
     .toLowerCase()
     .replace(/[^a-z0-9.]+/g, '-')
     .replace(/(?<!\d)\.(?!\d)/g, '-')
