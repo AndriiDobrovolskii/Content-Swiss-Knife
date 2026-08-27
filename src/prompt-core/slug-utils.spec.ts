@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSlug, ensureUniqueSlugs, SLUG_PATTERN, stripSlugStopwords } from './slug-utils';
+import {
+  normalizeSlug, ensureUniqueSlugs, SLUG_PATTERN, stripSlugStopwords,
+  buildSlugWithSpec, enforceSlugLength, SLUG_VALUE_PATTERN,
+} from './slug-utils';
 
 describe('normalizeSlug', () => {
   it('transliterates Ukrainian Cyrillic to latin', () => {
@@ -217,5 +220,78 @@ describe('ensureUniqueSlugs', () => {
       'smoothing-machine-us',
       'smoothing-machine-2',
     ]);
+  });
+});
+
+describe('SLUG_VALUE_PATTERN', () => {
+  it('accepts every real killerSpecs[].value shape found in the corpus', () => {
+    for (const v of ['20 Вт', '420 × 300 мм', '20000 мм/хв', '0,11 mm', '165 × 165 × 300 mm', '10 W', '98 мм', '200000 пікселів']) {
+      expect(v).toMatch(SLUG_VALUE_PATTERN);
+    }
+  });
+
+  it('rejects a qualifier-prefixed or ranged value', () => {
+    for (const v of ['≤ 0,015 mm', '<30 Вт', '0,02–0,05 мм', '0,015 мм (режим метрології)', '±0.02 mm']) {
+      expect(v).not.toMatch(SLUG_VALUE_PATTERN);
+    }
+  });
+});
+
+describe('buildSlugWithSpec', () => {
+  it('appends a resolved spec as a suffix', () => {
+    expect(buildSlugWithSpec('bambu-lab-h20', { key: 'power', value: '20 Вт' }, 'uk-UA'))
+      .toBe('bambu-lab-h20-potuzhnist-20-w');
+  });
+
+  it('localizes the label per target language, same key and value', () => {
+    expect(buildSlugWithSpec('ortur-h20', { key: 'power', value: '20 Вт' }, 'pl-PL'))
+      .toBe('ortur-h20-moc-20-w');
+  });
+
+  it('returns the base slug unchanged when resolved is null', () => {
+    expect(buildSlugWithSpec('ortur-h20', null, 'uk-UA')).toBe('ortur-h20');
+  });
+
+  it('returns the base slug unchanged when the key has no registry label', () => {
+    expect(buildSlugWithSpec('ortur-h20', { key: 'smart-camera', value: '200000 пікселів' }, 'uk-UA'))
+      .toBe('ortur-h20');
+  });
+
+  it('returns the base slug unchanged when the value fails SLUG_VALUE_PATTERN', () => {
+    expect(buildSlugWithSpec('ortur-h20', { key: 'accuracy', value: '≤ 0,015 mm' }, 'uk-UA'))
+      .toBe('ortur-h20');
+  });
+
+  it('returns the base slug unchanged for an unmapped locale', () => {
+    expect(buildSlugWithSpec('ortur-h20', { key: 'power', value: '20 Вт' }, 'fr-FR')).toBe('ortur-h20');
+  });
+
+  it('produces the dot-decimal form, not a hyphenated one', () => {
+    expect(buildSlugWithSpec('scanner-x', { key: 'accuracy', value: '0,015 мм' }, 'uk-UA'))
+      .toBe('scanner-x-tochnist-0.015-mm');
+  });
+});
+
+describe('enforceSlugLength', () => {
+  it('joins base and suffix unchanged when under the limit', () => {
+    expect(enforceSlugLength('ortur-h20', 'power-20-w', 100)).toBe('ortur-h20-power-20-w');
+  });
+
+  it('trims the suffix from the end, never the base, when over the limit', () => {
+    const base = 'a'.repeat(90);
+    const result = enforceSlugLength(base, 'power-twenty-watts-of-laser-engraving-strength', 100);
+    expect(result.startsWith(base)).toBe(true);
+    expect(result.length).toBeLessThanOrEqual(100);
+  });
+
+  it('drops the suffix entirely when the base alone is already at the limit', () => {
+    const base = 'a'.repeat(100);
+    expect(enforceSlugLength(base, 'power-20-w', 100)).toBe(base);
+  });
+
+  it('never leaves a trailing hyphen after trimming', () => {
+    const base = 'a'.repeat(95);
+    const result = enforceSlugLength(base, 'power-20-w', 100);
+    expect(result.endsWith('-')).toBe(false);
   });
 });

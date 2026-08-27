@@ -1,3 +1,7 @@
+import { resolveSpecLabel } from './slug-spec-labels';
+import type { ResolvedKillerSpec } from './killer-spec-resolver';
+export type { ResolvedKillerSpec };
+
 // Ukrainian + Russian Cyrillic → Latin. Pragmatic BGN/PCGN-style scheme.
 const CYRILLIC_MAP: Record<string, string> = {
   а: 'a', б: 'b', в: 'v', г: 'h', д: 'd', е: 'e', ж: 'zh', з: 'z', и: 'y', й: 'i',
@@ -130,13 +134,61 @@ export function slugsToLocalizedNames(slugs: { language: string; name: string }[
   return Object.fromEntries(slugs.map(s => [s.language, s.name]));
 }
 
+const SLUG_HARD_MAX = 100;
+
 /**
- * Placeholder for the deterministic killer-spec-suffix feature's resolved spec — every caller
- * passes `null` today. Exists now (rather than only once the feature lands) so the single shared
- * slug-generation call site can take the parameter from the start; a future PR replaces this stub
- * with the real resolver's richer type (see killer-spec-resolver.ts) without touching call sites.
+ * A killer-spec value safe to slug: a number (comma or dot decimal), optionally repeated as an
+ * "N × N" dimension chain, optionally followed by a unit token. Matches every real
+ * `killerSpecs[].value` sample found in this codebase's corpus (see description-doc.schema.ts's
+ * PR-Schema commit) — "20 Вт", "420 × 300 мм", "0,11 mm", "165 × 165 × 300 mm". Deliberately
+ * fail-closed rather than permissive: a value carrying a qualifier or range this pattern was never
+ * shown to occur in real killerSpecs data ("≤ 0,015 mm", "0,02–0,05 мм") does not match, and
+ * buildSlugWithSpec below returns the base slug unchanged rather than slugging garbage.
  */
-export interface ResolvedKillerSpec {
-  key: string;
-  value: string;
+export const SLUG_VALUE_PATTERN = /^\s*\d+(?:[.,]\d+)?(?:\s*[×x]\s*\d+(?:[.,]\d+)?)*\s*[\p{L}%/]*\s*$/u;
+
+/**
+ * Appends a killer-spec suffix to an already-built base slug — e.g. "bambu-lab-h20" +
+ * { key: 'power', value: '20 Вт' } → "bambu-lab-h20-power-20-w". Returns `baseSlug` unchanged
+ * (not an error) whenever any part of the chain can't be resolved deterministically: no spec
+ * resolved, the key has no registry label for this locale, or the value doesn't match
+ * SLUG_VALUE_PATTERN. "No suffix" is always a safe, silent fallback — never a guess.
+ */
+export function buildSlugWithSpec(
+  baseSlug: string,
+  resolved: ResolvedKillerSpec | null,
+  targetLanguage: string,
+  maxLen = SLUG_HARD_MAX,
+): string {
+  if (!resolved) return baseSlug;
+  const label = resolveSpecLabel(resolved.key, targetLanguage);
+  if (!label) return baseSlug;
+  if (!SLUG_VALUE_PATTERN.test(resolved.value)) return baseSlug;
+
+  // Same chain as the base slug (stripSlugStopwords -> normalizeSlug), so a stopword shared with
+  // the label/value ("de" in es-ES "volumen de impresión") is stripped the same way on both sides.
+  const suffix = normalizeSlug(stripSlugStopwords(`${label} ${resolved.value}`), targetLanguage);
+  if (!suffix) return baseSlug;
+
+  return enforceSlugLength(baseSlug, suffix, maxLen);
+}
+
+/**
+ * Fits `${baseSlug}-${suffix}` under `maxLen`, trimming the SUFFIX only, never the base. The base
+ * slug is the product name/invariant-core span (brand, model, config code) — corrupting it is the
+ * exact `32/300` -> `32300` class of bug this pipeline has already been burned by once; the suffix
+ * is entirely our own generated tokens (a registry label + a spec value), so it is always safe to
+ * shorten or drop. If the base slug alone is already at or over `maxLen`, the suffix is dropped
+ * entirely rather than appended-then-truncated into nothing useful.
+ */
+export function enforceSlugLength(baseSlug: string, suffix: string, maxLen = SLUG_HARD_MAX): string {
+  const full = `${baseSlug}-${suffix}`;
+  if (full.length <= maxLen) return full;
+  if (baseSlug.length >= maxLen) return baseSlug;
+
+  const budget = maxLen - baseSlug.length - 1; // -1 for the joining hyphen
+  const suffixTokens = suffix.split('-');
+  let kept = suffixTokens.length;
+  while (kept > 0 && suffixTokens.slice(0, kept).join('-').length > budget) kept--;
+  return kept > 0 ? `${baseSlug}-${suffixTokens.slice(0, kept).join('-')}` : baseSlug;
 }

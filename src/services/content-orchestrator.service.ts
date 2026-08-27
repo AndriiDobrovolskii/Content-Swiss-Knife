@@ -47,7 +47,11 @@ import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, prov
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
-import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopwords, ResolvedKillerSpec } from '../prompt-core/slug-utils';
+import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopwords, buildSlugWithSpec, ResolvedKillerSpec } from '../prompt-core/slug-utils';
+import { resolveKillerSpecFromDoc } from '../prompt-core/killer-spec-resolver';
+import { isKnownSpecKey } from '../prompt-core/slug-spec-labels';
+import { extractKillerSpecFromHtml } from '../prompt-core/killer-spec-from-html';
+import { usesSlugSpecSuffix } from '../prompt-core/slug-spec-suffix-flag';
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
@@ -459,7 +463,7 @@ export class ContentOrchestratorService {
     videoEmbeds: SourceVideoEmbed[];
     imgManifest?: ImageManifestEntry[];
     onAttempt: (n: number, c: number) => void;
-  }): Promise<RepairGateResult<string>> {
+  }): Promise<RepairGateResult<string> & { doc?: ProductDescriptionDoc }> {
     let isFirstAttempt = true;
     const produce = async (payload: PromptPayload): Promise<DocAttempt> => {
       const initial = isFirstAttempt;
@@ -573,12 +577,16 @@ export class ContentOrchestratorService {
     // separator-insensitive to normalizeDocProse's number-format fixes — but a future validator
     // that is NOT insensitive to normalizeDocProse's transforms would validate pre-normalization
     // text here. Worth checking when adding one.
+    const normalizedDoc = normalizeDocProse(result.artifact.doc, opts.locale);
     const html = renderDescription(
-      normalizeDocProse(result.artifact.doc, opts.locale),
+      normalizedDoc,
       renderContextFor(opts.input.website.name, opts.input.brandFolder, opts.input.modelFolder),
     );
 
-    return { ...result, artifact: html };
+    // `doc` carried alongside the rendered HTML so the killer-spec-suffix feature can resolve a
+    // suffix from the Doc directly (resolveKillerSpecFromDoc) rather than re-parsing it back out of
+    // rendered markup — the Doc was already computed here and previously discarded after this call.
+    return { ...result, artifact: html, doc: normalizedDoc };
   }
 
   /**
@@ -814,7 +822,7 @@ export class ContentOrchestratorService {
         restoredVideos = result.restoredVideos;
         return result.html;
       };
-      const htmlAResult = useDocPipeline
+      const htmlAResult: RepairGateResult<string> & { doc?: ProductDescriptionDoc } = useDocPipeline
         ? await this.runDocGate({
             label: 'HTML (base)', contextLabel: 'HTML (base)', docTaskLabel: 'Doc (base)',
             maxRepairs: masterRepairBudget, basePayload: basePayloadA, useThinking,
@@ -942,6 +950,22 @@ export class ContentOrchestratorService {
       let localizedNames: Record<string, string> | undefined;
       if (reusedSlug?.slugs?.length) {
         localizedNames = slugsToLocalizedNames(reusedSlug.slugs);
+        // Pulled into scope deliberately: without this, a slug approved before the store joined
+        // slug-spec-suffix-flag.ts's allow-list would keep serving a suffix-less URL forever, even
+        // after the feature goes live. Purely deterministic re-derivation from the already-approved
+        // localized `name` + the current Doc's killerSpecs[0] — no LLM call, so a doc/registry that
+        // hasn't changed reproduces the exact same slug (idempotent), and a store not on the
+        // allow-list is untouched (byte-identical to before this feature existed).
+        if (usesSlugSpecSuffix(input.website.name)) {
+          const killerSpec = this.checkKillerSpecKeyDrift(resolveKillerSpecFromDoc(htmlAResult.doc));
+          const resuffixed = reusedSlug.slugs.map(s => {
+            const base = normalizeSlug(stripSlugStopwords(s.name), s.language);
+            return { ...s, slug: buildSlugWithSpec(base, killerSpec, s.language) };
+          });
+          const unique = ensureUniqueSlugs(resuffixed);
+          const updatedSlugs = resuffixed.map((s, i) => ({ ...s, slug: unique[i] }));
+          this.content.update(c => ({ ...c, slugData: { ...reusedSlug, slugs: updatedSlugs } }));
+        }
       } else {
         try {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
@@ -949,8 +973,11 @@ export class ContentOrchestratorService {
           // Gated the same way as SEO metadata below: validateSlugs feeds this loop directly now,
           // so slug-name-designator-lost / slug-charset / slug-duplicate get a real repair attempt
           // instead of only being reported after the fact by runOutputValidation.
+          const killerSpec = usesSlugSpecSuffix(input.website.name)
+            ? this.checkKillerSpecKeyDrift(resolveKillerSpecFromDoc(htmlAResult.doc))
+            : null;
           const slugResult = await this.runSlugRepairGate({
-            input, seoLangs, contextHtmlOrDescription: mergedHtmlEn, useThinking,
+            input, seoLangs, contextHtmlOrDescription: mergedHtmlEn, useThinking, killerSpec,
           });
           const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
           if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
@@ -1238,7 +1265,7 @@ export class ContentOrchestratorService {
         restoredVideos = result.restoredVideos;
         return result.html;
       };
-      const htmlUaResult = useDocPipelineUa
+      const htmlUaResult: RepairGateResult<string> & { doc?: ProductDescriptionDoc } = useDocPipelineUa
         ? await this.runDocGate({
             label: 'HTML (uk-UA)', contextLabel: 'HTML (uk-UA)', docTaskLabel: 'Doc (uk-UA)',
             maxRepairs: repairBudget, basePayload: basePayloadA, useThinking,
@@ -1348,8 +1375,11 @@ export class ContentOrchestratorService {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
         // See generate()'s Step 2 for why this is a runRepairGate call now instead of a bare
         // generateJson: validateSlugs must feed a real repair loop, not just runOutputValidation.
+        const killerSpec = usesSlugSpecSuffix(input.website.name)
+          ? this.checkKillerSpecKeyDrift(resolveKillerSpecFromDoc(htmlUaResult.doc))
+          : null;
         const slugResult = await this.runSlugRepairGate({
-          input, seoLangs, contextHtmlOrDescription: finalHtmlUa, useThinking, telemetryLang: UA_ISO,
+          input, seoLangs, contextHtmlOrDescription: finalHtmlUa, useThinking, telemetryLang: UA_ISO, killerSpec,
         });
         const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
         if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
@@ -1498,8 +1528,14 @@ export class ContentOrchestratorService {
       const { seoLangs } = getLangsForStore(input.website.name);
       this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
 
+      // Standalone Slug UI mode never has a ProductDescriptionDoc (see killer-spec-from-html.ts's
+      // doc comment) — the deterministic extractor reads the same data-spec-key/data-spec-value
+      // markers straight out of whatever HTML the editor pasted into the Description field.
+      const killerSpec = usesSlugSpecSuffix(input.website.name)
+        ? this.checkKillerSpecKeyDrift(extractKillerSpecFromHtml(input.description ?? ''))
+        : null;
       const slugResult = await this.runSlugRepairGate({
-        input, seoLangs, contextHtmlOrDescription: input.description, useThinking,
+        input, seoLangs, contextHtmlOrDescription: input.description, useThinking, killerSpec,
       });
       const { artifact: slugData, finalIssues: slugFinalIssues, repairsUsed: slugRepairs } = slugResult;
       if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
@@ -1514,13 +1550,18 @@ export class ContentOrchestratorService {
     }, 'Error during slug generation.', 'Slug Generation failed.');
   }
 
-  // `killerSpec` is unused today — every call site passes `null`. Threading it through now (rather
-  // than adding it only once the suffix feature lands) means the 3 call sites below already share
-  // one call shape before that feature exists, so wiring it in later touches this one function
-  // body, not 3 separate call sites again.
+  /**
+   * Composition order (load-bearing, corrected during design review): base slug -> spec suffix
+   * (buildSlugWithSpec, which itself enforces the length cap by trimming ONLY the suffix) ->
+   * ensureUniqueSlugs LAST, unconditionally. Deduplication must run after truncation, not before —
+   * truncating two different already-unique slugs down to the same hard-max length can produce an
+   * identical string, and only a dedup pass that runs AFTER that truncation would catch it.
+   */
   private normalizeSlugResponse(raw: SlugResponse, killerSpec: ResolvedKillerSpec | null): SlugResponse {
-    void killerSpec;
-    const slugs = (raw.slugs ?? []).map(s => ({ ...s, slug: normalizeSlug(stripSlugStopwords(s.name), s.language) }));
+    const slugs = (raw.slugs ?? []).map(s => {
+      const base = normalizeSlug(stripSlugStopwords(s.name), s.language);
+      return { ...s, slug: buildSlugWithSpec(base, killerSpec, s.language) };
+    });
     const unique = ensureUniqueSlugs(slugs);
     return {
       site_name: raw.site_name ?? '',
@@ -1547,8 +1588,9 @@ export class ContentOrchestratorService {
     contextHtmlOrDescription?: string;
     useThinking: boolean;
     telemetryLang?: string;
+    killerSpec?: ResolvedKillerSpec | null;
   }) {
-    const { input, seoLangs, contextHtmlOrDescription, useThinking, telemetryLang } = params;
+    const { input, seoLangs, contextHtmlOrDescription, useThinking, telemetryLang, killerSpec = null } = params;
     const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, contextHtmlOrDescription);
     return runRepairGate<SlugResponse>({
       label: 'Slugs',
@@ -1559,7 +1601,7 @@ export class ContentOrchestratorService {
           taskLabel: 'Slug', productName: input.name, store: input.website.name,
           ...(telemetryLang ? { lang: telemetryLang } : {}),
         }),
-        null, // killerSpec — wired in by the suffix feature
+        killerSpec,
       ),
       validate: json => validateSlugs(json, input.name),
       withFeedback: appendRepairFeedback,
@@ -1588,6 +1630,31 @@ export class ContentOrchestratorService {
         context: 'Slugs',
       },
     ]);
+  }
+
+  /**
+   * A visible drift warning wrapped around a resolved killer spec (from either
+   * resolveKillerSpecFromDoc or extractKillerSpecFromHtml): an open-string `key` means the model
+   * can drift between runs of the same product (e.g. "accuracy" vs "scan-accuracy"), which would
+   * otherwise show up only as "does this product get a slug suffix or not" silently flickering
+   * between generations. Surfacing it as a warning makes the drift observable instead. Returns the
+   * spec unchanged either way — this only ever adds a warning, never changes behavior.
+   */
+  private checkKillerSpecKeyDrift(spec: ResolvedKillerSpec | null): ResolvedKillerSpec | null {
+    if (spec && !isKnownSpecKey(spec.key)) {
+      this.validationIssues.update(issues => [
+        ...issues,
+        {
+          severity: 'warning',
+          rule: 'slug-spec-key-unrecognized',
+          detail: `Killer spec key "${spec.key}" is not in SPEC_LABEL_REGISTRY's known vocabulary `
+            + '— no slug suffix will be produced for this product. If this category should be '
+            + 'supported, add it to the registry.',
+          context: 'Slugs',
+        },
+      ]);
+    }
+    return spec;
   }
 
   /** Keeps "N-in-N"/"N в N" hyphenation in sync with the HTML body's canonical form — see
