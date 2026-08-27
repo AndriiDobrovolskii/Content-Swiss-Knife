@@ -555,6 +555,15 @@
             (input)="updateSlugProductName($event)"
             [placeholder]="uiLabels().placeholderName">
         </div>
+
+        <app-source-input
+          [label]="uiLabels().contextDescription"
+          [placeholder]="uiLabels().slugContextPlaceholder"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [required]="false"
+          [value]="slugProductDescription()"
+          (valueChange)="slugProductDescription.set($event)" />
       </div>
     }
 
