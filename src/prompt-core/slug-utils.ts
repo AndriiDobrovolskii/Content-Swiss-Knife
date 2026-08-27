@@ -129,3 +129,14 @@ export const SLUG_PATTERN = /^[a-z0-9]+(\.[0-9]+)?(-[a-z0-9]+(\.[0-9]+)?)*$/;
 export function slugsToLocalizedNames(slugs: { language: string; name: string }[]): Record<string, string> {
   return Object.fromEntries(slugs.map(s => [s.language, s.name]));
 }
+
+/**
+ * Placeholder for the deterministic killer-spec-suffix feature's resolved spec — every caller
+ * passes `null` today. Exists now (rather than only once the feature lands) so the single shared
+ * slug-generation call site can take the parameter from the start; a future PR replaces this stub
+ * with the real resolver's richer type (see killer-spec-resolver.ts) without touching call sites.
+ */
+export interface ResolvedKillerSpec {
+  key: string;
+  value: string;
+}

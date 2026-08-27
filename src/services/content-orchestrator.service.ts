@@ -47,7 +47,7 @@ import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, prov
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
-import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopwords } from '../prompt-core/slug-utils';
+import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopwords, ResolvedKillerSpec } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
@@ -945,22 +945,12 @@ export class ContentOrchestratorService {
       } else {
         try {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
-          const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn);
           // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
           // Gated the same way as SEO metadata below: validateSlugs feeds this loop directly now,
           // so slug-name-designator-lost / slug-charset / slug-duplicate get a real repair attempt
           // instead of only being reported after the fact by runOutputValidation.
-          const slugResult = await runRepairGate<SlugResponse>({
-            label: 'Slugs',
-            maxRepairs: this.maxRepairs(),
-            basePayload: promptSlug,
-            produce: async payload => this.normalizeSlugResponse(
-              await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }),
-            ),
-            validate: json => validateSlugs(json, input.name),
-            withFeedback: appendRepairFeedback,
-            onAttempt: (n, c) =>
-              this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+          const slugResult = await this.runSlugRepairGate({
+            input, seoLangs, contextHtmlOrDescription: mergedHtmlEn, useThinking,
           });
           const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
           if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
@@ -970,10 +960,7 @@ export class ContentOrchestratorService {
           localizedNames = slugsToLocalizedNames(slugData.slugs);
         } catch (e) {
           console.warn('[Slugs] Generation failed; SEO H1 falls back to formula.', e);
-          this.validationIssues.update(issues => [
-            ...issues,
-            { severity: 'warning', rule: 'slug-generation-failed', detail: 'Slug generation failed — H1 and meta_title fall back to the English formula for all locales. Re-run Slug separately or regenerate.', context: 'Slugs' },
-          ]);
+          this.pushSlugGenerationFailedIssue();
         }
       }
 
@@ -1359,21 +1346,10 @@ export class ContentOrchestratorService {
       let localizedNames: Record<string, string> | undefined;
       try {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
-        const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
-        // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
         // See generate()'s Step 2 for why this is a runRepairGate call now instead of a bare
         // generateJson: validateSlugs must feed a real repair loop, not just runOutputValidation.
-        const slugResult = await runRepairGate<SlugResponse>({
-          label: 'Slugs',
-          maxRepairs: this.maxRepairs(),
-          basePayload: promptSlug,
-          produce: async payload => this.normalizeSlugResponse(
-            await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO }),
-          ),
-          validate: json => validateSlugs(json, input.name),
-          withFeedback: appendRepairFeedback,
-          onAttempt: (n, c) =>
-            this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+        const slugResult = await this.runSlugRepairGate({
+          input, seoLangs, contextHtmlOrDescription: finalHtmlUa, useThinking, telemetryLang: UA_ISO,
         });
         const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
         if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
@@ -1383,10 +1359,7 @@ export class ContentOrchestratorService {
         localizedNames = slugsToLocalizedNames(slugData.slugs);
       } catch (e) {
         console.warn('[Slugs] uk-UA slug generation failed; H1 falls back to formula.', e);
-        this.validationIssues.update(issues => [
-          ...issues,
-          { severity: 'warning', rule: 'slug-generation-failed', detail: 'Slug generation failed — H1 and meta_title fall back to the formula.', context: 'Slugs' },
-        ]);
+        this.pushSlugGenerationFailedIssue();
       }
 
       // Step 3 — SEO metadata for ALL site languages, grounded in the uk-UA description.
@@ -1525,18 +1498,8 @@ export class ContentOrchestratorService {
       const { seoLangs } = getLangsForStore(input.website.name);
       this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
 
-      const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, input.description);
-      const slugResult = await runRepairGate<SlugResponse>({
-        label: 'Slugs',
-        maxRepairs: this.maxRepairs(),
-        basePayload: promptSlug,
-        produce: async payload => this.normalizeSlugResponse(
-          await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }),
-        ),
-        validate: json => validateSlugs(json, input.name),
-        withFeedback: appendRepairFeedback,
-        onAttempt: (n, c) =>
-          this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+      const slugResult = await this.runSlugRepairGate({
+        input, seoLangs, contextHtmlOrDescription: input.description, useThinking,
       });
       const { artifact: slugData, finalIssues: slugFinalIssues, repairsUsed: slugRepairs } = slugResult;
       if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
@@ -1551,7 +1514,12 @@ export class ContentOrchestratorService {
     }, 'Error during slug generation.', 'Slug Generation failed.');
   }
 
-  private normalizeSlugResponse(raw: SlugResponse): SlugResponse {
+  // `killerSpec` is unused today — every call site passes `null`. Threading it through now (rather
+  // than adding it only once the suffix feature lands) means the 3 call sites below already share
+  // one call shape before that feature exists, so wiring it in later touches this one function
+  // body, not 3 separate call sites again.
+  private normalizeSlugResponse(raw: SlugResponse, killerSpec: ResolvedKillerSpec | null): SlugResponse {
+    void killerSpec;
     const slugs = (raw.slugs ?? []).map(s => ({ ...s, slug: normalizeSlug(stripSlugStopwords(s.name), s.language) }));
     const unique = ensureUniqueSlugs(slugs);
     return {
@@ -1562,6 +1530,64 @@ export class ContentOrchestratorService {
         name: canonicalizeMultiInOne(s.name, s.language),
       })),
     };
+  }
+
+  /**
+   * Shared by generate(), the uk-UA-scoped variant, and the standalone Slug UI mode — the single
+   * place a slug's `buildPromptSlug → runRepairGate → normalizeSlugResponse` chain runs. Before
+   * this existed, 3 independent copies each called normalizeSlugResponse separately; the
+   * killer-spec-suffix feature needs to thread a resolved spec into that call, and a duplicated
+   * call site is exactly the shape where one of the 3 gets missed silently — it wouldn't throw or
+   * fail a test, it would just ship a slug with no suffix. Unifying to one call site closes that
+   * structurally instead of relying on remembering to update all 3.
+   */
+  private runSlugRepairGate(params: {
+    input: ProductInput;
+    seoLangs: string[];
+    contextHtmlOrDescription?: string;
+    useThinking: boolean;
+    telemetryLang?: string;
+  }) {
+    const { input, seoLangs, contextHtmlOrDescription, useThinking, telemetryLang } = params;
+    const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, contextHtmlOrDescription);
+    return runRepairGate<SlugResponse>({
+      label: 'Slugs',
+      maxRepairs: this.maxRepairs(),
+      basePayload: promptSlug,
+      produce: async payload => this.normalizeSlugResponse(
+        await this.llm.generateJson<SlugResponse>(payload, useThinking, {
+          taskLabel: 'Slug', productName: input.name, store: input.website.name,
+          ...(telemetryLang ? { lang: telemetryLang } : {}),
+        }),
+        null, // killerSpec — wired in by the suffix feature
+      ),
+      validate: json => validateSlugs(json, input.name),
+      withFeedback: appendRepairFeedback,
+      onAttempt: (n, c) =>
+        this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+    });
+  }
+
+  /**
+   * Escalated from 'warning' to 'error' (previously logged a console.warn and pushed a warning
+   * while H1/meta_title silently fell back to English for every locale). Confirmed effect:
+   * severity 'error' auto-opens the acceptance/review panel on generation completion
+   * (app.component.ts's `acceptancePanelOpen.set(this.validationErrorCount() > 0)`), forcing the
+   * editor to see it — this doesn't block any export/publish action, since none exists that gates
+   * on error count, but it is a real behavior change, not a cosmetic label swap. Shared here so
+   * generate() and the uk-UA-scoped variant can't drift to different wording, which they had.
+   */
+  private pushSlugGenerationFailedIssue(): void {
+    this.validationIssues.update(issues => [
+      ...issues,
+      {
+        severity: 'error',
+        rule: 'slug-generation-failed',
+        detail: 'Slug generation failed — H1 and meta_title will render in ENGLISH for every '
+          + 'locale until Slug is re-run. Do not treat this artifact as ship-ready.',
+        context: 'Slugs',
+      },
+    ]);
   }
 
   /** Keeps "N-in-N"/"N в N" hyphenation in sync with the HTML body's canonical form — see
