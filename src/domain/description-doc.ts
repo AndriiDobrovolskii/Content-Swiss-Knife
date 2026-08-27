@@ -22,6 +22,14 @@
 export type Prose = string;
 
 export interface KillerSpec {
+  /**
+   * Stable, model-emitted machine identifier — e.g. "accuracy", "build-volume", "power" — never
+   * localized prose. Open string, not a closed enum: SPEC_LABEL_REGISTRY (slug-spec-labels.ts)
+   * simply has no entry for a key it doesn't recognize, which is the normal "no slug suffix"
+   * fallback, not an error. Exists so a deterministic slug suffix can key off it — `label` alone
+   * can't, since it's already translated per-locale prose.
+   */
+  key: string;
   /** e.g. "Об'єм друку" */
   label: string;
   /** e.g. "250x250x260 мм" */

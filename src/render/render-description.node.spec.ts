@@ -21,9 +21,9 @@ const doc: ProductDescriptionDoc = {
   localizedName: 'Test Product',
   hook: 'Hook <b>text</b>.',
   killerSpecs: [
-    { label: 'A', value: '1', why: 'Why A.' },
-    { label: 'B', value: '2', why: 'Why B.' },
-    { label: 'C', value: '3', why: 'Why C.' },
+    { key: 'a', label: 'A', value: '1', why: 'Why A.' },
+    { key: 'b', label: 'B', value: '2', why: 'Why B.' },
+    { key: 'c', label: 'C', value: '3', why: 'Why C.' },
   ],
   keyBenefits: [{ kind: 'paragraph', text: 'A benefit.' }],
   functionality: [

@@ -26,9 +26,9 @@ function docWithEveryField(): ProductDescriptionDoc {
     localizedName: 'name',
     hook: 'hook',
     killerSpecs: [
-      { label: 'ks-label-1', value: 'ks-value-1', why: 'ks-why-1' },
-      { label: 'ks-label-2', value: 'ks-value-2', why: 'ks-why-2' },
-      { label: 'ks-label-3', value: 'ks-value-3', why: 'ks-why-3' },
+      { key: 'ks-key-1', label: 'ks-label-1', value: 'ks-value-1', why: 'ks-why-1' },
+      { key: 'ks-key-2', label: 'ks-label-2', value: 'ks-value-2', why: 'ks-why-2' },
+      { key: 'ks-key-3', label: 'ks-label-3', value: 'ks-value-3', why: 'ks-why-3' },
     ],
     keyBenefits: [
       {
@@ -117,6 +117,7 @@ describe('mapDocText — completeness', () => {
     expect(mapped.locale).toBe('uk-UA');
     expect(mapped.figures[0].file).toBe('f.jpg');
     expect(mapped.videos[0].src).toBe('https://x/e/1');
+    expect(mapped.killerSpecs[0].key).toBe('ks-key-1');
     expect(mapped.functionality[0].blocks[1]).toEqual({ kind: 'figure', ref: 0 });
   });
 

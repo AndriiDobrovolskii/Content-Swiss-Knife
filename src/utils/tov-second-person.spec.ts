@@ -111,9 +111,9 @@ describe('validateSecondPersonScopeDoc — Doc-reading sibling', () => {
       localizedName: 'Ortur Laser Master 3',
       hook: 'Верстат придатний для виготовлення та використання у високоточних задачах.',
       killerSpecs: [
-        { label: 'A', value: '1', why: 'why a' },
-        { label: 'B', value: '2', why: 'why b' },
-        { label: 'C', value: '3', why: 'why c' },
+        { key: 'a', label: 'A', value: '1', why: 'why a' },
+        { key: 'b', label: 'B', value: '2', why: 'why b' },
+        { key: 'c', label: 'C', value: '3', why: 'why c' },
       ],
       keyBenefits: [{ kind: 'paragraph', text: 'Переваги виробу.' }],
       functionality: [{ heading: 'Функціональність', blocks: [{ kind: 'paragraph', text: 'Опис роботи.' }] }],

@@ -56,9 +56,9 @@ function conformanceDoc(locale: string): ProductDescriptionDoc {
     localizedName: 'Formlabs Fuse 1',
     hook: 'Formlabs Fuse 1 — SLS 3D printer with a 165 × 165 × 300 mm build volume.',
     killerSpecs: [
-      { label: 'Build volume', value: '165 × 165 × 300 mm', why: 'Fits a full nesting batch.' },
-      { label: 'Layer height', value: '0.11 mm', why: 'Holds fine detail across the bed.' },
-      { label: 'Laser power', value: '10 W', why: 'Sinters PA 12 at rated speed.' },
+      { key: 'build-volume', label: 'Build volume', value: '165 × 165 × 300 mm', why: 'Fits a full nesting batch.' },
+      { key: 'layer-height', label: 'Layer height', value: '0.11 mm', why: 'Holds fine detail across the bed.' },
+      { key: 'power', label: 'Laser power', value: '10 W', why: 'Sinters PA 12 at rated speed.' },
     ],
     keyBenefits: [
       {

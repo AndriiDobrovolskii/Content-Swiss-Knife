@@ -40,9 +40,9 @@ function validDoc() {
     localizedName: 'Test Product',
     hook: 'A hook sentence.',
     killerSpecs: [
-      { label: 'A', value: '1', why: 'why a' },
-      { label: 'B', value: '2', why: 'why b' },
-      { label: 'C', value: '3', why: 'why c' },
+      { key: 'a', label: 'A', value: '1', why: 'why a' },
+      { key: 'b', label: 'B', value: '2', why: 'why b' },
+      { key: 'c', label: 'C', value: '3', why: 'why c' },
     ],
     keyBenefits: [{ kind: 'paragraph' as const, text: 'Benefit.' }],
     functionality: [{ heading: 'How it works', blocks: [{ kind: 'paragraph' as const, text: 'It works.' }] }],
@@ -62,7 +62,7 @@ function validDoc() {
 
 /** A Doc the schema rejects — killerSpecs below the 3-entry minimum. */
 function invalidDoc() {
-  return { ...validDoc(), killerSpecs: [{ label: 'A', value: '1', why: 'only one' }] };
+  return { ...validDoc(), killerSpecs: [{ key: 'a', label: 'A', value: '1', why: 'only one' }] };
 }
 
 /** What Angular hands the Doc branch when the proxy answers `{ error: describeError(err) }`. */

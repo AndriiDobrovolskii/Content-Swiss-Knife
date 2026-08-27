@@ -290,9 +290,9 @@ describe('validateSentenceLengthDoc — Doc-reading sibling', () => {
       localizedName: 'Ortur H20',
       hook: 'Коротке речення.',
       killerSpecs: [
-        { label: 'A', value: '1', why: 'Коротке why a.' },
-        { label: 'B', value: '2', why: 'Коротке why b.' },
-        { label: 'C', value: '3', why: 'Коротке why c.' },
+        { key: 'a', label: 'A', value: '1', why: 'Коротке why a.' },
+        { key: 'b', label: 'B', value: '2', why: 'Коротке why b.' },
+        { key: 'c', label: 'C', value: '3', why: 'Коротке why c.' },
       ],
       keyBenefits: [],
       functionality: [],
@@ -334,9 +334,9 @@ describe('validateSentenceLengthDoc — Doc-reading sibling', () => {
   it('measures killerSpecs[].why independently, addressed by its own path', () => {
     const doc = baseDoc({
       killerSpecs: [
-        { label: 'A', value: '1', why: TOO_LONG },
-        { label: 'B', value: '2', why: 'Коротко.' },
-        { label: 'C', value: '3', why: 'Коротко.' },
+        { key: 'a', label: 'A', value: '1', why: TOO_LONG },
+        { key: 'b', label: 'B', value: '2', why: 'Коротко.' },
+        { key: 'c', label: 'C', value: '3', why: 'Коротко.' },
       ],
     });
     const issues = runDoc(doc);

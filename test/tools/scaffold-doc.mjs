@@ -202,6 +202,12 @@ export function parseKillerSpecs(html) {
     }
 
     specs.push({
+      // A stable machine `key` (see KillerSpec in description-doc.ts) is not encoded anywhere in
+      // legacy production HTML — no historical artifact this tool reads was ever rendered with a
+      // data-spec-key attribute. Guessing one from `label` text would reintroduce exactly the
+      // fragile per-locale label-matching this field exists to avoid. Left as TODO, like every
+      // other judgment field this scaffolder cannot derive — see the header.
+      key: TODO,
       label: collapsed.slice(0, at).trim(),
       value: collapsed.slice(at + 2).trim(),
       why: prose(tds[1], `killer-spec "why" for "${collapsed}"`),

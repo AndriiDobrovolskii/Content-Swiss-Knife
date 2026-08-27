@@ -33,9 +33,9 @@ function validDoc(): ProductDescriptionDoc {
     localizedName: 'XGRIDS L2 Pro',
     hook: 'hook',
     killerSpecs: [
-      { label: 'Точність', value: '3 см', why: 'why-1' },
-      { label: 'Дальність', value: '300 м', why: 'why-2' },
-      { label: 'Вага', value: '1,7 кг', why: 'why-3' },
+      { key: 'accuracy', label: 'Точність', value: '3 см', why: 'why-1' },
+      { key: 'range', label: 'Дальність', value: '300 м', why: 'why-2' },
+      { key: 'weight', label: 'Вага', value: '1,7 кг', why: 'why-3' },
     ],
     keyBenefits: [
       {
@@ -120,6 +120,24 @@ describe('plain-text fields reject HTML', () => {
 
     const s = validDoc(); s.specs.categories[0].rows[0].label = '<i>Вага</i>';
     expect(errorsFor(s)).not.toEqual([]);
+  });
+
+  /**
+   * KillerSpec.key is the stable machine identifier a deterministic slug-suffix feature keys off
+   * — unlike `label`, which is localized prose. An empty key is indistinguishable downstream from
+   * "no key", so it must fail validation rather than silently ship.
+   */
+  it('rejects a killer spec with an empty key', () => {
+    const doc = validDoc();
+    (doc.killerSpecs[0] as { key: string }).key = '';
+    expect(errorsFor(doc)).not.toEqual([]);
+  });
+
+  it('rejects a killer spec missing key entirely', () => {
+    const doc = validDoc();
+    const spec = doc.killerSpecs[0] as Partial<typeof doc.killerSpecs[0]>;
+    delete spec.key;
+    expect(errorsFor(doc)).not.toEqual([]);
   });
 
   /**

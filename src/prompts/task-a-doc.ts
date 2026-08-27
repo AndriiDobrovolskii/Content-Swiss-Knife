@@ -49,7 +49,7 @@ SHAPE — emit exactly these keys:
   "locale": "<BCP47 of the base language, e.g. uk-UA>",
   "localizedName": "<product name as it should read in this language>",
   "hook": "<§1, one paragraph>",
-  "killerSpecs": [ { "label": "", "value": "", "why": "" } ],        // §2a — 3–4 entries
+  "killerSpecs": [ { "key": "", "label": "", "value": "", "why": "" } ], // §2a — 3–4 entries
   "keyBenefits": [ <Block> ],           // §2b — at least 1; a "bullets" Block needs 3-8 items
   "functionality": [ <Subsection> ],                                 // §3 — at least 1
   "applications": {                                                  // §4
@@ -101,6 +101,13 @@ HARD RULES:
   "value" in a §2a KILLER SPEC ("killerSpecs[].value") is ALWAYS a plain string, never an array —
   even when it lists more than one item (e.g. "Large Tumbler Basket, Liner Kit"), join it into one
   string. Only §7 spec rows may be an array.
+- EACH §2a KILLER SPEC ALSO CARRIES A "key" — a short, stable, kebab-case MACHINE identifier for
+  what the spec measures, distinct from its localized "label". Prefer one of: "accuracy",
+  "resolution", "speed", "frame-rate", "build-volume", "working-area", "layer-height", "power".
+  If none of these genuinely fits the spec, coin a short kebab-case key of your own rather than
+  forcing a bad match — never leave "key" empty. "key" is always English/ASCII kebab-case
+  regardless of "locale"; only "label" and "value" are localized.
+  Example: { "key": "accuracy", "label": "Точність", "value": "0,015 мм", "why": "…" }.
 - A bullet's "lead" carries its own trailing punctuation and spacing; the renderer adds none.
   It joins them as <b>{lead}</b>{text} with nothing in between, so if "lead" ends with a letter or
   digit AND "text" begins with one, the two words collide: "Топографічне зніманняДальність".

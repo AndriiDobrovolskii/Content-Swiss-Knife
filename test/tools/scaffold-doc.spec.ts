@@ -173,7 +173,7 @@ describe('parseKillerSpecs', () => {
 </table></div>`;
 
     expect(parseKillerSpecs(html)).toEqual([
-      { label: 'Робоча зона', value: '420 × 300 мм', why: 'Розміщує заготовки середнього формату.' },
+      { key: 'TODO', label: 'Робоча зона', value: '420 × 300 мм', why: 'Розміщує заготовки середнього формату.' },
     ]);
   });
 
@@ -188,6 +188,7 @@ describe('parseKillerSpecs', () => {
 </table></div>`;
 
     expect(parseKillerSpecs(html)[0]).toEqual({
+      key: 'TODO',
       label: 'Роздільна здатність',
       value: '1920: 1080',
       why: 'why',
@@ -310,12 +311,29 @@ describe('scaffoldDoc against the real corpus', () => {
     const scaffolded = scaffoldDoc(html, { locale: 'uk-UA' });
 
     // One `it` per field so a failure names the field rather than dumping a 200-line diff.
-    it.each(['hook', 'killerSpecs', 'specs', 'figures', 'videos'])(
+    // killerSpecs is excluded here — see the dedicated pair of tests below for why.
+    it.each(['hook', 'specs', 'figures', 'videos'])(
       'derives %s identically to the hand-authored Doc',
       field => {
         expect(scaffolded[field]).toEqual(authored[field]);
       },
     );
+
+    /**
+     * killerSpecs.key is the one field in this comparison the scaffolder cannot derive from
+     * production HTML, by construction rather than by bug: no historical artifact was ever
+     * rendered with a data-spec-key attribute, so there is nothing in the source for the
+     * scaffolder to read a machine key from (see scaffold-doc.mjs's parseKillerSpecs). Every OTHER
+     * field must still match exactly — this is a scoped exception, not a blanket exemption.
+     */
+    it('derives killerSpecs identically to the hand-authored Doc, aside from key', () => {
+      const stripKey = specs => specs.map(({ key, ...rest }) => rest);
+      expect(stripKey(scaffolded.killerSpecs)).toEqual(stripKey(authored.killerSpecs));
+    });
+
+    it('leaves killerSpecs.key as the TODO sentinel, not a guessed value', () => {
+      expect(scaffolded.killerSpecs.every(s => s.key === 'TODO')).toBe(true);
+    });
   });
 });
 

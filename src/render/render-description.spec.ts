@@ -21,9 +21,9 @@ function fullDoc(): ProductDescriptionDoc {
     localizedName: 'xTool M1 Ultra',
     hook: 'xTool M1 Ultra — це багатофункціональний верстат для художньо-ремісничого виробництва.',
     killerSpecs: [
-      { label: 'Потужність лазера', value: '20 Вт', why: 'Ріже деревину за один прохід.' },
-      { label: 'Точність', value: '0,02 мм', why: 'Дозволяє поєднувати друк і різання.' },
-      { label: 'Швидкість', value: '400 мм/с', why: 'Скорочує час серійного замовлення.' },
+      { key: 'power', label: 'Потужність лазера', value: '20 Вт', why: 'Ріже деревину за один прохід.' },
+      { key: 'accuracy', label: 'Точність', value: '0,02 мм', why: 'Дозволяє поєднувати друк і різання.' },
+      { key: 'speed', label: 'Швидкість', value: '400 мм/с', why: 'Скорочує час серійного замовлення.' },
     ],
     keyBenefits: [
       {
@@ -151,12 +151,12 @@ describe('renderDescription', () => {
     expect(render(fullDoc())).toMatchInlineSnapshot(`
       "<p>xTool M1 Ultra — це багатофункціональний верстат для художньо-ремісничого виробництва.</p>
 
-      <div class="table-responsive"><table>
+      <div class="table-responsive" data-section="killer-specs"><table>
       <thead><tr><th>Параметр</th><th>Ваша перевага</th></tr></thead>
       <tbody>
-      <tr><td>Потужність лазера: 20 Вт</td><td>Ріже деревину за один прохід.</td></tr>
-      <tr><td>Точність: 0,02 мм</td><td>Дозволяє поєднувати друк і різання.</td></tr>
-      <tr><td>Швидкість: 400 мм/с</td><td>Скорочує час серійного замовлення.</td></tr>
+      <tr data-spec-key="power" data-spec-value="20 Вт"><td>Потужність лазера: 20 Вт</td><td>Ріже деревину за один прохід.</td></tr>
+      <tr data-spec-key="accuracy" data-spec-value="0,02 мм"><td>Точність: 0,02 мм</td><td>Дозволяє поєднувати друк і різання.</td></tr>
+      <tr data-spec-key="speed" data-spec-value="400 мм/с"><td>Швидкість: 400 мм/с</td><td>Скорочує час серійного замовлення.</td></tr>
       </tbody>
       </table></div>
 
@@ -254,6 +254,20 @@ describe('renderDescription', () => {
       const firstRow = table.querySelectorAll('tbody tr')[0].querySelectorAll('td');
       expect(firstRow).toHaveLength(2);
       expect(firstRow[0].textContent).toBe('Потужність лазера: 20 Вт');
+    });
+
+    it('marks the section and each row with machine-readable data attributes', () => {
+      const html = render(fullDoc());
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const section = doc.querySelector('[data-section="killer-specs"]');
+      expect(section).not.toBeNull();
+
+      const rows = section!.querySelectorAll('tbody tr');
+      expect(rows).toHaveLength(3);
+      expect(rows[0].getAttribute('data-spec-key')).toBe('power');
+      expect(rows[0].getAttribute('data-spec-value')).toBe('20 Вт');
+      expect(rows[1].getAttribute('data-spec-key')).toBe('accuracy');
+      expect(rows[1].getAttribute('data-spec-value')).toBe('0,02 мм');
     });
 
     it('uses the locale header pair from getKillerSpecsHeaders', () => {
@@ -395,7 +409,7 @@ describe('renderDescription', () => {
       const html = render(fullDoc());
       const preamble = html.slice(0, html.indexOf('<h2'));
       expect(preamble).toContain('<p>xTool M1 Ultra');
-      expect(preamble).toContain('<div class="table-responsive">');
+      expect(preamble).toContain('<div class="table-responsive" data-section="killer-specs">');
       expect(preamble).not.toContain('<h2');
       expect(preamble).not.toContain('<section');
     });

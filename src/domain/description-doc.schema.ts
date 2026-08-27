@@ -44,7 +44,10 @@ const NonEmpty = z.string().min(1).refine(s => !TAG_LIKE.test(s), {
   message: 'Plain-text fields may not contain HTML tags — the renderer applies all formatting.',
 });
 
-const KillerSpecSchema = z.object({ label: NonEmpty, value: NonEmpty, why: Prose });
+// Open string, not z.enum(...) — see KillerSpec.key's doc comment in description-doc.ts. NonEmpty
+// (not a bare z.string()) so the model can't ship an empty key, which would be indistinguishable
+// from "no key" everywhere downstream.
+const KillerSpecSchema = z.object({ key: NonEmpty, label: NonEmpty, value: NonEmpty, why: Prose });
 
 /**
  * `<li><b>{lead}</b>{text}</li>` — the renderer joins these with NOTHING of its own, deliberately.

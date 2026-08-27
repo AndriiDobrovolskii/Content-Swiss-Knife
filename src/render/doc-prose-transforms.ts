@@ -49,6 +49,9 @@ export const NON_TEXT_PATHS: readonly RegExp[] = [
   /\.kind$/,
   /^figures\[\d+\]\.file$/,
   /^videos\[\d+\]\.src$/,
+  // A stable machine identifier (e.g. "accuracy") — normalizing it as prose could rewrite it into
+  // something SPEC_LABEL_REGISTRY no longer recognizes, silently losing the slug suffix it enables.
+  /^killerSpecs\[\d+\]\.key$/,
 ];
 
 const mapBullets = (items: BulletItem[], fn: TextTransform): BulletItem[] =>
@@ -102,7 +105,7 @@ export function mapDocText(doc: ProductDescriptionDoc, fn: TextTransform): Produ
     localizedName: fn(doc.localizedName),
 
     hook: fn(doc.hook),
-    killerSpecs: doc.killerSpecs.map(s => ({ label: fn(s.label), value: fn(s.value), why: fn(s.why) })),
+    killerSpecs: doc.killerSpecs.map(s => ({ key: s.key, label: fn(s.label), value: fn(s.value), why: fn(s.why) })),
     keyBenefits: doc.keyBenefits.map(b => mapBlock(b, fn)),
     functionality: doc.functionality.map(s => mapSubsection(s, fn)),
     applications: {

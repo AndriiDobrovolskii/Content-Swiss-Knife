@@ -27,7 +27,7 @@ function brokenDoc(): unknown {
     locale: 'uk-UA',
     localizedName: 'Test',
     hook: 'A hook.',
-    killerSpecs: [{ label: 'a', value: 'b', why: 'c' }], // needs 3–4
+    killerSpecs: [{ key: 'a', label: 'a', value: 'b', why: 'c' }], // needs 3–4
     keyBenefits: [],                                     // needs ≥1
     functionality: [],                                   // needs ≥1
     applications: { heading: 'h', items: [] },           // needs 4–8

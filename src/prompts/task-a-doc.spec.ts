@@ -124,6 +124,19 @@ describe('TASK_A_DOC_INSTRUCTION — the output contract', () => {
   });
 
   /**
+   * KillerSpec.key (description-doc.ts) is a stable machine identifier a deterministic slug-suffix
+   * feature keys off — the localized "label" can't serve that role. The model must emit it, be told
+   * it's ASCII/kebab-case (not localized like label/value), and be given an escape hatch (coin a
+   * key) rather than forced into a bad match against the suggested set.
+   */
+  it('tells the model to emit a stable kebab-case "key" per killer spec, distinct from "label"', () => {
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/"key"/);
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/kebab-case/i);
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/accuracy/);
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/coin a (?:short )?kebab-case key/i);
+  });
+
+  /**
    * Added 2026-08-17: a live run shipped a keyBenefits "bullets" Block with only 2 items, which
    * the repair gate could only fail on — there is no cheaper repair instrument than a full
    * document regeneration for a schema-shape violation today (see doc-schema-issues.ts /

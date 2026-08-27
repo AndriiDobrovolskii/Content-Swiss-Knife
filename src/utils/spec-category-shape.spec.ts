@@ -154,9 +154,9 @@ function docWithCategories(categories: Array<{ title: string; rows: Array<{ labe
     localizedName: 'Ortur H20 20 W',
     hook: 'Hook.',
     killerSpecs: [
-      { label: 'A', value: '1', why: 'why a' },
-      { label: 'B', value: '2', why: 'why b' },
-      { label: 'C', value: '3', why: 'why c' },
+      { key: 'a', label: 'A', value: '1', why: 'why a' },
+      { key: 'b', label: 'B', value: '2', why: 'why b' },
+      { key: 'c', label: 'C', value: '3', why: 'why c' },
     ],
     keyBenefits: [],
     functionality: [],

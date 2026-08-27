@@ -240,11 +240,17 @@ function renderSubsection(
 function renderKillerSpecs(doc: ProductDescriptionDoc, ctx: RenderContext): string {
   const [paramHeader, benefitHeader] =
     getRenderRules(ctx.storeName ?? '').killerSpecsHeaders(doc.locale) ?? KILLER_SPECS_HEADERS['en-gb'];
+  // data-spec-key/data-spec-value: a machine-readable anchor for a deterministic slug-suffix
+  // feature to find "which killer spec, what raw value" without parsing it back out of the
+  // escaped, HTML-finalizer-rewritten <td> text (that text is locale-normalized prose by the time
+  // finalizers run over it; the attribute carries the pre-finalizer raw value instead). Both
+  // attributes, not a class: a class reads as styling and the first CSS refactor would drop it
+  // silently — a `data-` attribute is a declared machine contract.
   const rows = doc.killerSpecs
-    .map(s => `<tr><td>${esc(s.label)}: ${esc(s.value)}</td><td>${prose(s.why)}</td></tr>`)
+    .map(s => `<tr data-spec-key="${esc(s.key)}" data-spec-value="${esc(s.value)}"><td>${esc(s.label)}: ${esc(s.value)}</td><td>${prose(s.why)}</td></tr>`)
     .join('\n');
   return (
-    `<div class="table-responsive"><table>\n` +
+    `<div class="table-responsive" data-section="killer-specs"><table>\n` +
     `<thead><tr><th>${esc(paramHeader)}</th><th>${esc(benefitHeader)}</th></tr></thead>\n` +
     `<tbody>\n${rows}\n</tbody>\n` +
     `</table></div>`

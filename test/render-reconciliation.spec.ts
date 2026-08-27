@@ -68,11 +68,28 @@ function decodeNbsp(html: string): string {
 }
 
 /**
+ * `data-section="killer-specs"` / `data-spec-key="..."` / `data-spec-value="..."` are new,
+ * machine-readable attributes the renderer emits for the deterministic slug-suffix feature -- no
+ * historical production HTML has them, and never will retroactively. Same category as decodeNbsp
+ * above: a known, deliberate difference between the renderer's forward-looking output and a
+ * committed historical artifact, not the kind of unintended drift this suite exists to catch.
+ * Stripped from both sides (a no-op on production HTML, which has none) so the comparison stays
+ * about structural/content fidelity rather than freezing the renderer against ever adding an
+ * attribute -- the same reasoning SUPERSEDED_SLUGS below applies at the whole-artifact level.
+ */
+function stripSlugSuffixMarkers(html: string): string {
+  return html
+    .replace(/ data-section="killer-specs"/g, '')
+    .replace(/ data-spec-key="[^"]*"/g, '')
+    .replace(/ data-spec-value="[^"]*"/g, '');
+}
+
+/**
  * Collapses inter-tag whitespace and runs of whitespace inside text. Deliberately does NOT sort
  * attributes, drop attributes, or change case — those differences are real failures, not noise.
  */
 function normalize(html: string): string {
-  return decodeNbsp(html).replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
+  return stripSlugSuffixMarkers(decodeNbsp(html)).replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
 }
 
 /** Visible text only, for content-loss detection that tag counts would miss. */

@@ -52,9 +52,9 @@ function makeDoc(specRows: Array<{ label: string; value: string }>) {
     localizedName: 'Test Product',
     hook: 'A hook sentence.',
     killerSpecs: [
-      { label: 'A', value: '1', why: 'why a' },
-      { label: 'B', value: '2', why: 'why b' },
-      { label: 'C', value: '3', why: 'why c' },
+      { key: 'a', label: 'A', value: '1', why: 'why a' },
+      { key: 'b', label: 'B', value: '2', why: 'why b' },
+      { key: 'c', label: 'C', value: '3', why: 'why c' },
     ],
     keyBenefits: [{ kind: 'paragraph' as const, text: 'Benefit.' }],
     functionality: [{ heading: 'How it works', blocks: [{ kind: 'paragraph' as const, text: 'It works.' }] }],
@@ -74,7 +74,7 @@ function makeDoc(specRows: Array<{ label: string; value: string }>) {
 
 /** A Doc the schema rejects outright — killerSpecs below the 3-entry minimum. */
 function invalidSchemaDoc() {
-  return { ...makeDoc([{ label: 'Вага', value: '500 г' }]), killerSpecs: [{ label: 'A', value: '1', why: 'only one' }] };
+  return { ...makeDoc([{ label: 'Вага', value: '500 г' }]), killerSpecs: [{ key: 'a', label: 'A', value: '1', why: 'only one' }] };
 }
 
 /** Grounding source text (already Ukrainian — what groundingSpecs() would have produced). */
@@ -423,9 +423,9 @@ describe('runDocGate — full validator wiring (Center 3D Print / Style B, non-e
       localizedName: PRODUCT_NAME,
       hook: 'Ваш новий лазерний гравер Ortur H20 20 W забезпечує високу точність різання та гравіювання.',
       killerSpecs: [
-        { label: 'Потужність', value: '20 Вт', why: 'Досить потужний для різних матеріалів.' },
-        { label: 'Робоча зона', value: '400 мм', why: 'Вистачає для великих деталей.' },
-        { label: 'Швидкість', value: '12000 мм/хв', why: 'Швидка обробка великих партій.' },
+        { key: 'power', label: 'Потужність', value: '20 Вт', why: 'Досить потужний для різних матеріалів.' },
+        { key: 'working-area', label: 'Робоча зона', value: '400 мм', why: 'Вистачає для великих деталей.' },
+        { key: 'speed', label: 'Швидкість', value: '12000 мм/хв', why: 'Швидка обробка великих партій.' },
       ],
       keyBenefits: [{ kind: 'paragraph', text: 'Проста у використанні модель для дому та невеликої майстерні.' }],
       functionality: [{
