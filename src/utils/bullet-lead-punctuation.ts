@@ -127,3 +127,75 @@ export function normalizeBulletLeadPunctuation(
 
   return { doc: clone, fixed };
 }
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === 'object';
+}
+
+/**
+ * Pre-parse sibling of normalizeBulletLeadPunctuation, for the SAME defect
+ * (bullets-block lead/text collision) but reachable where the post-parse version above is not:
+ * description-doc.schema.ts's BulletItemSchema carries a `.refine()` that THROWS via
+ * ProductDescriptionDocSchema.parse() on exactly this collision, so by the time a Doc parses
+ * successfully it can no longer contain one — the bullets-block half of normalizeBulletLeadPunctuation
+ * above is therefore permanently unreachable for the defect it was built to fix (it stays reachable,
+ * and unchanged, for applications.items[].scenario, which is NOT refine-guarded and so never throws
+ * at parse time — see that function's own contract; this function does not touch `scenario` at all).
+ *
+ * Runs on raw: unknown — the model's JSON output BEFORE ProductDescriptionDocSchema.parse() has
+ * validated anything — so every hop is defensively guarded and nothing here throws on a malformed
+ * or unexpected shape; it is simply skipped and left for the schema to reject as it already does
+ * today. Mirrors forEachBlockInOrder's traversal shape (description-doc.ts) without assuming
+ * anything is already validated: keyBenefits (a flat Block[]), functionality[] and the optional
+ * compatibility Subsection (both `{blocks, subsections?}`, recursed defensively).
+ *
+ * Deliberately does NOT walk applications.blocks: unlike forEachBlockInOrder's post-parse traversal
+ * (where a bullets entry there is impossible once validated, so including it is harmless),
+ * ApplicationsBlockSchema is a discriminated union on `kind` restricted to 'paragraph'/'figure' — a
+ * raw `{kind:'bullets', ...}` entry there fails that discriminator match itself, before the
+ * lead/text refine is ever evaluated. Fixing the collision doesn't change `kind` back to a valid
+ * value, so `.parse()` would still throw, on an unrelated error — walking that branch here would fix
+ * nothing, so it is left out entirely.
+ *
+ * Reuses `collides()` unchanged — deliberately NOT trimmed, for the same reason as its own doc
+ * comment: it must match BulletItemSchema's refine byte-for-byte, and that refine tests the raw,
+ * untrimmed strings.
+ */
+export function normalizeRawBulletLeadPunctuation(raw: unknown): { raw: unknown; fixed: number } {
+  if (!isRecord(raw)) return { raw, fixed: 0 };
+  const clone = structuredClone(raw) as Record<string, unknown>;
+  let fixed = 0;
+
+  const fixItems = (items: unknown): void => {
+    if (!Array.isArray(items)) return;
+    for (const item of items) {
+      if (!isRecord(item)) continue;
+      const { lead, text } = item;
+      if (typeof lead !== 'string' || typeof text !== 'string') continue;
+      if (!collides(lead, text)) continue;
+      // trimEnd() here is a no-op in practice: collides() already confirmed `lead` ends in a raw
+      // letter/digit, so there is no trailing whitespace to trim — kept as a defensive habit only.
+      item.lead = `${lead.trimEnd()}: `;
+      fixed++;
+    }
+  };
+
+  const walkBlocks = (blocks: unknown): void => {
+    if (!Array.isArray(blocks)) return;
+    for (const block of blocks) {
+      if (isRecord(block) && block.kind === 'bullets') fixItems(block.items);
+    }
+  };
+
+  const walkSubsection = (sub: unknown): void => {
+    if (!isRecord(sub)) return;
+    walkBlocks(sub.blocks);
+    if (Array.isArray(sub.subsections)) for (const nested of sub.subsections) walkSubsection(nested);
+  };
+
+  walkBlocks(clone.keyBenefits);
+  if (Array.isArray(clone.functionality)) for (const sub of clone.functionality) walkSubsection(sub);
+  if (clone.compatibility !== undefined) walkSubsection(clone.compatibility);
+
+  return { raw: clone, fixed };
+}

@@ -8,7 +8,7 @@
  * RUN: npm run test
  */
 import { describe, it, expect } from 'vitest';
-import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation } from './bullet-lead-punctuation';
+import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation, normalizeRawBulletLeadPunctuation } from './bullet-lead-punctuation';
 import type { ProductDescriptionDoc, Block } from '../domain/description-doc';
 
 function baseDoc(overrides: Partial<ProductDescriptionDoc> = {}): ProductDescriptionDoc {
@@ -218,5 +218,160 @@ describe('normalizeBulletLeadPunctuation', () => {
     const before = structuredClone(doc);
     normalizeBulletLeadPunctuation(doc);
     expect(doc).toEqual(before);
+  });
+});
+
+describe('normalizeRawBulletLeadPunctuation', () => {
+  it('fixes a colliding lead in a top-level keyBenefits bullets block', () => {
+    const raw = {
+      keyBenefits: [{ kind: 'bullets', items: [{ lead: 'Деревообробка', text: 'Фанера 8 мм ріжеться.' }] }],
+    };
+    const { raw: fixed, fixed: count } = normalizeRawBulletLeadPunctuation(raw);
+    expect(count).toBe(1);
+    const items = (fixed as typeof raw).keyBenefits[0].items;
+    expect(items[0].lead).toBe('Деревообробка: ');
+  });
+
+  it('fixes a colliding lead in functionality[].blocks', () => {
+    const raw = {
+      functionality: [{
+        heading: 'Огляд',
+        blocks: [{ kind: 'bullets', items: [{ lead: 'Ролики', text: 'Подають матеріал.' }] }],
+      }],
+    };
+    const { raw: fixed, fixed: count } = normalizeRawBulletLeadPunctuation(raw);
+    expect(count).toBe(1);
+    const d = fixed as typeof raw;
+    expect(d.functionality[0].blocks[0].items[0].lead).toBe('Ролики: ');
+  });
+
+  it('fixes a colliding lead nested inside functionality[].subsections[].blocks', () => {
+    const raw = {
+      functionality: [{
+        heading: 'Огляд',
+        blocks: [],
+        subsections: [{
+          heading: 'Деталі',
+          blocks: [{ kind: 'bullets', items: [{ lead: 'Ролики', text: 'Подають матеріал.' }] }],
+        }],
+      }],
+    };
+    const { raw: fixed, fixed: count } = normalizeRawBulletLeadPunctuation(raw);
+    expect(count).toBe(1);
+    const d = fixed as typeof raw;
+    expect(d.functionality[0].subsections![0].blocks[0].items[0].lead).toBe('Ролики: ');
+  });
+
+  it('fixes a colliding lead directly inside compatibility', () => {
+    const raw = {
+      compatibility: {
+        heading: 'Сумісність',
+        blocks: [{ kind: 'bullets', items: [{ lead: 'Матеріали', text: 'PLA, PETG, ABS.' }] }],
+      },
+    };
+    const { raw: fixed, fixed: count } = normalizeRawBulletLeadPunctuation(raw);
+    expect(count).toBe(1);
+    const d = fixed as typeof raw;
+    expect(d.compatibility.blocks[0].items[0].lead).toBe('Матеріали: ');
+  });
+
+  it('fixes a colliding lead nested inside compatibility.subsections[].blocks', () => {
+    const raw = {
+      compatibility: {
+        heading: 'Сумісність',
+        blocks: [],
+        subsections: [{
+          heading: 'Деталі',
+          blocks: [{ kind: 'bullets', items: [{ lead: 'Матеріали', text: 'PLA, PETG, ABS.' }] }],
+        }],
+      },
+    };
+    const { raw: fixed, fixed: count } = normalizeRawBulletLeadPunctuation(raw);
+    expect(count).toBe(1);
+    const d = fixed as typeof raw;
+    expect(d.compatibility.subsections![0].blocks[0].items[0].lead).toBe('Матеріали: ');
+  });
+
+  it('fixes every colliding item across the whole document in one pass and counts them all', () => {
+    const raw = {
+      keyBenefits: [{ kind: 'bullets', items: [{ lead: 'Перше', text: 'Друге.' }] }],
+      functionality: [{
+        heading: 'Огляд',
+        blocks: [{ kind: 'bullets', items: [{ lead: 'Третє', text: 'Четверте.' }] }],
+      }],
+      compatibility: {
+        heading: 'Сумісність',
+        blocks: [{ kind: 'bullets', items: [{ lead: "П'яте", text: 'Шосте.' }] }],
+      },
+    };
+    const { fixed: count } = normalizeRawBulletLeadPunctuation(raw);
+    expect(count).toBe(3);
+  });
+
+  it('leaves applications.items[].scenario untouched — out of scope for this function', () => {
+    const raw = {
+      applications: { heading: 'Сфери застосування', items: [{ scenario: 'Маркування металу', text: 'Гравер працює.' }] },
+    };
+    const { raw: fixed, fixed: count } = normalizeRawBulletLeadPunctuation(raw);
+    expect(count).toBe(0);
+    expect(fixed).toEqual(raw);
+  });
+
+  it('leaves a stray bullets-kind entry under applications.blocks untouched — cannot help there (see header comment)', () => {
+    const raw = {
+      applications: {
+        heading: 'Сфери застосування',
+        blocks: [{ kind: 'bullets', items: [{ lead: 'Маркування металу', text: 'Гравер працює.' }] }],
+        items: [],
+      },
+    };
+    const { raw: fixed, fixed: count } = normalizeRawBulletLeadPunctuation(raw);
+    expect(count).toBe(0);
+    expect(fixed).toEqual(raw);
+  });
+
+  it('leaves a lead already ending in ": " or a non-alnum character untouched', () => {
+    const raw = {
+      keyBenefits: [{
+        kind: 'bullets',
+        items: [
+          { lead: 'Гравіювання металу: ', text: 'ІЧ-лазер маркує алюміній.' },
+          { lead: 'Компактний, легкий,', text: 'зручний для транспортування.' },
+        ],
+      }],
+    };
+    const { raw: fixed, fixed: count } = normalizeRawBulletLeadPunctuation(raw);
+    expect(count).toBe(0);
+    expect(fixed).toEqual(raw);
+  });
+
+  it('is a no-op on an empty document', () => {
+    const { raw: fixed, fixed: count } = normalizeRawBulletLeadPunctuation({});
+    expect(count).toBe(0);
+    expect(fixed).toEqual({});
+  });
+
+  it('does not mutate the input', () => {
+    const raw = {
+      keyBenefits: [{ kind: 'bullets', items: [{ lead: 'Ролики', text: 'Подають матеріал.' }] }],
+    };
+    const before = structuredClone(raw);
+    normalizeRawBulletLeadPunctuation(raw);
+    expect(raw).toEqual(before);
+  });
+
+  it('does not throw on malformed or missing shapes', () => {
+    expect(normalizeRawBulletLeadPunctuation(null)).toEqual({ raw: null, fixed: 0 });
+    expect(normalizeRawBulletLeadPunctuation(undefined)).toEqual({ raw: undefined, fixed: 0 });
+    expect(normalizeRawBulletLeadPunctuation('not an object')).toEqual({ raw: 'not an object', fixed: 0 });
+    expect(() => normalizeRawBulletLeadPunctuation({ keyBenefits: 'not an array' })).not.toThrow();
+    expect(() => normalizeRawBulletLeadPunctuation({ keyBenefits: [{ kind: 'bullets', items: 'not an array' }] })).not.toThrow();
+    expect(() => normalizeRawBulletLeadPunctuation({ keyBenefits: [null, 42, { kind: 'bullets', items: [null, { lead: 1, text: 2 }] }] })).not.toThrow();
+    expect(() => normalizeRawBulletLeadPunctuation({ functionality: 'not an array' })).not.toThrow();
+    expect(() => normalizeRawBulletLeadPunctuation({ functionality: [{ blocks: 'not an array' }] })).not.toThrow();
+    expect(() => normalizeRawBulletLeadPunctuation({ functionality: [{ subsections: 'not an array' }] })).not.toThrow();
+    expect(() => normalizeRawBulletLeadPunctuation({ functionality: [null] })).not.toThrow();
+    expect(() => normalizeRawBulletLeadPunctuation({ compatibility: 'not an object' })).not.toThrow();
+    expect(() => normalizeRawBulletLeadPunctuation({ compatibility: null })).not.toThrow();
   });
 });
