@@ -267,6 +267,97 @@ describe('runConsumablesDocGate — a bullet-lead/text collision is fixed pre-pa
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Spec-count parity — regression guard: validateSpecCountParity's default 'section.specs table'
+// scoping never matches consumables output (render-consumables.ts emits no <section> wrapper at
+// all — §C forbids it), so the check used to fire a permanently-wrong "row count is 0, expected N"
+// on every consumables generation with a canonical input table, regardless of the doc's real
+// content — not a silent no-op, a content-independent false signal. Now wired with the consumables
+// scoping override (tableSelector: 'table', sectionLabel: '§C4 spec-group'), it reports the real
+// count and only fires when rows are genuinely short.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('runConsumablesDocGate — a spec-count shortfall is caught and repaired', () => {
+  const CANONICAL_SPECS = `| Item | Specification |
+| :--- | :--- |
+| Nozzle Temperature | 200 °C |
+| Bed Temperature | 60 °C |
+| Density | 1.24 g/cm³ |
+| Diameter | 1.75 mm |
+| Print Speed | 60 mm/s |`;
+
+  function shortSpecsDoc(): ConsumablesDescriptionDoc {
+    return makeDoc([{
+      heading: 'Print Settings',
+      rows: [
+        { label: 'Nozzle Temperature', value: '200 °C' },
+        { label: 'Bed Temperature', value: '60 °C' },
+        { label: 'Density', value: '1.24 g/cm³' },
+      ],
+    }]);
+  }
+
+  function fullSpecsDoc(): ConsumablesDescriptionDoc {
+    return makeDoc([{
+      heading: 'Print Settings',
+      rows: [
+        { label: 'Nozzle Temperature', value: '200 °C' },
+        { label: 'Bed Temperature', value: '60 °C' },
+        { label: 'Density', value: '1.24 g/cm³' },
+        { label: 'Diameter', value: '1.75 mm' },
+        { label: 'Print Speed', value: '60 mm/s' },
+      ],
+    }]);
+  }
+
+  it('flags a spec-count-mismatch error and drives a repair when specGroups rows fall 2+ short of the canonical input', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson
+      .mockResolvedValueOnce(shortSpecsDoc())
+      .mockResolvedValueOnce(fullSpecsDoc());
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asConsumablesDocGate(orchestrator).runConsumablesDocGate(
+      baseGateOpts({ input: { ...BASE_INPUT, specs: CANONICAL_SPECS } }),
+    );
+
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(2);
+    expect(result.repairsUsed).toBe(1);
+    expect(result.finalIssues.some((i: { rule: string }) => i.rule === 'spec-count-mismatch')).toBe(false);
+    expect(result.artifact).toContain('<');
+  });
+
+  it('names the §C4 spec-group wording, not §7, in the repair feedback', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson
+      .mockResolvedValueOnce(shortSpecsDoc())
+      .mockResolvedValueOnce(fullSpecsDoc());
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    await asConsumablesDocGate(orchestrator).runConsumablesDocGate(
+      baseGateOpts({ input: { ...BASE_INPUT, specs: CANONICAL_SPECS } }),
+    );
+
+    const retryPayload = mockLlm.generateJson.mock.calls[1][0] as PromptPayload;
+    expect(retryPayload.userContent).toContain('§C4 spec-group');
+    expect(retryPayload.userContent).not.toContain('§7 spec-table');
+  });
+
+  it('reports the real row count, not a permanent "0", once the consumables scoping is applied', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValueOnce(shortSpecsDoc());
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asConsumablesDocGate(orchestrator).runConsumablesDocGate(
+      baseGateOpts({ input: { ...BASE_INPUT, specs: CANONICAL_SPECS }, maxRepairs: 0 }),
+    );
+
+    const issue = result.finalIssues.find((i: { rule: string }) => i.rule === 'spec-count-mismatch') as
+      { detail: string } | undefined;
+    expect(issue?.detail).toContain('row count is 3, expected 5');
+  });
+});
+
 describe('runConsumablesDocGate — a semantic (char-limit) rejection repairs via the existing HTML validator', () => {
   it('renders each schema-valid attempt and repairs when validateGeneratedHtml rejects an over-length hook', async () => {
     const mockLlm = makeMockLlm();

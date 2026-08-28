@@ -158,6 +158,82 @@ describe('validateSpecCountParity', () => {
   });
 });
 
+/**
+ * Regression suite: the Consumables Doc pipeline's rendered HTML never has a <section class="specs">
+ * wrapper (§C forbids it — render-consumables.ts), so the default scoping always matched zero
+ * tables and the check silently no-opped no matter how many rows the model actually dropped. These
+ * cases mirror validateSpecCountParity's own describe above, called with the consumables overrides
+ * (tableSelector: 'table', sectionLabel: '§C4 spec-group') instead of a second, duplicated function.
+ */
+function specGroupHtml(rowCount: number): string {
+  const rows = Array.from({ length: rowCount }, (_, i) => `<tr><td>Row ${i}</td><td>${i}</td></tr>`).join('');
+  return `<h2>Print Settings</h2><div class="table-responsive"><table><tbody>${rows}</tbody></table></div>`;
+}
+
+const CONSUMABLES_OPTS = { tableSelector: 'table', sectionLabel: '§C4 spec-group' };
+
+describe('validateSpecCountParity — consumables scoping (tableSelector/sectionLabel overrides)', () => {
+  it('returns no issues when counts match', () => {
+    const issues = validateSpecCountParity(
+      specGroupHtml(15), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', CONSUMABLES_OPTS,
+    );
+    expect(issues).toHaveLength(0);
+  });
+
+  it('the default (no opts) scoping always reports "actual 0" on this fixture, regardless of real content — the exact bug this override fixes', () => {
+    // section.specs matches nothing in specGroupHtml(), so countActualSpecRows always returns 0 —
+    // NOT a silent no-op: it fires a permanently-wrong "row count is 0, expected N" error no matter
+    // how many rows the doc actually has, which is exactly what the original incident's console
+    // log showed ("§7 spec-table row count is 0, expected 26"). "0" was the selector matching
+    // nothing, never the model's real row count.
+    const issues = validateSpecCountParity(specGroupHtml(15), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].detail).toContain('§7 spec-table row count is 0, expected 15');
+  });
+
+  it('flags a shortfall of 5 as an ERROR with the "§C4 spec-group" wording, not "§7"', () => {
+    const issues = validateSpecCountParity(
+      specGroupHtml(10), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', CONSUMABLES_OPTS,
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('error');
+    expect(issues[0].rule).toBe('spec-count-mismatch');
+    expect(issues[0].detail).toContain('§C4 spec-group row count is 10, expected 15');
+    expect(issues[0].detail).not.toContain('§7');
+  });
+
+  it('flags an off-by-one shortfall as a WARNING', () => {
+    const issues = validateSpecCountParity(
+      specGroupHtml(14), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', CONSUMABLES_OPTS,
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+  });
+
+  it('flags extra rows (actual > expected) as a WARNING', () => {
+    const issues = validateSpecCountParity(
+      specGroupHtml(18), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', CONSUMABLES_OPTS,
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+  });
+
+  it('no-ops when canonicalSpecs has no detectable table', () => {
+    const issues = validateSpecCountParity(specGroupHtml(3), 'free text, no table here', '', 'HTML (uk-UA)', CONSUMABLES_OPTS);
+    expect(issues).toHaveLength(0);
+  });
+});
+
+describe('countActualSpecRows — tableSelector override', () => {
+  it('counts every <table> unscoped when passed a bare "table" selector', () => {
+    expect(countActualSpecRows(specGroupHtml(4), 'table')).toBe(4);
+  });
+
+  it('counts zero when the consumables shape is scanned with the default section.specs scoping', () => {
+    expect(countActualSpecRows(specGroupHtml(4))).toBe(0);
+  });
+});
+
 describe('expectedSpecParameterLabels', () => {
   it('on the real 20w-specs.md shape (Ortur H20) returns 15 labels and does NOT contain the Product Name row', () => {
     const labels = expectedSpecParameterLabels(ORTUR_H20_SPECS, 'H20 Laser Engraving Machine');

@@ -181,16 +181,19 @@ export function countExpectedSpecRows(canonicalSpecs: string, productName: strin
   return expectedSpecParameterLabels(canonicalSpecs, productName).length;
 }
 
-/** Sums <tbody><tr> rows across every table inside <section class="specs"> — mirrors the
- *  scoping used by specs-grounding.ts's validateSpecsGrounding. */
-export function countActualSpecRows(html: string): number {
+/** Sums <tbody><tr> rows across every table matching `tableSelector`. Default scopes to
+ *  <section class="specs"> — mirrors the scoping used by specs-grounding.ts's
+ *  validateSpecsGrounding, correct for the machine ProductDescriptionDoc pipeline
+ *  (render-description.ts). Callers for a document family with no such wrapper (e.g. Consumables —
+ *  see validateSpecCountParity's SpecCountParityOptions doc comment) pass an unscoped selector. */
+export function countActualSpecRows(html: string, tableSelector = 'section.specs table'): number {
   let doc: Document;
   try {
     doc = new DOMParser().parseFromString(html, 'text/html');
   } catch {
     return -1; // DOMParser unavailable — sentinel, caller no-ops
   }
-  const specTables = Array.from(doc.querySelectorAll('section.specs table'));
+  const specTables = Array.from(doc.querySelectorAll(tableSelector));
   return specTables.reduce((sum, t) => sum + t.querySelectorAll('tbody tr').length, 0);
 }
 
@@ -205,7 +208,35 @@ export function countActualSpecRowsDoc(doc: ProductDescriptionDoc): number {
 }
 
 /**
- * Validate that the §7 spec-table row count matches the canonical source's expected count.
+ * Scoping/wording overrides for a document family whose rendered HTML doesn't match the machine
+ * pipeline's `<section class="specs">` shape. Both optional; omitting either preserves today's
+ * exact machine-pipeline behavior.
+ */
+export interface SpecCountParityOptions {
+  /**
+   * CSS selector the actual row count is scanned from. Default: 'section.specs table' — the
+   * machine pipeline's scoping (render-description.ts's one <section class="specs">).
+   *
+   * The Consumables Doc pipeline (render-consumables.ts) passes 'table' unscoped: that renderer
+   * never emits a <section> wrapper anywhere — §C forbids it outright (see that file's own doc
+   * comment on renderConsumablesDoc()) — and specGroup() is the ONLY source of <table> anywhere in
+   * that document family (bulletGroup emits <ul>/<li>, figures emit <figure>, hook/cta are bare
+   * <p>, and every prose field is escaped by prose()/esc() before rendering — only literal
+   * <b>/<strong> ever survive — so a model-authored string cannot smuggle a stray <table> in
+   * either). Scoping to `section.specs` there always matches zero tables — NOT a silent no-op:
+   * `actual` becomes a permanent 0 regardless of the doc's real content, so the check fires a
+   * constant, content-independent "row count is 0, expected N" false claim on every generation
+   * with a canonical input table. Exactly the bug this option exists to fix.
+   */
+  tableSelector?: string;
+  /** Label used in the detail message for where the count came from. Default: '§7 spec-table'
+   *  (machine pipeline). The Consumables Doc pipeline passes '§C4 spec-group' — the prompt's own
+   *  section name for spec parameters (task-a-consumables-doc.ts). */
+  sectionLabel?: string;
+}
+
+/**
+ * Validate that the rendered spec-table row count matches the canonical source's expected count.
  * Severity depends on direction and magnitude:
  * - Extra rows (actual > expected) always stay 'warning' — already independently caught, per
  *   row, by validateSpecsGrounding.
@@ -220,14 +251,20 @@ export function countActualSpecRowsDoc(doc: ProductDescriptionDoc): number {
  * @param canonicalSpecs  `input.specs` as submitted (NOT groundingSpecs — see module doc)
  * @param productName     `input.name`
  * @param context         reporting label, e.g. "HTML (uk-UA)"
+ * @param opts            scoping/wording overrides for a non-machine document family — see
+ *                        SpecCountParityOptions
  */
 export function validateSpecCountParity(
   html: string,
   canonicalSpecs: string,
   productName: string,
   context: string,
+  opts: SpecCountParityOptions = {},
 ): ValidationIssue[] {
   if (!html?.trim() || !canonicalSpecs?.trim()) return [];
+
+  const tableSelector = opts.tableSelector ?? 'section.specs table';
+  const sectionLabel = opts.sectionLabel ?? '§7 spec-table';
 
   const issues: ValidationIssue[] = [];
 
@@ -248,12 +285,12 @@ export function validateSpecCountParity(
   const expected = countExpectedSpecRows(canonicalSpecs, productName);
   if (expected === 0) return issues; // no canonical table detected — cannot verify count parity
 
-  const actual = countActualSpecRows(html);
+  const actual = countActualSpecRows(html, tableSelector);
   if (actual < 0) return issues; // DOMParser unavailable
 
   if (actual === expected) return issues;
 
-  const detail = `§7 spec-table row count is ${actual}, expected ${expected} (canonical input rows, ` +
+  const detail = `${sectionLabel} row count is ${actual}, expected ${expected} (canonical input rows, ` +
     `excluding empty/"N/A" values and the product-name row).`;
 
   if (actual > expected) {
