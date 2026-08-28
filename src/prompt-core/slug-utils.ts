@@ -58,8 +58,16 @@ export function stripSlugStopwords(input: string): string {
     .join(' ');
 }
 
+// uk-UA/ru-UA/pl-PL/de-DE/es-ES names carry a decimal COMMA ("1,75 мм"). normalizeSlug's char-class
+// collapse below doesn't include a comma, so left unconverted it becomes a hyphen ("1-75") instead
+// of surviving as the decimal point every other locale already gets ("1.75"). Only a comma strictly
+// between two digits is touched, so a thousands-style or non-numeric comma is untouched.
+function commaDecimalToDot(input: string): string {
+  return input.replace(/(\d),(\d)/g, '$1.$2');
+}
+
 export function normalizeSlug(input: string, language?: string): string {
-  return stripDiacritics(transliterateCyrillic(input, language))
+  return stripDiacritics(transliterateCyrillic(commaDecimalToDot(input), language))
     .toLowerCase()
     .replace(/[^a-z0-9.]+/g, '-')
     .replace(/(?<!\d)\.(?!\d)/g, '-')

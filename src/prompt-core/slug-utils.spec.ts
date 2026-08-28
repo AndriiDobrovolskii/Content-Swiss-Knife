@@ -38,6 +38,26 @@ describe('normalizeSlug', () => {
   it('decimal slug matches SLUG_PATTERN', () => {
     expect(normalizeSlug('PETG 1.75 mm 1 kg Orange')).toMatch(SLUG_PATTERN);
   });
+
+  it('converts a comma decimal to a dot (uk-UA/ru-UA)', () => {
+    expect(normalizeSlug('Точність 0,015 мм')).toBe('tochnist-0.015-mm');
+  });
+
+  it('converts a comma decimal to a dot (pl-PL)', () => {
+    expect(normalizeSlug('Dokladnosc 0,015 mm')).toBe('dokladnosc-0.015-mm');
+  });
+
+  it('converts a comma decimal to a dot (de-DE)', () => {
+    expect(normalizeSlug('Genauigkeit 0,015 mm')).toBe('genauigkeit-0.015-mm');
+  });
+
+  it('converts a comma decimal to a dot (es-ES)', () => {
+    expect(normalizeSlug('Precision 0,015 mm')).toBe('precision-0.015-mm');
+  });
+
+  it('comma-decimal slug matches SLUG_PATTERN', () => {
+    expect(normalizeSlug('Filament 1,75 mm 1 kg', 'uk-UA')).toMatch(SLUG_PATTERN);
+  });
 });
 
 describe('normalizeSlug — locale-aware Cyrillic transliteration', () => {
