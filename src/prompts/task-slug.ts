@@ -167,8 +167,13 @@ export function buildPromptSlug(
   contextHtmlOrDescription?: string,
 ): PromptPayload {
   const store = getStore(storeName);
+  // 4000, not 1000: a blind 1000-char prefix is often entirely §1's hook paragraph, cutting off
+  // before §2a's killer-specs table ever appears — the model then has nothing there to ground the
+  // name in beyond the hook. Still a prefix, not the whole document: this window is for the
+  // model's own name-grounding, a different concern from the deterministic killer-spec suffix
+  // extractor (killer-spec-from-html.ts), which scans the FULL string regardless of this limit.
   const context = contextHtmlOrDescription
-    ? `\n[CONTEXT — ground the product name in this generated copy]:\n${contextHtmlOrDescription.substring(0, 1000)}`
+    ? `\n[CONTEXT — ground the product name in this generated copy]:\n${contextHtmlOrDescription.substring(0, 4000)}`
     : '';
   const userContent = `[INPUT DATA]
 [Store Name]: "${storeName}"

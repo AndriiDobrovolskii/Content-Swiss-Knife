@@ -51,6 +51,7 @@ const TRANSLATIONS = {
     nameLabel: 'Localized Name',
     contextDescription: 'Context Description',
     seoOnlyPlaceholder: 'Paste the product description here (Text or HTML) to provide context...',
+    slugContextPlaceholder: 'Optional — paste the generated product description here. Used only to ground the localized name and, when enabled, to read a killer-spec URL suffix. Never published.',
     targetWebsite: 'Target Website',
     selectWebsite: 'Select Website...',
     productName: 'Product Name',
@@ -220,6 +221,7 @@ const TRANSLATIONS = {
     nameLabel: 'Локалізована назва',
     contextDescription: 'Опис для контексту',
     seoOnlyPlaceholder: 'Вставте опис товару сюди (Текст або HTML) для контексту...',
+    slugContextPlaceholder: 'Необов\'язково — вставте згенерований опис товару. Використовується лише для уточнення локалізованої назви та, якщо увімкнено, для зчитування суфікса killer-spec у URL. Не публікується.',
     targetWebsite: 'Цільовий сайт',
     selectWebsite: 'Оберіть сайт...',
     productName: 'Назва товару',
@@ -466,6 +468,10 @@ export class AppComponent {
   // --- SLUG GENERATOR: isolated input state ---
   slugSelectedWebsite = signal<WebsiteOption | null>(null);
   slugProductName = signal<string>('');
+  // Optional grounding context: feeds buildPromptSlug's own name-grounding AND, when the store is
+  // on slug-spec-suffix-flag.ts's allow-list, extractKillerSpecFromHtml's deterministic marker
+  // read — this is the one mode with no ProductDescriptionDoc to resolve a suffix from otherwise.
+  slugProductDescription = signal<string>('');
 
   // --- IMAGE TOOLS STATE ---
   imgFiles = signal<InputImage[]>([]);
@@ -829,6 +835,7 @@ export class AppComponent {
   updateProductName(event: Event) { this.productName.set((event.target as HTMLInputElement).value); }
   updateSeoProductName(event: Event) { this.seoProductName.set((event.target as HTMLInputElement).value); }
   updateSlugProductName(event: Event) { this.slugProductName.set((event.target as HTMLInputElement).value); }
+  updateSlugProductDescription(event: Event) { this.slugProductDescription.set((event.target as HTMLTextAreaElement).value); }
   updateCustomInstructions(event: Event) { this.customInstructions.set((event.target as HTMLTextAreaElement).value); }
   updateOptimizerInput(event: Event) { this.optimizerInputHtml.set((event.target as HTMLTextAreaElement).value); }
   updateTranslatorInput(event: Event) { this.translatorInput.set((event.target as HTMLTextAreaElement).value); }
@@ -925,7 +932,7 @@ export class AppComponent {
     const input: ProductInput = {
       website: currentSite,
       name: this.slugProductName(),
-      description: '',
+      description: this.slugProductDescription(),
       specs: '',
     };
     this.activeTab.set('slugs');
@@ -1071,6 +1078,7 @@ export class AppComponent {
       case 'slug-generator':
         this.slugSelectedWebsite.set(null);
         this.slugProductName.set('');
+        this.slugProductDescription.set('');
         this.activeTab.set('slugs');
         this.orchestrator.content.update(c => ({ ...c, slugData: null }));
         break;
