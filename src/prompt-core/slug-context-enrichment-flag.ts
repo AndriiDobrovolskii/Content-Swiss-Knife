@@ -15,6 +15,9 @@
  * OPT-IN, NEVER OPT-OUT. A store absent from the list gets the prompt exactly as it reads today —
  * no suffix, current behavior — so enabling this feature is always a deliberate, one-line addition.
  */
+// Live probe (2026-08-28) on "Center 3D Print": Slug-only, Generator, and UA Description modes all
+// passed — Rule 9 correctly picked one clean spec and localized it per language in every run. Left
+// empty pending an explicit decision to actually roll the store out (see PR description).
 export const SLUG_CONTEXT_ENRICHMENT_STORES: readonly string[] = [];
 
 export function usesSlugContextEnrichment(storeName: string): boolean {
