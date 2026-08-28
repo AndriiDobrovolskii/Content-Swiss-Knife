@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeSlug, ensureUniqueSlugs, SLUG_PATTERN, stripSlugStopwords } from './slug-utils';
+import { normalizeSlug, ensureUniqueSlugs, SLUG_PATTERN, stripSlugStopwords, enforceSlugLength } from './slug-utils';
+import { invariantCore } from './product-name-core';
 
 describe('normalizeSlug', () => {
   it('transliterates Ukrainian Cyrillic to latin', () => {
@@ -217,5 +218,50 @@ describe('ensureUniqueSlugs', () => {
       'smoothing-machine-us',
       'smoothing-machine-2',
     ]);
+  });
+});
+
+describe('enforceSlugLength', () => {
+  it('is a no-op when the slug is already under the cap', () => {
+    expect(enforceSlugLength('Bambu Lab X1', 'bambu-lab-x1')).toBe('bambu-lab-x1');
+  });
+
+  it('does not truncate the CONTEXT ENRICHMENT worked example — it already fits under 100', () => {
+    const name = '3D сканер Revopoint MetroY Ultra Standard Edition точність 0,015 мм';
+    const slug = normalizeSlug(stripSlugStopwords(name), 'uk-UA');
+    expect(slug.length).toBeLessThanOrEqual(100);
+    expect(enforceSlugLength(name, slug, 'uk-UA')).toBe(slug);
+  });
+
+  it('trims descriptive tokens immediately after the core first, keeping the trailing spec suffix', () => {
+    const filler = Array(15).fill('filler').join(' ');
+    const name = `Bambu Lab X1 Carbon ${filler} accuracy 0.015 mm`;
+    const slug = normalizeSlug(stripSlugStopwords(name));
+    expect(slug.length).toBeGreaterThan(100); // confirms the fixture actually needs trimming
+
+    const result = enforceSlugLength(name, slug, undefined);
+    const coreSlug = normalizeSlug(invariantCore(name));
+
+    expect(result.length).toBeLessThanOrEqual(100);
+    expect(result.startsWith(coreSlug)).toBe(true); // core survives byte-identical
+    expect(result.endsWith('accuracy-0.015-mm')).toBe(true); // trailing spec suffix survives intact
+    expect(result.match(/filler/g)?.length ?? 0).toBeLessThan(15); // front-of-tail tokens were dropped
+  });
+
+  it('returns the slug unchanged when the invariant core cannot be located inside it (drift)', () => {
+    const name = 'Totally Different Product Name';
+    const driftedSlug = 'x'.repeat(120);
+    expect(enforceSlugLength(name, driftedSlug)).toBe(driftedSlug);
+  });
+
+  it('falls back to the bare core when even core-only still exceeds maxLen', () => {
+    // 20 Title-Case tokens all read as designator-shaped, so invariantCore captures all of them —
+    // the core alone is already over 100 chars; the trailing "filler" gives the loop one token to
+    // drop before it has to give up and fall back to the (still over-length) core.
+    const name = `${Array(20).fill('Alpha').join(' ')} filler`;
+    const slug = normalizeSlug(name);
+    const coreSlug = normalizeSlug(invariantCore(name));
+    expect(coreSlug.length).toBeGreaterThan(100); // the core itself is already over the cap
+    expect(enforceSlugLength(name, slug)).toBe(coreSlug);
   });
 });

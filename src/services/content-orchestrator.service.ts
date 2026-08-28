@@ -47,7 +47,7 @@ import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, prov
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
-import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopwords } from '../prompt-core/slug-utils';
+import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopwords, enforceSlugLength } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
@@ -1552,7 +1552,10 @@ export class ContentOrchestratorService {
   }
 
   private normalizeSlugResponse(raw: SlugResponse): SlugResponse {
-    const slugs = (raw.slugs ?? []).map(s => ({ ...s, slug: normalizeSlug(stripSlugStopwords(s.name), s.language) }));
+    const slugs = (raw.slugs ?? []).map(s => {
+      const base = normalizeSlug(stripSlugStopwords(s.name), s.language);
+      return { ...s, slug: enforceSlugLength(s.name, base, s.language) };
+    });
     const unique = ensureUniqueSlugs(slugs);
     return {
       site_name: raw.site_name ?? '',
