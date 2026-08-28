@@ -1,5 +1,6 @@
 import { getStore, UNIT_LOCALIZATION_RULES } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
+import { usesSlugContextEnrichment } from '../prompt-core/slug-context-enrichment-flag';
 
 /**
  * TASK SLUG — universal localized product NAME + curated SEO SLUG generator.
@@ -160,6 +161,36 @@ Input product: "XGRIDS L2 Pro 32/300 Standard Package"
 Note: the slash SURVIVES in every "name" and becomes a hyphen ONLY in the "slug", where the
 lowercase-Latin-and-hyphens charset genuinely requires it. "32 300" and "32300" are both WRONG.`;
 
+// Appended as its own system block — only for stores on SLUG_CONTEXT_ENRICHMENT_STORES — so
+// TASK_SLUG_INSTRUCTION above stays byte-identical for every other store's prompt (and its cache).
+const TASK_SLUG_CONTEXT_ENRICHMENT =
+  `══════════ CONTEXT ENRICHMENT — KILLER-SPEC SUFFIX (ONLY IF [CONTEXT] IS PROVIDED) ══════════
+If a [CONTEXT] block is present, extract exactly ONE primary technical specification (e.g.
+accuracy, speed, build volume, power) that best differentiates this product — never a marketing
+phrase, never more than one. Append it organically to the END of the localized "name", using the
+format "[Localized Name of Spec] [Value]". The "slug" field you emit is regenerated deterministically
+by the pipeline from "name" and never read back from you — appending the suffix to "name" alone is
+sufficient; still fill "slug" in with your best transliteration for a valid, complete response.
+CRITICAL: translate the NAME of the specification into the target language; keep the VALUE (number
++ unit) as written in [CONTEXT], converted per the NUMBERS rule above (decimal separator per
+locale). Do not invent a specification that is not actually present in [CONTEXT]. A tier/edition
+identifier already in the product name ("Standard Edition") stays VERBATIM before this suffix —
+never dropped to make room for it.
+If [CONTEXT] contains no clean, differentiating spec (only marketing language, or only qualified/
+ranged values with no single clean number+unit), omit this suffix entirely — a plain name with no
+suffix is always an acceptable, expected output, not a failure.
+
+WORKED EXAMPLE (store "Center 3D Print" → uk-UA, ru-UA, pl-PL)
+Input product: "Revopoint MetroY Ultra Standard Edition", [CONTEXT] mentions "Accuracy 0.015 mm"
+{"site_name":"Center 3D Print","slugs":[
+ {"language":"uk-UA","name":"3D сканер Revopoint MetroY Ultra Standard Edition точність 0,015 мм","slug":"3d-skaner-revopoint-metroy-ultra-standard-edition-tochnist-0.015-mm"},
+ {"language":"ru-UA","name":"3D сканер Revopoint MetroY Ultra Standard Edition точность 0,015 мм","slug":"3d-skaner-revopoint-metroy-ultra-standard-edition-tochnost-0.015-mm"},
+ {"language":"pl-PL","name":"Skaner 3D Revopoint MetroY Ultra Standard Edition dokładność 0,015 mm","slug":"skaner-3d-revopoint-metroy-ultra-standard-edition-dokladnosc-0.015-mm"}
+]}
+Note: uk/ru transliterate "точність"/"точность" differently once the pipeline derives the slug
+from this name, giving natural per-locale uniqueness with no "-uk"/"-ru" collision suffix needed;
+"Standard Edition" survives verbatim before the suffix.`;
+
 export function buildPromptSlug(
   storeName: string,
   productName: string,
@@ -181,11 +212,12 @@ export function buildPromptSlug(
 [Region]: ${store.region}
 [Product Name]: "${productName}"
 [Target Languages]: ${languages.join(', ')}${context}`;
-  return {
-    systemBlocks: [
-      { text: TASK_SLUG_SYSTEM, cache: true },
-      { text: TASK_SLUG_INSTRUCTION, cache: true },
-    ],
-    userContent,
-  };
+  const systemBlocks = [
+    { text: TASK_SLUG_SYSTEM, cache: true },
+    { text: TASK_SLUG_INSTRUCTION, cache: true },
+  ];
+  if (usesSlugContextEnrichment(storeName)) {
+    systemBlocks.push({ text: TASK_SLUG_CONTEXT_ENRICHMENT, cache: true });
+  }
+  return { systemBlocks, userContent };
 }

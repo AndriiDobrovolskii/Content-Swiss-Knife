@@ -1,3 +1,5 @@
+import { invariantCore } from './product-name-core';
+
 // Ukrainian + Russian Cyrillic → Latin. Pragmatic BGN/PCGN-style scheme.
 const CYRILLIC_MAP: Record<string, string> = {
   а: 'a', б: 'b', в: 'v', г: 'h', д: 'd', е: 'e', ж: 'zh', з: 'z', и: 'y', й: 'i',
@@ -125,6 +127,49 @@ export function ensureUniqueSlugs(items: { language: string; slug: string }[]): 
 }
 
 export const SLUG_PATTERN = /^[a-z0-9]+(\.[0-9]+)?(-[a-z0-9]+(\.[0-9]+)?)*$/;
+
+const SLUG_HARD_MAX = 100;
+
+/**
+ * Fits `slug` under `maxLen` without ever cutting into the product's invariant core (brand, model,
+ * config code — the span `invariantCore`/`product-name-core.ts` protects everywhere else in this
+ * pipeline). Needed once the CONTEXT ENRICHMENT rule (task-slug.ts) can push a killer-spec suffix
+ * onto the end of a name: the LLM composes the whole name+slug itself now, so there is no
+ * separately-tracked "suffix span" to trim — the core has to be relocated inside the slug string by
+ * re-running it through the SAME transform (`normalizeSlug`) the base slug itself went through.
+ *
+ * `slug` is expected to already be `normalizeSlug(stripSlugStopwords(name), language)` — i.e. the
+ * whole name, not just a suffix — so trimming works on the real generated slug, not a fabricated one.
+ * A no-op whenever `slug` is already within `maxLen`, so this is safe to call unconditionally for
+ * every slug, not just ones a killer-spec suffix could have lengthened.
+ */
+export function enforceSlugLength(name: string, slug: string, language?: string, maxLen = SLUG_HARD_MAX): string {
+  if (slug.length <= maxLen) return slug;
+
+  const core = invariantCore(name).trim();
+  const coreSlug = core ? normalizeSlug(core, language) : '';
+  const idx = coreSlug ? slug.indexOf(coreSlug) : -1;
+  // No anchor found (the LLM's slug drifted from what invariantCore(name) predicts) — accept the
+  // over-length slug rather than risk trimming into content that might be the core after all.
+  if (idx === -1) return slug;
+
+  const prefix = slug.slice(0, idx).replace(/-+$/, '');
+  const tail = slug.slice(idx + coreSlug.length).replace(/^-+/, '');
+  const base = prefix ? `${prefix}-${coreSlug}` : coreSlug;
+  if (!tail) return slug; // nothing after the core to trim — already at the floor
+
+  // Drop tail tokens from the FRONT first, one at a time — this naturally protects the LAST
+  // tokens the longest, which is where CONTEXT ENRICHMENT always places the spec suffix, without
+  // needing to know how many tokens the suffix itself occupies.
+  const tailTokens = tail.split('-');
+  for (let drop = 1; drop <= tailTokens.length; drop++) {
+    const remaining = tailTokens.slice(drop).join('-');
+    const candidate = remaining ? `${base}-${remaining}` : base;
+    if (candidate.length <= maxLen) return candidate;
+  }
+  // Even the bare core doesn't fit — return it anyway rather than trim into it.
+  return base;
+}
 
 export function slugsToLocalizedNames(slugs: { language: string; name: string }[]): Record<string, string> {
   return Object.fromEntries(slugs.map(s => [s.language, s.name]));
