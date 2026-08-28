@@ -21,6 +21,14 @@ describe('invariantCore', () => {
     ['Creality Ender 3 V3 SE', 'Creality Ender 3 V3 SE'],
     ['xTool F2 Ultra', 'xTool F2 Ultra'],
     ['Ortur Laser Master 3', 'Ortur Laser Master 3'],
+    // "Laser" is a category MODIFIER here (the next token, "Engraver", is a recognized category
+    // stopword) — excluded from the core, same as "3D" always is. Contrast with the line above:
+    // "Laser Master" is NOT excluded, because "Master" is not a stopword, so "Laser" reads as part
+    // of the model designator there instead.
+    ['Creality Falcon2 22W Laser Engraver', 'Creality Falcon2 22W'],
+    // Real product name (see consumables-doc.ts, 2026-08-25) — "Grid"/"Panel" are not stopwords,
+    // so the Laser-modifier lookahead never fires and the whole name is still captured, unchanged.
+    ['Bambu Lab Laser Grid Panel', 'Bambu Lab Laser Grid Panel'],
     // Stops at the generic category noun, so the localizable part is excluded.
     // "Reflective" is an ACCEPTED OVER-CAPTURE: it is capitalized and not a category noun, so
     // the heuristic cannot tell it from "Carbon" in "X1 Carbon". Harmless in both consumers —
@@ -76,6 +84,8 @@ describe('productShort', () => {
     ['Creality Ender 3 V3 SE', 'Creality Ender 3 V3 SE'],
     ['xTool F2 Ultra', 'xTool F2 Ultra'],
     ['Anycubic Kobra 3 3D Printer', 'Anycubic Kobra 3'],
+    // Inherits the Laser-modifier fix from invariantCore; no trailing config token here either.
+    ['Creality Falcon2 22W Laser Engraver', 'Creality Falcon2 22W'],
   ])('%s → %s', (input, expected) => {
     expect(productShort(input)).toBe(expected);
   });

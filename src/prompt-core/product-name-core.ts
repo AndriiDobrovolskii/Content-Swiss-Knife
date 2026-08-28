@@ -90,6 +90,20 @@ function looksLikeDesignator(token: string): boolean {
 }
 
 /**
+ * "Laser" is genuinely ambiguous: part of a real model name ("Ortur Laser Master 3") in some
+ * products, a bare category modifier ("... Laser Engraver") in others — the same shape as
+ * CATEGORY_MODIFIER's "3D", which always precedes the noun it modifies. Distinguish by lookahead:
+ * only treat "Laser" as a category modifier (excluded from the core) when the very next token is
+ * itself a recognized category/packaging stopword — the one shape where the model's own output
+ * localizes the whole "Laser Engraver" pair to the front and "Laser" never survives stranded
+ * after the model number. Anything else ("Laser Master", "Laser" at the end of the name) is
+ * unaffected — still part of the designator, exactly as before. DELIBERATELY NOT added to
+ * DESCRIPTOR_STOPWORDS outright — that would truncate "Ortur Laser Master 3" down to "Ortur",
+ * the exact under-capture failure direction this module exists to avoid.
+ */
+const LASER_MODIFIER = /^laser$/i;
+
+/**
  * The span of the name that survives localization byte-for-byte — brand, model and any
  * configuration code, with the translatable category/packaging words removed.
  *
@@ -115,6 +129,9 @@ export function invariantCore(name: string): string {
 
   const core: string[] = [];
   for (let i = start; i < tokens.length; i++) {
+    if (LASER_MODIFIER.test(tokens[i]) && DESCRIPTOR_STOPWORDS.has((tokens[i + 1] ?? '').toLowerCase())) {
+      break;
+    }
     if (!looksLikeDesignator(tokens[i])) break;
     core.push(tokens[i]);
   }
