@@ -23,6 +23,7 @@ import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParame
 import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
 import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
 import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation } from '../utils/bullet-lead-punctuation';
+import { normalizeConsumablesBulletLeadPunctuation } from '../utils/consumables-bullet-lead-punctuation';
 import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
 import { validateHeadingStyle, validateHeadingStyleDoc } from '../utils/heading-style';
@@ -110,6 +111,14 @@ export interface DocAttempt {
 export interface ConsumablesDocAttempt {
   doc: ConsumablesDescriptionDoc | null;
   issues: ValidationIssue[];
+  /**
+   * Count of bullet-lead/text collisions normalizeConsumablesBulletLeadPunctuation fixed in this
+   * attempt's raw JSON before schema validation — undefined/0 when nothing needed fixing. Threaded
+   * through the return value rather than updated in place: produceTaskAConsumablesDoc doesn't have
+   * the gate label needed to update bulletLeadFixTally itself (see runConsumablesDocGate's produce
+   * closure, which does).
+   */
+  preValidationFixed?: number;
 }
 
 // ── Orchestrator ────────────────────────────────────────────────────────────
@@ -599,8 +608,19 @@ export class ContentOrchestratorService {
     let raw: unknown;
     try {
       raw = await this.llm.generateJson<ConsumablesDescriptionDoc>(payload, useThinking, { taskLabel: docTaskLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
-      ConsumablesDescriptionDocSchema.parse(raw);
-      return { doc: raw as ConsumablesDescriptionDoc, issues: [] };
+      // Pre-parse fix-up: eliminates any bullet-lead/text collision (features/applications/storage)
+      // BEFORE the schema's own refine can throw on it — see consumables-bullet-lead-punctuation.ts's
+      // header comment for why this must run here, not post-parse like the plain pipeline's
+      // normalizeBulletLeadPunctuation. `raw` itself is left untouched: the catch block below still
+      // logs the model's true, unmodified output for debugging.
+      const { raw: candidate, fixed } = normalizeConsumablesBulletLeadPunctuation(raw);
+      // parse(), not safeParse() or its return value: an invalid Doc must reach the repair gate as
+      // a thrown error. The return value is DISCARDED and `candidate` is cast instead — same
+      // TSCONFIG workaround as produceTaskADoc's identical comment above: without strictNullChecks,
+      // zod's inferred type comes back all-optional and does not satisfy ConsumablesDescriptionDoc.
+      // parse() still does the validating, so nothing is weakened.
+      ConsumablesDescriptionDocSchema.parse(candidate);
+      return { doc: candidate as ConsumablesDescriptionDoc, issues: [], preValidationFixed: fixed };
     } catch (err) {
       // Same escape hatch as produceTaskADoc — see its comment for the full rationale.
       if (isInitialAttempt && isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
@@ -662,6 +682,13 @@ export class ContentOrchestratorService {
         payload, useThinking: opts.useThinking, isInitialAttempt: initial, input: opts.input,
         contextLabel: opts.contextLabel, docTaskLabel: opts.docTaskLabel,
       });
+      // Same tally, same reporting path as runDocGate's produce closure (see its own comment) —
+      // opts.label is in scope here but not inside produceTaskAConsumablesDoc, which is why the
+      // count is threaded through the attempt instead of applied there directly.
+      if (attempt.preValidationFixed) {
+        this.bulletLeadFixTally.set(opts.label, (this.bulletLeadFixTally.get(opts.label) ?? 0) + attempt.preValidationFixed);
+        console.info(`[bullet-lead-punctuation] ${opts.label}: ${attempt.preValidationFixed} lead(s) normalized before validation`);
+      }
       if (!attempt.doc) return { html: null, issues: attempt.issues };
       return { html: renderConsumablesDoc(attempt.doc, ctx), issues: [] };
     };

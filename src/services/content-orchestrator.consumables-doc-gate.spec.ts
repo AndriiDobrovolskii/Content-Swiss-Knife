@@ -233,6 +233,40 @@ describe('runConsumablesDocGate — a forced Zod schema failure repairs rather t
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Bullet-lead/text collision — pre-parse fix, not a spent repair attempt. Regression guard for the
+// live incident: a Consumables generation with colliding leads across features/applications/storage
+// exhausted the full repair budget (blind full-document regeneration, no addressable `.path`) and
+// still shipped unresolved. normalizeConsumablesBulletLeadPunctuation fixes it deterministically
+// before ConsumablesDescriptionDocSchema.parse() can ever throw for it.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('runConsumablesDocGate — a bullet-lead/text collision is fixed pre-parse, not spent as a repair attempt', () => {
+  function collidingLeadDoc(): ConsumablesDescriptionDoc {
+    const doc = makeDoc([{ heading: 'Print Settings', rows: [{ label: 'Nozzle', value: '210 °C' }] }]);
+    return {
+      ...doc,
+      features: {
+        ...doc.features,
+        items: [{ lead: 'Швидкість', text: 'до 500 мм/с.' }, ...doc.features.items.slice(1)],
+      },
+    };
+  }
+
+  it('normalizes the collision before the schema can throw on it — settles on attempt 1, spends no repair', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValueOnce(collidingLeadDoc());
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asConsumablesDocGate(orchestrator).runConsumablesDocGate(baseGateOpts());
+
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    expect(result.repairsUsed).toBe(0);
+    expect(result.finalIssues.some((i: { rule: string }) => i.rule === 'doc-schema')).toBe(false);
+    expect(result.artifact).toContain('Швидкість: ');
+  });
+});
+
 describe('runConsumablesDocGate — a semantic (char-limit) rejection repairs via the existing HTML validator', () => {
   it('renders each schema-valid attempt and repairs when validateGeneratedHtml rejects an over-length hook', async () => {
     const mockLlm = makeMockLlm();
@@ -435,5 +469,33 @@ describe('generate() — routes to the consumables Doc pipeline when the flag is
     expect(recordGeneration).toHaveBeenCalledWith(
       expect.objectContaining({ locale: 'uk-UA', pipeline: 'consumables-doc', outcome: expect.stringMatching(/^(ok|repaired)$/) }),
     );
+  });
+
+  it('surfaces a bullet-lead pre-validation fix in the Repair Gate Report without spending a repair attempt', async () => {
+    const doc = makeDoc([{ heading: 'Print Settings', rows: [{ label: 'Nozzle', value: '210 °C' }] }]);
+    const collidingDoc: ConsumablesDescriptionDoc = {
+      ...doc,
+      features: {
+        ...doc.features,
+        items: [{ lead: 'Швидкість', text: 'до 500 мм/с.' }, ...doc.features.items.slice(1)],
+      },
+    };
+    const generateJson = vi.fn(async (_input: unknown, _useThinking?: boolean, meta?: UsageMeta) => {
+      if (meta?.taskLabel === 'Doc (base, consumables)') return structuredClone(collidingDoc);
+      if (meta?.taskLabel === 'Slug') return slugStub();
+      if (meta?.taskLabel === 'SEO metadata') return seoStub();
+      throw new Error(`unexpected generateJson taskLabel: ${meta?.taskLabel}`);
+    });
+    const generateText = vi.fn(async () => '<p>Опис продукту для тесту.</p>');
+    const recordGeneration = vi.fn(async () => {});
+    const orchestrator = bootOrchestrator({ generateJson, generateText, recordGeneration });
+    orchestrator.maxRepairs.set(0);
+
+    await orchestrator.generate({ ...BASE_INPUT });
+
+    const report = orchestrator.repairReport().find(r => r.label === 'HTML (base)');
+    expect(report?.repairsUsed).toBe(0);
+    expect(report?.preValidationFixes).toEqual([{ rule: 'bullet-lead-collision', count: 1 }]);
+    expect(orchestrator.content().mainHtmlUa).toContain('Швидкість: ');
   });
 });
