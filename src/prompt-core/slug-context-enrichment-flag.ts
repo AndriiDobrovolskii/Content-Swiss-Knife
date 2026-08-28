@@ -15,10 +15,12 @@
  * OPT-IN, NEVER OPT-OUT. A store absent from the list gets the prompt exactly as it reads today —
  * no suffix, current behavior — so enabling this feature is always a deliberate, one-line addition.
  */
-// Live probe (2026-08-28) on "Center 3D Print": Slug-only, Generator, and UA Description modes all
-// passed — Rule 9 correctly picked one clean spec and localized it per language in every run. Left
-// empty pending an explicit decision to actually roll the store out (see PR description).
-export const SLUG_CONTEXT_ENRICHMENT_STORES: readonly string[] = [];
+// "Center 3D Print" enabled 2026-08-28, after a live probe across Slug-only, Generator, and UA
+// Description modes all passed (Rule 9 correctly picked one clean spec and localized it per
+// language in every run), and after fixing the one real defect the probe surfaced —
+// invariantCore's "Laser" gap (#113), unrelated to this feature but blocking clean output for
+// this store's laser-engraver products specifically.
+export const SLUG_CONTEXT_ENRICHMENT_STORES: readonly string[] = ['Center 3D Print'];
 
 export function usesSlugContextEnrichment(storeName: string): boolean {
   return SLUG_CONTEXT_ENRICHMENT_STORES.includes(storeName);
