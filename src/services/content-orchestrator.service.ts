@@ -22,7 +22,7 @@ import {
 import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
 import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
-import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation } from '../utils/bullet-lead-punctuation';
+import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation, normalizeRawBulletLeadPunctuation } from '../utils/bullet-lead-punctuation';
 import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
 import { validateHeadingStyle, validateHeadingStyleDoc } from '../utils/heading-style';
@@ -104,6 +104,13 @@ const NO_CURRENCY_CHECK = '';
 export interface DocAttempt {
   doc: ProductDescriptionDoc | null;
   issues: ValidationIssue[];
+  /**
+   * Count of bullets-block lead/text collisions normalizeRawBulletLeadPunctuation fixed in this
+   * attempt's raw JSON before schema validation — undefined/0 when nothing needed fixing. Threaded
+   * through the return value rather than updated in place: produceTaskADoc doesn't have the gate
+   * label needed to update bulletLeadFixTally itself (see runDocGate's produce closure, which does).
+   */
+  preValidationFixed?: number;
 }
 
 /** The consumables sibling of DocAttempt — same contract, ConsumablesDescriptionDoc instead. */
@@ -392,16 +399,22 @@ export class ContentOrchestratorService {
     let raw: unknown;
     try {
       raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: docTaskLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
+      // Pre-parse fix-up: eliminates any bullets-block lead/text collision (keyBenefits/
+      // functionality/compatibility) BEFORE the schema's own refine can throw on it — see
+      // normalizeRawBulletLeadPunctuation's header comment for why this must run here, not
+      // post-parse like normalizeBulletLeadPunctuation. `raw` itself is left untouched: the catch
+      // block below still logs the model's true, unmodified output for debugging.
+      const { raw: candidate, fixed } = normalizeRawBulletLeadPunctuation(raw);
       // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
       // rather than be treated as valid.
       //
-      // The return value is DISCARDED and `raw` is used instead. Without strictNullChecks —
+      // The return value is DISCARDED and `candidate` is cast instead. Without strictNullChecks —
       // which this repo does not enable — zod's inferred type comes back all-optional and does
       // not satisfy ProductDescriptionDoc. See the TSCONFIG NOTE at the foot of
       // description-doc.schema.ts; this is the same workaround, not a new one. parse() still
       // does the validating, so nothing is weakened.
-      ProductDescriptionDocSchema.parse(raw);
-      return { doc: raw as ProductDescriptionDoc, issues: [] };
+      ProductDescriptionDocSchema.parse(candidate);
+      return { doc: candidate as ProductDescriptionDoc, issues: [], preValidationFixed: fixed };
     } catch (err) {
       // …unless the provider refused to produce anything in the first place, AND this is the
       // initial attempt (no `best` yet exists to fall back to — repair-gate.ts:112). A
@@ -468,17 +481,24 @@ export class ContentOrchestratorService {
         payload, useThinking: opts.useThinking, isInitialAttempt: initial, input: opts.input,
         contextLabel: opts.contextLabel, docTaskLabel: opts.docTaskLabel,
       });
-      // Deterministic, zero-cost, and provably complete for this rule (see the function's own
-      // doc comment) — runs on EVERY attempt, not just the first, so a full-regen that
-      // reintroduces a collision gets cleaned up too. Applied before validate() ever sees the
-      // Doc, so this class of error should never reach the repair gate as a failure at all.
+      // Deterministic, zero-cost, and provably complete for the scenario/text half of this rule
+      // (see the function's own doc comment) — runs on EVERY attempt, not just the first, so a
+      // full-regen that reintroduces a collision gets cleaned up too. The bullets-block half of
+      // this collision class is now fixed pre-parse instead, inside produceTaskADoc
+      // (normalizeRawBulletLeadPunctuation) — attempt.doc can no longer contain one by the time it
+      // gets here, so this call is effectively applications.items[].scenario-only in practice now,
+      // but stays as-is since it's still correct and still the only thing that fixes that field.
       if (!attempt.doc) return attempt;
       const { doc, fixed } = normalizeBulletLeadPunctuation(attempt.doc);
-      if (fixed > 0) {
+      const totalFixed = (attempt.preValidationFixed ?? 0) + fixed;
+      if (totalFixed > 0) {
         // Accumulated, not replaced — mirrors blockPatchTally: this closure runs once per
         // produce() call, and a report showing only the last attempt would understate the total.
-        this.bulletLeadFixTally.set(opts.label, (this.bulletLeadFixTally.get(opts.label) ?? 0) + fixed);
-        console.info(`[bullet-lead-punctuation] ${opts.label}: ${fixed} lead(s) normalized before validation`);
+        // Sums both the pre-parse (bullets-block) and post-parse (scenario) contributions into one
+        // entry, so the Repair Gate Report shows a single combined count under
+        // rule: 'bullet-lead-collision' rather than splitting them.
+        this.bulletLeadFixTally.set(opts.label, (this.bulletLeadFixTally.get(opts.label) ?? 0) + totalFixed);
+        console.info(`[bullet-lead-punctuation] ${opts.label}: ${totalFixed} lead(s) normalized before validation`);
       }
       return { ...attempt, doc };
     };
