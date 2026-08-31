@@ -331,6 +331,39 @@ describe('runDocGate — a forced Zod schema failure repairs rather than throws'
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Bullet-lead/text collision — pre-parse fix, not a spent repair attempt. Regression guard: a
+// bullets-block lead colliding with its text used to make ProductDescriptionDocSchema.parse() throw
+// and discard the whole doc (BulletItemSchema's refine — description-doc.schema.ts), leaving only
+// blind full-document regeneration to fix it. normalizeRawBulletLeadPunctuation
+// (bullet-lead-punctuation.ts) now fixes it deterministically before .parse() can ever throw for it.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('runDocGate — a bullet-lead/text collision is fixed pre-parse, not spent as a repair attempt', () => {
+  function collidingLeadDoc() {
+    return {
+      ...makeDoc([{ label: 'Вага', value: '500 г' }]),
+      keyBenefits: [{ kind: 'bullets' as const, items: [
+        { lead: 'Швидкість', text: 'до 500 мм/с.' },
+        { lead: 'Точність:', text: ' висока.' },
+      ] }],
+    };
+  }
+
+  it('normalizes the collision before the schema can throw on it — settles on attempt 1, spends no repair', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValueOnce(collidingLeadDoc());
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asDocGate(orchestrator).runDocGate(baseGateOpts());
+
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    expect(result.repairsUsed).toBe(0);
+    expect(result.finalIssues.some((i: { rule: string }) => i.rule === 'doc-schema')).toBe(false);
+    expect(result.artifact).toContain('Швидкість: ');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // FINAL-REVIEW FIX WAVE, IMPORTANT #5 — full validator wiring
 //
 // The fixture above (EXPERT3D, specs: '', no manifest, no video embeds) exercises exactly ONE of
