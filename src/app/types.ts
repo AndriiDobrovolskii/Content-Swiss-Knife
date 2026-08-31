@@ -131,7 +131,7 @@ export const WEBSITE_OPTIONS: WebsiteOption[] = [
 export const CONTENT_TEMPLATES: ContentTemplate[] = [
   {
     id: 'consumables-resin',
-    description: 'Simplified consumables schema (filament/resin/adhesive) — focuses on material properties, mechanical strength, and finish, with a 4000-character visible-text ceiling.',
+    description: 'Simplified consumables schema (filament/resin/adhesive) — focuses on material properties, mechanical strength, and finish, with a 5500-character visible-text ceiling.',
     geo: ['UA', 'EU', 'ES', 'US']
   }
 ];

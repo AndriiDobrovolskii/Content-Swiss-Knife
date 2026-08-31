@@ -76,7 +76,7 @@ describe('TASK_A_CONSUMABLES_DOC_INSTRUCTION — the output contract', () => {
     ['specGroups 0–3', /specGroups[^]*0[–-]3/],
     ['storage 2–3', /storage[^]*2[–-]3/],
     ['prose tag allow-list', /<b>[^]*<strong>/],
-    ['char ceiling', /4000/],
+    ['char ceiling', /5500/],
   ])('states the %s constraint the schema will enforce', (_label, pattern) => {
     expect(TASK_A_CONSUMABLES_DOC_INSTRUCTION).toMatch(pattern);
   });
