@@ -411,6 +411,31 @@ describe('runConsumablesDocGate — validates the rendered HTML with templateId 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Unit localization — regression guard: renderConsumablesDoc() rendered the model's raw JSON
+// straight to HTML, with no equivalent of the main ProductDescriptionDoc pipeline's
+// normalizeDocProse() step. A Latin-script unit ("1 kg") the model wrote anywhere in prose (a §C4
+// spec-group value included) survived into the body untouched, while the storefront name field
+// (Task Slug) always used the Cyrillic form — the exact "1 kg" vs. "1 кг" mismatch reported live.
+// normalizeConsumablesDocProse() closes that gap; this proves it actually runs before render.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('runConsumablesDocGate — units are localized in body prose, matching the storefront name field', () => {
+  it('renders a Latin-script unit as Cyrillic for uk-UA', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValueOnce(
+      makeDoc([{ heading: 'Physical Properties', rows: [{ label: 'Вага котушки', value: '1 kg' }] }]),
+    );
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asConsumablesDocGate(orchestrator).runConsumablesDocGate(baseGateOpts({ maxRepairs: 0 }));
+
+    // NBSP between the number and the localized unit — same convention unit-cyrillize.spec.ts uses.
+    expect(result.artifact).toContain('1 кг');
+    expect(result.artifact).not.toContain('1 kg');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Image manifest coverage — the exact regression a live run surfaced 2026-08-25: a consumables
 // product with uploaded images shipped with `image-manifest-missing` permanently unresolved,
 // because the Doc had nowhere to put a figure. Proves that gap is closed now that `figures` exists.
