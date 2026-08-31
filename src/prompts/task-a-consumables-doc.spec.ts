@@ -88,6 +88,17 @@ describe('TASK_A_CONSUMABLES_DOC_INSTRUCTION — the output contract', () => {
   it('allows specGroups to be empty', () => {
     expect(TASK_A_CONSUMABLES_DOC_INSTRUCTION).toMatch(/MAY BE AN EMPTY ARRAY/);
   });
+
+  it('demands every qualifying input spec row be reproduced, not dropped to fit the group cap or char budget', () => {
+    expect(TASK_A_CONSUMABLES_DOC_INSTRUCTION).toMatch(/COMPLETENESS/);
+    expect(TASK_A_CONSUMABLES_DOC_INSTRUCTION).toMatch(/reproduce\s+EVERY/);
+  });
+
+  it('gives an explicit priority order for trimming under the char ceiling — prose first, a row only as a last resort', () => {
+    const clause = TASK_A_CONSUMABLES_DOC_INSTRUCTION.slice(TASK_A_CONSUMABLES_DOC_INSTRUCTION.indexOf('COMPLETENESS'));
+    expect(clause).toMatch(/tighten.*FIRST/is);
+    expect(clause).toMatch(/Only if every other field is already at its floor/);
+  });
 });
 
 describe('TASK_A_CONSUMABLES_DOC_INSTRUCTION — plain-text vs prose fields', () => {

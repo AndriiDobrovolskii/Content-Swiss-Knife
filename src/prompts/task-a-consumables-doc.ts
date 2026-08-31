@@ -67,6 +67,16 @@ printing / mechanical / physical parameters. When present, each group's "heading
 Properties", "Physical Properties", or a kit-contents heading like "Package Contents" when the
 product is a spares/accessory kit rather than a printable material). Never invent a parameter value.
 
+COMPLETENESS — when the source supplies printing / mechanical / physical parameters, reproduce
+EVERY one of them that is not empty/"N/A" and is not the product's own name row: count the
+qualifying rows first, then emit exactly that many "rows" entries total across "specGroups"
+(consolidate into up to 3 groups — do not drop a row to reduce group count). If the source table is
+large, tighten "hook", the bullet "text" fields, and "cta" toward the low end of their targets FIRST
+— spec rows are terse label:value pairs and compress far less than narrative prose, so trimming
+prose is how you make room, not dropping a row. Only if every other field is already at its floor
+and the document would still exceed the 4000-char hard ceiling may a row be omitted — and even then,
+never invent, merge, or reword a value to make the count come out even.
+
 HARD RULES:
 - PROSE FIELDS ADMIT <b> and <strong> AND NOTHING ELSE. No <p>, <ul>, <a>, <em>, no entities, no
   Markdown. The prose fields are exactly: "hook", "cta", and every "items[].text".

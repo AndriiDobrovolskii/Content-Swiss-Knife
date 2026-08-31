@@ -22,7 +22,6 @@ import {
 import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
 import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
-import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation } from '../utils/bullet-lead-punctuation';
 import { normalizeConsumablesBulletLeadPunctuation } from '../utils/consumables-bullet-lead-punctuation';
 import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation, normalizeRawBulletLeadPunctuation } from '../utils/bullet-lead-punctuation';
 import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
@@ -729,7 +728,17 @@ export class ContentOrchestratorService {
           ...validateGeneratedHtml(html, opts.contextLabel, opts.input.name, opts.locale, { templateId: opts.input.templateId, imageManifest: opts.imgManifest }),
           ...validateSpecsGrounding(html, opts.groundingSpecs, opts.contextLabel, opts.allowedSpecParams,
             { labelAnchorTrusted: !!opts.groundingSpecs }),
-          ...validateSpecCountParity(html, opts.input.specs, opts.input.name, opts.contextLabel),
+          // section.specs never exists in consumables output (render-consumables.ts — §C forbids
+          // the wrapper outright), so the default machine-pipeline scoping always matched zero
+          // tables — NOT a silent no-op: it fired a permanently-wrong "row count is 0, expected N"
+          // error on every generation with a canonical input table, regardless of the doc's real
+          // content (verified: spec-count-parity.spec.ts's own "consumables scoping" describe).
+          // Pass the consumables scoping/wording explicitly — see SpecCountParityOptions's doc
+          // comment — so this reports the real count instead.
+          ...validateSpecCountParity(html, opts.input.specs, opts.input.name, opts.contextLabel, {
+            tableSelector: 'table',
+            sectionLabel: '§C4 spec-group',
+          }),
           ...validateAltNumericFidelity(html, this.numericFidelitySources(opts.input, opts.imgManifest), opts.contextLabel),
           ...validateSecondPersonScope(html, opts.localeIso, opts.input.website.name),
           ...validateHeadingStyle(html, opts.localeIso, opts.input.website.name, opts.input.name),
