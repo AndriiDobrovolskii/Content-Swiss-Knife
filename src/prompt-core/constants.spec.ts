@@ -538,7 +538,7 @@ describe('delivery region', () => {
 
   it('resolves a Polish-store region for its Ukrainian and Russian locales — the actual bug', () => {
     const c3d = STORE_REGISTRY['Center 3D Print'];
-    expect(resolveDeliveryPhrase(c3d.deliveryRegion, 'uk-UA')).toBe('по Польщі та країнах ЄС');
+    expect(resolveDeliveryPhrase(c3d.deliveryRegion, 'uk-UA')).toBe('по всій Польщі та країнах ЄС');
     expect(resolveDeliveryPhrase(c3d.deliveryRegion, 'ru-UA')).toBe('по Польше и странам ЕС');
     for (const locale of c3d.languages) {
       expect(resolveDeliveryPhrase(c3d.deliveryRegion, locale), locale).not.toMatch(/Україн|Украин/);
@@ -546,7 +546,7 @@ describe('delivery region', () => {
   });
 
   it('still says Ukraine for a Ukrainian store — the fix must not invert the bug', () => {
-    expect(resolveDeliveryPhrase(STORE_REGISTRY['3DDevice'].deliveryRegion, 'uk-UA')).toBe('по Україні');
+    expect(resolveDeliveryPhrase(STORE_REGISTRY['3DDevice'].deliveryRegion, 'uk-UA')).toBe('по всій Україні');
   });
 
   it('returns undefined for an unlisted locale rather than substituting English', () => {
@@ -559,7 +559,7 @@ describe('delivery region', () => {
   describe('buildDeliveryRegionBlock', () => {
     it('emits both lines when the locale has a phrase', () => {
       expect(buildDeliveryRegionBlock('Center 3D Print', 'uk-UA')).toBe(
-        '[Delivery Region]: Poland and the EU\n[Delivery Region Phrase]: по Польщі та країнах ЄС',
+        '[Delivery Region]: Poland and the EU\n[Delivery Region Phrase]: по всій Польщі та країнах ЄС',
       );
     });
 
