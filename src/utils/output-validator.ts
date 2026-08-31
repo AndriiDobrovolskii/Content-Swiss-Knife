@@ -290,6 +290,27 @@ function checkLeadInCapitalization(html: string, issues: ValidationIssue[], cont
 }
 
 /**
+ * COLON CAPITALIZATION for `<li><b>Label:</b> Continuation…</li>` bullets (§2b/§4, and §C3/§C5 in
+ * Consumables mode) — for uk-UA/ru-UA/pl-PL, the word after the colon must be lowercase (the
+ * colon introduces an explanation of the label, not a new sentence). Warning-only: flags likely
+ * regressions without blocking generation.
+ */
+function checkBulletColonCase(html: string, locale: string | undefined, issues: ValidationIssue[], context: string): void {
+  if (locale !== 'uk-UA' && locale !== 'ru-UA' && locale !== 'pl-PL') return;
+  // Colon is expected inside <b>Label:</b> per every template, but also matches the drifted form
+  // <b>Label</b>: text — the model doesn't always keep punctuation inside the bold span. Tolerate
+  // whitespace/&nbsp; (and a stray inline tag) between the colon and the checked letter too.
+  if (/<li>\s*<b>[^<]*?(?::\s*<\/b>|<\/b>\s*:)(?:<[^>]+>|\s|&nbsp;)*[\p{Lu}]/u.test(html)) {
+    issues.push({
+      severity: 'warning',
+      rule: 'bullet-colon-case',
+      detail: 'A <li><b>Label:</b> Continuation…</li> bullet capitalizes the word after the colon — should be lowercase per [COLON CAPITALIZATION].',
+      context,
+    });
+  }
+}
+
+/**
  * Latin SI units left uncyrillized in uk-UA / ru-UA output ([UNIT LOCALIZATION]).
  * Warning-only. Most of the fixed Latin exception list from the rule (°C, °F, dpi, px, fps,
  * K, ppm) is deliberately absent from the pattern, so those never fire. VAC / "V AC" is the
@@ -587,6 +608,7 @@ export function validateGeneratedHtml(
   checkExpert3dPortugueseCalques(html, locale, issues, context);
   checkUkrainianCalques(html, locale, issues, context);
   checkLeadInCapitalization(html, issues, context);
+  checkBulletColonCase(html, locale, issues, context);
   // Uncyrillized Latin units (uk/ru) — runs on the name/URL-stripped variant: units inside a
   // brand/model suffix stay Latin by design ([PRODUCT NAME LOCALIZATION] keeps model codes as-is).
   checkCyrillicUnitLocalization(htmlForUnitCheck, locale, issues, context);

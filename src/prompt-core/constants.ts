@@ -26,16 +26,55 @@ export interface StoreProfile {
    * Empty string means "not configured": buildPromptA/buildPromptC throw rather than guess.
    */
   deliveryRegion: string;
+  /**
+   * Brands this store is an official representative/authorized dealer of, per the store's own
+   * partner/manufacturer page (see the `BRANDS_*` constants above `STORE_REGISTRY`). Drives
+   * `resolveOfficialBrand()`, which gates the CTA "official representative" guarantee sentence —
+   * the guarantee must never be claimed for a brand not on this list. An empty array means "no
+   * source list yet": the CTA never claims official representation for this store, rather than
+   * guessing.
+   */
+  officialBrands: string[];
 }
 
+/**
+ * Official-representative brand lists per store, scraped from each store's own
+ * partner/manufacturer page — NOT the same as "brands this store happens to sell". Feeds
+ * `StoreProfile.officialBrands` in `STORE_REGISTRY` below, and `resolveOfficialBrand()`
+ * (further down this file), which gates the CTA "official representative" guarantee sentence.
+ * Sources:
+ *   EXPERT3D           — https://impresora-3d.es/en/collaboration/
+ *   3DDevice group      — https://3ddevice.com.ua/en/manufacturers/ (shared by 3DDevice/3DPrinter/3DScanner)
+ *   Center 3D Print     — https://center3dprint.com/en/for-partners
+ */
+export const BRANDS_EXPERT3D = ['Raise3D', 'Formlabs', 'xTool', 'Shining3D', 'XGRIDS', 'PUDU', 'Metal3D'];
+export const BRANDS_3DDEVICE_GROUP = [
+  '3DDevice', '3DeVOK', 'AESUB', 'Anycubic', 'APS', 'Artec 3D', 'Babyplast', 'Bambu Lab', 'BASF',
+  'BCN3D', 'Blackbelt', 'Builder', 'Bwmini', 'colorFabb', 'CraftBot', 'Creaform', 'Creality',
+  'Creatbot', 'Delfin', 'Dowell 3D', 'Drywise', 'Einstar', 'Elegoo', 'Eplus3D', 'eSUN', 'Farm 3D',
+  'FastForm', 'Fiberlogy', 'Flashforge', 'FlyingBear', 'Formlabs', 'Forward AM', 'Iemai', 'IMT',
+  'Intamsys', 'KLEMA', 'Magigoo', 'Makera', 'MakerBot', 'Markforged', 'Metal3D', 'Mingda',
+  'MonoFilament', 'Offid', 'Omni3D', 'Ortur', 'Peel 3D', 'Plexiwire', 'Polymaker', 'PUDU', 'Raise3D',
+  'Revopoint', 'Rosa3D', 'Scanology', 'Sculpfun', 'Sharebot', 'Shining 3D', 'Snapmaker',
+  'Spectrum Filaments', 'Sunlu', 'Surphaser', 'Thunk3D', 'UltiMaker', 'Unitree', 'Verbatim', 'XGRIDS',
+  'xTool',
+];
+export const BRANDS_C3D = [
+  'AESUB', 'Anycubic', 'APS', 'Dowell', 'Elegoo', 'Eplus3D', 'FastForm', 'Formlabs', 'IMT', 'Metal3D',
+  'Klema', 'Bambu Lab', 'Artec 3D', 'Blackbelt 3D', 'Builder', 'CreatBot', 'Omni3D', 'Creality',
+  'CraftBot', 'Flashforge', 'FlyingBear', 'MakerBot', 'Markforged', 'UltiMaker', 'Raise3D', 'Makera',
+  'Snapmaker', 'xTool', 'Ortur', 'Creaform', 'Peel 3D', 'Revopoint', 'Scanology', '3DeVOK',
+  'Shining 3D', 'Surphaser', 'XGRIDS', 'SHAREBOT',
+];
+
 export const STORE_REGISTRY: Record<string, StoreProfile> = {
-  '3DDevice': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3ddevice.com.ua/image/catalog/products/', deliveryRegion: 'Ukraine', siteSuffix: '3DDevice' },
-  '3DPrinter': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dprinter.com.ua/image/catalog/Products/', deliveryRegion: 'Ukraine', siteSuffix: '3DPrinter' },
-  '3DScanner': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dscanner.com.ua/image/catalog/Products/', deliveryRegion: 'Ukraine', siteSuffix: '3DScanner' },
-  'Center 3D Print': { group: 'EU', region: 'Poland & EU 🇵🇱', currency: 'PLN (zł) / EUR (€)', currencySymbol: 'zł', languages: ['pl-PL', 'en-GB', 'de-DE', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://center3dprint.com/image/catalog/Products/', deliveryRegion: 'Poland and the EU', siteSuffix: 'C3D' },
-  'Drukarka 3D': { group: 'EU', region: 'Poland 🇵🇱', currency: 'PLN (zł)', currencySymbol: 'zł', languages: ['pl-PL', 'uk-UA'], imageBaseUrl: 'https://drukarka-3d.com.pl/image/catalog/products/', deliveryRegion: 'Poland', siteSuffix: 'Drukarka 3D' },
-  'EXPERT3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'pt-PT', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', deliveryRegion: 'Spain and the EU', siteSuffix: 'EXPERT3D' },
-  'Expert-3DPrinter': { group: 'US', region: 'Houston, TX 🇺🇸', currency: 'USD ($)', currencySymbol: '$', languages: ['en-US', 'es-MX', 'uk-UA'], imageBaseUrl: '', deliveryRegion: 'the USA', siteSuffix: 'Expert-3DPrinter' },
+  '3DDevice': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3ddevice.com.ua/image/catalog/products/', deliveryRegion: 'Ukraine', siteSuffix: '3DDevice', officialBrands: BRANDS_3DDEVICE_GROUP },
+  '3DPrinter': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dprinter.com.ua/image/catalog/Products/', deliveryRegion: 'Ukraine', siteSuffix: '3DPrinter', officialBrands: BRANDS_3DDEVICE_GROUP },
+  '3DScanner': { group: 'UA', region: 'Ukraine 🇺🇦', currency: 'UAH (₴)', currencySymbol: '₴', languages: ['en-GB', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://3dscanner.com.ua/image/catalog/Products/', deliveryRegion: 'Ukraine', siteSuffix: '3DScanner', officialBrands: BRANDS_3DDEVICE_GROUP },
+  'Center 3D Print': { group: 'EU', region: 'Poland & EU 🇵🇱', currency: 'PLN (zł) / EUR (€)', currencySymbol: 'zł', languages: ['pl-PL', 'en-GB', 'de-DE', 'uk-UA', 'ru-UA'], imageBaseUrl: 'https://center3dprint.com/image/catalog/Products/', deliveryRegion: 'Poland and the EU', siteSuffix: 'C3D', officialBrands: BRANDS_C3D },
+  'Drukarka 3D': { group: 'EU', region: 'Poland 🇵🇱', currency: 'PLN (zł)', currencySymbol: 'zł', languages: ['pl-PL', 'uk-UA'], imageBaseUrl: 'https://drukarka-3d.com.pl/image/catalog/products/', deliveryRegion: 'Poland', siteSuffix: 'Drukarka 3D', officialBrands: [] },
+  'EXPERT3D': { group: 'ES', region: 'Valencia, Spain 🇪🇸', currency: 'EUR (€)', currencySymbol: '€', languages: ['en-ES', 'es-ES', 'pt-PT', 'uk-UA'], imageBaseUrl: 'https://impresora-3d.es/image/catalog/products/', deliveryRegion: 'Spain and the EU', siteSuffix: 'EXPERT3D', officialBrands: BRANDS_EXPERT3D },
+  'Expert-3DPrinter': { group: 'US', region: 'Houston, TX 🇺🇸', currency: 'USD ($)', currencySymbol: '$', languages: ['en-US', 'es-MX', 'uk-UA'], imageBaseUrl: '', deliveryRegion: 'the USA', siteSuffix: 'Expert-3DPrinter', officialBrands: [] },
 };
 
 /**
@@ -133,7 +172,7 @@ export function getStore(name: string): StoreProfile {
     // its customers EU delivery, with no failing test anywhere. The prompt builders throw on
     // an empty value instead — same fail-at-point-of-use shape as renderContextFor()'s
     // empty-imageBaseUrl guard in store-render-rules.ts.
-    languages: ['en-GB'], imageBaseUrl: '', siteSuffix: name, deliveryRegion: '',
+    languages: ['en-GB'], imageBaseUrl: '', siteSuffix: name, deliveryRegion: '', officialBrands: [],
   };
 }
 
@@ -373,13 +412,21 @@ export function resolveLocaleValue<T>(map: Record<string, T>, locale: string, fa
   return matchingKey !== undefined ? map[matchingKey] : fallback;
 }
 
-/** Brand lists per store group. */
-export const BRANDS_ES = ['Raise3D', 'Formlabs', 'xTool', 'Shining3D', 'XGRIDS', 'PUDU', 'Metal3D'];
-export const BRANDS_DEFAULT = [
-  'KLEMA', 'Formlabs', 'CreatBot', 'Raise3D', 'UltiMaker', 'MakerBot', 'Markforged', 'Omni 3D',
-  'Shining3D', 'Peel 3D', 'Creaform', 'Revopoint', 'Scantech', 'Surphaser', 'Thunk3D', 'E-PLUS 3D',
-  'Fastform', 'xTool', 'Magigoo', 'Aesub', 'Bambu Lab', 'PUDU', 'Metal3D',
-];
+function escapeRegexBrand(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Resolves which (if any) brand in `productName` is one `storeName` officially represents.
+ * Word-boundary-anchored (not `.includes()`) so short/ambiguous entries (APS, IMT, PUDU) don't
+ * false-positive inside an unrelated longer word. Uses `(?<=^|\W)…(?=\W|$)` rather than `\b` so a
+ * future brand name starting/ending in a non-alphanumeric character (e.g. "Maker+") still matches
+ * correctly — `\b` silently stops working at a non-word boundary.
+ */
+export function resolveOfficialBrand(productName: string, storeName: string): string | undefined {
+  const list = STORE_REGISTRY[storeName]?.officialBrands ?? [];
+  return list.find(b => new RegExp(`(?<=^|\\W)${escapeRegexBrand(b)}(?=\\W|$)`, 'i').test(productName));
+}
 
 /**
  * Brand-guarantee sentence used in the COMMERCIAL CLOSING / CTA-TRUST block (Schema v3 §9).
@@ -669,6 +716,18 @@ order and identical numeric values — only the translated descriptor, unit scri
 count abbreviation change.`;
 
 /**
+ * Shared core rule for `<b>Label:</b> continuation` bullets, wherever that pattern appears —
+ * the master's §2b/§4 (regular mode) and the consumables schema's §C3/§C5 below. Defined once so
+ * the exact wording can't drift between the HTML base-generation path and the JSON Doc pipeline
+ * (`task-a-consumables-doc.ts`), which restates its own instruction text rather than inheriting
+ * this file's prose.
+ */
+export const COLON_CAPITALIZATION_RULE =
+  `put a space after the colon; for uk-UA, ru-UA, and pl-PL output the continuation starts with a
+lowercase letter (the colon introduces an explanation of the label, not a new sentence); for de-DE
+and all English variants, keep the default capitalized start.`;
+
+/**
  * Simplified HTML schema for consumable products (filament / resin / adhesive).
  * Used by task-a.ts when templateId === 'consumables-resin'.
  * Overrides Schema v3.0 §1–§9. All other master-prompt rules stay in effect:
@@ -733,6 +792,9 @@ SECTIONS — emit in this exact order, no extras:
 §C5 STORAGE GUIDELINES  (<h2> + <ul>, 2–3 items)
   en H2: "Storage Guidelines"
   Each <li>: <b>[Label]:</b> [concrete storage/handling instruction.]
+
+COLON CAPITALIZATION (§C3, §C5 only — §C2's label ends in "." and correctly starts a new sentence):
+  when a bullet's bold label ends with ":", ${COLON_CAPITALIZATION_RULE}
 
 §C6 CLOSING CTA  (<hr> + plain <p>, 1–2 sentences)
   Product name + store name + availability/shipping.
@@ -1106,9 +1168,10 @@ The closing paragraph is consultative and ENDS WITH A DIRECT INVITATION, not a p
   GOOD ending: "Contact our specialists to discuss lead times, configuration and how [Product]
                fits your production requirements."
   BAD ending:  "The printer is available for purchase with delivery across ..." (flat, no ask)
-Keep the mandatory brand-guarantee sentence and the trust points from the master [CONTENT
-STRUCTURE]. Mention where applicable: official representative, fair price, authorized service,
-warranty, pre-purchase consultation, commissioning/integration.
+Keep the trust points from the master [CONTENT STRUCTURE]: fair price, authorized service,
+warranty, pre-purchase consultation, commissioning/integration. The official-representative
+guarantee sentence is mandatory only when [Official Brand] in [INPUT DATA] names a brand — see
+[BRAND LOGIC] in the master prompt; never add it on your own judgment.
 The CTA is the ONLY place that addresses the reader directly. Everywhere else, stay impersonal /
 benefit-3rd-person — do NOT scatter second-person address through the body.
 
