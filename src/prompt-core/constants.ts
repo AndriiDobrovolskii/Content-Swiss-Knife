@@ -96,29 +96,29 @@ export const STORE_REGISTRY: Record<string, StoreProfile> = {
  */
 export const DELIVERY_REGION_PHRASES: Record<string, Record<string, string>> = {
   'Ukraine': {
-    'uk-ua': 'по Україні',
+    'uk-ua': 'по всій Україні',
     'ru-ua': 'по Украине',
     'en-gb': 'across Ukraine',
   },
   'Poland and the EU': {
-    'uk-ua': 'по Польщі та країнах ЄС',
+    'uk-ua': 'по всій Польщі та країнах ЄС',
     'ru-ua': 'по Польше и странам ЕС',
     'pl-pl': 'na terenie Polski i UE',
     'de-de': 'in Polen und der EU',
     'en-gb': 'across Poland and the EU',
   },
   'Poland': {
-    'uk-ua': 'по Польщі',
+    'uk-ua': 'по всій Польщі',
     'pl-pl': 'na terenie Polski',
   },
   'Spain and the EU': {
-    'uk-ua': 'по Іспанії та країнах ЄС',
+    'uk-ua': 'по всій Іспанії та країнах ЄС',
     'es-es': 'a toda España y la UE',
     'pt-pt': 'para Portugal e a UE',
     'en-es': 'across Spain and the EU',
   },
   'the USA': {
-    'uk-ua': 'по США',
+    'uk-ua': 'по всій території США',
     'es-mx': 'a todo Estados Unidos',
     'en-us': 'across the USA',
   },
@@ -662,8 +662,8 @@ Normalize spacing even if the source omits it ("10W" → "10 W").`;
  * brand-first order. Count abbreviation split: es-ES "uds" vs es-MX "pzas".
  */
 export const PRODUCT_NAME_LOCALIZATION = `[PRODUCT NAME LOCALIZATION — localize the Product Name in EVERY place it appears]
-The Product Name recurs in the hook <p>, body prose and figure captions — render it in ONE
-consistent localized form across all of them.
+The Product Name recurs in the hook <p>, body prose, figure captions, and the closing CTA
+paragraph — render it in ONE consistent localized form across all of them.
 HEADINGS ARE THE EXCEPTION, and [HEADING FORM] governs them: the §7 header is a bare
 "Technical specifications", no <h3> carries the name at all, and only two <h2> in the document
 carry it — in the SHORT brand+model form. The rules below describe HOW to localize the name
@@ -795,6 +795,9 @@ SECTIONS — emit in this exact order, no extras:
 
 COLON CAPITALIZATION (§C3, §C5 only — §C2's label ends in "." and correctly starts a new sentence):
   when a bullet's bold label ends with ":", ${COLON_CAPITALIZATION_RULE}
+BOLD-LABEL SEPARATION (§C2, §C3, §C5 — any bullet's label): whichever side of </b> carries the
+  space, it must be an actual character — terminal punctuation alone is not a substitute (a
+  browser inserts no gap at a tag boundary).
 
 §C6 CLOSING CTA  (<hr> + plain <p>, 1–2 sentences)
   Product name + store name + availability/shipping.

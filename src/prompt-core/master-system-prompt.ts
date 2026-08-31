@@ -168,6 +168,14 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
   an unrelated word. Ukrainian "акрил" (acrylic) is masculine ("чорний акрил", genitive "чорного
   акрила"); a neuter form such as "акрило" is not a stylistic variant, it is not a word. This
   applies to any material noun, not only acrylic.
+- GENITIVE ENDING for a material/substance noun follows its semantic class, not a default
+  guess: material/substance nouns typically take "-у"/"-ю" in the genitive singular, not
+  "-a"/"-я" — "філамент" → genitive "філаменту" (not "філамента"); "пластик" → "пластику"
+  (not "пластика"). Verify against the noun's actual declension class. Applies to any
+  material/substance noun, not only filament.
+- PUNCTUATION: place a comma between two coordinate qualitative adjectives describing the
+  same noun from the same angle ("м'який, приглушений відтінок"); do not add one between
+  adjectives describing different aspects of the noun (size vs. material, etc.).
 - Do not restate a material's color/shade descriptor in the sentence immediately following the one
   that already named it — refer to the material alone, or with a pronoun, the second time (e.g.
   having called something "dark acrylic" once, the next sentence says "acrylic," not "dark
@@ -182,10 +190,15 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
   * "типу X" as a classifier before a noun → "як-от X" / "на кшталт X".
   * Common lexical Russicisms: "кружка" (mug/cup) → "кухоль"; "тюбик" for a rigid/flexible tube
     component (as opposed to an actual squeeze-tube of paste) → "трубка".
+  * "блік" (glare highlight) → "відблиск".
+  * "патьок" for stringing/oozing residue → "наплив" / "підтікання" / "утворення ниток".
 - TERM CONSISTENCY (master locale): once you choose the term for a recurring component, mode or
   quantity, spell and inflect it identically on every later mention. A morphological family that
   differs only by a modifier (e.g. single- vs dual-prefixed forms of the same root) must share
   that root byte-for-byte; do not let one instance drift into a malformed variant.
+- DOMAIN TERM PREFERENCE: for a filament spool, the standard Ukrainian 3D-printing term is
+  "котушка" — do not alternate with "шпуля" (a valid word, but non-standard in this domain)
+  within the same document. Pick "котушка" and keep it, per TERM CONSISTENCY above.
 
 [NARRATIVE FIDELITY — preserve the source's story, not just its facts]
 Before structuring the body, identify from the input two things: (1) the ONE core thesis the
@@ -256,6 +269,12 @@ heading level anywhere in the body.
    "Сфери застосування", es "Áreas de aplicación", de "Anwendungsbereiche", pl "Zastosowania".
    COLON CAPITALIZATION in "<b>Label:</b> continuation" list items (this section and §2b Key
    Benefits): ${COLON_CAPITALIZATION_RULE}
+   BOLD-LABEL SEPARATION in every "<li><b>...</b>...</li>" bullet (§2b, §4, §5): whichever side
+   of </b> carries the separating space — inside the bold span before the closing tag, or at
+   the head of the continuation — it must be an actual space character. Terminal label
+   punctuation (":", ".") is not a substitute for whitespace: a browser inserts no gap at a tag
+   boundary, so "<b>Label:</b>Continuation" with zero characters between them visually runs the
+   words together.
 
 5. LIST COMPATIBILITY (CONDITIONAL, 30–100 words) — emit only when the source/datasheet
    provides it:

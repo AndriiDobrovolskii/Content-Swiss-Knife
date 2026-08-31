@@ -222,6 +222,14 @@ const UK_FORBIDDEN_CALQUES: Array<{ re: RegExp; fix: string }> = [
   { re: /зависл\w*\s+речовин\w*/i, fix: 'зважені частинки (imprecise term)' },
   { re: /зіпер\w*/i, fix: 'застібка(-и)-блискавка(-и) (anglicism)' },
   { re: /асист[ау]/i, fix: 'підведення повітря / повітряний потік (not асистент — a different, legitimate word)' },
+  // These three need a left lookbehind (unlike the entries above): their roots are short
+  // enough to collide with real, unrelated words as a substring — "блік" inside "дублікатор"/
+  // "дублікат" (a Wanhao Duplicator-series printer, or a duplication feature), "публікація",
+  // "республіка"; "філамента" inside the correct "філаментами"/"філаментах" (needs a right
+  // lookahead too, for the same reason).
+  { re: /(?<!\p{L})блік\w*/iu, fix: 'відблиск (Russicism: рос. "блик")' },
+  { re: /(?<!\p{L})патьок\w*/iu, fix: 'наплив / підтікання / утворення ниток (Russicism: рос. "подтек")' },
+  { re: /(?<!\p{L})філамента(?![\p{L}])/iu, fix: 'філаменту (genitive of a material noun takes "-у", not "-a")' },
 ];
 
 const UK_AMBIGUOUS_CALQUES: Array<{ re: RegExp; fix: string }> = [
@@ -300,11 +308,34 @@ function checkBulletColonCase(html: string, locale: string | undefined, issues: 
   // Colon is expected inside <b>Label:</b> per every template, but also matches the drifted form
   // <b>Label</b>: text — the model doesn't always keep punctuation inside the bold span. Tolerate
   // whitespace/&nbsp; (and a stray inline tag) between the colon and the checked letter too.
-  if (/<li>\s*<b>[^<]*?(?::\s*<\/b>|<\/b>\s*:)(?:<[^>]+>|\s|&nbsp;)*[\p{Lu}]/u.test(html)) {
+  if (/<li[^>]*>\s*<b>[^<]*?(?::\s*<\/b>|<\/b>\s*:)(?:<[^>]+>|\s|&nbsp;)*[\p{Lu}]/u.test(html)) {
     issues.push({
       severity: 'warning',
       rule: 'bullet-colon-case',
       detail: 'A <li><b>Label:</b> Continuation…</li> bullet capitalizes the word after the colon — should be lowercase per [COLON CAPITALIZATION].',
+      context,
+    });
+  }
+}
+
+/**
+ * Genuine zero-whitespace glue between a bold bullet label and its continuation — e.g.
+ * `<b>Матова текстура.</b>Розсіює` or `<b>Декоративні моделі:</b>матові`. Distinct from
+ * checkBulletColonCase (which only fires on a wrongly-capitalized continuation): this fires
+ * regardless of case or which punctuation ends the label, because a browser inserts no
+ * whitespace at a tag boundary — a correctly-cased continuation can still visually glue to
+ * the label with zero characters between them. Requires punctuation immediately abutting
+ * </b> (no space before it) AND a letter immediately abutting </b> (no space after it) —
+ * either side having real whitespace (the EXPERT3D/C3D "space before </b>" style, or the
+ * default "space after </b>" style) correctly does not match. Ungated by locale — this is a
+ * rendering defect, not a language rule.
+ */
+function checkBoldLabelGlue(html: string, issues: ValidationIssue[], context: string): void {
+  if (/<li[^>]*>\s*<b>[^<]*[.:]<\/b>[\p{L}]/u.test(html)) {
+    issues.push({
+      severity: 'warning',
+      rule: 'bold-label-glue',
+      detail: 'A bullet label ends in "." or ":" with zero whitespace before AND after </b> — the words will visually run together in the browser.',
       context,
     });
   }
@@ -609,6 +640,7 @@ export function validateGeneratedHtml(
   checkUkrainianCalques(html, locale, issues, context);
   checkLeadInCapitalization(html, issues, context);
   checkBulletColonCase(html, locale, issues, context);
+  checkBoldLabelGlue(html, issues, context);
   // Uncyrillized Latin units (uk/ru) — runs on the name/URL-stripped variant: units inside a
   // brand/model suffix stay Latin by design ([PRODUCT NAME LOCALIZATION] keeps model codes as-is).
   checkCyrillicUnitLocalization(htmlForUnitCheck, locale, issues, context);
