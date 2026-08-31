@@ -1,4 +1,4 @@
-import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES, NO_LEAKED_REASONING_CLAUSE } from './constants';
+import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES, NO_LEAKED_REASONING_CLAUSE, COLON_CAPITALIZATION_RULE } from './constants';
 
 /**
  * STATIC system prompt shared by Task A / B / C and all translations.
@@ -254,6 +254,8 @@ heading level anywhere in the body.
    ("Dentistry: prints 40 aligner models per build with ±50 µm accuracy"). Add other
    relevant fields or synonyms when they fit. Localize the H2: uk-UA/ru-UA
    "Сфери застосування", es "Áreas de aplicación", de "Anwendungsbereiche", pl "Zastosowania".
+   COLON CAPITALIZATION in "<b>Label:</b> continuation" list items (this section and §2b Key
+   Benefits): ${COLON_CAPITALIZATION_RULE}
 
 5. LIST COMPATIBILITY (CONDITIONAL, 30–100 words) — emit only when the source/datasheet
    provides it:
@@ -346,8 +348,11 @@ ending at §9.
    SHOWROOM SCOPE: offer "in-showroom demo & test" only for stores with a physical
    showroom; for EXPERT3D (no showroom) substitute that slot with another
    trust point from the list, e.g. "consumables & spare parts in stock".
-   BRAND LOGIC PRESERVED: if [Product] contains an applicable brand, still include the
-   localized: "${BRAND_GUARANTEE_EN}"
+   BRAND LOGIC: consult [Official Brand] in [INPUT DATA]. When it names a brand, include the
+   localized guarantee sentence with [Brand] filled in from it: "${BRAND_GUARANTEE_EN}". When
+   [Official Brand] is "None…", omit any official-representative / authorized-dealer /
+   authenticity-guarantee claim entirely — never infer or guess a brand from the product name
+   yourself.
 
 [VIDEO]
 MANDATORY WHEN PRESENT: if [Raw Description] or a [VIDEO MANIFEST] supplies an embed, the output

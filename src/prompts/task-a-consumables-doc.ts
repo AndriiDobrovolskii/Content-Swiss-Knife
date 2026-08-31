@@ -17,6 +17,7 @@
  * a live probe, mirroring how the main Doc pipeline itself was rolled out.
  */
 import { buildPromptA } from './task-a';
+import { COLON_CAPITALIZATION_RULE } from '../prompt-core/constants';
 import type { PromptPayload } from '../prompt-core/payload';
 import type { ProductInput } from '../app/types';
 
@@ -89,6 +90,9 @@ HARD RULES:
   It joins them as <b>{lead}</b>{text} with nothing in between, so if "lead" ends with a letter or
   digit AND "text" begins with one, the two words collide: "Топографічне зніманняДальність".
   End the "lead" with ":" or ". ", or begin the "text" with a space.
+- COLON CAPITALIZATION: for "applications" (§C3) and "storage" (§C5) items whose "lead" ends in
+  ":", ${COLON_CAPITALIZATION_RULE} (applied to "text"). Does not apply to "features" (§C2) items,
+  whose "lead" ends in "." and correctly starts a new sentence.
 - TARGET LENGTH: ~4700 visible characters (HTML tags stripped) across the whole document. HARD
   CEILING: 5500 — validation FAILS above this. You cannot count your own characters, so AIM LOW to
   leave headroom; budget words, do not measure.
