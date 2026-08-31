@@ -79,8 +79,8 @@ HARD RULES:
   It joins them as <b>{lead}</b>{text} with nothing in between, so if "lead" ends with a letter or
   digit AND "text" begins with one, the two words collide: "Топографічне зніманняДальність".
   End the "lead" with ":" or ". ", or begin the "text" with a space.
-- TARGET LENGTH: ~3400 visible characters (HTML tags stripped) across the whole document. HARD
-  CEILING: 4000 — validation FAILS above this. You cannot count your own characters, so AIM LOW to
+- TARGET LENGTH: ~4700 visible characters (HTML tags stripped) across the whole document. HARD
+  CEILING: 5500 — validation FAILS above this. You cannot count your own characters, so AIM LOW to
   leave headroom; budget words, do not measure.
 - Do not invent a "section", "hr", "h3", "thead" or any other structural field. Section order,
   headings, tables, <hr> and spacing are the renderer's job, not yours.`;

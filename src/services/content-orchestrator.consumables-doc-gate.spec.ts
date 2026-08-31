@@ -71,7 +71,7 @@ function invalidSchemaDoc() {
 }
 
 /**
- * An over-long hook — pads past output-validator.ts's 4000-char CONSUMABLES_MAX_STRIPPED_CHARS
+ * An over-long hook — pads past output-validator.ts's 5500-char CONSUMABLES_MAX_STRIPPED_CHARS
  * ceiling (rule 'consumables-char-limit', severity 'error'). NOT a grounding fixture: validateSpecsGrounding
  * only scans `section.specs table` (specs-grounding.ts), which consumables output never has — §C4
  * explicitly forbids `<section class="specs">` — so that validator (and validateSpecCountParity,
@@ -81,7 +81,7 @@ function invalidSchemaDoc() {
  */
 function overLengthDoc(): ConsumablesDescriptionDoc {
   const doc = makeDoc([{ heading: 'Print Settings', rows: [{ label: 'Nozzle', value: '210 °C' }] }]);
-  return { ...doc, hook: 'А'.repeat(4200) };
+  return { ...doc, hook: 'А'.repeat(5700) };
 }
 
 /** Same shape, hook shortened back under the ceiling. */

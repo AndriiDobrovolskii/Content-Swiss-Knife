@@ -493,7 +493,7 @@ export const SENTENCE_LENGTH_BANDS: Record<string, SentenceLengthBand> = {
   // were the tightest and were exactly where real generations overshot — 21/22/22 words against the
   // uk-UA ceiling of 20 (Ortur H20 20 W, Center 3D Print, 2026-07-27). The model cannot count its
   // own words, so the target must sit far enough below the ceiling that a normal overshoot still
-  // lands under it. Same doctrine as task-a.ts's consumables rule ("AIM LOW (~3400) to leave
+  // lands under it. Same doctrine as task-a.ts's consumables rule ("AIM LOW (~4700) to leave
   // headroom; budget words, do not measure").
   //
   // Ceilings are acceptance criteria and deliberately NOT moved — lowering one would hide the
@@ -673,7 +673,7 @@ count abbreviation change.`;
  * Used by task-a.ts when templateId === 'consumables-resin'.
  * Overrides Schema v3.0 §1–§9. All other master-prompt rules stay in effect:
  * unit cyrillization, number separators, no H1, no microdata, anti-anglicism.
- * Hard visible-text limit: 4 000 characters (HTML tags stripped).
+ * Hard visible-text limit: 5 500 characters (HTML tags stripped).
  */
 export const CONSUMABLES_SIMPLIFIED_SCHEMA =
   `[CONSUMABLES SIMPLIFIED SCHEMA — overrides Schema v3.0 §1–§9]
@@ -682,9 +682,9 @@ IGNORE: §1 Hook, §2 Killer Specs, §3 Functionality, §4 Applications, §5 Com
         §6 Package Contents, §9 CTA-TRUST from the master [CONTENT STRUCTURE].
 KEEP ALL OTHER MASTER RULES: unit cyrillization, number separators, no H1, no microdata, anti-anglicism.
 
-TARGET LENGTH: ~3400 visible characters (HTML tags stripped). HARD CEILING: 4000 — validation FAILS above this.
-You cannot count your own characters, so AIM LOW (~3400) to leave headroom; budget words, do not measure.
-Translations into German/Russian/Spanish expand 10–30% vs. English — that headroom is what keeps them under 4000.
+TARGET LENGTH: ~4700 visible characters (HTML tags stripped). HARD CEILING: 5500 — validation FAILS above this.
+You cannot count your own characters, so AIM LOW (~4700) to leave headroom; budget words, do not measure.
+Translations into German/Russian/Spanish expand 10–30% vs. English — that headroom is what keeps them under 5500.
 Write efficiently — never pad to a minimum length.
 
 SECTIONS — emit in this exact order, no extras:
@@ -745,7 +745,7 @@ FORBIDDEN for consumables:
 * Translation overlay for consumables. Appended to whichever task-c instruction is
 * selected when templateId === 'consumables-resin'. Stops the translator from re-inflating
 * the simplified §C1–§C6 structure into a printer/scanner-style description, and carries the
-* 4000-char limit into every target language (DE/RU expand vs EN). Single source of truth.
+* 5500-char limit into every target language (DE/RU expand vs EN). Single source of truth.
 */
 export const CONSUMABLES_TRANSLATION_OVERLAY =
   `[CONSUMABLES MODE — TRANSLATION OVERLAY — these rules WIN over any [LABELS]/closing-H2 instruction above]
@@ -794,7 +794,7 @@ Translate it AS-IS. Do NOT restructure it into a printer/scanner-style descripti
   drift to "діджитизація"/"цифровізація"). Apply the same precedence logic in ru/pl/de/es when an
   equivalent editor-confirmed term exists in the glossary.
 
-HARD LIMIT: translated visible text (HTML tags stripped) MUST stay at or below 3400 characters (ceiling 4000).
+HARD LIMIT: translated visible text (HTML tags stripped) MUST stay at or below 4700 characters (ceiling 5500).
 Since you cannot count characters, COMPRESS structurally: keep §C2/§C3/§C5 bullets to one short sentence each, drop adjectives. Never pad, never add sentences.
 If the target language expands vs. the source, COMPRESS §C2/§C3/§C5 prose to stay under the limit. Never pad, never add sentences.
 Preserve every spec-table row and numeric value verbatim (only localize unit/separator as instructed above).`;
@@ -1186,7 +1186,7 @@ FORBIDDEN list are untouched — only the item grammar changes:
 - §C5 items "<b>[Label]:</b>": a bold IMPERATIVE opener ending in a period, matching SIGNATURE
   MOVE #3 — storage and handling instructions are advice, so the imperative is the natural register
   there. No colon.
-- BUDGET GUARD: §C is capped at 4000 characters. In this mode each item takes the verb/imperative
+- BUDGET GUARD: §C is capped at 5500 characters. In this mode each item takes the verb/imperative
   opener plus EXACTLY ONE supporting sentence, not SIGNATURE MOVE #1's 1-3. If the budget is still
   tight, cut supporting detail — never drop a required §C section or a spec value.
 The COLON CAPITALIZATION rule in the consumables overlay describes the form these items USED to
@@ -1288,7 +1288,7 @@ items arrive VERB-LED (or, in §C5, imperative-led) and period-terminated, becau
 voice already replaced their colon-label form. Translate them as they arrive. Its COLON
 CAPITALIZATION rule describes the form those items USED to take — with no colon left in §C2/§C3/§C5
 it has nothing to apply to, so do not reintroduce a colon in order to satisfy it. Every other
-consumables rule (section set, tables, the 4000-character cap) still applies unchanged.
+consumables rule (section set, tables, the 5500-character cap) still applies unchanged.
 
 Direct second-person address stays confined to the CTA — do not spread it elsewhere.
 

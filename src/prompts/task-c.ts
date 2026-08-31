@@ -123,7 +123,7 @@ export function buildPromptC(
   instruction += `\n\n${HEADING_FIDELITY}`;
 
   // …then, for consumables, append the overlay so the simplified §C1–§C6 structure and the
-  // 4000-char limit survive translation regardless of which variant was chosen above.
+  // 5500-char limit survive translation regardless of which variant was chosen above.
   if (templateId === 'consumables-resin') {
     instruction += `\n\n${CONSUMABLES_TRANSLATION_OVERLAY}`;
   }

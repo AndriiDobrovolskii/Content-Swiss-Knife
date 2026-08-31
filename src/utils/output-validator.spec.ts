@@ -784,6 +784,36 @@ describe('validateGeneratedHtml — Rules: image-manifest-missing / image-manife
   });
 });
 
+describe('validateGeneratedHtml — Rule: consumables-char-limit', () => {
+  /** `<p>` + n filler letters strips to exactly n visible chars — no spaces to collapse. */
+  const stripped = (n: number) => `<p>${'a'.repeat(n)}</p>`;
+  const opts = { templateId: 'consumables-resin' };
+
+  it('does not flag stripped text exactly at the 5500 ceiling', () => {
+    const issues = validateGeneratedHtml(stripped(5500), 'test', undefined, undefined, opts);
+    expectNoRule(issues, 'consumables-char-limit');
+  });
+
+  it('flags stripped text over the 5500 ceiling, with ceiling and ~4700 target in the detail', () => {
+    const issues = validateGeneratedHtml(stripped(5510), 'test', undefined, undefined, opts);
+    const hit = findRule(issues, 'consumables-char-limit');
+    expect(hit?.severity).toBe('error');
+    expect(hit?.detail).toContain('5500');
+    expect(hit?.detail).toContain('4700');
+    expect(hit?.detail).toContain('<li>');
+  });
+
+  it('no longer flags stripped text between the old 4000 ceiling and the new 5500 one', () => {
+    const issues = validateGeneratedHtml(stripped(4200), 'test', undefined, undefined, opts);
+    expectNoRule(issues, 'consumables-char-limit');
+  });
+
+  it('does not gate templates other than consumables-resin on this rule', () => {
+    const issues = validateGeneratedHtml(stripped(6000), 'test', undefined, undefined, { templateId: 'other-template' });
+    expectNoRule(issues, 'consumables-char-limit');
+  });
+});
+
 describe('validateSeoMetadata — Rule: seo-empty', () => {
   it('flags null input', () => {
     expect(findRule(validateSeoMetadata(null, '₴'), 'seo-empty')?.severity).toBe('error');
