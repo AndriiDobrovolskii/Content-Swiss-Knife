@@ -41,6 +41,7 @@ import { renderDescription } from '../render/render-description';
 import { renderConsumablesDoc } from '../render/render-consumables';
 import type { RenderContext } from '../render/render-description';
 import { normalizeDocProse } from '../render/doc-prose-transforms';
+import { normalizeConsumablesDocProse } from '../render/consumables-prose-transforms';
 import { renderContextFor, getRenderRules } from '../prompt-core/store-render-rules';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
 import type { ConsumablesDescriptionDoc } from '../domain/consumables-doc';
@@ -710,7 +711,7 @@ export class ContentOrchestratorService {
         console.info(`[bullet-lead-punctuation] ${opts.label}: ${attempt.preValidationFixed} lead(s) normalized before validation`);
       }
       if (!attempt.doc) return { html: null, issues: attempt.issues };
-      return { html: renderConsumablesDoc(attempt.doc, ctx), issues: [] };
+      return { html: renderConsumablesDoc(normalizeConsumablesDocProse(attempt.doc, opts.locale), ctx), issues: [] };
     };
 
     const result = await runRepairGate<{ html: string | null; issues: ValidationIssue[] }>({
