@@ -66,12 +66,25 @@ every other artifact — stays in **English**.
 breaks the gate with "script not found," which §7.9 forbids working around.
 
 ```bash
-npm run lint          # tsc --noEmit — a type-check, NOT a linter. There is no ESLint here.
-npm test              # vitest run
-npm run test:coverage # vitest run --coverage
-npm run build         # ng build
-bash arch-guard.sh    # the architecture + frozen-file gate (§3, §9)
+npm run lint            # tsc --noEmit — a type-check, NOT a linter. There is no ESLint here.
+npm test                # BOTH runners: test:logic && test:components. This is the gate.
+npm run test:logic      # vitest run — logic specs only
+npm run test:components # ng test — component specs only (Angular unit-test builder)
+npm run test:coverage   # vitest run --coverage — logic scope only (see §5)
+npm run build           # ng build
+bash arch-guard.sh      # the architecture + frozen-file gate (§3, §9)
 ```
+
+`npm test` is composite on purpose: there are two runners, and the gate must never be able
+to pass while one of them was silently not run. Never invoke `test:logic` alone as the test
+step of the Definition of Done.
+
+**Dependency pin worth knowing.** `@angular/router` is pinned to an exact version
+(`21.2.18`), not a caret range. It is a test-only peer of `@testing-library/angular` — the
+app has no router. Angular packages peer-require each other at an *exact* version, so a
+caret range lets `npm install` resolve a newer patch that then demands a matching
+`@angular/core` and fails the whole install. Keep it exact and equal to the installed
+`@angular/core` patch.
 
 ---
 
@@ -247,13 +260,35 @@ Tests sit beside the code: `src/utils/foo.ts` → `src/utils/foo.spec.ts`. A new
 
 ### Runner split
 
-`vitest.config.ts` defines two projects, and the split is deliberate:
+Two runners, split by **file-name suffix**. That suffix is the only boundary; there is no
+path-based rule, so a component spec may live anywhere its component lives.
 
-- **`logic`** — pure TypeScript under `src/**` and the corpus harness under `test/**`,
-  environment `happy-dom`, no Angular compilation. This is where the large existing suite
-  lives; it must stay green and stay fast.
-- **`components`** — `*.component.spec.ts`, compiled through the Angular plugin, with
-  `@testing-library/angular` and a zoneless setup.
+- **Logic — `npm run test:logic`** (`vitest run`, config `vitest.config.ts`). Pure
+  TypeScript under `src/**` plus the corpus harness under `test/**`, environment
+  `happy-dom`, **no Angular compilation**. This is where the large existing suite lives; it
+  must stay green and stay fast. It explicitly excludes `**/*.component.spec.ts`.
+- **Components — `npm run test:components`** (`ng test`, the Angular `unit-test` builder
+  declared in `angular.json`). Runs `**/*.component.spec.ts` on the Vitest runner, compiled
+  through the Angular compiler, with TestBed and `@testing-library/angular`.
+
+**Name a component spec `*.component.spec.ts` or it will run in the wrong runner** — picked
+up by the logic runner without Angular compilation, it fails for a reason unrelated to the
+code under test.
+
+> The Angular `unit-test` builder is marked `[EXPERIMENTAL]` by the Angular team. It was
+> chosen over `@analogjs/vitest-angular` because Analog is uninstallable on this dependency
+> tree (its optional `@angular-devkit/build-angular` peer forces an Angular patch bump the
+> project has not taken). First-party and experimental beat third-party and uninstallable,
+> but the label is real: if this builder's behaviour changes under an Angular upgrade, that
+> is the first place to look.
+
+### Writing a component test
+
+Use `@testing-library/angular`. Query the way a user finds things — `getByRole`,
+`getByText`, accessible names — not by CSS class or internal field. Drive it with
+`@testing-library/user-event`, assert what the user observes: rendered text, an emitted
+output, a signal the interaction changed. Do not mock the component, hook, or service under
+test; a real `providedIn: 'root'` signal store is preferable to a stub of it.
 
 `test/render-reconciliation.spec.ts` is included deliberately: it compares the renderer
 against real accepted artifacts in `test/fixtures/corpus/`. Without it that harness is dead
@@ -268,9 +303,19 @@ is running — it is never part of the gate.
 
 ### Coverage — the scope is part of the number
 
-Coverage is measured by v8 over an **explicit include list**, currently `src/utils/**`, with
-floors of lines 80 / functions 80 / branches 75 / statements 80. A percentage quoted without
-its scope is theater; always state both.
+Coverage is measured by v8 over an **explicit include list** — `src/utils/**`,
+`src/prompt-core/**`, `src/render/**`, `src/domain/**` — with a global floor of lines 80 /
+functions 80 / branches 75 / statements 80, plus higher per-directory floors for the three
+better-covered directories (see the comment in `vitest.config.ts` for the measured values
+those floors were derived from). A percentage quoted without its scope is theater; always
+state both.
+
+**Coverage covers the logic runner only.** `npm run test:coverage` does not measure component
+specs, and `src/app/**` and `src/services/**` are not in the include list — `app.component.ts`
+and `content-orchestrator.service.ts` are large and largely untested, and adding them today
+would produce an instantly dishonest number. Widening the scope as component coverage lands
+is welcome and expected; it is a deliberate change to `vitest.config.ts`, not a number edited
+in prose.
 
 Coverage is a floor, not a goal. Widening the scope is a deliberate, phased change to
 `vitest.config.ts`. Narrowing it, excluding a file, or lowering a threshold to make a run go
@@ -284,7 +329,8 @@ Do not report a task complete until all of these are verified **with real comman
 
 1. **Type-check green** — `npm run lint` (`tsc --noEmit`) reports zero errors.
 2. **Tests written and green** — the new behaviour has tests that were written first and
-   observed failing, and the **full** suite passes, not just the new tests: `npm test`.
+   observed failing, and the **full** suite passes, not just the new tests: `npm test`
+   (which runs *both* runners — `test:logic` alone does not satisfy this item).
 3. **Coverage held** — `npm run test:coverage` passes its thresholds and no touched module
    in the coverage scope lost coverage.
 4. **Build green** — `npm run build` completes with no errors.

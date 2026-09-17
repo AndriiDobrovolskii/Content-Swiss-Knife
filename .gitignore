@@ -44,3 +44,6 @@ data/*.db-*
 *.sw?
 .env.example
 *.example
+
+# Generated coverage report — reproducible from `npm run test:coverage`
+coverage/
