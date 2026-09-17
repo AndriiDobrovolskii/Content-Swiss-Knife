@@ -285,6 +285,13 @@ describe('runDocGate — a forced Zod schema failure repairs rather than throws'
     expect(result.finalIssues.filter((i: { severity: string }) => i.severity === 'error')).toHaveLength(0);
     expect(result.repairsUsed).toBe(1);
     expect(result.artifact).toContain('<'); // rendered HTML, not the empty-artifact throw path
+
+    // Proves runDocGate is actually WIRED to withDocRepairFeedback, not just that the function
+    // itself produces the right string in isolation (doc-schema-issues.spec.ts covers that). A
+    // wiring test asserting only against withDocRepairFeedback's own output would pass identically
+    // if this call site still read `withFeedback: appendRepairFeedback`.
+    const retryPayload = mockLlm.generateJson.mock.calls[1][0] as PromptPayload;
+    expect(retryPayload.userContent).toMatch(/single JSON object/i);
   });
 
   /**

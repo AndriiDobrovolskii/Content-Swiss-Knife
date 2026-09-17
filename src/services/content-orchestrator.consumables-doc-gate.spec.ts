@@ -205,6 +205,10 @@ describe('runConsumablesDocGate — a forced Zod schema failure repairs rather t
     const retryPayload = mockLlm.generateJson.mock.calls[1][0] as PromptPayload;
     expect(retryPayload.userContent).toContain('features.items');
     expect(retryPayload.userContent).toContain('VALIDATION FEEDBACK');
+    // Proves this gate is wired to withDocRepairFeedback, not just appendRepairFeedback — the
+    // re-anchor exists specifically because a Doc-path retry can abandon the JSON contract entirely
+    // (see doc-schema-issues.ts's withDocRepairFeedback doc comment).
+    expect(retryPayload.userContent).toMatch(/single JSON object/i);
   });
 
   it('returns the empty-artifact sentinel — not a throw — when every attempt fails the schema', async () => {
