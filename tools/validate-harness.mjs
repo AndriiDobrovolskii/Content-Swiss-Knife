@@ -218,8 +218,16 @@ for (const id of retiredIds) {
   }
 }
 
-if (retiredIds.length > 0) {
-  const pattern = new RegExp(`\\b(${retiredIds.join('|')})\\b`);
+// Only SCREAMING_SNAKE compounds are scanned for in prose. A bare single word like `PR`,
+// `DESIGN`, `TESTS` or `DONE` is ordinary English ("open the PR", "the DESIGN section") and
+// flagging it produces noise that trains people to ignore the validator. A compound such as
+// `API_DESIGN` or `BACKLOG_SYNC` cannot be anything but a stage identifier. The full
+// retired_identifiers map is still enforced against workflow-state.yaml below, where a value
+// is unambiguously a stage id and no such exemption applies.
+const scannableRetired = retiredIds.filter(id => id.includes('_'));
+
+if (scannableRetired.length > 0) {
+  const pattern = new RegExp(`\\b(${scannableRetired.join('|')})\\b`);
   for (const file of [...walk(SKILLS_DIR), ...walk(COMMANDS_DIR)]) {
     if (!/\.(md|ya?ml|json)$/.test(file)) continue;
     const lines = readFileSync(file, 'utf8').split('\n');
@@ -234,7 +242,14 @@ if (retiredIds.length > 0) {
 // 5. Skills named by the registry exist (PENDING during bootstrap)
 // ---------------------------------------------------------------------------
 
-for (const skill of [...skillsNamed].sort()) {
+// Every skill the registry names, plus every skill directory that actually exists. The
+// second half matters because so-orchestrator is named as an artifact `owner` and by the
+// /so:* commands, never as a stage's `skill:` — without this it would never be checked.
+const skillDirs = existsSync(SKILLS_DIR)
+  ? readdirSync(SKILLS_DIR).filter(d => statSync(join(SKILLS_DIR, d)).isDirectory())
+  : [];
+
+for (const skill of [...new Set([...skillsNamed, ...skillDirs])].sort()) {
   const path = join(SKILLS_DIR, skill, 'SKILL.md');
   if (!existsSync(path)) {
     pend(`.claude/skills/${skill}/SKILL.md`, 'named by stage-map.yaml but not authored yet');
