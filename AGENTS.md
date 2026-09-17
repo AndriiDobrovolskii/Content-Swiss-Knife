@@ -428,10 +428,12 @@ artifact `owner` is a skill some stage names, and that no retired stage identifi
 `.claude/skills/` or `.claude/commands/`. Run it after touching `docs/workflow/` or any
 skill.
 
-A skill named by the registry but not yet authored is reported as **PENDING**, not an error —
-during bootstrap phases P3–P5 that is the expected state. `--strict` makes PENDING fatal;
-wire that into the gate at P6, when every skill exists. It is a ratchet, and it never hides
-a real error.
+**The `--strict` ratchet is now armed.** All 17 `so-*` skills exist, so `npm run
+validate:harness` runs with `--strict`: a skill named by the registry but missing is a
+**fatal error**, not a pending note. Adding a stage or a `skills_by_track` entry without
+authoring its skill now fails the gate. Do not remove the flag to make a run pass — that is a
+§7.9 violation. `node tools/validate-harness.mjs` without the flag still exists for
+diagnosis.
 
 ---
 

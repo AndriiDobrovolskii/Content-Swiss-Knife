@@ -15,7 +15,7 @@
     "test:components": "ng test",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "validate:harness": "node tools/validate-harness.mjs"
+    "validate:harness": "node tools/validate-harness.mjs --strict"
   },
   "dependencies": {
     "@angular/build": "^21.0.0",

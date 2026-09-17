@@ -264,6 +264,30 @@ for (const skill of [...new Set([...skillsNamed, ...skillDirs])].sort()) {
 }
 
 // ---------------------------------------------------------------------------
+// 5b. Every skill a /so:* command names actually exists
+// ---------------------------------------------------------------------------
+// The commands are the user-facing entry points. A command naming a skill that was renamed
+// or never written fails at invocation time, in front of the user, with nothing upstream
+// catching it — stage-map.yaml does not reference the commands at all, so section 5 above
+// never sees these. Found while finishing P6: /so:new names so-story-writer, which no stage's
+// `skill:` field names either (STORY_WRITING does, but the command bypasses the orchestrator).
+
+const knownSkills = new Set([...skillsNamed, ...skillDirs]);
+
+for (const file of walk(COMMANDS_DIR)) {
+  if (!file.endsWith('.md')) continue;
+  const body = readFileSync(file, 'utf8');
+  // Only backticked references — prose like "the so-* skills" is not a reference.
+  for (const m of body.matchAll(/`(so-[a-z0-9-]+)`/g)) {
+    const named = m[1];
+    if (named.endsWith('-*')) continue;
+    if (!knownSkills.has(named)) {
+      error(relative(ROOT, file), `references skill \`${named}\`, which does not exist under .claude/skills/`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 6. State files are parseable and canonical
 // ---------------------------------------------------------------------------
 
