@@ -19,8 +19,12 @@ dist-ssr
 
 # Local knowledge/plan files — not part of the codebase.
 # "Knowlege/" is the original typo, kept so any stale local folder stays ignored.
-Knowlege/
-Knowledge/
+#
+# Leading slash is load-bearing: an unanchored `Knowledge/` matches at ANY depth, and git
+# is case-insensitive on Windows by default — so it silently swallowed `docs/knowledge/`,
+# the harness's own delivery-summary directory. Anchor both to the repo root.
+/Knowlege/
+/Knowledge/
 
 # Local usage/cost tracking database — machine-specific, not part of the codebase
 data/*.db

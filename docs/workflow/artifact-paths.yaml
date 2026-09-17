@@ -1,0 +1,165 @@
+# =============================================================================
+# CANONICAL ARTIFACT PATH REGISTRY
+# =============================================================================
+# The single authoritative source for where every workflow artifact lives and
+# which skill owns it.
+#
+# Rules:
+#   - Skills MUST resolve artifact locations from this registry, not from
+#     hard-coded paths. A skill may show a resolved example path for
+#     readability, but must state that this file is authoritative. A hard-coded
+#     path is a defect even when it currently happens to be correct.
+#   - {story_id} -> canonical epic-dotted Story identifier, e.g. US-1.2
+#   - {slug}     -> lowercase-kebab short title from the Story front matter
+#   - Exactly one `owner` per artifact type. Other skills may read or reference
+#     an artifact but must not (re)generate one they do not own.
+#   - A consumed artifact with no `owner` here is an external input.
+#
+# Related authorities:
+#   - docs/workflow/stage-map.yaml        workflow + routing
+#   - docs/workflow/artifact-lifecycle.md status vocabularies + Result Envelope
+#   - docs/workflow/artifact-schema.md    artifact front matter
+#   - docs/workflow/state-schema.md       workflow state
+#
+# Validated by `npm run validate:harness` (tools/validate-harness.mjs): every
+# artifact key named in stage-map.yaml `inputs`/`outputs`/`required_artifacts`
+# must appear here, and every key here must be reachable from some stage.
+# =============================================================================
+
+version: 1
+
+# Canonical Story id form. A Story id that does not match is rejected by
+# so-orchestrator rather than silently normalised.
+story_id_pattern: "^US-[0-9]+\\.[0-9]+$"
+
+artifacts:
+
+  # --- Story ----------------------------------------------------------------
+  story:
+    pattern: docs/stories/{story_id}-{slug}.md
+    owner: so-story-writer
+    external_ok: true          # a hand-written Story file is a valid input
+
+  story_catalog:
+    pattern: docs/catalog/stories.yaml
+    owner: so-story-writer
+
+  # --- Clarification --------------------------------------------------------
+  clarification_report:
+    pattern: docs/evidence/{story_id}-clarification-report.md
+    owner: so-clarifier
+
+  open_decisions:
+    pattern: docs/decisions/{story_id}-open-decisions.md
+    owner: so-clarifier
+
+  # --- Specification --------------------------------------------------------
+  specification:
+    pattern: docs/specifications/{story_id}-spec.md
+    owner: so-spec-writer
+
+  specification_review:
+    pattern: docs/reviews/specifications/{story_id}-spec-review.md
+    owner: so-spec-reviewer
+
+  # --- Impact + planning ----------------------------------------------------
+  impact_analysis:
+    pattern: docs/impact-analysis/{story_id}-impact-analysis.md
+    owner: so-impact-analyzer
+
+  implementation_plan:
+    pattern: docs/plans/{story_id}-implementation-plan.md
+    owner: so-planner
+
+  task_breakdown:
+    pattern: docs/plans/{story_id}-task-breakdown.md
+    owner: so-implementation-planner
+
+  plan_review:
+    pattern: docs/reviews/plans/{story_id}-plan-review.md
+    owner: so-plan-reviewer
+
+  # --- Tests ----------------------------------------------------------------
+  test_strategy:
+    pattern: docs/tests/{story_id}-test-strategy.md
+    owner: so-test-writer
+
+  ac_test_matrix:
+    pattern: docs/tests/{story_id}-ac-test-matrix.md
+    owner: so-test-writer
+
+  test_generation_report:
+    pattern: docs/tests/{story_id}-test-generation-report.md
+    owner: so-test-writer
+
+  # --- Implementation -------------------------------------------------------
+  pipeline_status:
+    pattern: docs/catalog/{story_id}-pipeline-status.md
+    owner: so-builder
+
+  implementation_report:
+    pattern: docs/verification/{story_id}-implementation-report.md
+    owner: so-gate-enforcer
+
+  quality_gate_report:
+    pattern: docs/verification/{story_id}-quality-gate-report.md
+    owner: so-gate-enforcer
+
+  # --- Review ---------------------------------------------------------------
+  verification_report:
+    pattern: docs/verification/{story_id}-verification-report.md
+    owner: so-implementation-verifier
+
+  security_review:
+    pattern: docs/reviews/security/{story_id}-security-review.md
+    owner: so-security-reviewer
+
+  reconciliation_report:
+    pattern: docs/reconciliation/{story_id}-reconciliation-report.md
+    owner: so-reconciliation-reviewer
+
+  # --- Pull Request ---------------------------------------------------------
+  pr_summary:
+    pattern: docs/pr/{story_id}-pr-summary.md
+    owner: so-pr-preparer
+
+  pull_request:
+    pattern: docs/pr/{story_id}-pull-request.yaml
+    owner: so-pr-creator
+
+  # --- Archive --------------------------------------------------------------
+  # Not named in any stage's inputs/outputs: archive mode is invoked by
+  # /so:archive from the ARCHIVED terminal stage, outside normal routing.
+  delivery_summary:
+    pattern: docs/knowledge/{story_id}-delivery-summary.md
+    owner: so-orchestrator
+    routed: false
+
+  project_state:
+    pattern: docs/knowledge/project-state.md
+    owner: so-orchestrator
+    routed: false
+
+# --- Workflow state (not story-scoped) --------------------------------------
+# Written only by so-orchestrator. Stage skills never write these.
+state_files:
+  active_story:
+    path: docs/workflow/active-story.yaml
+    owner: so-orchestrator
+
+  workflow_state:
+    path: docs/workflow/workflow-state.yaml
+    owner: so-orchestrator
+
+  history:
+    path: docs/workflow/history.jsonl
+    owner: so-orchestrator
+    append_only: true
+
+# --- Retired paths ----------------------------------------------------------
+# From the reference harness this one was adapted from. MUST NOT appear in any
+# new skill or document; there is no REST/DB design track here.
+retired_paths:
+  - docs/designs/api/
+  - docs/designs/database/
+  - docs/reviews/designs/

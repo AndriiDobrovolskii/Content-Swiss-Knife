@@ -73,6 +73,7 @@ npm run test:components # ng test — component specs only (Angular unit-test bu
 npm run test:coverage   # vitest run --coverage — logic scope only (see §5)
 npm run build           # ng build
 bash arch-guard.sh      # the architecture + frozen-file gate (§3, §9)
+npm run validate:harness # docs/workflow registry consistency (§8)
 ```
 
 `npm test` is composite on purpose: there are two runners, and the gate must never be able
@@ -342,6 +343,8 @@ Do not report a task complete until all of these are verified **with real comman
    registry still the only source of languages and currency.
 7. **Artifacts updated** — `.env.example` current if a setting was added; the story's
    Specification and AC ↔ test matrix reflect what was actually built.
+8. **Harness intact** — if `docs/workflow/` or any `so-*` skill was touched,
+   `npm run validate:harness` exits 0 with zero errors.
 
 **Reporting a check as passing without running it is the most serious violation available to
 you** — it silently disables every other rule in this file.
@@ -412,13 +415,23 @@ the file named here wins.
 `REFACTOR_PLAN.md` is a stub kept only to retire a long-standing dangling reference. It holds
 no strategy and overrides nothing.
 
-> **Status:** the `docs/workflow/` registry lands in bootstrap phase P2 (see §12). Until then
-> those rows describe the target, not the present. This note is removed when P2 ships.
-
 No skill, command, or document may define an alternative stage list, alternative stage
 identifiers, or an alternative artifact-path convention. A skill resolves every artifact
 location from the registry — a hard-coded path is a defect even when it currently happens to
 be correct.
+
+**`npm run validate:harness` enforces this** (`tools/validate-harness.mjs`). It checks that
+`stage_order` and `stages` agree, that every `next` / `on_approve` / `on_reject` /
+`loop_back` target is a real stage, that no stage is unreachable, that every artifact key a
+stage names exists in `artifact-paths.yaml` and every artifact there is reachable, that every
+artifact `owner` is a skill some stage names, and that no retired stage identifier appears in
+`.claude/skills/` or `.claude/commands/`. Run it after touching `docs/workflow/` or any
+skill.
+
+A skill named by the registry but not yet authored is reported as **PENDING**, not an error —
+during bootstrap phases P3–P5 that is the expected state. `--strict` makes PENDING fatal;
+wire that into the gate at P6, when every skill exists. It is a ratchet, and it never hides
+a real error.
 
 ---
 

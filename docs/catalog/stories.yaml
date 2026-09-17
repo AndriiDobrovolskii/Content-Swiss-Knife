@@ -1,0 +1,8 @@
+# Story lifecycle catalog — the roll-up of every Story and where it stands.
+# Written by so-story-writer (creation) and so-orchestrator (status transitions).
+# Schema note: `state` uses the active-story.yaml status enum
+# (NOT_STARTED | IN_PROGRESS | COMPLETED | ARCHIVED), see docs/workflow/state-schema.md.
+#
+# Empty until the first /so:new.
+version: 1
+stories: []
