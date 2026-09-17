@@ -21,6 +21,8 @@
  * that cannot.
  */
 import type { ValidationIssue } from '../utils/output-validator';
+import type { PromptPayload } from '../prompt-core/payload';
+import { appendRepairFeedback } from '../utils/repair-gate';
 
 /** Stable rule name, so these can be counted and filtered like any other validator finding. */
 export const DOC_SCHEMA_RULE = 'doc-schema';
@@ -169,4 +171,34 @@ export function assertDocRendered(html: string, context: string, issues: Validat
       `so there is nothing to save.` +
       (schemaFailures ? `\nUnresolved schema failures:\n${schemaFailures}` : ''),
   );
+}
+
+/**
+ * Doc-path repair feedback: appendRepairFeedback's generic wording, plus a re-anchor of the output
+ * contract itself.
+ *
+ * WHY THIS EXISTS. appendRepairFeedback names WHAT failed (e.g. "doc-schema: Document could not be
+ * parsed — Unexpected token '<'") but never restates THAT the response must be a JSON object at
+ * all. Observed in production: attempt 0 produced JSON that failed schema validation; the one repair
+ * attempt abandoned the JSON contract entirely and returned raw HTML, which fails even to parse.
+ * Nothing in the retry prompt pulled the model back to the format — only the failure detail was
+ * appended, against a cached master system prompt that is otherwise HTML-oriented.
+ *
+ * WORDED SCHEMA-AGNOSTICALLY ("the schema you were given", not "ProductDescriptionDoc"), because
+ * this same wrapper is wired into both the main Doc gate (runDocGate, ProductDescriptionDocSchema)
+ * and the consumables Doc gate (runConsumablesDocGate, ConsumablesDescriptionDocSchema) — both have
+ * the identical failure shape.
+ *
+ * NOT a change to appendRepairFeedback itself: that function is shared by the HTML, FAQ, SEO,
+ * Translator and Copywriter repair gates, whose artifacts are plain strings, not JSON — its generic
+ * wording is correct for those and must not change.
+ */
+export function withDocRepairFeedback(payload: PromptPayload, errors: ValidationIssue[]): PromptPayload {
+  const withGeneric = appendRepairFeedback(payload, errors);
+  return {
+    ...withGeneric,
+    userContent:
+      `${withGeneric.userContent}\n\n[FORMAT REMINDER] Your response must be a single JSON object ` +
+      'matching the schema you were given — not HTML, not Markdown, no prose, no code fences.',
+  };
 }
