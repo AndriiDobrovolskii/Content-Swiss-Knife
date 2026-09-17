@@ -145,3 +145,45 @@ describe('generateUaContent() — Doc pipeline wiring', () => {
     );
   });
 });
+
+describe('generateUaContent() — Doc gate repair budget', () => {
+  it('boosts the repair budget the same way generate() does, not the unboosted default', async () => {
+    // Every attempt returns a Doc that fails schema validation, so the run only stops when the
+    // budget is exhausted — this is what lets the test count exactly how many attempts the gate
+    // was given, rather than how many it happened to need.
+    const generateJson = vi.fn(async (_input: unknown, _useThinking?: boolean, meta?: UsageMeta) => {
+      if (meta?.taskLabel === 'Doc (uk-UA)') return {};
+      if (meta?.taskLabel === 'Slug') return slugStub();
+      if (meta?.taskLabel === 'SEO metadata') return seoStub();
+      throw new Error(`unexpected generateJson taskLabel: ${meta?.taskLabel}`);
+    });
+    const generateText = vi.fn(async () => '');
+    const recordGeneration = vi.fn(async () => {});
+    const orchestrator = bootOrchestrator({ generateJson, generateText, recordGeneration });
+    // generateUaContent() routes a failed Doc gate through withProgress's catch (content-
+    // orchestrator.service.ts:1920), which calls alert() rather than letting the error escape —
+    // happy-dom's alert() is unimplemented, so it must be stubbed for this branch to run at all.
+    vi.stubGlobal('alert', vi.fn());
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const input: ProductInput = {
+      website: { name: 'EXPERT3D', group: 'ES', url: 'https://impresora-3d.es' },
+      name: 'Ortur H20 20 W',
+      description: '',
+      specs: '',
+      brandFolder: 'ortur',
+      modelFolder: 'h20/h20-20w',
+    };
+
+    await orchestrator.generateUaContent(input);
+
+    const docCalls = generateJson.mock.calls.filter(
+      call => (call[2] as { taskLabel?: string } | undefined)?.taskLabel === 'Doc (uk-UA)',
+    );
+    // 1 initial attempt + the boosted floor of 2 repairs (no image manifest here, so
+    // Math.max(this.maxRepairs(), 2) = 2) — content-orchestrator.service.ts's uaRepairBudget.
+    // The unboosted default (this.maxRepairs() alone, which is 1) would stop at 2 calls total,
+    // which is exactly the production failure this test guards against.
+    expect(docCalls.length).toBe(3);
+  });
+});

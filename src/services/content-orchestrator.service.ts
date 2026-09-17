@@ -45,7 +45,7 @@ import { normalizeConsumablesDocProse } from '../render/consumables-prose-transf
 import { renderContextFor, getRenderRules } from '../prompt-core/store-render-rules';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
 import type { ConsumablesDescriptionDoc } from '../domain/consumables-doc';
-import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, providerDetail } from '../render/doc-schema-issues';
+import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, providerDetail, withDocRepairFeedback } from '../render/doc-schema-issues';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
@@ -555,7 +555,7 @@ export class ContentOrchestratorService {
           }] : []),
         ];
       },
-      withFeedback: appendRepairFeedback,
+      withFeedback: withDocRepairFeedback,
       // Field-scoped rung live for `heading-product-name-stuffing` (repair-strategy.ts) — a
       // warning-severity rule that never reaches full regeneration (resolveLadder never appends
       // 'full-regen' after a warning's own ladder), so this is one of the instruments that can fix
@@ -759,7 +759,7 @@ export class ContentOrchestratorService {
           }] : []),
         ];
       },
-      withFeedback: appendRepairFeedback,
+      withFeedback: withDocRepairFeedback,
       // Block-scoped rung, reusing the HTML executor unchanged: this gate validates the RENDERED
       // HTML (see produce() above), not the Doc — the Doc is a local variable inside produce() and
       // is never carried in the gate's artifact state, so there is nothing Doc-shaped to patch here.
@@ -1259,6 +1259,12 @@ export class ContentOrchestratorService {
     // See the sibling comment in generate().
     const videoEmbeds = isConsumables ? [] : extractVideoEmbeds(input.description);
     const repairBudget = isConsumables ? 2 : this.maxRepairs();
+    // Same floor as generate()'s masterRepairBudget (line 813) — this call site targets the
+    // identical runDocGate/runConsumablesDocGate/plain-HTML gates and had the same single-attempt
+    // failure mode: a full-document regeneration is the only repair instrument the Doc pipeline has
+    // for a schema-shape failure, and this.maxRepairs()'s default of 1 proved too narrow a window
+    // for that reroll to land (see the identical rationale at masterRepairBudget's definition).
+    const uaRepairBudget = Math.max(repairBudget, imgManifest ? 3 : 2);
 
     await this.withProgress(async () => {
       const { seoLangs } = getLangsForStore(input.website.name);
@@ -1312,7 +1318,7 @@ export class ContentOrchestratorService {
       const htmlUaResult = useDocPipelineUa
         ? await this.runDocGate({
             label: 'HTML (uk-UA)', contextLabel: 'HTML (uk-UA)', docTaskLabel: 'Doc (uk-UA)',
-            maxRepairs: repairBudget, basePayload: basePayloadA, useThinking,
+            maxRepairs: uaRepairBudget, basePayload: basePayloadA, useThinking,
             locale: UA_ISO, localeIso: UA_ISO, input, groundingSpecs, allowedSpecParams,
             groundingDisabled, grounding, videoEmbeds, imgManifest,
             onAttempt: (n, c) =>
@@ -1321,7 +1327,7 @@ export class ContentOrchestratorService {
         : useConsumablesDocPipelineUa
         ? await this.runConsumablesDocGate({
             label: 'HTML (uk-UA)', contextLabel: 'HTML (uk-UA)', docTaskLabel: 'Doc (uk-UA, consumables)',
-            maxRepairs: repairBudget, basePayload: basePayloadA, useThinking,
+            maxRepairs: uaRepairBudget, basePayload: basePayloadA, useThinking,
             locale: UA_ISO, localeIso: UA_ISO, input, groundingSpecs, allowedSpecParams,
             groundingDisabled, grounding, imgManifest,
             onAttempt: (n, c) =>
@@ -1329,7 +1335,7 @@ export class ContentOrchestratorService {
           })
         : await runRepairGate<string>({
             label: 'HTML (uk-UA)',
-            maxRepairs: repairBudget,
+            maxRepairs: uaRepairBudget,
             basePayload: basePayloadA,
             produce: produceHtmlUa,
             validate: html => [

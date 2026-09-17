@@ -17,8 +17,10 @@ import { describe, it, expect } from 'vitest';
 
 import {
   docSchemaIssues, DOC_SCHEMA_RULE, isUnrepairableGenerationError, providerDetail,
+  withDocRepairFeedback,
 } from './doc-schema-issues';
 import { ProductDescriptionDocSchema } from '../domain/description-doc.schema';
+import type { PromptPayload } from '../prompt-core/payload';
 
 /** A Doc that fails several ways at once, so the field paths are distinguishable. */
 function brokenDoc(): unknown {
@@ -108,6 +110,38 @@ describe('docSchemaIssues', () => {
     const detail = docSchemaIssues(HTTP_TRUNCATION, 'HTML (base)')[0].detail;
     expect(detail).toContain('hit max_tokens');
     expect(detail).not.toContain('Internal Server Error');
+  });
+});
+
+/**
+ * withDocRepairFeedback — the retry prompt for the two Doc-shaped gates (runDocGate,
+ * runConsumablesDocGate). See its own doc comment for why the generic appendRepairFeedback wording
+ * alone was not enough: it names WHAT failed but never restates THAT the response must be JSON.
+ */
+describe('withDocRepairFeedback', () => {
+  const basePayload: PromptPayload = {
+    systemBlocks: [{ text: 'master', cache: true }, { text: 'task', cache: true }],
+    userContent: 'Generate the description.',
+  };
+  const errors = issuesFor(brokenDoc());
+
+  it('re-anchors the JSON contract, on top of the generic validation feedback', () => {
+    const result = withDocRepairFeedback(basePayload, errors);
+    expect(result.userContent).toContain('[VALIDATION FEEDBACK');
+    expect(result.userContent).toContain('killerSpecs');
+    expect(result.userContent).toMatch(/single JSON object/i);
+    expect(result.userContent).toContain('not HTML');
+  });
+
+  it('is worded schema-agnostically, since it also covers the consumables Doc gate', () => {
+    // Must not name ProductDescriptionDoc specifically — runConsumablesDocGate validates against a
+    // different schema (ConsumablesDescriptionDocSchema) and shares this same wrapper.
+    expect(withDocRepairFeedback(basePayload, errors).userContent).not.toContain('ProductDescriptionDoc');
+  });
+
+  it('passes systemBlocks through by reference, preserving the Anthropic cache hit', () => {
+    const result = withDocRepairFeedback(basePayload, errors);
+    expect(result.systemBlocks).toBe(basePayload.systemBlocks);
   });
 });
 
