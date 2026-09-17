@@ -17,8 +17,10 @@ dist-ssr
 .env.local
 .env.*.local
 
-# Local knowledge/plan files — not part of the codebase
+# Local knowledge/plan files — not part of the codebase.
+# "Knowlege/" is the original typo, kept so any stale local folder stays ignored.
 Knowlege/
+Knowledge/
 
 # Local usage/cost tracking database — machine-specific, not part of the codebase
 data/*.db
