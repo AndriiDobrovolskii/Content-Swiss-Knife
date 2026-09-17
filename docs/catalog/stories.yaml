@@ -2,7 +2,12 @@
 # Written by so-story-writer (creation) and so-orchestrator (status transitions).
 # Schema note: `state` uses the active-story.yaml status enum
 # (NOT_STARTED | IN_PROGRESS | COMPLETED | ARCHIVED), see docs/workflow/state-schema.md.
-#
-# Empty until the first /so:new.
 version: 1
-stories: []
+stories:
+  - id: US-1.1
+    title: Restrict proxy CORS to an allow-list instead of every origin
+    slug: proxy-cors-allowlist
+    track: server
+    path: docs/stories/US-1.1-proxy-cors-allowlist.md
+    state: IN_PROGRESS
+    created_at: 2026-09-18T00:00:00Z

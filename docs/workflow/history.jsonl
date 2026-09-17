@@ -1,0 +1,4 @@
+{"ts":"2026-09-18T00:00:00Z","story":"US-1.1","from":null,"to":"CLARIFICATION","stage":"STORY_WRITING","skill":"so-story-writer","verdict":"PASS","actor":"sbruhov@gmail.com","note":"Story activated via /so:start"}
+{"ts":"2026-09-18T00:05:00Z","story":"US-1.1","from":"CLARIFICATION","to":"SPECIFICATION","stage":"CLARIFICATION","skill":"so-clarifier","verdict":"PASS","actor":"so-orchestrator","note":"1 non-blocking Open Decision (OD-1); 3 ambiguities resolved from source"}
+{"ts":"2026-09-18T00:10:00Z","story":"US-1.1","from":"SPECIFICATION","to":"SPEC_REVIEW","stage":"SPECIFICATION","skill":"so-spec-writer","verdict":"PASS","actor":"so-orchestrator","note":"7 FRs, 3 NFRs; FR-6 preflight made explicit per clarification report"}
+{"ts":"2026-09-18T00:15:00Z","story":"US-1.1","from":"SPEC_REVIEW","to":"HUMAN_SPEC_APPROVAL","stage":"SPEC_REVIEW","skill":"so-spec-reviewer","verdict":"PASS","actor":"so-orchestrator","note":"4 non-blocking findings; halted at human gate"}

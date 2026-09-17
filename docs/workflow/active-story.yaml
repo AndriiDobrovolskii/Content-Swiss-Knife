@@ -1,16 +1,14 @@
 # Identity of the active User Story. Written by so-orchestrator only.
 # Schema: docs/workflow/state-schema.md
-#
-# Idle state: no Story is active. /so:start <StoryId> populates this.
 version: 1
-active_story: null
-story_path: null
+active_story: US-1.1
+story_path: docs/stories/US-1.1-proxy-cors-allowlist.md
 source:
   type: local_only
   repository: null
   issue_number: null
   issue_url: null
-activated_at: null
-activated_by: null
-status: NOT_STARTED
+activated_at: 2026-09-18T00:00:00Z
+activated_by: sbruhov@gmail.com
+status: IN_PROGRESS
 note: null

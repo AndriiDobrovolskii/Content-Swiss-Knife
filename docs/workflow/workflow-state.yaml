@@ -1,16 +1,26 @@
 # Execution state of the active delivery workflow. Written by so-orchestrator ONLY.
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
-#
-# Idle state: no Story is active, so there is no current stage.
 version: 1
-story: null
-current_stage: null
-status: NOT_STARTED
-started_at: null
-updated_at: null
-pending_human_gate: null
+story: US-1.1
+current_stage: HUMAN_SPEC_APPROVAL
+status: WAITING_FOR_HUMAN
+started_at: 2026-09-18T00:00:00Z
+updated_at: 2026-09-18T00:15:00Z
+pending_human_gate:
+  stage: HUMAN_SPEC_APPROVAL
+  status: PENDING
+  required_artifacts:
+    - key: specification
+      path: docs/specifications/US-1.1-spec.md
+      version: 1
+    - key: specification_review
+      path: docs/reviews/specifications/US-1.1-spec-review.md
+      version: 1
+  decided_at: null
+  decided_by: null
+  comment: null
 stage_attempts: {}
-track: null
+track: server
 blockers: []
-note: null
+note: SPEC_REVIEW returned PASS with 4 non-blocking findings. No implementation code may be written until this gate is approved.
