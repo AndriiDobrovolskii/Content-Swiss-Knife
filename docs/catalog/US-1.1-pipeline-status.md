@@ -113,7 +113,7 @@ try/catch and no error-throwing origin callback were added (T2's note, FR-3).
 
 ### Verification
 
-This task has **no test**, by plan decision D1 — `server/index.js:242` calls `app.listen()` at
+This task has **no test**, by plan decision D1 — `server/index.js` calls `app.listen()` at
 module scope, so the file cannot be imported, and adding `supertest` was rejected at planning as
 an AGENTS.md §7.8 dependency proposal. The plan and `plan_review` finding 1 both name this line
 as the Story's untested surface. Nothing here hides that.
@@ -147,9 +147,13 @@ quantity at review rather than an assumption.
 
 **Status:** DONE.
 
-`ALLOWED_ORIGINS` added to `.env.example` at the end of the file, next to `PORT`, with a
-comment block stating the comma-separated format, the trailing-slash tolerance, the exact-match
-semantics, and the fail-closed `http://localhost:3000` default.
+`ALLOWED_ORIGINS` added to `.env.example` at the end of the file, after `PORT`, with a comment
+block. T3 asked for the comma-separated format and the `http://localhost:3000` default; the
+comment states **more** than that — trailing-slash tolerance, the exact-match semantics, and
+that a request with no `Origin` header is always served. Recorded as a deliberate overshoot of
+the task's minimum, not as the minimum: an operator reading only this file would otherwise
+configure `https://Shop.Example/` and get silent refusals, which is the same class of failure
+D4 exists to prevent.
 
 The value is a **placeholder only** — `http://localhost:3000,https://your-frontend.example.com`.
 `example.com` is RFC 2606 reserved and `your-frontend` is an obvious stand-in; no real deployed
@@ -180,6 +184,24 @@ and nothing was skipped, relaxed or deleted to get there.** No test file, fixtur
 `npm run test:coverage`, `npm run build` and `bash arch-guard.sh` are `so-gate-enforcer`'s
 stage and were deliberately **not** run here, so no gate is reported as passing that this stage
 did not actually execute (AGENTS.md §6).
+
+## The spec file was handed over untracked
+
+`test/cors-policy.spec.ts` arrived in the working tree **untracked** — `git log --all` shows no
+commit has ever contained it. Left that way, all three task commits would claim test results
+against a file absent at their own SHA, and none of them could be verified standalone (§13).
+
+This stage therefore committed it, **byte-for-byte as received**: it was only ever read here,
+never edited, and `git diff --stat` against the index shows a pure 424-line addition. It is a
+test file, not one of the artifacts `artifact-paths.yaml` assigns to `so-test-writer`
+(`test_strategy`, `ac_test_matrix`, `test_generation_report` — those are left untouched, as are
+`docs/workflow/*`).
+
+**Known imperfection, stated rather than hidden:** it lands *after* T1–T3 rather than before
+them, so history does not show the tests red first. Putting it first would have meant rewriting
+three commits with `git reset --hard`, and the working tree carries uncommitted modifications
+belonging to `so-orchestrator` (`workflow-state.yaml`, `history.jsonl`) that such a rewrite
+would have destroyed. The safe ordering was chosen over the tidy one.
 
 ## Scope
 
