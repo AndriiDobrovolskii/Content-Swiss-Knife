@@ -363,6 +363,41 @@ describe('the composed policy, through the real cors middleware', () => {
     expect(response.nextError).toBeFalsy();
   });
 
+  it('FR-6/D9: a listed origin preflight is answered by the middleware itself, with 204, not handed on', async () => {
+    const middleware = await middlewareFor('https://shop.example');
+    const response = exchange(middleware, { method: 'OPTIONS', origin: 'https://shop.example' });
+
+    // WHY A STATUS CODE IS ASSERTED HERE WHEN NO FR NAMES ONE. `cors` answers a preflight itself
+    // only because `node_modules/cors/lib/index.js:8-12` defaults `preflightContinue: false` and
+    // `optionsSuccessStatus: 204`, and `package.json` declares `"cors": "^2.8.5"` — a caret range.
+    // If a future minor flipped `preflightContinue`, the middleware would call `next()` on every
+    // preflight, Express would fall through to its 404 handler, and the real frontend's preflights
+    // would start failing — while every header assertion in this file stayed green. This is the
+    // one assertion that goes red on that flip. Plan v2 D9, Risk 2; impact analysis v2 IA-3.
+    expect(response.statusCode).toBe(204);
+    expect(response.ended).toBe(true);
+    expect(response.nextCalled).toBe(false);
+  });
+
+  it('AC-2: an unlisted origin preflight is handed on, never answered by the middleware', async () => {
+    const middleware = await middlewareFor('https://shop.example');
+    const response = exchange(middleware, { method: 'OPTIONS', origin: 'https://evil.example' });
+
+    // FR-6 states a preflight is subject to FR-3 "identically to the actual request", and the
+    // actual-request leg is asserted above as `next` called, no error, response not ended, no
+    // status set. This is that clause applied to `OPTIONS`.
+    //
+    // It is additive rather than a restatement: the neighbouring test asserts `nextError` is
+    // falsy, but `nextError` is falsy BOTH when the middleware answered the request itself and
+    // when it called `next()`. Nothing else in this file can tell those two apart. Plan review v2
+    // non-blocking finding 1 names exactly that hole.
+    expect(response.nextCalled).toBe(true);
+    expect(response.nextError).toBeFalsy();
+    expect(response.ended).toBe(false);
+    expect(response.statusCode).toBeUndefined();
+    expect(response.headers[ALLOW_ORIGIN]).toBeUndefined();
+  });
+
   it('does not enable credentialed CORS', async () => {
     const middleware = await middlewareFor('https://shop.example');
     const response = exchange(middleware, { origin: 'https://shop.example' });
