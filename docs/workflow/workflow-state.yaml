@@ -3,19 +3,22 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-1.1
-current_stage: HUMAN_SPEC_APPROVAL
+current_stage: HUMAN_PLAN_APPROVAL
 status: WAITING_FOR_HUMAN
 started_at: 2026-09-18T00:00:00Z
-updated_at: 2026-09-18T00:15:00Z
+updated_at: 2026-09-18T00:40:00Z
 pending_human_gate:
-  stage: HUMAN_SPEC_APPROVAL
+  stage: HUMAN_PLAN_APPROVAL
   status: PENDING
   required_artifacts:
-    - key: specification
-      path: docs/specifications/US-1.1-spec.md
+    - key: implementation_plan
+      path: docs/plans/US-1.1-implementation-plan.md
       version: 1
-    - key: specification_review
-      path: docs/reviews/specifications/US-1.1-spec-review.md
+    - key: task_breakdown
+      path: docs/plans/US-1.1-task-breakdown.md
+      version: 1
+    - key: plan_review
+      path: docs/reviews/plans/US-1.1-plan-review.md
       version: 1
   decided_at: null
   decided_by: null
@@ -23,4 +26,10 @@ pending_human_gate:
 stage_attempts: {}
 track: server
 blockers: []
-note: SPEC_REVIEW returned PASS with 4 non-blocking findings. No implementation code may be written until this gate is approved.
+note: >
+  PLAN_REVIEW returned PASS with 2 non-blocking findings, both about the single line of
+  server/index.js that no test in this repository can observe. Approving this gate sends the
+  Story to TEST_WRITING, which writes failing tests; still no implementation code.
+  Approver comment from HUMAN_SPEC_APPROVAL stands: this Story runs to demonstrate the
+  harness and its code changes are to be rolled back afterwards, branch-scoped to
+  feat/US-1.1-proxy-cors-allowlist.

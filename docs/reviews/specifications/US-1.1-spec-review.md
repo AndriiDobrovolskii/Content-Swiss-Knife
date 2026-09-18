@@ -2,10 +2,10 @@
 artifact: specification_review
 story: US-1.1
 version: 1
-status: DRAFT
+status: APPROVED
 owner: so-spec-reviewer
 created_at: 2026-09-18T00:00:00Z
-updated_at: 2026-09-18T00:00:00Z
+updated_at: 2026-09-18T00:20:00Z
 supersedes: null
 inputs_consumed:
   - key: story
