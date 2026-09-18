@@ -45,7 +45,7 @@ are `test/cors-policy.spec.ts`, which `so-test-writer` left red by design (AGENT
 | Task | Files | Status | Commit |
 |---|---|---|---|
 | T1 — pure CORS allow-list policy module | `server/cors-policy.js` (new) | DONE | `feat(US-1.1): T1 …` |
-| T2 — wire the policy into the proxy | `server/index.js` | PENDING | — |
+| T2 — wire the policy into the proxy | `server/index.js` | DONE | `feat(US-1.1): T2 …` |
 | T3 — document the setting | `.env.example` | PENDING | — |
 
 ---
@@ -96,7 +96,50 @@ would collapse two tasks into one commit. T3 closes them in this same branch, mi
 
 ## T2 — Wire the policy into the proxy
 
-**Status:** PENDING.
+**Status:** DONE.
+
+The diff for `server/index.js` is exactly two lines, as the task's acceptance check requires:
+the import, and line 33. Nothing else in the file changed.
+
+```diff
++import { resolveAllowedOrigins, corsOriginPolicy } from './cors-policy.js';
+...
+-app.use(cors());
++app.use(cors({ origin: corsOriginPolicy(resolveAllowedOrigins(process.env.ALLOWED_ORIGINS)) }));
+```
+
+No `credentials` option is passed, so `cors`'s default of `false` stands (D8, NFR-1). No
+try/catch and no error-throwing origin callback were added (T2's note, FR-3).
+
+### Verification
+
+This task has **no test**, by plan decision D1 — `server/index.js:242` calls `app.listen()` at
+module scope, so the file cannot be imported, and adding `supertest` was rejected at planning as
+an AGENTS.md §7.8 dependency proposal. The plan and `plan_review` finding 1 both name this line
+as the Story's untested surface. Nothing here hides that.
+
+What *was* done instead of a test, so the line is not merely asserted to be correct: the wired
+proxy was booted and exercised for real.
+
+```
+$ PORT=3999 ALLOWED_ORIGINS="https://shop.example" node server/index.js
+[Server] Running on http://localhost:3999
+
+--- listed origin ---
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: https://shop.example
+--- unlisted origin ---
+HTTP/1.1 200 OK            (no Access-Control-Allow-Origin header, request not rejected)
+--- no origin header ---
+HTTP/1.1 200 OK
+{"ok":true,"uptime":1.2372129}
+```
+
+That is AC-1, AC-2 and AC-3 observed against the running proxy. It is a manual smoke check, not
+a repeatable test, and it does not replace one — it is recorded so the residual risk is a known
+quantity at review rather than an assumption.
+
+`node --check server/index.js` clean. `npm run lint` clean.
 
 ---
 
