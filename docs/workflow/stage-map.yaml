@@ -1,0 +1,416 @@
+# =============================================================================
+# CANONICAL WORKFLOW + ROUTING DEFINITION
+# =============================================================================
+# This file is the ONLY authoritative definition of the story-delivery
+# workflow: stage identifiers, stage order, stage ownership, normal
+# transitions, loop-back targets, and human gates.
+#
+# No skill, command, or prose document may define an alternative stage list,
+# alternative stage identifiers, or alternative routing. Prose docs
+# (stages.md, AGENTS.md, skill "Position in Workflow" sections) are
+# explanatory and MUST stay consistent with this file.
+#
+# Artifact locations referenced here are registry KEYS defined in
+# docs/workflow/artifact-paths.yaml. Never put a filesystem path in this file.
+#
+# Result contract (see docs/workflow/artifact-lifecycle.md):
+#   verdict = PASS             -> orchestrator advances to `next`
+#   verdict = CHANGES_REQUIRED -> orchestrator routes to loop_back[<key>]
+#                                 (the skill selects the key; it MUST exist here)
+#   verdict = BLOCKED          -> orchestrator holds at the current stage and
+#                                 surfaces blocking_issues
+#   verdict = NOT_APPLICABLE   -> only where `optional: true`; advances to `next`
+#
+# Only so-orchestrator may record a transition (docs/workflow/workflow-state.yaml
+# + append docs/workflow/history.jsonl). Stage skills never mutate workflow state.
+#
+# Validated by `npm run validate:harness` (tools/validate-harness.mjs).
+# =============================================================================
+
+version: 1
+workflow: story-delivery
+
+# Ordered list of canonical stage identifiers. This is the authoritative set.
+stage_order:
+  - STORY_WRITING
+  - CLARIFICATION
+  - SPECIFICATION
+  - SPEC_REVIEW
+  - HUMAN_SPEC_APPROVAL
+  - IMPACT_ANALYSIS
+  - ARCHITECTURE_PLANNING
+  - IMPLEMENTATION_PLANNING
+  - PLAN_REVIEW
+  - HUMAN_PLAN_APPROVAL
+  - TEST_WRITING
+  - IMPLEMENTATION
+  - QUALITY_GATE
+  - IMPLEMENTATION_VERIFICATION
+  - SECURITY_REVIEW
+  - RECONCILIATION
+  - HUMAN_PR_APPROVAL
+  - PR_PREPARATION
+  - PR_CREATION
+  - READY_FOR_PR
+  - COMPLETED
+  - ARCHIVED
+
+# Retired identifiers -> canonical replacement. MUST NOT appear anywhere in the
+# active harness. docs/workflow/history.jsonl is the single exclusion.
+#
+# The first four are stages the reference harness had and this one does not:
+# there is no REST contract to design, no relational schema, and no migration
+# chain here (the only database is one server-side usage-telemetry table with
+# no migration mechanism at all). Their concerns were absorbed by
+# ARCHITECTURE_PLANNING, which covers the Zod domain models, the prompt payload
+# contracts and component/service shape in one artifact.
+retired_identifiers:
+  BACKLOG_SYNC: STORY_WRITING
+  API_DESIGN: ARCHITECTURE_PLANNING
+  DB_DESIGN: ARCHITECTURE_PLANNING
+  DESIGN_REVIEW: PLAN_REVIEW
+  CLARIFY: CLARIFICATION
+  SPEC_WRITE: SPECIFICATION
+  DESIGN: ARCHITECTURE_PLANNING
+  PLANNING: ARCHITECTURE_PLANNING
+  TESTS: TEST_WRITING
+  TESTING: TEST_WRITING
+  VERIFICATION: IMPLEMENTATION_VERIFICATION
+  HUMAN_REVIEW: HUMAN_PR_APPROVAL
+  PR: PR_PREPARATION
+  PULL_REQUEST: READY_FOR_PR
+  DONE: COMPLETED
+
+stages:
+
+  STORY_WRITING:
+    type: automated_skill
+    skill: so-story-writer
+    purpose: >
+      Turn raw input - an idea, a bug report, a piece of user feedback - into a
+      structured User Story at docs/stories/. Docs-as-Code: the Story is a file
+      in this repository, not a GitHub Issue, so a requirement change and the
+      code that implements it move in the same Pull Request. The skill
+      interviews for a missing actor, business outcome or acceptance criterion
+      rather than inventing one.
+    inputs: []
+    outputs: [story, story_catalog]
+    next: CLARIFICATION
+    run_policy: >
+      Not run during every `continue`. Runs only on explicit /so:new, or on a
+      RECONCILIATION story_drift loop-back.
+
+  CLARIFICATION:
+    type: automated_skill
+    skill: so-clarifier
+    purpose: >
+      Read the Story and surface what it does not say - ambiguities, missing
+      acceptance criteria, undecided business/validation rules - as an Open
+      Decisions log. Never answers its own questions.
+    inputs: [story]
+    outputs: [clarification_report, open_decisions]
+    next: SPECIFICATION
+
+  SPECIFICATION:
+    type: automated_skill
+    skill: so-spec-writer
+    inputs: [story, clarification_report, open_decisions]
+    outputs: [specification]
+    next: SPEC_REVIEW
+
+  SPEC_REVIEW:
+    type: automated_skill
+    skill: so-spec-reviewer
+    inputs: [story, specification, open_decisions]
+    outputs: [specification_review]
+    next: HUMAN_SPEC_APPROVAL
+    loop_back:
+      changes_required: SPECIFICATION
+      changes_required_clarification: CLARIFICATION
+
+  HUMAN_SPEC_APPROVAL:
+    type: human_gate
+    owner: human
+    required_artifacts: [specification, specification_review]
+    meaning: >
+      The AGENTS.md section 10 gate. No implementation code exists yet and none
+      may be written until this is approved. A so-spec-reviewer PASS is not
+      this approval.
+    approve_command: "/so:approve"
+    reject_command: "/so:reject"
+    on_approve: IMPACT_ANALYSIS
+    on_reject: SPECIFICATION
+
+  IMPACT_ANALYSIS:
+    type: automated_skill
+    skill: so-impact-analyzer
+    purpose: >
+      Survey the blast radius before anything is planned: which files, stores,
+      locales, prompts and fixtures this Story reaches. Repo-specific hazards it
+      must check - the STORE_REGISTRY fan-out, the FROZEN file set (AGENTS.md
+      section 9), the prompt -> renderer -> validator chain, and the corpus
+      harness in test/fixtures/.
+    inputs: [story, specification, open_decisions]
+    outputs: [impact_analysis]
+    next: ARCHITECTURE_PLANNING
+    loop_back:
+      changes_required: SPECIFICATION
+
+  ARCHITECTURE_PLANNING:
+    type: automated_skill
+    skill: so-planner
+    purpose: >
+      The architectural plan, including the design work the reference harness
+      split across API_DESIGN and DB_DESIGN: Zod domain-model shape
+      (src/domain/*.schema.ts), prompt payload contracts
+      (src/prompt-core/payload.ts), component/service structure, and the
+      validation strategy. Names files to create/modify and the risks taken.
+    inputs: [story, specification, open_decisions, impact_analysis]
+    outputs: [implementation_plan]
+    next: IMPLEMENTATION_PLANNING
+    loop_back:
+      changes_required: SPECIFICATION
+      changes_required_impact: IMPACT_ANALYSIS
+
+  IMPLEMENTATION_PLANNING:
+    type: automated_skill
+    skill: so-implementation-planner
+    purpose: >
+      Decompose the architectural plan into ordered, individually verifiable
+      tasks, each naming its track (angular | server | prompt) and its
+      acceptance check. Decides execution order; does not decide architecture.
+    inputs: [story, specification, impact_analysis, implementation_plan]
+    outputs: [task_breakdown]
+    next: PLAN_REVIEW
+    loop_back:
+      changes_required_architecture: ARCHITECTURE_PLANNING
+
+  PLAN_REVIEW:
+    type: automated_skill
+    skill: so-plan-reviewer
+    purpose: >
+      Quality gate on the plan and task breakdown together, against the
+      approved Specification and AGENTS.md sections 3, 4 and 9. Confirms every
+      externally-observable acceptance criterion maps to at least one task, and
+      that no task would require editing a FROZEN file without the section 9
+      stop.
+    inputs: [story, specification, impact_analysis, implementation_plan, task_breakdown]
+    outputs: [plan_review]
+    next: HUMAN_PLAN_APPROVAL
+    loop_back:
+      changes_required: ARCHITECTURE_PLANNING
+      changes_required_tasks: IMPLEMENTATION_PLANNING
+      changes_required_specification: SPECIFICATION
+
+  HUMAN_PLAN_APPROVAL:
+    type: human_gate
+    owner: human
+    required_artifacts: [implementation_plan, task_breakdown, plan_review]
+    approve_command: "/so:approve"
+    reject_command: "/so:reject"
+    on_approve: TEST_WRITING
+    on_reject: ARCHITECTURE_PLANNING
+
+  TEST_WRITING:
+    type: automated_skill
+    skill: so-test-writer
+    purpose: >
+      The TDD gate (AGENTS.md section 5). Writes the tests BEFORE any
+      implementation exists, and they are expected to fail - a test suite that
+      passes at this stage is evidence the tests do not exercise the new
+      behaviour. Produces the AC -> test traceability matrix that
+      RECONCILIATION later checks. Component specs must be named
+      *.component.spec.ts or they run in the wrong runner.
+    inputs: [story, specification, impact_analysis, implementation_plan,
+             task_breakdown, plan_review]
+    outputs: [test_strategy, ac_test_matrix, test_generation_report]
+    next: IMPLEMENTATION
+    loop_back:
+      changes_required_tests: TEST_WRITING
+      invalid_specification: SPECIFICATION
+      invalid_plan: ARCHITECTURE_PLANNING
+
+  IMPLEMENTATION:
+    type: composite_skill
+    skill: so-builder
+    purpose: >
+      Code generation - turn the failing tests from TEST_WRITING green without
+      weakening them (AGENTS.md section 7.7). One composite skill with three
+      tracks rather than a builder per layer: this codebase has no
+      schema/repository/service/router ordering constraint to justify the split.
+      Sub-step progress is tracked in pipeline_status, NOT in
+      workflow-state.yaml.
+    skills_by_track:
+      # story.track (docs/stories/<StoryId>-<slug>.md front matter) selects the
+      # track. Absent/unset track = angular (the default; it is where most of
+      # this repository's surface lives).
+      angular:
+        - so-builder    # src/app, src/services, src/render, src/domain, src/utils
+      server:
+        - so-builder    # server/** - Express proxy, providers, retrieval, usage
+      prompt:
+        - so-builder    # src/prompts, src/prompt-core - leads with the section 9 FROZEN stop
+    inputs: [story, specification, open_decisions, impact_analysis,
+             implementation_plan, task_breakdown, plan_review, test_strategy,
+             ac_test_matrix]
+    outputs: [pipeline_status]
+    next: QUALITY_GATE
+    loop_back:
+      partial: IMPLEMENTATION
+      blocked_by_plan: IMPLEMENTATION_PLANNING
+      blocked_by_architecture: ARCHITECTURE_PLANNING
+      changes_required_tests: TEST_WRITING
+
+  QUALITY_GATE:
+    type: automated_skill
+    skill: so-gate-enforcer
+    purpose: >
+      The mechanical Definition-of-Done gate (AGENTS.md section 6). Runs, by
+      name and in order: npm run lint, npm test (BOTH runners), npm run
+      test:coverage, npm run build, bash arch-guard.sh. Pastes real output.
+      A green arch-guard is explicitly NOT evidence that architecture Rule #2
+      holds - that one has no automated check and is verified by reading the
+      diff.
+    inputs: [story, implementation_plan, task_breakdown, ac_test_matrix, pipeline_status]
+    outputs: [implementation_report, quality_gate_report]
+    next: IMPLEMENTATION_VERIFICATION
+    loop_back:
+      changes_required: IMPLEMENTATION
+      changes_required_tests: TEST_WRITING
+
+  IMPLEMENTATION_VERIFICATION:
+    type: automated_skill
+    skill: so-implementation-verifier
+    purpose: >
+      Technical compliance with AGENTS.md - the rules no command checks.
+      Architecture Rule #2, the section 4 HTML acceptance criteria where the
+      prompt or renderer was touched, STORE_REGISTRY as the only source of
+      languages and currency, and that no FROZEN file changed without recorded
+      approval.
+    inputs: [story, specification, implementation_plan, task_breakdown,
+             implementation_report, quality_gate_report]
+    outputs: [verification_report]
+    next: SECURITY_REVIEW
+    loop_back:
+      changes_required: IMPLEMENTATION
+      changes_required_plan: ARCHITECTURE_PLANNING
+
+  SECURITY_REVIEW:
+    type: automated_skill
+    skill: so-security-reviewer
+    purpose: >
+      Retargeted to this codebase's actual attack surface: API keys never
+      reaching the browser bundle (Rule #4), bypassSecurityTrust* / SafeHtml
+      usage, TipTap-editable untrusted HTML, prompt injection via
+      Serper-fetched pages entering an LLM prompt, and proxy CORS/secret
+      handling.
+    inputs: [story, specification, implementation_report, verification_report]
+    outputs: [security_review]
+    next: RECONCILIATION
+    loop_back:
+      changes_required: IMPLEMENTATION
+
+  RECONCILIATION:
+    type: automated_skill
+    skill: so-reconciliation-reviewer
+    purpose: >
+      Acceptance-criteria compliance, distinct from
+      IMPLEMENTATION_VERIFICATION's technical compliance. Confirms every AC in
+      the approved Specification has a row in the AC -> test matrix, that the
+      named test exists, and that it actually asserts the AC's behaviour rather
+      than merely existing.
+    inputs: [story, specification, ac_test_matrix, implementation_report,
+             verification_report]
+    outputs: [reconciliation_report]
+    next: HUMAN_PR_APPROVAL
+    loop_back:
+      changes_required: IMPLEMENTATION
+      changes_required_tests: TEST_WRITING
+      story_drift: STORY_WRITING
+
+  HUMAN_PR_APPROVAL:
+    type: human_gate
+    owner: human
+    required_artifacts: [implementation_report, quality_gate_report,
+                         verification_report, security_review,
+                         reconciliation_report]
+    approve_command: "/so:approve"
+    reject_command: "/so:reject"
+    on_approve: PR_PREPARATION
+    on_reject: IMPLEMENTATION
+
+  PR_PREPARATION:
+    type: automated_skill
+    skill: so-pr-preparer
+    purpose: >
+      Draft the Pull Request title and body only. Does not push, open or merge.
+      Confirms .env.example was updated if a setting was added, and that commit
+      hygiene holds - no unrelated files, no drive-by refactors (AGENTS.md
+      section 7.8), no batching across phases.
+    inputs: [story, specification, implementation_report, quality_gate_report,
+             verification_report, security_review, reconciliation_report]
+    outputs: [pr_summary]
+    next: PR_CREATION
+    loop_back:
+      changes_required: IMPLEMENTATION
+
+  PR_CREATION:
+    type: automated_skill
+    skill: so-pr-creator
+    purpose: >
+      The ONLY stage permitted to touch the remote - `git push` and the github
+      MCP server's create_pull_request / update_pull_request - using
+      so-pr-preparer's drafted content verbatim. Never force-pushes, never
+      merges.
+    run_policy: >
+      Never runs on its own initiative. `continue` treats reaching this stage as
+      a stop condition exactly like STORY_WRITING. It runs only on a separate,
+      explicit human instruction (e.g. "create the PR for US-1.2"). Approving
+      HUMAN_PR_APPROVAL does NOT carry approval for this, and running it does
+      not carry approval for READY_FOR_PR. See AGENTS.md section 10.
+    inputs: [story, pr_summary]
+    outputs: [pull_request]
+    next: READY_FOR_PR
+    loop_back:
+      changes_required: PR_PREPARATION
+
+  READY_FOR_PR:
+    type: human_gate
+    owner: human
+    required_artifacts: [pr_summary, pull_request]
+    meaning: >
+      The branch is pushed and the real Pull Request is open. A human reviews
+      the actual Pull Request and records that it is ready.
+    approve_command: "/so:approve"
+    reject_command: "/so:reject"
+    on_approve: COMPLETED
+    on_reject: PR_PREPARATION
+
+  COMPLETED:
+    type: human_gate
+    owner: human
+    required_artifacts: [pr_summary, pull_request]
+    meaning: >
+      A human confirms the Pull Request has been merged. Archive mode may run
+      only from this stage.
+    approval_precondition: >
+      Not satisfied by a human's statement alone. Before recording APPROVED,
+      verify against the actual repository that the Story's Pull Request is
+      merged into the default branch (`git fetch` + `git merge-base
+      --is-ancestor <tip-commit> origin/main`, or `gh pr view --json
+      state,mergedAt`). If the check fails, is inconclusive, or no Pull
+      Request/branch is found, refuse the approval and report what was found
+      rather than what was claimed. See AGENTS.md section 10.
+    approve_command: "/so:approve"
+    reject_command: "/so:reject"
+    on_approve: ARCHIVED
+    on_reject: PR_PREPARATION
+
+  ARCHIVED:
+    type: terminal
+    owner: so-orchestrator
+    meaning: >
+      Knowledge consolidation and workflow cleanup are complete. Reached only
+      through archive mode after explicit human invocation (/so:archive).
+      Artifacts are NOT physically moved; the catalog status and artifact
+      front-matter distinguish archived from current.

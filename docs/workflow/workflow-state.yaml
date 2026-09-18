@@ -1,0 +1,16 @@
+# Execution state of the active delivery workflow. Written by so-orchestrator ONLY.
+# Stage skills return a Result Envelope; they never touch this file.
+# Schema: docs/workflow/state-schema.md
+#
+# Idle state: no Story is active, so there is no current stage.
+version: 1
+story: null
+current_stage: null
+status: NOT_STARTED
+started_at: null
+updated_at: null
+pending_human_gate: null
+stage_attempts: {}
+track: null
+blockers: []
+note: null

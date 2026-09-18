@@ -10,9 +10,12 @@
     "build": "ng build",
     "lint": "tsc --noEmit",
     "preview": "ng serve --configuration=production",
-    "test": "vitest run",
+    "test": "npm run test:logic && npm run test:components",
+    "test:logic": "vitest run",
+    "test:components": "ng test",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "validate:harness": "node tools/validate-harness.mjs --strict"
   },
   "dependencies": {
     "@angular/build": "^21.0.0",
@@ -62,13 +65,19 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@angular/router": "21.2.18",
+    "@testing-library/angular": "^19.5.0",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/user-event": "^14.6.7",
     "@types/js-beautify": "^1.14.3",
     "@types/node": "^22.14.0",
     "@vitest/coverage-v8": "^4.1.8",
     "happy-dom": "^20.10.2",
     "typescript": "~5.9.3",
     "vite": "^6.2.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "yaml": "^2.9.1"
   },
   "overrides": {
     "node-domexception": "^2.0.2",

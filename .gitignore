@@ -17,8 +17,14 @@ dist-ssr
 .env.local
 .env.*.local
 
-# Local knowledge/plan files — not part of the codebase
-Knowlege/
+# Local knowledge/plan files — not part of the codebase.
+# "Knowlege/" is the original typo, kept so any stale local folder stays ignored.
+#
+# Leading slash is load-bearing: an unanchored `Knowledge/` matches at ANY depth, and git
+# is case-insensitive on Windows by default — so it silently swallowed `docs/knowledge/`,
+# the harness's own delivery-summary directory. Anchor both to the repo root.
+/Knowlege/
+/Knowledge/
 
 # Local usage/cost tracking database — machine-specific, not part of the codebase
 data/*.db
@@ -42,3 +48,6 @@ data/*.db-*
 *.sw?
 .env.example
 *.example
+
+# Generated coverage report — reproducible from `npm run test:coverage`
+coverage/
