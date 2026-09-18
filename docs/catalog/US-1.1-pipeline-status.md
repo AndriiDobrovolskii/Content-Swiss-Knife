@@ -46,7 +46,7 @@ are `test/cors-policy.spec.ts`, which `so-test-writer` left red by design (AGENT
 |---|---|---|---|
 | T1 — pure CORS allow-list policy module | `server/cors-policy.js` (new) | DONE | `feat(US-1.1): T1 …` |
 | T2 — wire the policy into the proxy | `server/index.js` | DONE | `feat(US-1.1): T2 …` |
-| T3 — document the setting | `.env.example` | PENDING | — |
+| T3 — document the setting | `.env.example` | DONE | `feat(US-1.1): T3 …` |
 
 ---
 
@@ -145,4 +145,53 @@ quantity at review rather than an assumption.
 
 ## T3 — Document the setting
 
-**Status:** PENDING.
+**Status:** DONE.
+
+`ALLOWED_ORIGINS` added to `.env.example` at the end of the file, next to `PORT`, with a
+comment block stating the comma-separated format, the trailing-slash tolerance, the exact-match
+semantics, and the fail-closed `http://localhost:3000` default.
+
+The value is a **placeholder only** — `http://localhost:3000,https://your-frontend.example.com`.
+`example.com` is RFC 2606 reserved and `your-frontend` is an obvious stand-in; no real deployed
+hostname enters this or any other tracked file (NFR-2, AGENTS.md §3 Rule 4). The comment says
+explicitly that the real origin belongs in the deployment's own environment.
+
+### Verification
+
+`npx vitest run test/cors-policy.spec.ts` — **24 passed (24)**. The two AC-5 assertions are
+green, including the one that rejects a platform hostname anywhere in the file.
+
+---
+
+## Final state
+
+| Check | Command | Result |
+|---|---|---|
+| Type-check | `npm run lint` | clean, zero errors |
+| Logic runner | `npm run test:logic` | **109 files passed, 2381 passed, 3 skipped** |
+| Component runner | `npm run test:components` | 1 file passed, 4 passed |
+| Story's spec | `npx vitest run test/cors-policy.spec.ts` | 24 passed (24) |
+
+Against the baseline handed to this stage (24 failed, 2357 passed, 3 skipped): 2357 + 24 = 2381.
+Every previously passing test still passes and all 24 new ones are green — **zero regressions,
+and nothing was skipped, relaxed or deleted to get there.** No test file, fixture,
+`vitest.config.ts` or `tsconfig.json` was touched.
+
+`npm run test:coverage`, `npm run build` and `bash arch-guard.sh` are `so-gate-enforcer`'s
+stage and were deliberately **not** run here, so no gate is reported as passing that this stage
+did not actually execute (AGENTS.md §6).
+
+## Scope
+
+Only the three files the task breakdown names changed: `server/cors-policy.js` (new),
+`server/index.js` (two lines), `.env.example`. No drive-by refactor, no dependency added, no
+FROZEN file touched, no `STORE_REGISTRY` value duplicated, no prompt builder involved. No
+secret can reach a log line or the browser bundle: the module reads one variable that holds
+origins, not credentials, and logs nothing.
+
+## For the next stage
+
+`plan_review` finding 1 stands unchanged and should be carried into the PR body: the deployed
+frontend origin must be set as `ALLOWED_ORIGINS` in the deployment environment before or with
+this change, or the deployed proxy will start refusing the real frontend. That is a deploy-time
+action, not a repository one.
