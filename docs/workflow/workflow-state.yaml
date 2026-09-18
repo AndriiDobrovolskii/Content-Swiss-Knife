@@ -3,33 +3,23 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-1.1
-current_stage: HUMAN_PLAN_APPROVAL
-status: WAITING_FOR_HUMAN
+current_stage: PR_CREATION
+status: IN_PROGRESS
 started_at: 2026-09-18T00:00:00Z
-updated_at: 2026-09-18T00:40:00Z
-pending_human_gate:
-  stage: HUMAN_PLAN_APPROVAL
-  status: PENDING
-  required_artifacts:
-    - key: implementation_plan
-      path: docs/plans/US-1.1-implementation-plan.md
-      version: 1
-    - key: task_breakdown
-      path: docs/plans/US-1.1-task-breakdown.md
-      version: 1
-    - key: plan_review
-      path: docs/reviews/plans/US-1.1-plan-review.md
-      version: 1
-  decided_at: null
-  decided_by: null
-  comment: null
+updated_at: 2026-09-18T14:59:38Z
+pending_human_gate: null
 stage_attempts: {}
 track: server
 blockers: []
 note: >
-  PLAN_REVIEW returned PASS with 2 non-blocking findings, both about the single line of
-  server/index.js that no test in this repository can observe. Approving this gate sends the
-  Story to TEST_WRITING, which writes failing tests; still no implementation code.
-  Approver comment from HUMAN_SPEC_APPROVAL stands: this Story runs to demonstrate the
-  harness and its code changes are to be rolled back afterwards, branch-scoped to
-  feat/US-1.1-proxy-cors-allowlist.
+  HUMAN_PR_APPROVAL approved 2026-09-18T14:52:55Z by sbruhov@gmail.com; all five gate artifacts
+  are APPROVED at v2. The approver accepted both outstanding prose defects as-is and explicitly
+  declined any loop_back: NBF-D9-LEG (implementation_plan D9, task_breakdown's D9 row,
+  plan_review finding 1) and Story v2's nine-word parenthetical stay as written, because neither
+  affects CORS behaviour or code quality. Three items must reach the Pull Request body:
+  (1) the cors-upgrade reminder plus a follow-up Story carrying the README.md update (D10),
+  on the approver's instruction at the plan gate; (2) ALLOWED_ORIGINS must be set in the
+  deployment environment before cutover, or the deployed frontend is refused while /health keeps
+  answering 200; (3) the false parenthetical must NOT be quoted in the Pull Request body
+  (reconciliation NBF-4). PR_PREPARATION drafts only — it does not push or open anything.
+  PR_CREATION remains unauthorised and needs its own explicit human instruction (AGENTS.md §10).

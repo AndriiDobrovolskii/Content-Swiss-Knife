@@ -1,19 +1,19 @@
 ---
 artifact: specification
 story: US-1.1
-version: 1
+version: 2
 status: APPROVED
 owner: so-spec-writer
 created_at: 2026-09-18T00:00:00Z
-updated_at: 2026-09-18T00:20:00Z
-supersedes: null
+updated_at: 2026-09-18T14:00:00Z
+supersedes: docs/specifications/US-1.1-spec.md#1
 inputs_consumed:
   - key: story
-    version: 1
+    version: 2
   - key: clarification_report
-    version: 1
+    version: 2
   - key: open_decisions
-    version: 1
+    version: 2
 open_decisions_blocking: false
 ---
 
@@ -35,8 +35,14 @@ request with `Access-Control-Allow-Origin: *`. The proxy is deployed, not local-
 configured deploy health-check path.
 
 The proxy holds four API keys and exposes `/api/llm/*` and `/api/retrieval/*` with no
-authentication. Wide-open CORS means any page a user visits can drive that user's browser to
-call the proxy successfully and spend the owner's API credits.
+authentication. Wide-open CORS means any page a user visits can read the proxy's responses in
+full, and can make preflighted cross-origin calls — every JSON `fetch` — succeed from that
+user's browser.
+
+What wildcard CORS does **not** control is whether a request reaches the proxy at all. A
+CORS-simple cross-origin request is delivered and executed regardless of the allow-list; the
+browser only withholds the response from the calling page. Preventing that execution is an
+authentication concern, not a CORS one — see *Out of scope* and OD-1.
 
 ## Scope
 
@@ -105,6 +111,14 @@ This is stated explicitly rather than left implied — the clarification report 
 resolved from the `cors` package's behaviour, and a requirement that is only implied is a
 requirement that is only sometimes tested.
 
+The grounding is stronger at Story version 2 than at version 1: the Story's outcome clause now
+promises in its own words that "no preflighted cross-origin request … succeeds from an unlisted
+origin", while **no acceptance criterion mentions preflight**. FR-6 is what discharges that
+promise, together with FR-3 — an unlisted origin's preflight receives no
+`Access-Control-Allow-Origin`, the browser aborts the exchange, and the actual request is never
+sent. AC-1 and AC-2 are written against "a request carrying an `Origin` header", and an
+`OPTIONS` preflight is such a request, so FR-6 traces to both rather than standing alone.
+
 ### FR-7: The setting is documented
 
 `.env.example` carries `ALLOWED_ORIGINS` with a **placeholder** value and a comment stating
@@ -122,26 +136,58 @@ the repository.
 
 ## Out of scope
 
-- **Authentication on the proxy.** CORS is a browser-side mechanism; a direct `curl` or script
-  still reaches `/api/llm/*` and spends credits. Recorded as **OD-1**, non-blocking, deferred
-  to its own Story.
+- **Stopping the request from being executed — for any client, browser or not.** CORS governs
+  what a browser does with the *response*; it does not withhold the *request* from the proxy.
+  Two paths remain open and this Specification deliberately closes neither:
+  - **Non-browser clients.** A `curl`, a script or any server-to-server caller sends no
+    `Origin` header, which FR-4 requires to be served, and reaches `/api/llm/*` directly.
+  - **CORS-simple cross-origin browser requests.** `application/x-www-form-urlencoded` is a
+    CORS-safelisted content type, and `server/index.js:36` mounts
+    `express.urlencoded({ limit: '50mb', extended: true })` two lines after the CORS
+    middleware. A cross-origin form POST to `/api/llm/generate` therefore sends no preflight,
+    is delivered, is parsed into `req.body`, and drives a real provider call.
+    `/api/retrieval/search` and the `GET /api/usage*` routes are reachable the same way. The
+    attacker's page cannot read the result — but it does not need to if the goal is to burn
+    credits.
+
+  Preventing the credit spend itself requires **authentication on the proxy**, which is
+  **OD-1**, non-blocking and deliberately deferred to its own Story. No requirement in this
+  Specification addresses it, and none could.
 - Rate limiting.
 - Any change to endpoint behaviour, payloads or routing.
 - Setting the real origin in Railway — a deployment action, not a code change.
 
 ## Open questions
 
-- **OD-1** (non-blocking): the proxy has no authentication, so this Story reduces exposure
-  without removing it. Explicitly out of scope per the Story and confirmed with the user. See
-  `docs/decisions/US-1.1-open-decisions.md`.
+- **OD-1** (non-blocking, **restated at version 2**): should `/api/llm/*`, `/api/retrieval/*`
+  and `GET /api/usage*` require authentication of some kind, so that neither a non-browser
+  client **nor a third-party page making a CORS-simple cross-origin request** can cause the
+  deployed proxy to execute a request and spend API credits? The question is stated
+  mechanism-neutrally: version 1 asked it only for non-browser clients and presupposed a
+  shared secret.
+
+  A **constraint on the answer space, not an answer**: AGENTS.md §3 Rule 4 keeps secrets
+  server-side and forbids shipping them in the Angular bundle, and the product's own frontend
+  is a browser SPA calling this proxy — so any scheme resting on a static shared secret the
+  real frontend must present would violate that rule. Which mechanism is acceptable cannot be
+  inferred from any source in this repository and is **not** resolved here.
+
+  This Specification stands satisfied without it: FR-1 through FR-7 are satisfiable, and none
+  of AC-1 through AC-5 makes a claim about request execution. Recorded so the residual risk is
+  visible at the human gate. See `docs/decisions/US-1.1-open-decisions.md`.
 
 ## Traceability matrix
 
 | Acceptance criterion | Satisfied by | Notes |
 |---|---|---|
-| AC-1 | FR-1, FR-2 | listed origin echoed exactly |
-| AC-2 | FR-3 | header omitted, request not rejected |
+| AC-1 | FR-1, FR-2, FR-6 | listed origin echoed exactly, on the preflight as on the actual request |
+| AC-2 | FR-3, FR-6 | header omitted, request not rejected; the same for an unlisted origin's preflight |
 | AC-3 | FR-4 | origin-less requests, incl. the health check |
 | AC-4 | FR-5 | fail closed on unset configuration |
 | AC-5 | FR-7 | `.env.example` placeholder |
-| — | FR-6 | preflight; derived from AC-1/AC-2 and made explicit per the clarification report. Not scope creep: it constrains the same behaviour those criteria already describe, on the request type the browser sends first. |
+
+Every FR traces to at least one AC and every AC to at least one FR. FR-6 is traced to AC-1 and
+AC-2 rather than left as an untraced row: both criteria are written against "a request carrying
+an `Origin` header", and a CORS preflight is such a request, so FR-6 constrains the same
+behaviour on the request type the browser sends first. It is not scope creep and not a
+requirement without a criterion.
