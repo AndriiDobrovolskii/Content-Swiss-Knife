@@ -10,6 +10,7 @@ import { describeError } from './utils/describe-error.js';
 import { formatCallStart, formatCallDone, formatCallError } from './utils/call-log.js';
 import { formatBuild, readBuild } from './utils/build-info.js';
 import { warmProviders } from './providers/factory.js';
+import { resolveAllowedOrigins, corsOriginPolicy } from './cors-policy.js';
 
 config();
 
@@ -30,7 +31,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
 
-app.use(cors());
+app.use(cors({ origin: corsOriginPolicy(resolveAllowedOrigins(process.env.ALLOWED_ORIGINS)) }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
