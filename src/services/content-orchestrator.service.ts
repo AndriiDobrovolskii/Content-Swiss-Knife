@@ -33,6 +33,11 @@ import { validateProductNameConsistency, validateProductNameH1SlugAgreement } fr
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptADoc } from '../prompts/task-a-doc';
+// FR-14 — the service layer is the only one that sees input.name and input.website BEFORE the
+// prompt payload is built, which is where the Specification puts this choice. A HookPattern VALUE
+// crosses into the service; the instruction STRING stays inside task-a-doc.ts, so AGENTS.md §3
+// rule 3 (no prompt text in services) still holds.
+import { selectHookPattern } from '../prompt-core/hook-pattern';
 import { buildPromptAConsumablesDoc } from '../prompts/task-a-consumables-doc';
 import { usesDocPipeline, usesConsumablesDocPipeline } from '../prompt-core/doc-pipeline-flag';
 import { ProductDescriptionDocSchema } from '../domain/description-doc.schema';
@@ -857,7 +862,9 @@ export class ContentOrchestratorService {
       // never satisfies usesDocPipeline() (proven impossible — see its own doc comment).
       const useConsumablesDocPipeline = usesConsumablesDocPipeline(input.templateId);
       const basePayloadA = useDocPipeline
-        ? buildPromptADoc(masterInput, 'Ukrainian (uk-UA)')
+        // The pattern is selected from the PRODUCT's own name + website pair, not from masterInput,
+        // so the same product draws the same hook however this path assembled its input (NFR-5).
+        ? buildPromptADoc(masterInput, 'Ukrainian (uk-UA)', selectHookPattern(input.name, input.website.name))
         : useConsumablesDocPipeline
         ? buildPromptAConsumablesDoc(masterInput, 'Ukrainian (uk-UA)')
         : buildPromptA(masterInput, 'Ukrainian (uk-UA)');
@@ -1302,7 +1309,9 @@ export class ContentOrchestratorService {
       // See the sibling comment in generate().
       const useConsumablesDocPipelineUa = usesConsumablesDocPipeline(input.templateId);
       const basePayloadA = useDocPipelineUa
-        ? buildPromptADoc(uaInput, UA_BASE_LANGUAGE)
+        // BOTH call sites, not one. A pattern selected at generate() and not here would make the
+        // rotation depend on which code path a run took — see the sibling comment there.
+        ? buildPromptADoc(uaInput, UA_BASE_LANGUAGE, selectHookPattern(input.name, input.website.name))
         : useConsumablesDocPipelineUa
         ? buildPromptAConsumablesDoc(uaInput, UA_BASE_LANGUAGE)
         : buildPromptA(uaInput, UA_BASE_LANGUAGE);
