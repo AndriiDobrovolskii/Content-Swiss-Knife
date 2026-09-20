@@ -164,6 +164,139 @@ export function buildDeliveryRegionBlock(storeName: string, locale: string): str
   );
 }
 
+/** The four v4 section headings a locale fixes in code rather than leaving to the model. */
+export interface V4SectionHeadings {
+  /**
+   * §2 — the Killer Specs + Key Benefits `<h2>`.
+   *
+   * NOMINAL AND PRODUCT-FREE, and both halves of that are load-bearing.
+   * `checkProductNameStuffing` (`../utils/heading-style.ts`) budgets TWO product-named `<h2>`s
+   * per document and reads the last `?`-bearing `<h2>` as the §9 closing. A §2 heading naming the
+   * product would spend one of those two and put the CTA's slot in question — hence no
+   * interpolation slot here at all, in deliberate contrast with `ctaTemplate` below, which carries
+   * exactly two. Nominal is also why each entry is added to MANDATED_NOMINAL_H2 for the locales
+   * that linter covers: under v4 this heading is the mandated form, not a Style A regression.
+   */
+  keyBenefitsH2: string;
+  /** §6 — a single product. uk-UA is stated verbatim by the v4 schema: «Що в коробці?». */
+  packageContentsSingle: string;
+  /** §6 — a set. uk-UA is stated verbatim by the v4 schema: «Що входить до набору?». */
+  packageContentsSet: string;
+  /**
+   * §9 — the commercial closing question, carrying `[Product-short]` and `[Store]`. Interpolated
+   * by `getRenderRules(store).ctaHeading`, never by the model. Still a question after
+   * substitution, because `checkProductNameStuffing` identifies the closing H2 by its `?`.
+   */
+  ctaTemplate: string;
+}
+
+/**
+ * The v4 section headings, per locale, in code.
+ *
+ * WHY THESE LIVE IN CODE AT ALL — the rationale already recorded above for
+ * DELIVERY_REGION_PHRASES, applied to three more strings. Left to the model, a fixed commercial
+ * heading comes back worded differently on each run, and «Що в коробці?» / «Комплект постачання» /
+ * «Що є в комплекті?» across three regenerations of the same product is drift, not variety. It
+ * also gives the schema something to validate §6's heading AGAINST (the FR-6 membership check in
+ * description-doc.schema.ts) and the renderer something to emit for §2 and §9 — none of which is
+ * possible while the string is whatever the model wrote.
+ *
+ * ONE TABLE, NOT THREE. The three families share a key set, a rationale and a test; splitting
+ * them would triple the places a new store locale has to be remembered in.
+ *
+ * KEYS COME FROM STORE_REGISTRY, NOT FROM THIS FILE'S IMAGINATION (NFR-6). The exported key set is
+ * derived below from the registry's own `languages`, so a store locale added without a translation
+ * here DROPS OUT of the export and fails `v4-headings.spec.ts`'s key-set assertion by name,
+ * instead of silently resolving to `undefined` at render time. Lowercase BCP47 to match
+ * DELIVERY_REGION_PHRASES, MANDATED_NOMINAL_H2 and KILLER_SPECS_HEADERS.
+ */
+const V4_SECTION_HEADINGS_SOURCE: Record<string, V4SectionHeadings> = {
+  'uk-ua': {
+    keyBenefitsH2: 'Ключові характеристики та переваги',
+    packageContentsSingle: 'Що в коробці?',
+    packageContentsSet: 'Що входить до набору?',
+    ctaTemplate: 'Чому варто купити [Product-short] в [Store]?',
+  },
+  'ru-ua': {
+    keyBenefitsH2: 'Ключевые характеристики и преимущества',
+    packageContentsSingle: 'Что в коробке?',
+    packageContentsSet: 'Что входит в комплект?',
+    ctaTemplate: 'Почему стоит купить [Product-short] в [Store]?',
+  },
+  'pl-pl': {
+    keyBenefitsH2: 'Kluczowe parametry i korzyści',
+    packageContentsSingle: 'Co znajduje się w pudełku?',
+    packageContentsSet: 'Co wchodzi w skład zestawu?',
+    ctaTemplate: 'Dlaczego warto kupić [Product-short] w [Store]?',
+  },
+  'de-de': {
+    keyBenefitsH2: 'Wichtigste Spezifikationen und Vorteile',
+    packageContentsSingle: 'Was ist im Lieferumfang enthalten?',
+    packageContentsSet: 'Was gehört zum Set?',
+    ctaTemplate: 'Warum [Product-short] bei [Store] kaufen?',
+  },
+  'es-es': {
+    keyBenefitsH2: 'Características clave y ventajas',
+    packageContentsSingle: '¿Qué incluye la caja?',
+    packageContentsSet: '¿Qué incluye el kit?',
+    ctaTemplate: '¿Por qué comprar [Product-short] en [Store]?',
+  },
+  'es-mx': {
+    keyBenefitsH2: 'Características clave y ventajas',
+    packageContentsSingle: '¿Qué incluye la caja?',
+    packageContentsSet: '¿Qué incluye el kit?',
+    ctaTemplate: '¿Por qué comprar [Product-short] en [Store]?',
+  },
+  'pt-pt': {
+    keyBenefitsH2: 'Características principais e vantagens',
+    packageContentsSingle: 'O que vem na caixa?',
+    packageContentsSet: 'O que inclui o conjunto?',
+    ctaTemplate: 'Porquê comprar [Product-short] em [Store]?',
+  },
+  'en-gb': {
+    keyBenefitsH2: 'Key specifications and benefits',
+    packageContentsSingle: 'What is in the box?',
+    packageContentsSet: 'What is included in the set?',
+    ctaTemplate: 'Why buy the [Product-short] from [Store]?',
+  },
+  'en-es': {
+    keyBenefitsH2: 'Key specifications and benefits',
+    packageContentsSingle: 'What is in the box?',
+    packageContentsSet: 'What is included in the set?',
+    ctaTemplate: 'Why buy the [Product-short] from [Store]?',
+  },
+  // en-US keeps the market qualifier the master prompt's §9 template already carries for it.
+  'en-us': {
+    keyBenefitsH2: 'Key specifications and benefits',
+    packageContentsSingle: 'What is in the box?',
+    packageContentsSet: 'What is included in the set?',
+    ctaTemplate: 'Why buy the [Product-short] from [Store] in Houston, TX?',
+  },
+};
+
+/** Every locale any store in STORE_REGISTRY publishes, lowercased — the registry is the source. */
+export const V4_HEADING_LOCALES: string[] = [
+  ...new Set(Object.values(STORE_REGISTRY).flatMap(p => p.languages.map(l => l.toLowerCase()))),
+].sort();
+
+/**
+ * The v4 heading table, keyed over the locales STORE_REGISTRY actually publishes.
+ *
+ * See V4_SECTION_HEADINGS_SOURCE above for the whole rationale. This export is the derived view:
+ * a locale in the source but not in the registry never ships, and a locale in the registry but not
+ * in the source is absent here rather than `undefined`-valued — which is what turns "somebody
+ * added a store language" into a named test failure.
+ */
+export const V4_SECTION_HEADINGS: Record<string, V4SectionHeadings> = Object.fromEntries(
+  V4_HEADING_LOCALES.filter(locale => locale in V4_SECTION_HEADINGS_SOURCE)
+    .map(locale => [locale, V4_SECTION_HEADINGS_SOURCE[locale]]),
+);
+
+/** The v4 §6 heading pair for a locale, or undefined when the locale is not published. */
+export function resolveV4SectionHeadings(locale: string): V4SectionHeadings | undefined {
+  return V4_SECTION_HEADINGS[locale.toLowerCase()];
+}
+
 export function getStore(name: string): StoreProfile {
   return STORE_REGISTRY[name] ?? {
     group: 'EU', region: 'Global/EU', currency: 'EUR (€)', currencySymbol: '€',
@@ -1395,15 +1528,22 @@ export const FUNCTIONAL_H2_OPENERS: Record<string, string[]> = {
  * «Безпечна експлуатація Ortur H20». Exempting on the product name would also exempt most of the
  * nominal headings the linter exists to catch. If a specific umbrella form proves legitimate and
  * recurring, add it here explicitly rather than widening the rule.
+ *
+ * WIDENED AGAIN for v4's §2. The Killer-Specs-and-Benefits block gains an <h2> under v4, and
+ * V4_SECTION_HEADINGS fixes its wording in code — so it is mandated by the schema in exactly the
+ * sense this list means, and the linter must stop reading it as Style A. Drawn FROM the table
+ * rather than retyped, so the two cannot be edited apart.
  */
 export const MANDATED_NOMINAL_H2: Record<string, string[]> = {
   'uk-ua': [
     'Технічні характеристики', 'Матеріали та сумісне обладнання', 'Сумісність',
     'Сумісні аксесуари', 'Комплект постачання', 'Сфери застосування',
+    V4_SECTION_HEADINGS['uk-ua'].keyBenefitsH2,
   ],
   'ru-ua': [
     'Технические характеристики', 'Материалы и совместимое оборудование', 'Совместимость',
     'Совместимые аксессуары', 'Комплект поставки', 'Сферы применения',
+    V4_SECTION_HEADINGS['ru-ua'].keyBenefitsH2,
   ],
 };
 
