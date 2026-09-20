@@ -119,7 +119,16 @@ export interface VideoEmbed {
 }
 
 export interface ProductDescriptionDoc {
-  schemaVersion: '3.0';
+  /**
+   * `'3.0'` is every cached document already in the wild; `'4.0'` is what new generations emit.
+   *
+   * The type is the WIDER shape on purpose, and the schema is the gate — the same technique the
+   * subsection depth cap and `applications.blocks` already use in `description-doc.schema.ts`. It
+   * means the renderer can branch on the version without a special case, while every v4-only rule
+   * lives behind one version guard in the schema and no bound a cached `'3.0'` document parses
+   * through ever moves (NFR-8, OD-2).
+   */
+  schemaVersion: '3.0' | '4.0';
   /** BCP47, e.g. "uk-UA". */
   locale: string;
   /** Authoritative localized product name — replaces the [H1 LOCK] prompt block in task-c.ts. */

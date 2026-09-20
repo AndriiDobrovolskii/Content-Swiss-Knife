@@ -8,6 +8,12 @@
 import { z } from 'zod';
 import { forEachBlockInOrder } from './description-doc';
 import type { ProductDescriptionDoc } from './description-doc';
+// FR-6 / D5 — §6's heading is validated AGAINST the code-resident table rather than restated here.
+// New import direction for this file (src/domain → src/prompt-core) and deliberately one-way:
+// constants.ts imports only ../app/types and ../utils/specs-grounding, nothing from src/domain, so
+// there is no cycle. Recorded because the TSCONFIG NOTE below documents that inference here is
+// fragile and a reviewer will ask.
+import { resolveV4SectionHeadings } from '../prompt-core/constants';
 
 /**
  * Prose allows `<b>` and `<strong>`. Any other tag is a schema error, not something to sanitize away.
@@ -152,7 +158,7 @@ const SubsectionSchema = makeSubsectionSchema(LeafSubsectionSchema);
 const RelaxedSubsectionSchema = makeSubsectionSchema(RelaxedLeafSubsectionSchema);
 
 export const ProductDescriptionDocSchema = z.object({
-  schemaVersion: z.literal('3.0'),
+  schemaVersion: z.enum(['3.0', '4.0']),
   locale: NonEmpty,
   localizedName: NonEmpty,
 
@@ -239,6 +245,119 @@ export const ProductDescriptionDocSchema = z.object({
 
   checkRefs(figureRefs, doc.figures.length, 'figures');
   checkRefs(videoRefs, doc.videos.length, 'videos');
+})
+/**
+ * Every v4-only rule, behind ONE version guard.
+ *
+ * WHY A SECOND REFINEMENT RATHER THAN TIGHTER FIELD SCHEMAS. The rules below would each be
+ * shorter as a `.max()`, a `.min(2)` or a narrowed union on the field itself — and every one of
+ * those would apply to `'3.0'` too. The corpus is full of documents that legitimately violate all
+ * of them: a functionality group with a single `<h3>`, a §2 carrying a paragraph and a figure, an
+ * array `SpecRow.value`, a combined §2 list of twelve items. Those documents are CACHED — they
+ * are re-parsed on every re-render and must keep parsing forever (NFR-8, OD-2). So the guard is
+ * the design, not an optimization: one early return, and no bound a `'3.0'` document parses
+ * through moves at all.
+ *
+ * WHY THE PATHS ARE SPELLED OUT. `doc-schema-issues.ts` joins `issue.path` with `.` and
+ * `repair-strategy.ts` resolves that dotted string to decide whether a failure is a tier-0
+ * single-field fix or a full-document regeneration. An issue raised at the document root degrades
+ * every one of these into a regeneration against a budget FR-30 can exhaust.
+ */
+.superRefine((doc: ProductDescriptionDoc, ctx) => {
+  if (doc.schemaVersion !== '4.0') return;
+
+  // FR-4 — §2 is exactly one <h2> over one <ul>, so every §2 Block must be `bullets`.
+  // EVERY offending Block is named, not just the first: an implementation that stops at the first
+  // one leaves the model repairing a single field per attempt against the FR-30 budget.
+  doc.keyBenefits.forEach((block, i) => {
+    if (block.kind !== 'bullets') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['keyBenefits', i, 'kind'],
+        message:
+          `§2 of a 4.0 document is one merged list: every keyBenefits Block must be "bullets", ` +
+          `but this one is "${block.kind}". Move it to §3 functionality or §4 applications.`,
+      });
+    }
+  });
+
+  // FR-17 — the ceiling is on the COMBINED rendered list, which is why no single field owns it and
+  // why the issue sits at `keyBenefits`. `measured` carries the operands so the tier-1 repair
+  // instruction can state the exact surplus instead of restating the rule (D7, R2).
+  const benefitItems = doc.keyBenefits.reduce(
+    (n, block) => n + (block.kind === 'bullets' ? block.items.length : 0),
+    0,
+  );
+  const combined = doc.killerSpecs.length + benefitItems;
+  if (combined > 8) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['keyBenefits'],
+      message:
+        `§2 renders killerSpecs and keyBenefits as ONE list of at most 8 items, but this document ` +
+        `would render ${combined} (${doc.killerSpecs.length} killer specs + ${benefitItems} benefits). ` +
+        `Remove ${combined - 8}.`,
+      params: { measured: { actual: combined, limit: 8, unit: 'items' } },
+    });
+  }
+
+  // FR-10 — a §7 value is a single string for 4.0; multiple values are comma-joined BY THE MODEL
+  // into one row (FR-9). The `'3.0'` array branch stays legal on its own path.
+  doc.specs.categories.forEach((category, c) => {
+    category.rows.forEach((row, r) => {
+      if (Array.isArray(row.value)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['specs', 'categories', c, 'rows', r, 'value'],
+          message:
+            `A 4.0 §7 value is one string. Comma-join the ${row.value.length} values into a ` +
+            `single row instead of listing them.`,
+        });
+      }
+    });
+  });
+
+  // FR-27 / the human's settled Decision 1 — a §3 group opens <h3> sub-headings only when it has
+  // 2+ distinct sub-functions.
+  //
+  // FIRES ON length === 1 ONLY, and that is deliberate rather than a loose `< 2`. An absent
+  // `subsections` is the common shape (a group with prose and no sub-headings), and `[]` is
+  // equivalent to absent — both render no <h3> at all, so neither is the defect this rule is
+  // about. The defect is a lone <h3>, a heading level opened for one child.
+  //
+  // It is ALSO why `makeSubsectionSchema` is not given a `.min(2)`: that factory builds the shape
+  // shared by `functionality` and, via RelaxedSubsectionSchema, by §5 `compatibility` — so a bound
+  // there would reject cached `'3.0'` documents AND govern a section FR-27 says nothing about.
+  doc.functionality.forEach((group, i) => {
+    if (group.subsections?.length === 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['functionality', i, 'subsections'],
+        message:
+          `A §3 group opens <h3> sub-headings only when it has 2 or more distinct sub-functions. ` +
+          `This group has one: fold it into the group's own blocks, or split the function in two.`,
+      });
+    }
+  });
+
+  // FR-6 / D5 — §6's heading stays model-authored, but for 4.0 it must be one of the two
+  // code-resident entries for the document's locale, so the single-vs-set CHOICE stays with the
+  // model while the WORDING stops drifting between regenerations of the same product.
+  if (doc.packageContents) {
+    const headings = resolveV4SectionHeadings(doc.locale);
+    const allowed = headings
+      ? [headings.packageContentsSingle, headings.packageContentsSet]
+      : [];
+    if (headings && !allowed.includes(doc.packageContents.heading)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['packageContents', 'heading'],
+        message:
+          `§6's heading for ${doc.locale} must be exactly one of ${allowed.map(h => `"${h}"`).join(' or ')} ` +
+          `— use the first for a single product and the second for a set.`,
+      });
+    }
+  }
 });
 
 /**
