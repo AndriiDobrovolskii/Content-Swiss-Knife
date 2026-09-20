@@ -61,7 +61,7 @@ carried finding 7.
 
 ---
 
-## Final measured state at HEAD 85ebaa3
+## Final measured state (code complete at `8b34852`)
 
 | Check | Result |
 |---|---|
@@ -98,10 +98,11 @@ No test file, fixture, `vitest.config.ts` setting or coverage threshold was modi
 | T8 — orchestrator wiring | angular | **DONE** | `53b80a5` |
 | T9 — `NUMBER_FORMAT_RULES` | prompt | **DONE** | `b656dce` |
 | T10 — `number-format-fixer` | angular | **DONE** | `d993fee` |
-| T11 — FAQ prompt numbers | prompt | **DONE** | `33adf2a` |
+| T11 — FAQ prompt numbers | prompt | **DONE** | `33adf2a` + `8b34852` (F5) |
 | T12 — `master-system-prompt.ts` [§9 GATE] | prompt | **DONE** | `85ebaa3` |
 
-Every task ended in **one** commit. No commit touched a path outside its task's Files list.
+Every task ended in one commit, with the single exception of T11, whose §8/§9 correction (F5) is a
+second commit for the reason recorded there. No commit touched a path outside its task's Files list.
 
 ---
 
@@ -261,7 +262,7 @@ one cached prompt and the FAQ in another**. `task-faq.ts` follows the master pro
 what T11 specified and are unaffected.
 
 `task-faq.v4.spec.ts` asserts only `not.toContain('Schema v3.0')`, so both numberings satisfy it —
-this is a judgment call recorded rather than a test-driven one. Corrected in `d20a4e1` rather than
+this is a judgment call recorded rather than a test-driven one. Corrected in `8b34852` rather than
 by amending `33adf2a`, because the sanctioned US-1.1 rollback is **staged** in the working tree and
 a rebase to amend a non-HEAD commit would have put it at risk.
 
