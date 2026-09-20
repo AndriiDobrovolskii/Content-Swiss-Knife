@@ -1,12 +1,12 @@
 ---
 artifact: test_generation_report
 story: US-2.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-09-21T12:00:00Z
-updated_at: 2026-09-21T12:00:00Z
-supersedes: null
+updated_at: 2026-09-21T18:00:00Z
+supersedes: docs/tests/US-2.1-test-generation-report.md#1
 inputs_consumed:
   - key: story
     version: 1
@@ -20,10 +20,18 @@ inputs_consumed:
     version: 2
   - key: plan_review
     version: 2
+  - key: pipeline_status
+    version: 1
 open_decisions_blocking: false
 ---
 
 # Test Generation Report — US-2.1
+
+> **READ §8 FIRST AT v2.** §§1–7 below are v1's record of the `TEST_WRITING` pass, kept as written
+> because they are the evidence that the tests were red before the implementation existed — the
+> substance of AGENTS.md §5. **Their measurements are authoring-time measurements and are no longer
+> current.** §8 carries the loop-back: the two defects corrected, the current full-suite, lint and
+> coverage numbers, and what is now known that v1 could not know.
 
 ## 1. What was written
 
@@ -49,7 +57,18 @@ open_decisions_blocking: false
 **No `src/**` source file changed.** No existing spec file was edited except `optimizer.spec.ts`,
 which was appended to and whose five existing tests all still pass.
 
+**v2 adds two edited spec files**, and nothing else:
+
+| File | Change | Why |
+|---|---|---|
+| `src/prompt-core/hook-pattern.spec.ts` | `URL` → `NodeURL` from `node:url`; imports hoisted; stale header paragraph corrected | §8.1 |
+| `src/prompts/task-a-doc.spec.ts` | line 82's superseded `"schemaVersion": "3.0"` pin → `"4.0"` | §8.2 |
+
 ## 2. The observed failure — `npx vitest run`, full logic suite
+
+**⏱ AUTHORING-TIME MEASUREMENT (v1), superseded by §8.2.** This is what the suite reported before
+any implementation existed. It is retained, not updated in place: it is the only record that these
+tests were genuinely red for the right reason at the gate.
 
 ```
  Test Files  14 failed | 108 passed (122)
@@ -195,6 +214,8 @@ and trade a loud, specific failure for a quiet one. Both files are red in their 
 and go green together at T6/T7/T8.
 
 ## 3. `npm run lint` — the eight type errors this stage leaves standing, and who clears each
+
+**⏱ AUTHORING-TIME MEASUREMENT (v1), superseded by §8.3 — all eight are cleared.**
 
 Baseline before this stage: **green, zero errors** (verified: `npm run lint` exited 0 with no
 output on the pre-existing tree). After:
@@ -431,3 +452,172 @@ way".
 - **Nothing out of scope was touched:** the consumables pipeline (`task-a-consumables-doc.ts`,
   `consumables-doc.schema.ts`, `renderConsumablesDoc`) and §7 conditional-omission behaviour have no
   test in this suite.
+
+---
+
+## 8. v2 — the loop-back from IMPLEMENTATION
+
+`IMPLEMENTATION` completed and returned `CHANGES_REQUIRED`, loop-back key `changes_required_tests`,
+naming two **test-side** defects. Attempt 1 of 3. Both are fixed; nothing else in the suite changed.
+
+**All six of `so-builder`'s findings were read, not just the two dispatched** (`docs/catalog/US-2.1-pipeline-status.md`
+§Findings). Only **F3** and **F4** are test-side and they are §8.1 and §8.2 below. Of the rest:
+**F1** (T1's C-1 baseline evidence unobtainable, because v1 committed both fixture families at
+once) is evidentiary and explicitly "not a thing to repair" — stripping the `'4.0'` builders to
+satisfy a checklist would be the §7.7 move; it stands as a finding for `RECONCILIATION`. **F2**
+(`optimizer.spec.ts` red at baseline) is closed at T12, all 11 tests pass. **F5** (the FAQ is
+Schema v4.0 **§8**, not §9 — the master prompt reserves §9 for the CTA) is a source correction
+already landed at `8b34852`; `task-faq.v4.spec.ts` asserts only `not.toContain('Schema v3.0')`, so
+it is satisfied either way and **no test change is needed** — recorded here because a test that
+cannot tell the two numberings apart is worth naming. **F6** is answered in §8.3 and §8.4.
+
+### 8.1 Defect 1 — `hook-pattern.spec.ts`'s NFR-5 purity scan could not run at all
+
+**What was wrong.** `vitest.config.ts:23` sets `environment: 'happy-dom'`. happy-dom's global `URL`
+resolves every specifier against `http://localhost:3000/` and ignores a `file://` base, so
+
+```
+fileURLToPath(new URL('./hook-pattern.ts', import.meta.url))
+```
+
+threw `ERR_INVALID_URL_SCHEME` before `readFileSync` was ever reached. The module source was never
+read, so the test could neither pass nor fail honestly — it reported a thrown URL error in place of
+the property it exists to assert. The other 12 of the file's 13 assertions were unaffected and green.
+
+**The fix.** `import { fileURLToPath, URL as NodeURL } from 'node:url'`, hoisted to a static import
+beside `readFileSync`, and `new NodeURL(...)` at the call site. `node:url`'s WHATWG `URL` is
+base-faithful. The precedent already exists in this repository's test layer at
+`src/app/components/html-editor/beautify-round-trip.spec.ts:13`.
+
+**What did NOT change.** The three assertions are byte-for-byte v1's:
+
+```ts
+expect(source).not.toMatch(/Math\.random/);
+expect(source).not.toMatch(/\bnew Date\b|Date\.now/);
+expect(source).not.toMatch(/^\s*let\s/m);
+```
+
+No assertion was deleted, weakened or relaxed, and `vitest.config.ts` was not touched. The
+`async` keyword came off the callback with the dynamic imports, since nothing is awaited any more.
+
+**One assertion was ADDED — an anti-vacuity guard, which is the lesson of this defect.** Three
+negatives over an empty or wrong string all pass, so the test now asserts
+`expect(source).toContain('export function selectHookPattern')` **before** evaluating any negative.
+Had that guard existed at v1, a silent degradation of the read would have been loud; the thrown
+`ERR_INVALID_URL_SCHEME` happened to be loud on its own, but the next failure mode of a
+file-reading test is not guaranteed to be. This tightens the test; it does not relax it.
+
+**Why not `// @vitest-environment node`.** It switches the environment of the whole file, including
+the twelve behavioural tests that never touch the file system — a broad change to fix one line.
+
+**The property genuinely holds.** Read directly from `src/prompt-core/hook-pattern.ts`: `fnv1a` is
+written with `reduce` precisely so the module holds no mutable binding, there is no `Math.random`,
+and there is no `Date`. The test now demonstrates that instead of throwing on the way to it.
+
+### 8.2 Defect 2 — the mutually unsatisfiable `schemaVersion` pair
+
+`task-a-doc.spec.ts:82` required `"schemaVersion": "3.0"` **present** in `TASK_A_DOC_INSTRUCTION`;
+`task-a-doc.v4.spec.ts:50` requires `"3.0"` **absent** from the same string. No implementation can
+satisfy both. `so-builder` correctly declined to touch either — it may not edit tests. Tests are
+this stage's, so this stage settles it.
+
+**Verified independently against the approved Specification, not taken on trust.** The v4 assertion
+is the live contract, on three citations:
+
+| Source | Line | What it says |
+|---|---|---|
+| **FR-15** | `docs/specifications/US-2.1-spec.md:354-363` | "Every new LLM generation emits a document with `schemaVersion: '4.0'`." `'3.0'` "remains accepted" by the **domain schema** and in **rendering**, for documents already cached — "Existing cached documents are neither rejected nor mass-migrated." Its failure path names "a new generation emitting `'3.0'`" as a defect |
+| **FR-30**, cited by FR-15 | `:363` | "A generation that cannot produce a valid `'4.0'` document does not fall back to `'3.0'`" |
+| **Plan D16** | `docs/plans/US-2.1-implementation-plan.md:777-784` | "D1 emits `'4.0'` from the prompt and validates it in the schema; there is no code path that retries as `'3.0'`, and none is added" |
+
+`TASK_A_DOC_INSTRUCTION` is the prompt — the text that produces a **new** generation. FR-15's
+`'3.0'` tolerance is scoped to parse and render, which are `description-doc.schema.spec.ts`'s and
+`render-description.spec.ts`'s subject and are both still green and unmodified. So the v3 pin at
+`:82` encodes a superseded rule.
+
+**The resolution is an update, not a deletion.** `task-a-doc.spec.ts:82` now reads
+
+```ts
+expect(TASK_A_DOC_INSTRUCTION).toContain('"schemaVersion": "4.0"');
+```
+
+with an inline comment carrying the three citations. A positive, exact-string version pin is
+retained in that file rather than dropped; the negative (`"3.0"` absent) stays in the v4 file. This
+is a contract change, which `task-a-doc.v4.spec.ts:6-9` anticipated in its header and test strategy
+v1 §9 recorded as T7's — the only correction is **who** makes it. **The file's other twelve tests
+are untouched and all pass**, including the `bullets 3–8` and prose-field clauses v1 flagged as
+text T7 rewrites: T7's rewrite preserved every one of them.
+
+### 8.3 The current numbers — full suite, lint, coverage
+
+Every command below was run in this repository and its real output recorded.
+
+```
+$ npx vitest run
+ Test Files  122 passed (122)
+      Tests  2812 passed | 3 skipped (2815)
+   Duration  77.34s
+```
+
+```
+$ npm run lint          # tsc --noEmit
+(no output, exit 0)
+```
+
+**All eight type errors §3 left standing are cleared** — T3 widened the `schemaVersion` union, T6
+created `src/prompt-core/hook-pattern.ts`, T7 added `buildPromptADoc`'s optional third parameter.
+The `asSchemaVersion4()` cast's clearance is T3's and is visible in the exit code, not in a comment.
+
+```
+$ npm run test:coverage   # exit 0 — every floor in vitest.config.ts met
+Statements   : 91.96% ( 2999/3261 )
+Branches     : 85.83% ( 1787/2082 )
+Functions    : 94.12% ( 641/681 )
+Lines        : 92.56% ( 2554/2759 )
+
+  domain       100 stmts | 95.45 branch | 100 func | 100 lines   (floor 95/90/95/95)
+  prompt-core  98.12     | 88.96       | 100      | 99.09        (floor 95/85/95/95)
+  render       99.39     | 91.75       | 100      | 100          (floor 95/90/95/95)
+```
+
+**This answers `so-builder`'s finding F6 directly.** Coverage emitted no report at all while a test
+failed, so the floors were unevaluable; with the suite green they are measurable again and **all of
+them pass**. No floor was lowered and no file was excluded.
+
+### 8.4 `so-builder`'s four unreached defensive branches — measured, and none breaks a floor
+
+`so-builder` recorded four defensive branches no fixture reaches. Measured against the floors:
+
+| Branch | Where (uncovered line, from the v8 report) | Floor it sits under | Margin |
+|---|---|---|---|
+| The `en-gb` heading fallback in `renderKeyBenefitsV4` | `render-description.ts:277` — `?? V4_SECTION_HEADINGS['en-gb']` | `src/render/**` branches ≥ 90 | **91.75** |
+| The non-`bullets` arm of `renderKeyBenefitsV4`'s `flatMap` | `render-description.ts:283-284` | same | same |
+| The `!headings` throw in `ctaHeading` | `store-render-rules.ts:98` | `src/prompt-core/**` branches ≥ 85 | **88.96** |
+| The `!headings` arm of the FR-6 §6-heading check | `description-doc.schema.ts:348` — the `: []` arm of `allowed` | `src/domain/**` branches ≥ 90 | **95.45** |
+
+**No coverage floor breaks on them, so no test is added for them, and that is a deliberate refusal
+rather than an oversight.** All four are unreachable-by-construction guards over data the schema and
+`V4_SECTION_HEADINGS` already make total: `store-render-rules.ts:98`'s own comment says "every
+locale any registry store publishes has a table entry by construction". A test for one would have to
+manufacture a state the system cannot be in, and it would be written **from the implementation**
+rather than from an acceptance criterion — the one thing `TEST_WRITING` may not do (AGENTS.md §5,
+skill contract). Recorded here so that if a later change does trip a floor on them, the next writer
+knows they were seen and left.
+
+One measured near-neighbour, for the same reason: `hook-pattern.ts` shows **50% branch** coverage on
+its single branch, `character.codePointAt(0) ?? 0` (`:99`) — a guard against a `codePointAt` that
+cannot return `undefined` for an index `Array.from` produced. `prompt-core` clears its floor with
+3.96 points of margin regardless.
+
+### 8.5 Constraints honoured at v2
+
+- **Only `*.spec.ts` files were edited.** `git diff --stat` for this revision touches
+  `src/prompt-core/hook-pattern.spec.ts`, `src/prompts/task-a-doc.spec.ts` and the three artifacts
+  below. No source file, no `vitest.config.ts`.
+- **No assertion weakened, deleted, skipped or relaxed.** Defect 1 kept all three assertions
+  verbatim; defect 2 replaced a superseded exact-string pin with the current one. No `.skip`, no
+  `.only`, no coverage threshold or `include` touched (§7.7).
+- **No workflow state written.** `docs/workflow/workflow-state.yaml` and `history.jsonl` untouched.
+- **The staged US-1.1 rollback in the working tree was not disturbed.** Every commit names its paths
+  explicitly; no `git add -A`, no `git add .`, no `git commit -a`.
+- **No Pull Request pushed, opened or merged.**

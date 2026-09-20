@@ -1,12 +1,12 @@
 ---
 artifact: test_strategy
 story: US-2.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-09-21T12:00:00Z
-updated_at: 2026-09-21T12:00:00Z
-supersedes: null
+updated_at: 2026-09-21T18:00:00Z
+supersedes: docs/tests/US-2.1-test-strategy.md#1
 inputs_consumed:
   - key: story
     version: 1
@@ -20,10 +20,28 @@ inputs_consumed:
     version: 2
   - key: plan_review
     version: 2
+  - key: pipeline_status
+    version: 1
 open_decisions_blocking: false
 ---
 
 # Test Strategy — US-2.1: Migrate product descriptions to the v4.0 UA content schema
+
+## 0. v2 — what the loop-back changed, and what it did not
+
+`IMPLEMENTATION` returned `CHANGES_REQUIRED` with loop-back key `changes_required_tests` against
+two **test-side** defects. v1's strategy is unchanged in substance; two files were corrected and
+three statements in v1 that the completed implementation made false are restated here.
+
+| Defect | File | Resolution |
+|---|---|---|
+| The source-scan test could not run at all under the configured environment | `src/prompt-core/hook-pattern.spec.ts` | `URL` is now imported as `NodeURL` from `node:url`. See §8 |
+| Two assertions were mutually unsatisfiable against one string — `"schemaVersion": "3.0"` required present *and* absent | `src/prompts/task-a-doc.spec.ts:82` vs `src/prompts/task-a-doc.v4.spec.ts:50` | The v3 pin is superseded; `task-a-doc.spec.ts` now pins `"4.0"`. See §9 |
+
+**No assertion was weakened, deleted or relaxed to fit the implementation.** The source-scan test
+asserts exactly the three negatives it asserted in v1, and `task-a-doc.spec.ts` keeps a positive
+version pin rather than dropping one. Nothing under `src/` that is not a `*.spec.ts` was touched,
+and `vitest.config.ts` was not touched.
 
 ## 1. The shape of this suite
 
@@ -33,19 +51,23 @@ is named `*.component.spec.ts`, nothing in FR-1..FR-30 reaches `src/app/componen
 component runner gains no work — which is what the implementation plan's *Validation strategy*
 section already predicted.
 
-The governing constraint on file layout is **runtime module resolution, not taste**. Three
-artifacts this suite asserts against do not exist yet: `src/prompt-core/hook-pattern.ts` (T6), a new
-export in `constants.ts` (T2) and a new member on `StoreRenderRules` (T4). A *named* import of a
-missing export is a link-time failure that takes a whole module down and reports one error about
-the module rather than one failure per contract. So:
+The governing constraint on file layout was **runtime module resolution, not taste**. At the time
+this suite was authored, three artifacts it asserts against did not exist: `src/prompt-core/hook-pattern.ts`
+(T6), a new export in `constants.ts` (T2) and a new member on `StoreRenderRules` (T4). A *named*
+import of a missing export is a link-time failure that takes a whole module down and reports one
+error about the module rather than one failure per contract. So:
 
 - **New behaviour that needs a not-yet-existing artifact goes in its own new spec file**, never
   appended to an existing green one. `constants.spec.ts`, `heading-style.spec.ts`,
-  `render-description.spec.ts`, `description-doc.schema.spec.ts`, `task-a-doc.spec.ts`,
+  `render-description.spec.ts`, `description-doc.schema.spec.ts`,
   `master-system-prompt.spec.ts`, `structural-parity.spec.ts`, `number-format-fixer.spec.ts`,
   `render-conformance.spec.ts` and `render-reconciliation.spec.ts` are **not edited**.
-- The one exception is `src/prompts/optimizer.spec.ts`, which is appended to — every import it
-  needs already resolves, so the new block cannot take the existing five tests down.
+- The one exception at v1 was `src/prompts/optimizer.spec.ts`, which is appended to — every import
+  it needs already resolves, so the new block cannot take the existing five tests down.
+- **v2 adds a second exception**: `src/prompts/task-a-doc.spec.ts`, whose single superseded
+  `schemaVersion` assertion is updated in place. v1 listed that file as not edited and recorded
+  the update as T7's; `so-builder` correctly declined it because it may not edit tests, so it is
+  settled here instead. §9 carries the reasoning.
 
 ## 2. What is tested at which level
 
@@ -169,10 +191,11 @@ satisfied as follows:
 | V2's four negatives, V12's parse half | **No** — `safeParse(data: unknown)` | `v4Negatives.*` and `v4LongHookDoc()` return `unknown`; the version is bumped on a plain object spread, with no type claimed |
 | V3, V14, V15's `'4.0'` half | **Yes** — `renderDescription(doc: ProductDescriptionDoc, …)` | one documented helper, `asSchemaVersion4()`, carrying a single `as unknown as` cast with a comment naming C-1/D2 and telling T3 to delete it |
 
-That is the whole of the `'4.0'` typing question, and it contributes **zero** type errors. The
-eight errors this stage does leave standing are of a different class entirely — a module and a
-parameter that genuinely do not exist yet — and are enumerated in the test generation report with
-the task that clears each.
+That is the whole of the `'4.0'` typing question, and it contributed **zero** type errors. The
+eight errors v1 left standing were of a different class entirely — a module and a parameter that
+genuinely did not exist yet. **At v2 all eight are gone**: T3 widened the union, T6 created the
+module and T7 added the optional parameter, and `npm run lint` exits 0 with no output. The test
+generation report §3 records the measurement.
 
 ## 7. What is deliberately NOT unit-tested, and why
 
@@ -193,15 +216,33 @@ website list are fixed literals; the conformance matrix is enumerated from `STOR
 orchestrator spec drives a `vi.fn()` stub and never reaches a provider. `assertDocRendered` and
 `validateStructuralParity` are pure. Nothing in this suite is time-dependent.
 
+**The one environment dependency, and how it is handled (v2).** `vitest.config.ts:23` runs the
+logic suite under **happy-dom**, whose global `URL` resolves every specifier against
+`http://localhost:3000/` and ignores a `file://` base. So `fileURLToPath(new URL('./x.ts', import.meta.url))`
+throws `ERR_INVALID_URL_SCHEME` — the one construct in this suite that reads a source file off
+disk, `hook-pattern.spec.ts`'s NFR-5 purity scan, hit exactly that. **Resolved by importing
+`URL as NodeURL` from `node:url`**, the precedent `src/app/components/html-editor/beautify-round-trip.spec.ts:13`
+already sets in this repository. The assertion is byte-for-byte the one v1 wrote; only the URL
+constructor changed, and the test now actually reads `hook-pattern.ts` before asserting against it.
+
+The two alternatives were rejected: a `// @vitest-environment node` pragma switches the
+environment of the **whole file**, including the twelve behavioural tests that have nothing to do
+with the file system, and editing `vitest.config.ts` was out of bounds and would have moved the
+whole suite off the environment `output-validator`'s `DOMParser` checks depend on. **Any future
+test in this repository that reads a file off disk must use `NodeURL`** — the failure mode is a
+thrown `ERR_INVALID_URL_SCHEME` that looks nothing like the property under test.
+
 ## 9. Existing tests this suite must NOT break, and the five it deliberately leans on
 
 Untouched and green: `description-doc.schema.spec.ts`, `render-description.spec.ts`,
 `render-reconciliation.spec.ts`, `render-conformance.spec.ts`, `task-a.spec.ts`,
-`task-a-doc.spec.ts`, `master-system-prompt.spec.ts`, `constants.spec.ts`,
+`master-system-prompt.spec.ts`, `constants.spec.ts`,
 `structural-parity.spec.ts`, `number-format-fixer.spec.ts`, `decimal-separator.spec.ts`,
-`store-render-rules.spec.ts`, `scaffold-doc.spec.ts`.
+`store-render-rules.spec.ts`, `scaffold-doc.spec.ts`. **`task-a-doc.spec.ts` left this list at v2**
+— one assertion in it is updated, for the reasons three bullets down; the file's other twelve tests
+are untouched and green.
 
-Five of them are load-bearing for a decision in this suite:
+Five files are load-bearing for a decision in this suite:
 
 - `ua-translation-style-guide.spec.ts:49` pins the exact group-2 substring — the reason D10's edit
   must be three lines and not a rewrite. V9 restates the same assertion from the v4 side.
@@ -209,8 +250,27 @@ Five of them are load-bearing for a decision in this suite:
   why V14 is a parallel matrix rather than a flipped fixture**: flipping `conformanceDoc()` to
   `'4.0'` would make that correct assertion permanently red and the only route to green would be to
   weaken it.
-- `task-a-doc.spec.ts:82` pins `"schemaVersion": "3.0"`; T7 updates it as a contract change. Nothing
-  in this suite touches it.
+- `task-a-doc.spec.ts:82` pinned `"schemaVersion": "3.0"`. **v1 recorded this as T7's to update and
+  said "nothing in this suite touches it"; that was wrong, and this is the correction.** `so-builder`
+  may not edit tests, so T7 could only rewrite the prompt and leave the assertion contradicting
+  `task-a-doc.v4.spec.ts:50`, which requires `"3.0"` to be ABSENT from the same string. The two are
+  mutually unsatisfiable; one of them had to be the live contract. **The v4 assertion is**, on three
+  citations verified against the approved Specification rather than taken on trust:
+  - **FR-15** (`docs/specifications/US-2.1-spec.md:354`) — "Every new LLM generation emits a
+    document with `schemaVersion: '4.0'`". `'3.0'` "remains accepted" at the **schema** and in
+    **rendering**, for documents already cached — which is `description-doc.schema.spec.ts`'s and
+    `render-description.spec.ts`'s subject, not the prompt's. FR-15's failure path names "a new
+    generation emitting `'3.0'`" as a defect outright.
+  - **FR-30**, cited by FR-15:363 — "A generation that cannot produce a valid `'4.0'` document does
+    not fall back to `'3.0'`."
+  - **Plan D16** (`docs/plans/US-2.1-implementation-plan.md:777-784`) — "D1 emits `'4.0'` from the
+    prompt … there is no code path that retries as `'3.0'`, and none is added."
+
+  So `task-a-doc.spec.ts` now pins `"schemaVersion": "4.0"`. This is a **contract change, not a
+  weakening**: the test still asserts a positive, still names an exact string, and the file's own
+  v4 sibling already anticipated it in its header. The other tests in `task-a-doc.spec.ts` —
+  including the `bullets 3–8` and prose-field clauses v1 flagged as text T7 rewrites — are
+  untouched and all still pass.
 - `task-a.spec.ts` green and unmodified is the evidence FROZEN `task-a.ts` was not edited.
 - `master-system-prompt.spec.ts` and `constants.spec.ts` green and unmodified is T12's acceptance
   check 7. Weakening either to fit the §9 edit is an AGENTS.md §7.7 violation, not a fix.

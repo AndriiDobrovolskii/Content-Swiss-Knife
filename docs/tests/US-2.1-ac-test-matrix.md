@@ -1,12 +1,12 @@
 ---
 artifact: ac_test_matrix
 story: US-2.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-09-21T12:00:00Z
-updated_at: 2026-09-21T12:00:00Z
-supersedes: null
+updated_at: 2026-09-21T18:00:00Z
+supersedes: docs/tests/US-2.1-ac-test-matrix.md#1
 inputs_consumed:
   - key: story
     version: 1
@@ -18,6 +18,8 @@ inputs_consumed:
     version: 2
   - key: plan_review
     version: 2
+  - key: pipeline_status
+    version: 1
 open_decisions_blocking: false
 ---
 
@@ -30,6 +32,19 @@ Specification's own traceability matrix says so.
 
 `⬤` = expected RED at this stage (the TDD gate). `○` = green on arrival, labelled in the spec file
 as a characterization or baseline.
+
+> **v2 — read the marks as AUTHORING-TIME state, not current state.** The marks below are unchanged
+> from v1 and record what each row was **when the tests were written, before any implementation
+> existed**. `IMPLEMENTATION` has since completed, so **every row is green now**: the full logic
+> suite is `122 passed (122) / 2812 passed | 3 skipped (2815)`. They are deliberately not flipped —
+> a `⬤` is the evidence that the test was genuinely red before the code existed, which is the whole
+> substance of AGENTS.md §5's TDD gate and the one fact a reconciliation reviewer cannot recover
+> from a green suite. **No row's file or test name changed at v2.** The two corrections this
+> revision carries are in `src/prompt-core/hook-pattern.spec.ts` (the `NodeURL` fix — the row
+> `V5 … › contains no Math.random, no Date and no mutable module-level binding` under **NFR-5**
+> keeps its file, its test name and all three of its assertions) and in `src/prompts/task-a-doc.spec.ts`
+> (the superseded `"3.0"` version pin), which no row in this matrix has ever named. See the test
+> strategy §0 and §9 and the test generation report §8.
 
 ---
 
