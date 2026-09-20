@@ -625,8 +625,9 @@ text, headings, captions, AND spec-table <td> cells alike. Never change the digi
 unit; only the separator punctuation localizes.
 - uk-UA / ru-UA: decimal comma, thousands non-breaking space  → 1 234 567,89
 - pl-PL:         decimal comma, thousands non-breaking space  → 1 234 567,89
-- de-DE:         decimal comma, thousands dot (or space)      → 1.234.567,89
-- es-ES:         decimal comma, thousands dot (or space)      → 1.234.567,89
+- de-DE:         decimal comma, thousands non-breaking space  → 1 234 567,89
+- es-ES:         decimal comma, thousands non-breaking space  → 1 234 567,89
+- pt-PT:         decimal comma, thousands non-breaking space  → 1 234 567,89
 - en-GB / en-ES: decimal dot, thousands comma                 → 1,234,567.89
 - en-US:         decimal dot, thousands comma                 → 1,234,567.89
 - es-US / es-MX (US market, CLDR): decimal dot, thousands comma → 1,234,567.89
