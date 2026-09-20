@@ -1,13 +1,12 @@
 /**
  * hook-pattern.spec.ts — US-2.1 validation category V5 (FR-14, NFR-5, AC-9).
  *
- * 🔴 THIS FILE FAILS TO RESOLVE ITS IMPORT UNTIL T6 CREATES `src/prompt-core/hook-pattern.ts`, and
- * that is the intended TDD state, not a broken test. AGENTS.md §5 requires the failing test to
- * exist before the module does; there is no honest way to assert against a module that does not
- * exist yet other than to import it. Hiding the gap behind a dynamic specifier would type every
- * assertion below as `any` and trade a loud, specific failure for a quiet one. `npm run lint` is a
- * §6 Definition-of-Done gate that runs after implementation; see the test generation report for the
- * full list of type errors this stage deliberately leaves standing and the task that clears each.
+ * WHY THE IMPORT IS STATIC. Written at TEST_WRITING, before T6 created
+ * `src/prompt-core/hook-pattern.ts`, so this file failed to resolve its import in its entirety —
+ * the intended TDD state, not a broken test (AGENTS.md §5). There is no honest way to assert
+ * against a module that does not exist yet other than to import it; hiding the gap behind a
+ * dynamic specifier would have typed every assertion below as `any` and traded a loud, specific
+ * failure for a quiet one. T6 has since landed the module and the import resolves.
  *
  * WHAT FR-14 ACTUALLY REQUIRES, AND WHY DETERMINISM ALONE IS NOT IT. A constant selector that
  * returned pattern 1 for every product would satisfy NFR-5 in full — deterministic, service-side,
@@ -30,6 +29,9 @@
  * that genuinely distributes. The window length itself is derived from the plan's floor of four
  * patterns — see the comment on that test.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath, URL as NodeURL } from 'node:url';
+
 import { describe, it, expect } from 'vitest';
 
 import { HOOK_PATTERNS, selectHookPattern } from './hook-pattern';
@@ -196,11 +198,23 @@ describe('V5 — the module is pure: no clock, no randomness, no module-level st
    * seeded PRNG that happens to be stable within one process from a pure function. Reading the file
    * is how the repository already checks a negative it cannot observe — see the `git diff --stat`
    * acceptance checks throughout the task breakdown.
+   *
+   * 🔴 IT MUST BE `NodeURL`, NOT THE GLOBAL `URL`. `vitest.config.ts:23` runs this suite under
+   * happy-dom, whose global `URL` resolves against `http://localhost:3000/` and ignores a `file://`
+   * base, so `fileURLToPath(new URL(…, import.meta.url))` throws `ERR_INVALID_URL_SCHEME` before
+   * `readFileSync` is ever reached — the module source is never read and the assertions below can
+   * neither pass nor fail honestly. `node:url`'s WHATWG `URL` is base-faithful. The repository
+   * already carries this precedent at `src/app/components/html-editor/beautify-round-trip.spec.ts:13`.
+   * The alternative — a `// @vitest-environment node` pragma — was not taken: it would change the
+   * environment of the WHOLE file, including the twelve behavioural tests above, for the sake of one.
    */
-  it('contains no Math.random, no Date and no mutable module-level binding', async () => {
-    const { readFileSync } = await import('node:fs');
-    const { fileURLToPath } = await import('node:url');
-    const source = readFileSync(fileURLToPath(new URL('./hook-pattern.ts', import.meta.url)), 'utf8');
+  it('contains no Math.random, no Date and no mutable module-level binding', () => {
+    const source = readFileSync(fileURLToPath(new NodeURL('./hook-pattern.ts', import.meta.url)), 'utf8');
+
+    // ANTI-VACUITY GUARD, and it is the lesson of the defect above: three negatives over an empty
+    // or wrong string all pass. This asserts the file that was read is the module under test before
+    // any negative is evaluated.
+    expect(source, 'read the wrong file, or an empty one').toContain('export function selectHookPattern');
 
     expect(source).not.toMatch(/Math\.random/);
     expect(source).not.toMatch(/\bnew Date\b|Date\.now/);
