@@ -19,7 +19,12 @@
  * (`C3D_TOV_BASE_OVERLAY`, `EXPERT3D_*`) stay in constants.ts: they are prompt text consumed by
  * frozen files, and relocating them would force a frozen-file edit for no gain.
  */
-import { getStore, getKillerSpecsHeaders } from './constants';
+import {
+  getStore,
+  getKillerSpecsHeaders,
+  isCenter3dPrintStore,
+  resolveV4SectionHeadings,
+} from './constants';
 // Type-only, so this does NOT create a runtime import cycle with render-description.ts (which
 // imports this module for real). TypeScript erases the import entirely.
 import type { RenderContext } from '../render/render-description';
@@ -39,6 +44,39 @@ export interface StoreRenderRules {
    * header text the model already wrote for that document. Do not add a default here.
    */
   killerSpecsHeaders(locale: string): [param: string, benefit: string] | undefined;
+  /**
+   * The §9 commercial-closing `<h2>` for a locale, with the product and the store substituted in.
+   *
+   * v4 fixes this heading in code (FR-11, D6) for the reason `DELIVERY_REGION_PHRASES` is already
+   * code-resident: left to the model, a fixed commercial string comes back worded differently on
+   * every run. The renderer assembles §9's heading from this rather than from `doc.cta.heading`,
+   * which is discarded on the `'4.0'` path.
+   *
+   * Store-specific Tone of Voice overrides are honoured HERE rather than at the renderer's call
+   * site — that is what this module is for.
+   */
+  ctaHeading(locale: string, productShortName: string): string;
+}
+
+/**
+ * Center 3D Print's uk-UA ToV REPLACES the master CTA template with the soft «варто» form, quoted
+ * verbatim in `C3D_UK_LOCALE_TOV` (`constants.ts:1596-1598`):
+ *
+ *   «Чому варто купити [Product-short] у Center 3D Print?»
+ *
+ * Its only divergence from the table's uk-UA template is the preposition before the store name —
+ * «у» rather than «в», Ukrainian euphony before the consonant cluster that "Center" opens with.
+ *
+ * Written as a TRANSFORMATION OF the table entry rather than as a second copy of the sentence, so
+ * that a future rewording of the template carries here automatically instead of leaving this store
+ * silently pinned to the old wording. That is this module's standing rule (see the header): a
+ * derived view, never a copy.
+ */
+function applyStoreToneOverride(template: string, storeName: string, locale: string): string {
+  if (isCenter3dPrintStore(storeName) && locale.toLowerCase() === 'uk-ua') {
+    return template.replace(' в [Store]', ' у [Store]');
+  }
+  return template;
 }
 
 /** The rule set for one store. Unknown names fall back to getStore()'s default profile. */
@@ -49,6 +87,23 @@ export function getRenderRules(storeName: string): StoreRenderRules {
     imageBaseUrl: store.imageBaseUrl,
     locales: store.languages,
     killerSpecsHeaders: locale => getKillerSpecsHeaders(locale, storeName),
+    ctaHeading: (locale, productShortName) => {
+      const headings = resolveV4SectionHeadings(locale);
+      if (!headings) {
+        // THROWS RATHER THAN FALLING BACK, on the same reasoning as renderContextFor's empty-base
+        // refusal below. Every locale any registry store publishes has a table entry by
+        // construction, so reaching this means a store gained a language without a translation.
+        // The alternatives are both worse in production: an empty string ships a bare <h2>, and a
+        // silent English fallback ships the wrong language under a localized document.
+        throw new Error(
+          `${storeName}/${locale}: no V4_SECTION_HEADINGS entry, so §9's CTA heading cannot be ` +
+            `assembled. Add the locale to V4_SECTION_HEADINGS_SOURCE in constants.ts.`,
+        );
+      }
+      return applyStoreToneOverride(headings.ctaTemplate, storeName, locale)
+        .replace('[Product-short]', productShortName)
+        .replace('[Store]', storeName);
+    },
   };
 }
 
