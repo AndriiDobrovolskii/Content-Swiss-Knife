@@ -248,6 +248,52 @@ it, but because under v4 that value genuinely *is* "always a plain string, never
 prompt was worded accurately rather than the test relaxed. `bullets 3–8`, the prose/plain-text field
 lists, the figure-ref and depth-cap pins and the paragraph escape hatch all survived unchanged.
 
+### F5 — the breakdown and the master prompt disagree on the FAQ's section number; the prompt won
+
+The breakdown's T11 is titled *"Carry the v4 §9 numbers into the FAQ prompt"* and calls the FAQ
+"v4 §9" throughout. But `master-system-prompt.ts`'s own in-band section map — which **T12 edited
+under the §9 approval** — reserves §9 for `§9 COMMERCIAL CLOSING / CTA` and states
+`§8 FAQ/HowTo belongs to dedicated artifacts`.
+
+Labelling the FAQ artifact "Schema v4.0 §9" would therefore have made that string name **the CTA in
+one cached prompt and the FAQ in another**. `task-faq.ts` follows the master prompt and reads
+**`Schema v4.0 §8`**; the numbers themselves (3–5 pairs, 2–4 sentences, 150–400 words) are exactly
+what T11 specified and are unaffected.
+
+`task-faq.v4.spec.ts` asserts only `not.toContain('Schema v3.0')`, so both numberings satisfy it —
+this is a judgment call recorded rather than a test-driven one. Corrected in `d20a4e1` rather than
+by amending `33adf2a`, because the sanctioned US-1.1 rollback is **staged** in the working tree and
+a rebase to amend a non-HEAD commit would have put it at risk.
+
+### F6 — the coverage gate cannot be evaluated while F3 and F4 stand
+
+`npm run test:coverage` exits 1, and **no coverage report is produced at all** — no table, no
+`coverage/` directory — because vitest skips report generation when the run has failing tests.
+Confirmed by forcing the text reporter (`npx vitest run --coverage --coverage.reporter=text`),
+which also printed nothing. The exit code is driven **solely** by F3 and F4; the thresholds in
+`vitest.config.ts` are never reached, so neither a pass nor a breach can be claimed.
+
+This matters because this stage added **defensive branches that no current fixture reaches**, and
+`src/render/**` is held at branches ≥ 90 and `src/prompt-core/**` at ≥ 85:
+
+| Branch | File |
+|---|---|
+| `?? V4_SECTION_HEADINGS['en-gb']` unlisted-locale fallback | `src/render/render-description.ts` (`renderKeyBenefitsV4`) |
+| the `: []` arm of the `kind === 'bullets'` flatMap ternary | `src/render/render-description.ts` (`renderKeyBenefitsV4`) |
+| the `if (!headings) throw` arm | `src/prompt-core/store-render-rules.ts` (`ctaHeading`) |
+| the `!headings` arm of the FR-6 membership check | `src/domain/description-doc.schema.ts` |
+
+Every v4 fixture uses a registry locale with a table entry and bullets-only `keyBenefits`, so none
+of the four is exercised. They were **not** removed to flatter an unmeasured number: each is a real
+guard, and the `throw` in particular is the module's established behaviour (`renderContextFor`
+refuses an empty `imageBaseUrl` the same way).
+
+**Disposition.** The mechanical §6 gate is `so-gate-enforcer`'s stage, not this one. Once F3 and F4
+are resolved at TEST_WRITING, coverage runs and the thresholds are checked for the first time. If a
+branch floor is then breached, the loop-back is **not** `changes_required_tests` in this skill's
+sense — `so-builder` cannot add tests — and the choice is between TEST_WRITING covering these four
+paths and a deliberate decision to drop a guard.
+
 ---
 
 ## Working-tree hygiene
