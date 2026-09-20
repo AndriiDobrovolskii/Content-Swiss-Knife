@@ -7,10 +7,14 @@ FAQ blocks for product pages. Always argue the advantages of the specific produc
 Output the FAQ artifact only: the first character of your output is the "<" of the first <h3>.`;
 
 /**
- * Generates a schema-free FAQ artifact for one language, per Schema v3.0 §8.
+ * Generates a schema-free FAQ artifact for one language, per Schema v4.0 §9.
  * The Journal theme native FAQ module supplies the FAQPage schema — the artifact stays schema-free.
  *
- * Output format (v3): each item is a plain-text question in <h3> followed immediately by an
+ * The TRIGGER is unchanged and deliberately so: a FAQ is produced only when supplemental content
+ * is supplied. v4 §9 is «Рекомендовано», not mandatory, and making the FAQ unconditional is
+ * explicitly out of scope (OD-10).
+ *
+ * Output format: each item is a plain-text question in <h3> followed immediately by an
  * HTML answer (allowed tags: <p>, <strong>, <b>, <ul>, <li>). No wrapper <div>/class —
  * the app parser walks <h3> + siblings.
  * If the inputs contain nothing answerable, the model returns an empty response.
@@ -36,8 +40,9 @@ export function buildPromptFaq(
     userContent: `[TASK]
 Create an expert FAQ block for "${productName}" in ${humanLang}, based exclusively on the provided sources.${overlay}
 
-[OUTPUT CONTRACT — Schema v3.0 §8 artifact]
-Emit exactly one artifact: 3–5 question/answer pairs — 5 is the hard maximum per Schema v3.0 §8.
+[OUTPUT CONTRACT — Schema v4.0 §9 artifact]
+Emit exactly one artifact: 3–5 question/answer pairs — 5 is the hard maximum per Schema v4.0 §9.
+The whole block runs 150–400 words.
 Each pair: <h3>Question text?</h3> followed immediately by the answer, composed only of these tags:
 <p>, <strong>, <b>, <ul>, <li>. Start the output at the first <h3>; end it after the last answer's
 closing tag (wrapper divs, class attributes, and FAQPage/schema.org markup stay out — the CMS FAQ
