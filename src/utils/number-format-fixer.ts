@@ -47,14 +47,47 @@ function coreMaskPattern(productName: string): RegExp | null {
 }
 
 /**
+ * FR-16's three separator groups, keyed by lowercase BCP47.
+ *
+ * Group 3 is the only one that needs a transform: `de-DE`, `es-ES` and `pt-PT` receive source
+ * numbers written with a thousands DOT (`1.234.567,89`) and must publish them grouped with a
+ * non-breaking space, which is what `NUMBER_FORMAT_RULES` now tells the model for those locales.
+ *
+ * Groups 1 (`en-US`, `en-GB`, `en-ES`, `es-US`, `es-MX` — decimal dot, thousands comma) and 2
+ * (`uk-UA`, `ru-UA`, `pl-PL` — decimal comma, thousands non-breaking space) are ALREADY correct in
+ * published output, so for them this function must be a no-op on grouping. That is a behaviour
+ * change worth naming: the legacy locale-blind path below STRIPS every thousands separator it can
+ * find, which would turn a correct `1,234,567.89` into `1234567.89`. Once a locale is known, the
+ * grouping the locale calls for is preserved rather than flattened.
+ */
+const GROUP_3_LOCALES = new Set(['de-de', 'es-es', 'pt-pt']);
+
+/**
+ * Dot-grouped thousands → non-breaking-space-grouped, for group 3 only.
+ *
+ * Reuses `stripThousandsSeparators`'s period-group pattern verbatim, including both of its guards:
+ * a decimal tail must not be swallowed (`(?!\.\d)`), and `0.004` is a fraction rather than a
+ * grouped integer (`(?!0\.\d{3})`). Idempotent by construction — after one pass there are no dots
+ * left to match, so a second pass is a no-op, which is what the fixer's contract requires.
+ */
+function regroupDotThousands(text: string): string {
+  return text.replace(/\b(?!0\.\d{3})\d{1,3}(?:\.\d{3})+(?!\.\d)/g, m => m.replace(/\./g, NBSP));
+}
+
+/**
  * @param html        the HTML (or, via normalizeSeoNumbers, a plain meta string)
  * @param productName optional raw product name; its invariant core is protected from every
  *                    numeric transform below. Optional so existing call sites keep working —
  *                    omitting it restores the pre-fix behaviour rather than throwing.
+ * @param locale      optional BCP47 target locale (FR-16). Optional for the same reason
+ *                    `productName` is: this function has existing call sites, and a required
+ *                    parameter would break them in the commit that adds it. Omitting it keeps the
+ *                    locale-blind behaviour exactly as it was.
  */
-export function fixNumberFormatting(html: string, productName = ''): string {
+export function fixNumberFormatting(html: string, productName = '', locale = ''): string {
+  const format = (text: string) => processTextNode(text, locale);
   const pattern = productName.trim() ? coreMaskPattern(productName) : null;
-  if (!pattern) return mapHtmlText(html, processTextNode);
+  if (!pattern) return mapHtmlText(html, format);
 
   const originals: string[] = [];
   const masked = html.replace(pattern, match => {
@@ -62,12 +95,21 @@ export function fixNumberFormatting(html: string, productName = ''): string {
     return MASK;
   });
   let i = 0;
-  return mapHtmlText(masked, processTextNode).replace(new RegExp(MASK, 'g'), () => originals[i++]);
+  return mapHtmlText(masked, format).replace(new RegExp(MASK, 'g'), () => originals[i++]);
 }
 
-/** Applied to text nodes and alt values — full formatting. */
-function processTextNode(text: string): string {
-  return ensureUnitSpaces(stripThousandsSeparators(text));
+/**
+ * Applied to text nodes and alt values — full formatting.
+ *
+ * With NO locale this is the original locale-blind behaviour, unchanged, because every existing
+ * call site relies on it. With a locale, grouping is handled per FR-16's group and never flattened.
+ * Unit spacing (FR-21) runs on every path: localization changes punctuation only, so the digits,
+ * the unit and the space between them are the same whichever branch produced the number.
+ */
+function processTextNode(text: string, locale = ''): string {
+  const normalized = locale.trim().toLowerCase();
+  if (!normalized) return ensureUnitSpaces(stripThousandsSeparators(text));
+  return ensureUnitSpaces(GROUP_3_LOCALES.has(normalized) ? regroupDotThousands(text) : text);
 }
 
 export function stripThousandsSeparators(text: string): string {
