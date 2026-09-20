@@ -377,9 +377,22 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
     parts.push(renderSubsection(doc.compatibility, doc, positions, ctx));
   }
 
+  // §6. The list container is the third and last of D8's version-conditional points: an <ol> for
+  // `'4.0'` (FR-6, AC-5), a <ul> for `'3.0'`. The <h2> and every <li> are identical on both paths.
+  //
+  // VERSION-SCOPED, NOT UNCONDITIONAL, and this must not be "simplified" to save one ternary.
+  // FR-15 says a `'3.0'` document keeps the previous handling rules WHEREVER THEY DIFFER, and the
+  // <ul> is such a rule: it is the element every already-shipped `'3.0'` artifact carries. An
+  // unconditional <ol> would make a re-render of a cached document differ from what shipped, for a
+  // change no requirement makes retroactive.
+  //
+  // AND IT IS THE ONE CHANGE THE CORPUS CANNOT SEE: neither committed .doc.json carries
+  // packageContents at all, so test/render-reconciliation.spec.ts is byte-for-byte green under
+  // EITHER choice of element. V15 is this change's only detector, in both directions.
   if (doc.packageContents) {
     const items = doc.packageContents.items.map(i => `<li>${esc(i)}</li>`).join('\n');
-    parts.push(`<h2>${esc(doc.packageContents.heading)}</h2>\n<ul>\n${items}\n</ul>`);
+    const [open, close] = isV4 ? ['<ol>', '</ol>'] : ['<ul>', '</ul>'];
+    parts.push(`<h2>${esc(doc.packageContents.heading)}</h2>\n${open}\n${items}\n${close}`);
   }
 
   // §7 is the only <section>, and the only <hr> follows it.
