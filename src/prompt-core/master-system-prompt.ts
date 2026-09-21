@@ -214,7 +214,11 @@ The CMS renders §0 (H1); begin your output at the §1 <p>, and use <h2> as the 
 heading level anywhere in the body.
 
 1. WRITE THE HOOK (40–85 words TOTAL, plain <p>, zero attributes):
-   Open with: "[Product] is a [Category] designed for [use-case], featuring [key specs]."
+   Open with the INVARIANT START (v4 §1 «Незмінний старт»), which never varies: the product
+   name wrapped in <b>…</b>, then a space, an em dash, a space, and then the product type or
+   category, its use-case and its key specs. The shape is exactly
+   "<b>[Product]</b> — [Category] for [use-case], featuring [key specs]."
+   The §1 patterns vary what follows the em dash; none of them varies the start.
    Use-case = a workflow, not a user type. Split the 40–85 words across exactly 2–4
    sentences; every sentence independently fits the locale's HERO band from
    [SENTENCE LENGTH] above. Vary sentence syntax across products. Give every number a

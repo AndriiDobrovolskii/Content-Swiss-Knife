@@ -44,39 +44,55 @@ export interface HookPattern {
  * None of them states a word range, a tag or a section rule. Those belong to the task instruction
  * (`task-a-doc.ts`) and the master prompt, and restating them here would give the model two
  * authorities for the same rule that could later disagree.
+ *
+ * EVERY PATTERN PRESERVES THE INVARIANT START (FR-1 / AC-1). v4 §1's «Незмінний старт» fixes the
+ * opening of the hook — the product name, then an em dash, then the product type — and the five v4
+ * §1 patterns vary only what FOLLOWS it. An earlier revision of this list instructed the opposite:
+ * four of the five told the model to open on a problem, a spec value, a scenario or a comparison
+ * and to let the product "enter the sentence" later, which is a positively-shipped contradiction of
+ * the invariant start on every Doc generation.
+ *
+ * So each instruction below is phrased as a rule about the clause AFTER the invariant start, and
+ * the start itself is REFERRED TO rather than restated — the master prompt's §1 clause is its one
+ * authority, for the same two-authorities reason stated in the paragraph above.
  */
 export const HOOK_PATTERNS: readonly HookPattern[] = [
   {
     id: 'problem-first',
     instruction:
-      'Open §1 with the concrete production problem this product removes — the failure, delay or ' +
-      'manual step the reader recognises from their own workflow — and only then name the product ' +
-      'as what resolves it.',
+      'Keep the §1 invariant start exactly as [CONTENT STRUCTURE] defines it, then carry the ' +
+      'opening sentence on into the concrete production problem this product removes — the ' +
+      'failure, delay or manual step the reader recognises from their own workflow — and spend ' +
+      'the rest of §1 showing how this product resolves it.',
   },
   {
     id: 'spec-anchor',
     instruction:
-      'Open §1 with the single most decisive technical value of this product and what it makes ' +
-      'possible in practice. Lead with that value, not with the product category.',
+      'Keep the §1 invariant start exactly as [CONTENT STRUCTURE] defines it, then make the single ' +
+      'most decisive technical value of this product the first thing that follows it, together ' +
+      'with what that value makes possible in practice. Reach it before any other capability.',
   },
   {
     id: 'scenario',
     instruction:
-      'Open §1 inside one concrete working scenario — a specific job, material or batch this ' +
-      'product is used for — and let the product enter the sentence as the tool doing that job.',
+      'Keep the §1 invariant start exactly as [CONTENT STRUCTURE] defines it, then place what ' +
+      'follows inside one concrete working scenario — a specific job, material or batch this ' +
+      'product is used for — and write the rest of §1 from inside that job.',
   },
   {
     id: 'contrast',
     instruction:
-      'Open §1 by contrasting this product with the class of equipment it replaces or upgrades ' +
-      'from, stating the practical difference the operator feels. Do not disparage a named ' +
-      'competitor; contrast with the category.',
+      'Keep the §1 invariant start exactly as [CONTENT STRUCTURE] defines it, then contrast this ' +
+      'product with the class of equipment it replaces or upgrades from, stating the practical ' +
+      'difference the operator feels. Do not disparage a named competitor; contrast with the ' +
+      'category.',
   },
   {
     id: 'outcome',
     instruction:
-      'Open §1 with the measurable outcome the operator gets — throughput, accuracy, finish or ' +
-      'cost per part — and attribute it to the specific capability of this product that delivers it.',
+      'Keep the §1 invariant start exactly as [CONTENT STRUCTURE] defines it, then lead with the ' +
+      'measurable outcome the operator gets — throughput, accuracy, finish or cost per part — and ' +
+      'attribute it to the specific capability of this product that delivers it.',
   },
 ];
 
