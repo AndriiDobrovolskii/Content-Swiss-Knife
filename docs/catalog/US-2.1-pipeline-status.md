@@ -1,13 +1,13 @@
 ---
 artifact: pipeline_status
 story: US-2.1
-version: 3
+version: 4
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-09-20T22:10:00Z
-updated_at: 2026-09-22T09:20:00Z
-supersedes: docs/catalog/US-2.1-pipeline-status.md#2
+updated_at: 2026-09-22T12:40:00Z
+supersedes: docs/catalog/US-2.1-pipeline-status.md#3
 inputs_consumed:
   - key: story
     version: 1
@@ -34,341 +34,347 @@ open_decisions_blocking: false
 
 # Pipeline Status — US-2.1: Migrate product descriptions to the v4.0 UA content schema
 
-**Verdict at v3: `BLOCKED`.** This is a RECONCILIATION loop-back, attempt 1 of 3, opened for exactly
-one blocking finding — **B1**, AC-1's «Незмінний старт» opening form. **No code was written on this
-pass, and the working tree is byte-identical to `5ee05c7` apart from this file.**
+**Verdict at v4: `BLOCKED`.** IMPLEMENTATION attempt 2 of 3. Every item the human's 2026-09-22
+decision authorised was **executed and committed** — this is not a repeat of v3's "no code written"
+stop. It is `BLOCKED` for **one new finding, B2**: a *second* clause in the same FROZEN file states
+the same reversed opening form that B1 was about, and it is outside the §9 grant just answered.
+Under the dispatch's own instruction — *"If you find another clause needing change, STOP and raise
+it as a further request rather than folding it in"* — it was not edited. §6 is the request.
 
-This revision supersedes v2, whose `PASS` verdict was spent when RECONCILIATION returned
-`CHANGES_REQUIRED` / `changes_required` against the tree v2 described. The thirteen tasks, the suite,
-the lint result and the FROZEN trail recorded at v2 all still hold and are re-confirmed below; they
-are not restated in full, because nothing about them changed.
+This revision supersedes v3, whose `BLOCKED` verdict and `B1-APPROVAL` request were answered.
 
-**The reason this is `BLOCKED` and not a delivered fix:** B1 cannot be honestly closed without
-editing `src/prompt-core/master-system-prompt.ts:217`, which is FROZEN and **outside** the AGENTS.md
-§9 per-file approval granted at HUMAN_PLAN_APPROVAL. That approval was granted *for T12, to implement
-NI-1..NI-5 and the tier-2 repairs*, and §4 below shows from the approved plan's own text that
-`:217` is in neither list. A **new** §9 per-file approval is requested in §5, written so it can be
-answered without re-deriving anything.
+**Three commits landed, all with explicit pathspecs:**
+
+| Commit | What |
+|---|---|
+| `270caa7` | B1 — `master-system-prompt.ts:217` under the new §9 grant, + FR-14 `HOOK_PATTERNS` realignment, + `.arch-guard-checksums` rebaseline in the same commit |
+| `7c32265` | N2/O4 — five of seven `fixNumberFormatting` call sites now pass the locale |
+| `50ead2a` | NB-2 — the FR-1 invariant-start rejection rule, **implemented**, not taken as a residual |
+
+`git diff --stat 5ee05c7..HEAD -- src/ test/` touches **five source files and zero test files**.
 
 ---
 
-## 1. What B1 is, re-derived rather than inherited
+## 1. Per-item disposition
 
-Every point RECONCILIATION made was re-derived against the files on this pass. All of them hold.
-
-| Claim | Re-derived how | Result |
+| Item | Disposition | Where |
 |---|---|---|
-| AC-1 requires the hook to start `<b>{product name}</b> —` | `docs/stories/US-2.1-migrate-descriptions-to-v4-schemas.md:47` | confirmed, verbatim |
-| FR-1 repeats it and gives it a failure path | `docs/specifications/US-2.1-spec.md:89-97` | confirmed — *"is a structural defect and the generation is rejected by structural validation"* |
-| The primary source agrees | `Knowledge/Schemas/product_description_schemas_v4_ua.md:210`, and all five v4 §1 patterns read below | confirmed — **all five** open `<b>[Назва]</b> — [категорія/клас/тип]`; the «Антиконвеєр» rotation varies what follows the em dash, never the start |
-| `master-system-prompt.ts:217` states a different form | read at line, and `git diff 0622de6..HEAD` on the file | confirmed — `Open with: "[Product] is a [Category] designed for [use-case], featuring [key specs]."`, a **context line** in the diff, sandwiched between two `+` lines |
-| `TASK_A_DOC_INSTRUCTION` does not supply it | `src/prompts/task-a-doc.ts:155` | confirmed — the entire §1 content is `- §1 hook: 40–85 words.` |
-| No validator or renderer enforces it | `output-validator.ts` byte-unchanged; `render-description.ts:353` | confirmed — `<p>${prose(doc.hook)}</p>`, nothing inspected |
-| Four of five `HOOK_PATTERNS` instruct the model away from it | `src/prompt-core/hook-pattern.ts:48-81` | confirmed — `problem-first` *"only then name the product"*, `spec-anchor` *"Lead with that value, not with the product category"*, `scenario` *"let the product enter the sentence"*, `contrast` and `outcome` opening on a comparison and an outcome |
-| That text reaches the model on every Doc generation | `src/prompts/task-a-doc.ts:189-191` | confirmed — appended to `userContent` as `[§1 HOOK PATTERN]` |
-
-The diff hunk is the sharpest single piece of evidence, so it is quoted rather than described:
-
-```diff
--1. WRITE THE HOOK (40–75 words TOTAL, plain <p>, zero attributes):
-+1. WRITE THE HOOK (40–85 words TOTAL, plain <p>, zero attributes):
-    Open with: "[Product] is a [Category] designed for [use-case], featuring [key specs]."
--   Use-case = a workflow, not a user type. Split the 40–75 words across exactly 2–4
-+   Use-case = a workflow, not a user type. Split the 40–85 words across exactly 2–4
-```
-
-`:217` is the unchanged middle line. It was **read past, not unreached** — §4 explains why the plan's
-three sweeps could not see it.
+| **B1** — `:217` invariant start | **DONE**, under the new grant. Rebaseline rode the same commit. | `270caa7` |
+| **FR-14** — `HOOK_PATTERNS` | **DONE**. All five realigned; none now instructs away from the start. | `270caa7` |
+| **N2/O4** — seven call sites | **5 of 7 DONE. 2 reported, not forced.** See §3 — per site, with evidence. | `7c32265` |
+| **NB-2** — hook-start validation | **IMPLEMENTED.** The approver's fallback was available and was **not** taken; the precondition discharged cleanly and coverage held. See §4. | `50ead2a` |
+| **§7.8 / PR_PREPARATION** | Confirmed. The US-1.1 rollback is untouched; see §7. | — |
+| **B2** — `:146-148`, NEW | **NOT DONE — outside the grant.** §6 is the request. | — |
 
 ---
 
-## 2. The approach decision, stated plainly
+## 2. B1 and FR-14 — what actually changed
 
-Two fix paths were on the table. The narrow one was taken seriously and **rejected on the evidence**,
-not waved off to justify a stop.
+**H1, the frozen line.** `:217` read `Open with: "[Product] is a [Category] designed for
+[use-case], featuring [key specs]."`. It now states v4 §1's «Незмінний старт» in the exact words the
+approver reviewed in v3 §5 — verbatim, including `featuring [key specs]`, so no content element was
+quietly dropped inside a frozen file. The em dash in the quoted shape is **U+2014**, verified by
+codepoint rather than by eye.
 
-### Path A — unfrozen only: state the invariant start in `task-a-doc.ts`, repair `hook-pattern.ts`
+**The four things v3 promised the reviewer would not have to check, re-verified on this pass:**
+`occurrences('40–75')` is still `0` and `occurrences('40–85')` is `3` (`>= 2` required) — the NI-1
+assertions are untouched. `contentStructureClause(n)` slices on `^\d+\. ` at line start; every added
+line is indented, so the clause parser is unaffected. No assertion anywhere in the suite references
+`Open with`, `[Category]`, `designed for` or `featuring [key specs]`. The sweep was widened per
+review to **every** file reading `MASTER_SYSTEM_PROMPT` — `constants.spec.ts`,
+`master-system-prompt.spec.ts`, `master-system-prompt.v4.spec.ts`, `task-a.spec.ts`,
+`optimizer.spec.ts` — checking for occurrence-counting or purity assertions the **new** text could
+trip. None does.
 
-This is the path RECONCILIATION noted *exists* (it prescribed none). It would leave `:217` in place
-and override it from `systemBlocks[1]`.
+**The rebaseline is scoped, and this is shown rather than asserted.** `bash arch-guard.sh
+--rebaseline` rewrites every entry, and this repository's baseline has a history of lagging
+legitimate commits. `git diff -- .arch-guard-checksums` is **one line changed**:
+`master-system-prompt.ts` only. `task-a.ts`, `task-b.ts`, `task-c.ts` and `output-validator.ts` are
+byte-identical. No unrelated drift was laundered through a blanket rebaseline under a one-file grant.
 
-**It does not work, and the two files say so themselves.** The Doc instruction's override authority
-is *scoped to serialization*, by both ends of the contract:
-
-- `master-system-prompt.ts:456-458`, `[FORMAT]`:
-  > SERIALIZATION IS SET BY THE ACTIVE [TASK] BLOCK. When that block specifies a different
-  > output format (for example a JSON document model), its contract wins over this section,
-  > **and the rules below then describe only WHAT to express — not how to serialize it.**
-
-- `task-a-doc.ts:44`:
-  > **Every [CONTENT STRUCTURE] rule about WHAT each section contains still applies;** only
-  > the serialization changes.
-
-The hook's opening form is a **WHAT** rule. An em dash after a bolded name versus a copula
-(`is a`) is a difference in what the sentence says, not in how the document is serialized — the
-JSON `hook` field admits `<b>` either way. So both files designate the frozen master as the authority
-on this rule, and the master currently states the wrong one.
-
-**Restating v4's form in `task-a-doc.ts` would therefore be a contradiction, not a restatement** —
-and this repository already names that failure mode in the very file the fix would touch:
-
-> Those belong to the task instruction (`task-a-doc.ts`) and the master prompt, and restating them
-> here would give the model **two authorities for the same rule that could later disagree**.
-> — `hook-pattern.ts:44-46`
-
-**The asymmetry that settles it.** `task-a-doc.ts` *does* already diverge from the master in several
-places — §2's heading is discarded, §9's `cta.heading` is discarded, §6's heading is fixed per locale.
-Every one of those is about **who supplies a value**, code or model. Not one of them contradicts what
-the master says a section's prose must *say*. There is no precedent in this file for overruling a
-WHAT rule, and inventing one here would leave the cached block 0 — read on every generation, on the
-Doc path and the translation path alike — positively instructing the model to open the hook the wrong
-way. That is the paper-over, not the fix.
-
-**The approved plan reaches the same conclusion, in its own words**, in the §9 request's *"Why the
-edit cannot be avoided"* paragraph (`implementation_plan:691-696`):
-
-> `MASTER_SYSTEM_PROMPT` is `systemBlocks[0]` on the Doc path and is cached; `TASK_A_DOC_INSTRUCTION`
-> explicitly says *"Every [CONTENT STRUCTURE] rule about WHAT each section contains still applies"* …
-> Every clause above is exactly such a rule. That sentence is also why the invariant list must be
-> complete: it imports **all** of block 0's content rules into the Doc path, so **any one left stating
-> a v3 rule contradicts block 1 and the schema at once.**
-
-The plan wrote that to justify granting the approval it got. It applies to `:217` word for word.
-(The plan cites that sentence as `task-a-doc.ts:41`; it sits at **`:44`** in the tree today, because
-T7 grew the file above it. Same sentence, verified byte-for-byte.)
-
-### Path B — the frozen edit, under a new approval
-
-Taken as the correct path, and **not executed**, because the existing approval does not cover it.
-§5 is the request.
-
-### What was deliberately NOT done
-
-- **`:217` was not edited under the old approval.** The grant names its surface; borrowing it for a
-  sixth invariant nobody reviewed is the move AGENTS.md §9 exists to stop.
-- **No partial commit was landed.** Repairing `hook-pattern.ts` alone would be a checkpoint, not a
-  complete change (AGENTS.md §13) — and worse, the patterns' *content* depends on how `:217`
-  resolves. If the invariant start lands in the master, the five patterns mirror v4's and vary only
-  what follows the em dash. If it does not, they would each have to carry the start themselves — the
-  two-authorities problem again, written five times. Writing them now risks writing them twice.
-- **No test was written, weakened or touched.** AC-1's opening form still has no assertion anywhere;
-  see finding **NB-1**, which is a routing matter for RECONCILIATION, not grounds for a
-  `changes_required_tests` loop — there is nothing for TEST_WRITING to assert against until the
-  implementation exists.
+**H2, `HOOK_PATTERNS`.** All five instructions are rewritten as rules about the clause **after** the
+invariant start; the start itself is *referred to* («exactly as [CONTENT STRUCTURE] defines it»)
+rather than restated. That is deliberate and is the module's own doctrine at `:44-46` — restating a
+tag or a dash here would create the two-authorities problem the file was written against, and would
+have contradicted the argument H1 rests on. `selectHookPattern`, the pattern count (5) and every
+`id` are unchanged, so `hook-pattern.spec.ts` — which pins a count floor, reachability,
+distribution, the AC-9 window and a source-purity scan, and pins no instruction text — is green by
+construction and was confirmed green by running it.
 
 ---
 
-## 3. What the complete fix is, so the approval can be judged against the whole of it
+## 3. N2/O4 — five sites done, two reported per site
 
-Both halves are required. Neither closes B1 alone.
+The approver's principle was *"the code must not carry a non-functional signature."* Five sites make
+it functional. Two are left locale-blind, and the dispatch's instruction for that case was explicit:
+*say so per site and leave it* rather than ship a plausible-looking wrong argument.
 
-| Half | File | Frozen? | What changes |
+| # | Site | Locale passed | Disposition |
 |---|---|---|---|
-| **H1** | `src/prompt-core/master-system-prompt.ts:217` | **YES — §5 requests it** | The §1 opening-form sentence is replaced with v4's «Незмінний старт». One line. |
-| **H2** | `src/prompt-core/hook-pattern.ts:48-81` | no | `HOOK_PATTERNS` is realigned so **every** pattern preserves the invariant start and varies only what follows the em dash, as v4 §1's own five do. This removes the four positively-shipped instructions that contradict AC-1, and closes FR-14's recorded drift (*"naming which of the v4 §1 patterns to use"*) at the same time. |
+| 1 | `content-orchestrator.service.ts:370` | `'uk-UA'` | **DONE** |
+| 2 | `content-orchestrator.service.ts:1103` | `locale` | **DONE** |
+| 3 | `content-orchestrator.service.ts:1195` | `isoCode` | **DONE** |
+| 4 | `content-orchestrator.service.ts:1511` | `UA_ISO` | **DONE** |
+| 5 | `utils/seo-number-format.ts:60` | `item.language` | **DONE** |
+| 6 | `render/doc-prose-transforms.ts:156` | `locale` — **in scope** | **NOT DONE — reddens a test** |
+| 7 | `render/consumables-prose-transforms.ts:97` | `locale` — **in scope** | **NOT DONE — reddens a test** |
 
-H2 is unfrozen and needs no approval — it is held back only because it is half a change.
+**Sites 6 and 7 are not missing a locale.** `locale` is a parameter of the enclosing function and is
+already passed to the four transforms beside `fixNumberFormatting` on the same line. The omission is
+a *behaviour* decision, not an absent value, and it is the case the dispatch told me to check for.
 
-**H2 keeps `hook-pattern.spec.ts` green by construction, checked before proposing it.** That file
-asserts a *count floor* (≥ 4), reachability of every element, the distribution properties, and a
-source-purity scan. It pins no `id` and no `instruction` text. Rewriting the five `instruction`
-strings and keeping five elements touches none of its assertions, and the selector function is not
-changed at all.
+Passing it turns **three green tests red**, measured, not predicted:
 
-### Not folded into the fix — recorded for routing instead
+```
+× src/render/doc-prose-transforms.spec.ts > strips a thousands separator and localizes the decimal for uk-UA
+    AssertionError: expected 'Швидкість 20 000 мм/хв за 1,75 мм.' not to contain '20 000'
+× src/render/doc-prose-transforms.spec.ts > applies to every text field, not just the hook
+    AssertionError: expected 'Швидкість 20 000 мм/хв.' not to contain '20 000'
+× src/render/consumables-prose-transforms.spec.ts > applies to every text field, not just the hook
+    AssertionError: expected 'Швидкість друку 20 000 мм/хв.' not to contain '20 000'
+```
 
-**FR-1's failure path has no mechanism anywhere, frozen or unfrozen.** The spec says a hook that does
-not open with the bolded name and em dash *"is rejected by structural validation"*. H1 + H2 make the
-model produce the form; neither **rejects** a generation that does not. The plausible home is a
-version-guarded `superRefine` on the `'4.0'` branch of `src/domain/description-doc.schema.ts`
-(unfrozen, and already carrying this Story's other version-guarded rules). It was **not** taken here,
-for two reasons, both of which are the point of the stage boundary:
+**The conflict is real and substantive, not a fixture detail.** `processTextNode` with no locale
+strips *every* thousands separator; with a group-1 or group-2 locale it strips *none*. FR-16 makes
+`uk-UA` a **group-2** locale whose grouping must be preserved — `number-format-fixer.ts:56-61` says
+so in the file's own words. These three assertions require the opposite. Both cannot be true.
 
-1. It is an architecture decision. Plan D12's enumerated §1 contract has eleven items and the opening
-   form is not among them; adding a twelfth rejection rule decides where structural validation lives,
-   which is `so-planner`'s call, not `so-builder`'s.
-2. Its precondition is unmet. Every doc that the suite parses as `'4.0'` would have to be swept first.
-   The three v4 fixture hooks conform — `test/fixtures/v4-docs.ts:58`, `:297`, `:397` all read
-   `<b>…</b> — …` — but that is the fixture module alone, not the whole suite, and a rejection rule
-   that reddens a test `so-builder` may not edit is worse than no rule.
+**Whose tests they are decides what happens next, so it was checked.** Neither file was touched by
+this Story: `doc-prose-transforms.spec.ts` was last modified at `021f467`, and
+`consumables-prose-transforms.spec.ts` at `2747ad8`, both **before** TEST_WRITING's `0622de6`.
+`git log 0622de6~1..HEAD --` on both files is empty. They are **pre-existing tests encoding the
+legacy locale-blind behaviour**, not US-2.1's tests. AGENTS.md §7.7 forbids weakening them, and
+`so-builder` does not own them either way. This is reported as finding **N9** for the orchestrator to
+route; it is **not** returned as `changes_required_tests`, because this is a requirement conflict for
+a human or `so-planner` to settle, not a test TEST_WRITING merely forgot to write.
 
-Carried as finding **NB-2**.
+**One consequence stated rather than hidden.** `doc-prose-transforms.ts`'s header says its chain
+order is copied from the orchestrator's HTML chain *"so the two pipelines cannot diverge while both
+exist."* Site 1 (HTML master, uk-UA) is now locale-aware while site 6 (Doc path, same artifact) is
+not, so for a uk-UA master description the two pipelines **now group thousands differently**. That
+divergence is a direct consequence of the conflict above, not an independent choice, and it is
+carried as finding **N10**.
+
+**A stale comment was corrected in the same hunk**, and it is named because it looks like a
+drive-by and is not. `:371` justified the transform order with *"fixNumberFormatting … has already
+stripped thousands separators."* Once a locale is passed that sentence is **false**, and leaving a
+false justification next to the line that falsified it is worse than the edit. The ordering still
+holds for a real reason, now stated: `MEASURED_DECIMAL_RE` excludes a 3-digit group itself
+(`\d+\.(?!\d{3}(?!\d))`), so `fixDecimalSeparator` never depended on the stripping. This was
+verified against `decimal-separator.ts:104-110` before the comment was rewritten — the suspected
+corruption path (`"20.000 мм"` → `"20,000 мм"` in uk-UA) **does not exist**, because that regex
+guards it independently.
 
 ---
 
-## 4. Why `:217` is outside the existing approval — from the plan's own text
+## 4. NB-2 — implemented, and why the fallback was declined
 
-The grant (`history.jsonl`, HUMAN_PLAN_APPROVAL, 2026-09-21) reads:
+The approver granted an explicit fallback: *"if it is technically unsound at this stage, leave the
+validation to the prompt and record it as an ACCEPTED RESIDUAL rather than forcing it."* **It was
+not needed.** Both of the conditions that would have made it unsound were tested and neither holds.
 
-> AGENTS.md SECTION 9 PER-FILE APPROVAL GRANTED for `src/prompt-core/master-system-prompt.ts`, **for
-> T12, to implement NI-1..NI-5 and the tier-2 repairs**
+**Precondition 1 — the sweep, run BEFORE the rule was written, exactly as v3 required of itself.**
+The question was not "do the three hooks in `v4-docs.ts` conform" but "which documents does the
+*whole suite* parse as `'4.0'`". Answer, from a repository-wide sweep of `schemaVersion` in `src/`
+and `test/`: **only `test/fixtures/v4-docs.ts` produces one**, through `asSchemaVersion4()` (`:219`)
+and `bumpVersion()` (`:413`). Both spread over a base document, and the only three hooks reachable —
+`v3BaseDoc`, `v4ConformanceDoc`, `v4LongHookDoc` — all open with the invariant start on a **U+2014**
+em dash, confirmed by codepoint. No other `'4.0'` literal in the suite constructs a document;
+`test/doc-generation-live.spec.ts` is the only consumer that could parse model output and is skipped
+without `LIVE_DOC_TEST`. **The full suite run after the change confirms the sweep: 2812 passed, 0
+failed, identical to baseline.** No test was edited and the rule was not weakened to pass a fixture.
 
-Both lists are enumerated in `implementation_plan` v2's §9 request, and `:217` is in neither.
+**Precondition 2 — coverage, which was the real risk.** `vitest.config.ts` floors `src/domain/**` at
+95/95/90/95, and the new `addIssue` branch is **unreachable by the suite** (that is what the sweep
+just proved), so it adds uncovered lines to a floored directory — and `so-builder` may not write the
+test that would reach it. Measured before and after rather than assumed:
 
-**NI-1 is the one invariant that touches this clause, and it is a word range only**
-(`implementation_plan:632-634`):
+| `src/domain` | Stmts | Branch | Funcs | Lines |
+|---|---|---|---|---|
+| Floor | 95 | 90 | 95 | 95 |
+| Before (`5ee05c7`) | 100 | 95.45 | 100 | 100 |
+| **After** | **98.95** | **93.47** | **100** | **98.8** |
 
-> **NI-1 (FR-1).** No clause states a §1 hook word range other than **40–85**.
-> *Evidence:* `:27` (section map), `:216` (clause head), `:218` (**inside the `:216` clause** — the
-> instance that proves a claimed range was not read to its end).
+All four clear the floor with 3.4–4.0 points of headroom, and `npm run test:coverage` exits **0**.
+No threshold was lowered and no coverage `include` was narrowed. The fallback's trigger condition is
+therefore not met, so taking it would have been a choice, not a finding.
 
-The evidence cites `:216` and `:218` — the two lines carrying `40–75` — and skips `:217` between them.
-NI-2..NI-5 govern §2, §3, §9 and §6 respectively and do not reach §1 at all.
+**A third worry was checked and dismissed on evidence.** `path: ['hook']` was used per this file's
+own rule about root-path issues degrading into full regeneration — but `'doc-schema'` has **no entry
+in `REPAIR_STRATEGIES`**, so `resolveLadder` returns `['full-regen']` for *every* schema issue,
+including the five FR rules already in this refinement. The new rule is therefore **no costlier than
+its neighbours**, and the FR-30 budget argument that would have favoured the residual does not apply.
+The path still names the field in the repair prompt's detail line, which is why it is spelled out.
 
-**Tier 2 is a closed table of exactly six lines** (`implementation_plan:662-674`): `:42`, `:103`,
-`:153-154`, `:221`, `:270-272`, `:309`. It is not an open-ended "anything that contradicts v4" clause
-— its own preamble scopes it to clauses that *"reference a construct the edit removes or renames"*,
-and it is introduced *"so the human can see that one approval covers two severities"*. `:217` states
-a reversed rule, which is the tier-1 severity, and it is absent from both tiers.
+**Because no test can reach it, the rule was verified directly** — the honest substitute for the
+coverage `so-builder` is not allowed to create. It accepts all three fixture hooks and a hook that
+bolds a spec *later* in the sentence (the lazy `.*?` makes the **first** `</b>` close the name), and
+rejects the reversed copula form, a missing `<b>`, a U+2013 en dash and a missing space before the
+dash. That verification is recorded here because it is evidence, not a substitute for a test:
+**AC-1's opening form still has no assertion in the suite** — see finding **NB-1**, unchanged.
 
-**`:217` is also absent from the plan's *"Explicitly NOT in this request"* table** — the eight clauses
-"swept, read, and confirmed to agree with v4". So it was neither requested nor cleared: it fell
-through all three sweeps, and it is mechanical why. The numeral sweep matched `40–75`, `90–200`,
-`150–2,000`, `80–150` — `:217` carries no numeral. The construct sweep matched `table`, the §6 `<ul>`
-and the CTA template — `:217` carries none. The cross-reference sweep matched `§2`, `§3`, `§6` and the
-image-placement block — `:217` names no section. A clause stating a *reversed rule in prose with no
-numeral, no construct and no cross-reference* is invisible to all three methods. That is the gap, and
-it is worth recording because the same gap could hide another clause.
-
-**This is a judgment call and it is named as one:** a reader could argue that "tier-2 repairs" was
-meant as a spirit rather than a list, and that a sixth invariant is what the approver would have
-granted had the sweep found it. That reading is plausible. It is not taken, because the plan went to
-unusual lengths to make the surface *enumerated rather than sampled* — that enumeration was
-plan-review finding 1's whole remedy — and treating an enumerated grant as open-ended would undo
-exactly the property the human approved.
-
----
-
-## 5. THE REQUEST — a new AGENTS.md §9 per-file approval
-
-> **Edit `src/prompt-core/master-system-prompt.ts`, line 217 — one line — so that the §1 clause
-> states v4's invariant start.**
-
-**Current text** (`:217`, a single line inside the `:216` clause):
-
-```
-   Open with: "[Product] is a [Category] designed for [use-case], featuring [key specs]."
-```
-
-**Proposed replacement** (the dash in the quoted shape is a literal **U+2014** em dash, matching the
-U+2014 already pinned by AC-2's rendered killer-spec form — not U+2013):
-
-```
-   Open with the INVARIANT START (v4 §1 «Незмінний старт»), which never varies: the product
-   name wrapped in <b>…</b>, then a space, an em dash, a space, and then the product type or
-   category, its use-case and its key specs. The shape is exactly
-   "<b>[Product]</b> — [Category] for [use-case], featuring [key specs]."
-   The §1 patterns vary what follows the em dash; none of them varies the start.
-```
-
-**This deletes no content element — it repairs the opening form only.** The current `:217` carries
-three things: the opening form, that the hook names the category and use-case, and that it names the
-key specs. The replacement keeps all three and changes only the first. That is deliberate: a
-one-line opening-form repair is what is being asked for, and quietly dropping `featuring [key specs]`
-inside a frozen file would turn it into an unannounced content deletion. (`:220-222` separately
-governs *how* numbers may appear in the hook, and FR-2's "2–4 technical values" is declared
-unenforced prose by the Specification, so the key-specs element could arguably go — but not on this
-approval, and not without saying so.)
-
-**Four things the reviewer should not have to check, checked here:**
-
-1. **`<b>` does not breach the same clause's "plain `<p>`, zero attributes."** That phrase governs
-   *attributes*, and `<b>` is an attribute-free inline tag. `[FORMAT]` already instructs
-   `use <b> for inline spec scannability`, and the Doc path's `hook` is a prose field that
-   `task-a-doc.ts:93-95` declares admits `<b>` and `<strong>`.
-2. **`[OUTPUT CONTRACT]` at `:20` still holds** — *"The first character of your output is the opening
-   `<` of the §1 hook paragraph"* is true of `<p><b>Name</b> — …`.
-3. **`bash arch-guard.sh --rebaseline` must ride in the same commit as the edit**, per the original
-   grant's own terms and AGENTS.md §9. It will.
-4. **No test pins the sentence being replaced, so H1 needs no test change.** Checked directly rather
-   than by keyword grep: `master-system-prompt.v4.spec.ts`'s NI-1 block (`:51-62`) contains exactly
-   two assertions about §1 — `occurrences('40–75')` is `0` and `occurrences('40–85') >= 2`. The
-   replacement introduces no `40–75` and touches neither `40–85` occurrence (they live at `:216` and
-   `:218`, which this request does not alter). No assertion anywhere in the suite references
-   `Open with`, `[Category]`, `designed for` or `featuring [key specs]` in the prompt — swept across
-   `src/**` and `test/**`. **H1 therefore carries no `changes_required_tests` dependency**, which
-   matters because the approver should know before granting whether saying yes also commits the
-   pipeline to a TEST_WRITING loop. It does not.
-
-**Blast radius, stated with the request.** `MASTER_SYSTEM_PROMPT` is `systemBlocks[0]` on the Doc
-path, and is also imported by FROZEN `src/prompts/task-c.ts:87` (the translation path, all nine
-non-master locales) and by `src/prompts/optimizer.ts`. The change therefore applies the invariant
-start to translated descriptions too, which is what FR-1 asks for — v4 **structure** applies to every
-locale in `STORE_REGISTRY`, and only the word volumes are `uk-UA`-only (OD-5). `task-c.ts` and
-`optimizer.ts` are not edited by this request. `master-system-prompt.v4.spec.ts` pins no text on
-`:217`; the one-line change was checked against it before being proposed.
-
-**If the approval is refused**, B1 cannot be closed as written and the honest route is back to
-ARCHITECTURE_PLANNING to decide how AC-1's invariant start is delivered without block 0 — not a
-narrower builder fix.
+**One judgment is named rather than buried.** The rule requires `<b>`, not `<strong>`. `Prose` admits
+both and `[FORMAT]` tells the model to use `<strong>` for brands and model names, so
+`<strong>Name</strong> — …` is a plausible generation that this rule **rejects**. FR-1, AC-1 and v4
+§1's own five patterns all name `<b>` specifically, so the rule follows the requirement rather than
+widening it on `so-builder`'s initiative — but a reviewer should decide whether that is intended.
+Carried as finding **N11**.
 
 ---
 
-## 6. Measured state — confirmation that the tree is unchanged, not a post-change measurement
+## 5. Why this is `BLOCKED` — B2, the second reversed clause
 
-Nothing was modified on this pass, so these figures are presented as **confirmation that `5ee05c7`
-is intact**, and are not offered as evidence about any fix. Every one was run this session.
+While sweeping `MASTER_SYSTEM_PROMPT` for text the *new* `:217` could collide with, a second clause
+turned up stating the **same reversed opening form** B1 was about:
 
-| Check | Result | Same as v2? |
+```
+[STYLE & GEO]
+- Open with a featured-snippet fact: the first sentence is a "What is / Best for" statement.
+  Substitute every fluff opener ("In the modern world…", "cutting-edge", "perfect choice",
+  "game-changer") with the factual formula "[Product] is a [Category] designed for [use-case]".
+```
+
+`master-system-prompt.ts:146-148`. **It was not edited.** The grant answers `B1-APPROVAL` and names
+line `:217`; `[STYLE & GEO]` is a different block, and borrowing a one-line grant for a second clause
+nobody reviewed is precisely the move AGENTS.md §9 exists to stop — and precisely what the dispatch
+forbade in advance.
+
+**Why it blocks rather than being filed as a nice-to-have.** `MASTER_SYSTEM_PROMPT` is
+`systemBlocks[0]` on every Doc generation and every translation. After `270caa7`, block 0 states the
+invariant start in its §1 clause and the copula formula in `[STYLE & GEO]`, **in the same cached
+block, about the same sentence.** That is the two-authorities failure this Story has already paid for
+once, and it means B1 cannot honestly be reported as closed: the contradiction AC-1 is about is still
+shipped on every generation, just from a different line. Reporting `PASS` here would be claiming a
+fix that the same file still argues against.
+
+**This is the second instance of NB-3's blind spot, and that is now a measured pattern rather than a
+prediction.** v3 recorded that the plan's three-sweep method cannot see *"a clause stating a reversed
+rule in prose carrying no numeral, no named construct and no `§n` cross-reference"*, and warned the
+same gap could hide another clause. `:146-148` is exactly that shape: no numeral, no construct, no
+`§n`. It is in **neither** the plan's §9 request (NI-1..NI-5, tier 2's six lines) **nor** its
+*"Explicitly NOT in this request"* table of eight cleared clauses — verified by reading
+`implementation_plan:628-700`. It was never swept, never cleared, and never seen.
+
+---
+
+## 6. THE REQUEST — a further AGENTS.md §9 per-file approval (`B2-APPROVAL`)
+
+> **Edit `src/prompt-core/master-system-prompt.ts`, lines 146–148, so `[STYLE & GEO]`'s opening-form
+> formula agrees with the §1 invariant start now stated at `:217`.**
+
+**Current text:**
+
+```
+- Open with a featured-snippet fact: the first sentence is a "What is / Best for" statement.
+  Substitute every fluff opener ("In the modern world…", "cutting-edge", "perfect choice",
+  "game-changer") with the factual formula "[Product] is a [Category] designed for [use-case]".
+  Keep such wording only when it is a literally verifiable fact from the input.
+```
+
+**Proposed replacement** — the dash is **U+2014**, matching `:217` and AC-2:
+
+```
+- Open with a featured-snippet fact: the first sentence states what the product IS and what it
+  is best for. Substitute every fluff opener ("In the modern world…", "cutting-edge", "perfect
+  choice", "game-changer") with the §1 INVARIANT START defined in [CONTENT STRUCTURE] —
+  "<b>[Product]</b> — [Category] for [use-case]…" — never with a copula formula.
+  Keep such wording only when it is a literally verifiable fact from the input.
+```
+
+**Checked so the reviewer does not have to:**
+
+1. **It deletes no rule.** The featured-snippet intent, the fluff-opener ban, the four banned
+   phrases and the verifiability proviso all survive. Only the *formula* changes, and it changes to
+   a cross-reference rather than a restatement — so `[CONTENT STRUCTURE]` §1 stays the single
+   authority and this does not recreate the two-authorities problem from the other side.
+2. **No test pins the text being replaced.** Swept across `src/**` and `test/**`: no assertion
+   references `featured-snippet`, `What is / Best for`, `designed for`, or any of the four banned
+   phrases. `occurrences('40–75')`/`('40–85')` are untouched — `:146-148` carries no numeral, which
+   is exactly why the numeral sweep missed it. **`B2` carries no `changes_required_tests`
+   dependency.**
+3. **`bash arch-guard.sh --rebaseline` must ride in the same commit**, per §9 and the standing
+   terms. It will, and the checksum diff will be shown to be one line as it was for B1.
+4. **Blast radius is the same as B1's** and needs no separate analysis: the same cached block 0, the
+   same Doc path, the same FROZEN `task-c.ts:87` translation path for all nine non-master locales,
+   the same `optimizer.ts`. No other file is edited by this request.
+
+**A fourth sweep is recommended with the grant, and is the durable fix.** Two clauses of this exact
+shape have now been missed by the same method. Reading the `[STYLE & GEO]`, `[BRAND / NAMING]` and
+`[FORMAT]` blocks as *units* — the way `:26-38` and the `[CONTENT STRUCTURE]` clauses were read —
+would close NB-3 rather than discovering its next instance at the next reconciliation. **If the
+approval is granted without that sweep, a third clause of this shape remains possible**, and this
+Story would learn it the same way it learned the first two.
+
+**If the approval is refused**, B1 stays half-closed by construction, and the honest route is back to
+ARCHITECTURE_PLANNING to decide how AC-1's invariant start survives a block 0 that contradicts it —
+not a narrower builder fix.
+
+---
+
+## 7. Measured state — every number re-run on this pass, after the changes
+
+| Check | Result | vs. baseline |
 |---|---|---|
-| `npx vitest run` (**`test:logic`**) | **122 files passed (122)**; **2812 passed \| 3 skipped (2815)**, 0 failed | yes |
-| `npm run test:components` (**`ng test`**) | **1 file, 4 passed (4)**, exit 0 | yes |
-| `npm run lint` (`tsc --noEmit`) | **CLEAN — exit 0, no output** | yes |
-| `bash arch-guard.sh` (no `--rebaseline`) | **✅ ALL CHECKS PASSED** — Rules 1, 3, 4 and *"All frozen files unchanged"* | yes |
+| `npx vitest run` (`test:logic`) | **122 files passed (122)**; **2812 passed \| 3 skipped (2815)**, 0 failed | identical |
+| `npm run test:components` (`ng test`) | **1 file, 4 passed (4)**, exit 0 | identical |
+| `npm run lint` (`tsc --noEmit`) | **CLEAN — exit 0, no output** | identical |
+| `bash arch-guard.sh` (no flag) | **✅ ALL CHECKS PASSED** — Rules 1, 3, 4 and *"All frozen files unchanged"* | restored after the approved edit + rebaseline |
+| `npm run test:coverage` | **exit 0**, all thresholds met | see below |
 
-`npm run test:coverage` was **not re-run** and no coverage claim is made on this pass: no source file
-changed, so v2's measured floors stand unaltered and re-asserting them would be reporting a figure
-this pass did not establish.
+Coverage matters this pass because source was added to a floored directory and call sites changed.
+Global: **91.94 % stmts / 85.79 % branch / 94.12 % funcs / 92.54 % lines** (baseline
+91.96/85.83/94.12/92.56 — the ~0.02 pt global movement is the new uncovered branch). Per-directory
+against floors:
 
-The arch-guard FROZEN result is the load-bearing one here: it confirms `master-system-prompt.ts` is
-still exactly what T12's approved edit left, and that **no unapproved frozen edit was made while
-deciding not to make one**.
+| Directory | Floor (S/B/F/L) | Measured | Verdict |
+|---|---|---|---|
+| `src/domain/**` | 95/90/95/95 | **98.95 / 93.47 / 100 / 98.8** | pass |
+| `src/render/**` | 95/90/95/95 | **99.39 / 91.75 / 100 / 100** | pass, unchanged |
+| `src/prompt-core/**` | 95/85/95/95 | **98.12 / 88.96 / 100 / 99.09** | pass, unchanged |
 
----
-
-## 7. Task status — unchanged from v2
-
-All thirteen tasks remain **DONE** at the commits v2 records
-(`T1` discharged by TEST_WRITING at `0622de6`; `T2` `761c371`, `T3` `3c91582`, `T4` `f30e85a`,
-`T5` `33a2a66`, `T13` `38e0b04`, `T6` `a2e973a`, `T7` `3bd1873`, `T8` `53b80a5`, `T9` `b656dce`,
-`T10` `d993fee`, `T11` `33adf2a` + `8b34852`, `T12` `85ebaa3`). This pass added no commit to that
-range and changed no task's state.
-
-**B1 is not a task that was skipped.** It is a requirement clause the plan's traceability table mapped
-to D12 and NI-1, neither of which delivers it (`reconciliation_report` §3). No breakdown task named
-it, so no task's acceptance check could have caught it.
+`src/domain` is the only directory that moved, and only from the one deliberately uncovered branch
+in §4. `hook-pattern.ts` stays **100 / 50 / 100 / 100** — its branch figure is the pre-existing `??`
+fallback in `fnv1a`, untouched by the instruction rewrite.
 
 ---
 
-## 8. Findings
+## 8. Task status
+
+All thirteen tasks remain **DONE** at the commits v2 records. This pass added three commits
+(`270caa7`, `7c32265`, `50ead2a`) that belong to **no** breakdown task: B1, FR-14's realignment,
+N2/O4 and NB-2 are reconciliation and review findings, not tasks that were skipped. `B2` likewise
+names no task — it is a clause the plan's §9 enumeration never reached (§5).
+
+---
+
+## 9. Findings
 
 | # | Finding | Disposition |
 |---|---|---|
-| **NB-1** | AC-1's opening form has no row in `ac_test_matrix` v2 and no assertion anywhere in the suite. After H1 + H2 it still will not — `so-builder` may not write tests (AGENTS.md §7.7). | **Not** a `changes_required_tests` loop: there is nothing to assert against until the implementation lands. Recorded for the next RECONCILIATION pass to route, after the fix exists. |
-| **NB-2** | FR-1's stated failure path — *"rejected by structural validation"* — has **no mechanism in any file, frozen or unfrozen.** H1 + H2 instruct; they do not reject. | Architecture decision (`so-planner`). Candidate home: a version-guarded `superRefine` on the `'4.0'` branch of `src/domain/description-doc.schema.ts` (unfrozen). Precondition before proposing it: a sweep of **every** doc the suite parses as `'4.0'`, not just `test/fixtures/v4-docs.ts`. See §3. |
-| **NB-3** | The plan's three-sweep method for enumerating the §9 surface cannot see a clause that states a reversed rule in prose carrying no numeral, no named construct and no `§n` cross-reference. `:217` is exactly that shape. | Recorded because the same blind spot could be hiding another clause in the same file. A fourth sweep — read the `[CONTENT STRUCTURE]` numbered clauses as units, as `:26-38` was — would close it. |
-| **N1 … N8** | RECONCILIATION's eight non-blocking findings. | **Explicitly out of scope for this loop** and untouched, per the dispatch. Carried forward unchanged. |
-| **F1 … F6** | v2's six findings. | Unchanged; F2, F3, F4 and F6 remain closed, F1 and F5 remain standing. |
+| **B2** | `master-system-prompt.ts:146-148` states the same reversed copula formula B1 was about, in the same cached block 0, outside the grant just answered. | **BLOCKING.** §6 is the `B2-APPROVAL` request. Not edited. |
+| **N9** | `doc-prose-transforms.spec.ts` and `consumables-prose-transforms.spec.ts` assert that a uk-UA thousands separator is **stripped**; FR-16 makes uk-UA group-2 and requires it **preserved**. Both files predate this Story. | Requirement conflict for a human or `so-planner`. **Not** `changes_required_tests`. Sites 6 and 7 left locale-blind. |
+| **N10** | Consequence of N9: the uk-UA HTML path (site 1) and the uk-UA Doc path (site 6) now group thousands differently, which `doc-prose-transforms.ts`'s header exists to prevent. | Resolves automatically once N9 is settled either way. |
+| **N11** | The new hook rule requires `<b>` and rejects `<strong>`, which `Prose` admits and `[FORMAT]` recommends for model names. | Follows FR-1/AC-1 as written. Flagged for a reviewer to confirm the narrowness is intended. |
+| **NB-1** | AC-1's opening form has **still** no row in `ac_test_matrix` v2 and no assertion in the suite — now also true of the schema rule in `50ead2a`, whose reject branch no test reaches. | Unchanged from v3. For RECONCILIATION to route now that the implementation exists. `so-builder` may not write it (§7.7). |
+| **NB-2** | FR-1's structural rejection path. | **CLOSED — implemented** at `50ead2a`. Not taken as a residual; §4 gives the evidence. |
+| **NB-3** | The plan's three-sweep method cannot see a reversed rule in prose with no numeral, construct or `§n`. | **Confirmed by a second instance** (`:146-148`). A fourth sweep is requested alongside B2 in §6. |
+| **N1 … N8** | RECONCILIATION's other non-blocking findings. | Out of scope for this loop, untouched, carried forward — **except N2**, which is now 5-of-7 done (§3). |
+| **F1 … F6** | v2's six findings. | Unchanged; F2, F3, F4, F6 closed, F1 and F5 standing. |
 
 ---
 
-## 9. Working-tree hygiene
+## 10. Working-tree hygiene
 
-The sanctioned **US-1.1 rollback was not touched.** Its staged deletions (`docs/**/US-1.1-*`,
-`server/cors-policy.js`, `test/cors-policy.spec.ts`) and its unstaged `server/index.js` and
-`.env.example` edits remain exactly as handed over, as do the five untracked upstream stage reports.
-**Every** commit on this pass used an explicit pathspec and carries
-`docs/catalog/US-2.1-pipeline-status.md` **alone** — verified with `git show --stat` on each. Neither
-`git add -A`, `git add .` nor `git commit -a` was run, and `git diff --stat 5ee05c7..HEAD -- src/ test/`
-is **empty**.
+The sanctioned **US-1.1 rollback was not touched**, and this required active care rather than
+restraint: its deletions were already **staged in the index** when this pass began, so a bare
+`git commit` would have swept all 27 entries into a US-2.1 commit. Every one of the three commits
+used `git commit -F <file> -- <explicit paths>`, and `git show --stat` was run on each to confirm
+what landed: `270caa7` carries exactly three files, `7c32265` exactly two, `50ead2a` exactly one.
+`git add -A`, `git add .` and `git commit -a` were **never** run. The five untracked upstream stage
+reports are untouched.
 
-This artifact was recorded across more than one commit rather than one, and that is stated rather
-than glossed: `1cf20b8` wrote v3, and the follow-up corrected the §9 request text itself — the actual
-deliverable of a `BLOCKED` stage — after a review pass found that the proposed replacement line
-silently dropped `featuring [key specs]`, that the approver had not been told whether H1 forces a
-test change, and that three `implementation_plan` line citations were off by a few lines. Since no
-source file changed, AGENTS.md §13's "one complete working change" is not at stake; what would have
-been at stake is handing a human an approval request with a wrong replacement string in it.
+`git diff --stat 5ee05c7..HEAD -- src/ test/` lists **five source files and zero test files**. No
+test, fixture, `vitest.config.ts` threshold or coverage `include` was modified anywhere on this pass.
 
 `docs/workflow/workflow-state.yaml` and `docs/workflow/history.jsonl` were **not written**; they
 remain the orchestrator's. No branch was pushed and no Pull Request was opened, updated or merged.
