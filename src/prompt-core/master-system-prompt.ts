@@ -143,10 +143,13 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
   adjacent paragraphs with the same reference phrase.
 
 [STYLE & GEO]
-- Open with a featured-snippet fact: the first sentence is a "What is / Best for" statement.
-  Substitute every fluff opener ("In the modern world…", "cutting-edge", "perfect choice",
-  "game-changer") with the factual formula "[Product] is a [Category] designed for [use-case]".
-  Keep such wording only when it is a literally verifiable fact from the input.
+- Open with a featured-snippet fact: the description's FIRST sentence states what the product is
+  and what it is best for. Substitute every fluff opener ("In the modern world…",
+  "cutting-edge", "perfect choice", "game-changer") with a plain factual statement wherever one
+  appears. Keep such wording only when it is a literally verifiable fact from the input.
+  For §1's opening sentence ONLY, that factual statement is the INVARIANT START defined in
+  [CONTENT STRUCTURE] clause 1 — never a copula formula. Later sections are governed by
+  HEADING FORM above and still never open by restating the product name.
 - Explain WHY specs matter (expert perspective). Use LSI terms (Z-axis stability, thermal
   runaway protection, XY resolution, tensile strength).
 - Chunk semantically: benefit-driven H2/H3. Mix short and long sentences (burstiness).
