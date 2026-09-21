@@ -2,27 +2,13 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: US-1.1
-current_stage: PR_PREPARATION
+story: US-2.1
+current_stage: PR_CREATION
 status: IN_PROGRESS
-started_at: 2026-09-18T00:00:00Z
-updated_at: 2026-09-18T15:05:24Z
+started_at: 2026-09-19T08:28:31Z
+updated_at: 2026-09-21T12:24:17Z
 pending_human_gate: null
-stage_attempts:
-  PR_PREPARATION: 1
-track: server
+stage_attempts: {}
+track: prompt
 blockers: []
-note: >
-  PR_CREATION returned CHANGES_REQUIRED at pre-flight, before any push — nothing was pushed, no
-  Pull Request was created, no remote state changed. The branch is 17 commits ahead of
-  origin/main but only 6 are US-1.1; the other 11 are the P0–P6 SDD+TDD harness migration, which
-  has never been merged to main. The Pull Request would therefore render 91 files, +12278/-139,
-  not the +758/-1 pr_summary v1 describes, and four of its claims are false against that diff —
-  most seriously `npm run validate:harness` declared not applicable while 36 `.claude/skills/`
-  and `docs/workflow/` paths are in it, so a gate command was skipped on a premise the real diff
-  contradicts. Every claim was verified independently by so-orchestrator. Also recorded
-  (NBF-PR-1): local `main` was 3 commits behind origin/main, so every diffstat the upstream
-  stages reviewed was computed against a base the remote no longer has as its tip. This is not a
-  redraft so-pr-preparer can decide alone: whether the harness migration lands in its own Pull
-  Request first, or this Pull Request describes all 17 commits, is a human's call. Awaiting that
-  decision before PR_PREPARATION is re-dispatched.
+note: null

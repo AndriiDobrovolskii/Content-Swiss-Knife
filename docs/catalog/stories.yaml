@@ -4,10 +4,10 @@
 # (NOT_STARTED | IN_PROGRESS | COMPLETED | ARCHIVED), see docs/workflow/state-schema.md.
 version: 1
 stories:
-  - id: US-1.1
-    title: Restrict proxy CORS to an allow-list instead of every origin
-    slug: proxy-cors-allowlist
-    track: server
-    path: docs/stories/US-1.1-proxy-cors-allowlist.md
+  - id: US-2.1
+    title: Migrate product descriptions to the v4.0 UA content schema
+    slug: migrate-descriptions-to-v4-schemas
+    track: prompt
+    path: docs/stories/US-2.1-migrate-descriptions-to-v4-schemas.md
     state: IN_PROGRESS
-    created_at: 2026-09-18T00:00:00Z
+    created_at: 2026-09-19T00:00:00Z
