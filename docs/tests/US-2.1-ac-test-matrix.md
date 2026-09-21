@@ -1,12 +1,12 @@
 ---
 artifact: ac_test_matrix
 story: US-2.1
-version: 3
+version: 4
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-09-21T12:00:00Z
-updated_at: 2026-09-22T16:00:00Z
-supersedes: docs/tests/US-2.1-ac-test-matrix.md#2
+updated_at: 2026-09-23T12:00:00Z
+supersedes: docs/tests/US-2.1-ac-test-matrix.md#3
 inputs_consumed:
   - key: story
     version: 1
@@ -20,6 +20,8 @@ inputs_consumed:
     version: 2
   - key: pipeline_status
     version: 4
+  - key: reconciliation_report
+    version: 2
 open_decisions_blocking: false
 ---
 
@@ -57,6 +59,13 @@ as a characterization or baseline.
 > `2 failed | 120 passed (122) / 3 failed | 2809 passed | 3 skipped (2815)`; every other row named
 > in this matrix remains green. **No other row's file or test name changed at v3.**
 
+> **v4 — RECONCILIATION loop-back (`changes_required_tests`), attempt 1 of 3.** The reconciliation
+> report v2 found three implemented reject branches with no test that would notice their removal.
+> Rows are added below (marked `◆`: green on first run BECAUSE the implementation already exists,
+> and each shown to fail with its guard removed - see the test generation report section 10). No
+> existing row, file, test name or assertion changed. Full logic suite: `122 passed (122)` files,
+> `2828 passed | 3 skipped (2831)`, 0 failed.
+
 ---
 
 ## Acceptance criteria
@@ -70,6 +79,15 @@ as a characterization or baseline.
 | `src/prompt-core/master-system-prompt.v4.spec.ts` | `NI-1 / FR-1 … › states 40–85 in both the section map and the §1 clause` | FR-1 | ⬤ |
 | `src/render/render-description.v4.spec.ts` | `V3 … › FR-18 — renders an over-long §1 hook unchanged rather than truncating it` | FR-18, FR-19 | ○ |
 
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-1, FR-1 … › accepts `<b>{name}</b> — ` (space, em dash, space) followed by text` | FR-1 | ◆ |
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-1, FR-1 … › rejects a hook with no leading <b> at the path `hook`` (guard `HOOK_INVARIANT_START`) | FR-1 | ◆ |
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-1, FR-1 … › rejects a <strong> opener at `hook` (N11 ...)` | FR-1, N11 | ◆ |
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-1, FR-1 … › rejects an en dash (U+2013) in place of the em dash at `hook`` | FR-1 | ◆ |
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-1, FR-1 … › rejects a hyphen-minus in place of the em dash at `hook`` | FR-1 | ◆ |
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-1, FR-1 … › rejects an em dash without the surrounding spaces at `hook`` | FR-1 | ◆ |
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-1, FR-1 … › rejects a hook whose <b> is not the opening element at `hook`` | FR-1 | ◆ |
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-1, FR-1 … › leaves a 3.0 document with a non-conforming hook accepted (OD-2 ...)` | FR-1, OD-2 | ◆ |
+
 *The single-`<p>` shape is a renderer invariant (`render-description.ts:312` emits exactly one
 `<p>` for `doc.hook`) and the 40–85 range is **prompt-only** by FR-17.3 — so the word count itself
 is asserted as prompt text and as the absence of a rejection, never as an output measurement. That
@@ -82,6 +100,9 @@ is FR-18, not a gap.*
 | `src/render/render-description.v4.spec.ts` | `V3 … › renders each killer spec as <b>{label}: {value}</b> — {why} with a literal em dash` | FR-3 | ⬤ |
 | `src/render/render-description.v4.spec.ts` | `V3 … › never lets a killer-spec item glue its bold lead to the following letter` | FR-3 | ⬤ |
 | `src/domain/description-doc.schema.v4.spec.ts` | `V1 … › shows the over-ceiling shape is legal today because every individual bound still holds` (asserts `killerSpecs` length 4) | FR-3, FR-17 | ○ |
+
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-2, FR-3 … › rejects %i killer specs at `killerSpecs`` (2 and 5) | FR-3 | ◆ |
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-2, FR-3 … › accepts %i killer specs` (3 and 4) | FR-3 | ◆ |
 
 *The hook's "2–4 technical values" is declared a property of prose by FR-2 and carries no automated
 check — stated in the Specification, not conceded here.*
@@ -113,6 +134,9 @@ check — stated in the Specification, not conceded here.*
 | `src/prompts/task-a-doc.v4.spec.ts` | `V10 / FR-17.3 … › carries the §4 applications 80–250 volume` | FR-5, FR-17.3 | ⬤ |
 | `src/domain/description-doc.schema.v4.spec.ts` | `V1 … › accepts the base document every builder above is derived from` (4-item `applications.items` parses; the 4–8 bound is unchanged at `description-doc.schema.ts:174`) | FR-5 | ○ |
 | `test/render-conformance.v4.spec.ts` | `V14 … › produces zero validator errors` (the `'4.0'` conformance doc carries 4 application items across 20 store-locale pairs) | FR-5 | ○ |
+
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-4, FR-5 … › rejects %i application items at `applications.items`` (3 and 9) | FR-5 | ◆ |
+| `src/domain/description-doc.schema.v4.spec.ts` | `V16 / AC-4, FR-5 … › accepts %i application items` (4 and 8) | FR-5 | ◆ |
 
 *FR-5's item count is an existing bound this Story does not move — the task breakdown records AC-4
 as "T7 (bound unchanged)". The scenario-explanation clause is declared prose-only by FR-5.*

@@ -240,3 +240,91 @@ describe('V12 — FR-18: no generation is rejected for a word-count miss', () =>
     expect(issuesFor(doc).join('\n')).not.toMatch(/word|слов|length|too long|40|85/i);
   });
 });
+
+// ── V16 — RECONCILIATION loop-back: reject branches of rules that were already live ─────────────
+//
+// Added at TEST_WRITING attempt 1 of the RECONCILIATION loop-back (changes_required_tests). The
+// implementation for each rule below already exists, so these pass on first run; each was shown to
+// fail with its guard removed (see the test generation report v4, section 10).
+
+describe('V16 / AC-1, FR-1 — a 4.0 hook opens with the invariant start `<b>{name}</b> — `', () => {
+  const NAME = 'Ortur H20 20 W';
+  const withHook = (hook: string, version: '3.0' | '4.0' = '4.0'): unknown => {
+    const doc = version === '4.0' ? v4ValidDoc() : v3BaseDoc();
+    doc.hook = hook;
+    return doc;
+  };
+
+  it('accepts `<b>{name}</b> — ` (space, em dash, space) followed by text', () => {
+    expect(issuesFor(withHook(`<b>${NAME}</b> — лазерний гравер із потужністю 20 Вт.`))).toEqual([]);
+  });
+
+  it('rejects a hook with no leading <b> at the path `hook`', () => {
+    expect(pathsFor(withHook(`${NAME} — лазерний гравер із потужністю 20 Вт.`))).toEqual(['hook']);
+  });
+
+  it('rejects a <strong> opener at `hook` (N11: the strictness on <b> is human-confirmed)', () => {
+    expect(pathsFor(withHook(`<strong>${NAME}</strong> — лазерний гравер із потужністю 20 Вт.`))).toEqual(['hook']);
+  });
+
+  it('rejects an en dash (U+2013) in place of the em dash at `hook`', () => {
+    expect(pathsFor(withHook(`<b>${NAME}</b> – лазерний гравер із потужністю 20 Вт.`))).toEqual(['hook']);
+  });
+
+  it('rejects a hyphen-minus in place of the em dash at `hook`', () => {
+    expect(pathsFor(withHook(`<b>${NAME}</b> - лазерний гравер із потужністю 20 Вт.`))).toEqual(['hook']);
+  });
+
+  it('rejects an em dash without the surrounding spaces at `hook`', () => {
+    expect(pathsFor(withHook(`<b>${NAME}</b>—лазерний гравер із потужністю 20 Вт.`))).toEqual(['hook']);
+    expect(pathsFor(withHook(`<b>${NAME}</b> —лазерний гравер із потужністю 20 Вт.`))).toEqual(['hook']);
+  });
+
+  it('rejects a hook whose <b> is not the opening element at `hook`', () => {
+    expect(pathsFor(withHook(`Гравер <b>${NAME}</b> — лазерний гравер із потужністю 20 Вт.`))).toEqual(['hook']);
+  });
+
+  it('leaves a 3.0 document with a non-conforming hook accepted (OD-2: no cached shape is invalidated)', () => {
+    expect(issuesFor(withHook(`${NAME} — лазерний гравер із потужністю 20 Вт.`, '3.0'))).toEqual([]);
+    expect(issuesFor(withHook(`<strong>${NAME}</strong> – лазерний гравер.`, '3.0'))).toEqual([]);
+  });
+});
+
+describe('V16 / AC-2, FR-3 — `killerSpecs` holds 3 to 4 entries', () => {
+  const withKillerSpecs = (n: number): unknown => {
+    const doc = v4ValidDoc();
+    doc.killerSpecs = Array.from({ length: n }, (_, i) => ({
+      label: `Параметр ${i + 1}`,
+      value: `${i + 1} Вт`,
+      why: `Пояснення переваги ${i + 1}.`,
+    }));
+    return doc;
+  };
+
+  it.each([2, 5])('rejects %i killer specs at `killerSpecs`', n => {
+    expect(pathsFor(withKillerSpecs(n))).toEqual(['killerSpecs']);
+  });
+
+  it.each([3, 4])('accepts %i killer specs', n => {
+    expect(issuesFor(withKillerSpecs(n))).toEqual([]);
+  });
+});
+
+describe('V16 / AC-4, FR-5 — `applications.items` holds 4 to 8 entries', () => {
+  const withApplications = (n: number): unknown => {
+    const doc = v4ValidDoc();
+    doc.applications.items = Array.from({ length: n }, (_, i) => ({
+      scenario: `Сценарій ${i + 1}:`,
+      text: ` опис застосування ${i + 1}.`,
+    }));
+    return doc;
+  };
+
+  it.each([3, 9])('rejects %i application items at `applications.items`', n => {
+    expect(pathsFor(withApplications(n))).toEqual(['applications.items']);
+  });
+
+  it.each([4, 8])('accepts %i application items', n => {
+    expect(issuesFor(withApplications(n))).toEqual([]);
+  });
+});

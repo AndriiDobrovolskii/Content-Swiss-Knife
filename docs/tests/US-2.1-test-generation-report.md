@@ -1,12 +1,12 @@
 ---
 artifact: test_generation_report
 story: US-2.1
-version: 3
+version: 4
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-09-21T12:00:00Z
-updated_at: 2026-09-22T16:00:00Z
-supersedes: docs/tests/US-2.1-test-generation-report.md#2
+updated_at: 2026-09-23T12:00:00Z
+supersedes: docs/tests/US-2.1-test-generation-report.md#3
 inputs_consumed:
   - key: story
     version: 1
@@ -22,6 +22,8 @@ inputs_consumed:
     version: 2
   - key: pipeline_status
     version: 4
+  - key: reconciliation_report
+    version: 2
 open_decisions_blocking: false
 ---
 
@@ -774,3 +776,39 @@ was broadened to accept `<strong>`, and none was added.
   `git add -A`, no `git add .`, no `git commit -a`. Porcelain went 32 → 34 entries, the two added
   being this stage's modified spec files.
 - **No Pull Request pushed, opened or merged.**
+
+## 10. v4 - RECONCILIATION loop-back (`changes_required_tests`), attempt 1 of 3
+
+Finding source: `docs/reconciliation/US-2.1-reconciliation-report.md` v2 (NB-1 plus the AC-2 and AC-4
+count-bound gaps). Implementation already exists, so the new tests are green on first run; the
+evidence that they are not vacuous is mutation, below.
+
+### 10.1 What was written
+
+Block `V16` appended to `src/domain/description-doc.schema.v4.spec.ts` (16 tests: 8 hook, 4
+killerSpecs, 4 applications, parametrized cases counted; file went 24 -> 40 tests).
+
+### 10.2 First run against the live implementation
+
+`npx vitest run src/domain/description-doc.schema.v4.spec.ts` -> `1 passed (1) / 40 passed (40)`.
+No new test failed against the live implementation, so there is no finding to report.
+
+### 10.3 Anti-vacuity - each guard removed in turn, schema restored after each (git shows the schema unmodified)
+
+| Mutation of `src/domain/description-doc.schema.ts` (temporary) | Result |
+|---|---|
+| `if (!HOOK_INVARIANT_START.test(doc.hook))` replaced by `if (false)` | 6 failed / 34 passed: no-leading-`<b>`, `<strong>`, en dash, hyphen, missing spaces, non-leading `<b>` |
+| `HOOK_INVARIANT_START = /^/` (accept anything) | the same 6 failed |
+| regex widened to accept `<strong>` | 1 failed: the `<strong>` test (N11) |
+| regex widened to accept en dash | 1 failed: the en-dash test |
+| `killerSpecs` `.min(3).max(4)` removed | 2 failed: 2 and 5 rejected |
+| `applications.items` `.min(4).max(8)` removed | 2 failed: 3 and 9 rejected |
+
+The accept tests and the 3.0 test are boundary/negative-control tests and stay green by design.
+
+### 10.4 Full suite
+
+`npx vitest run` -> `Test Files 122 passed (122)`, `Tests 2828 passed | 3 skipped (2831)`, 0 failed
+(previous 2812 passed + 16 new = 2828). `npm run lint` (`tsc --noEmit`)
+is clean. Only `*.spec.ts` changed under `src/`; no implementation, fixture, coverage config or
+existing assertion was touched.

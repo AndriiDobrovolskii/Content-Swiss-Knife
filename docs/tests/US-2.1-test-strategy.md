@@ -1,12 +1,12 @@
 ---
 artifact: test_strategy
 story: US-2.1
-version: 3
+version: 4
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-09-21T12:00:00Z
-updated_at: 2026-09-22T16:00:00Z
-supersedes: docs/tests/US-2.1-test-strategy.md#2
+updated_at: 2026-09-23T12:00:00Z
+supersedes: docs/tests/US-2.1-test-strategy.md#3
 inputs_consumed:
   - key: story
     version: 1
@@ -22,10 +22,29 @@ inputs_consumed:
     version: 2
   - key: pipeline_status
     version: 4
+  - key: reconciliation_report
+    version: 2
 open_decisions_blocking: false
 ---
 
 # Test Strategy — US-2.1: Migrate product descriptions to the v4.0 UA content schema
+
+## 0b. v4 — RECONCILIATION loop-back: three reject branches, one file
+
+`RECONCILIATION` returned `CHANGES_REQUIRED` with loop-back key `changes_required_tests`
+(resolves to `TEST_WRITING`). Three rules were already implemented but no test would notice their
+removal: the `HOOK_INVARIANT_START` guard (AC-1 / FR-1, N11 `<b>`-only strictness human-confirmed),
+`killerSpecs` `.min(3).max(4)` (AC-2) and `applications.items` `.min(4).max(8)` (AC-4).
+
+Scope of v4: one appended block `V16` in `src/domain/description-doc.schema.v4.spec.ts` (logic
+runner; pure Zod, no Angular). Assertions are written from the criteria: reject paths are asserted
+exactly (`['hook']`, `['killerSpecs']`, `['applications.items']`), boundaries on both sides. The
+hook tests are 4.0-only; a 3.0 document with a non-conforming hook stays accepted (OD-2). Nothing
+outside `*.spec.ts` changed; no existing assertion touched. These tests are green on first run by
+construction; the anti-vacuity evidence (guard removed -> red) is in the report section 10.
+
+Not tested, deliberately: the 3.0 behaviour of the two count bounds (they are unconditional and
+predate this Story; the reconciliation asked for 4.0 only).
 
 ## 0a. v3 — the N9 ruling, and the one thing it changed
 
