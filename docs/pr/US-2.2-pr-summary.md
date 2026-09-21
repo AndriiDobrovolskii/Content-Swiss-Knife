@@ -1,12 +1,12 @@
 ---
 artifact: pr_summary
 story: US-2.2
-version: 1
+version: 2
 status: DRAFT
 owner: so-pr-preparer
 created_at: 2026-09-21T20:00:00Z
-updated_at: 2026-09-21T20:00:00Z
-supersedes: null
+updated_at: 2026-09-21T20:30:00Z
+supersedes: docs/pr/US-2.2-pr-summary.md@v1
 inputs_consumed:
   - key: implementation_report
     version: 2
@@ -27,9 +27,9 @@ open_decisions_blocking: false
 > only on a separate explicit instruction. Approving `HUMAN_PR_APPROVAL` did not carry that
 > approval (AGENTS.md §10).
 
-> **Branch name flag:** the working branch is still `feat/US-2.1-migrate-descriptions-to-v4-schemas`
-> although US-2.1 is archived and this work is US-2.2. It is deliberately NOT renamed here; the
-> human decides whether to rename or accept before the PR is opened.
+> **Branch:** `feat/US-2.2-simplified-content-template-schemas`. The earlier `feat/US-2.1-…` branch
+> was already merged as #125, so this work was moved to a new US-2.2 branch. The US-2.1 archive commit
+> is landing separately (#126) and this branch is rebased onto `main` afterwards.
 
 ## Title
 
@@ -88,8 +88,8 @@ Real results, carried from `docs/verification/US-2.2-quality-gate-report.md` v2.
 - [x] `bash arch-guard.sh` — exit 0; all 5 frozen checksums match after re-baseline (3 lines changed, see below)
 - [x] `npm run validate:harness --strict` — 0 errors (22 stages, 23 artifacts, 16 skills)
 - [ ] **LIVE Spare parts generation check (human condition, before merge):** run a real Spare parts generation and confirm the CTA/FAQ numbering conflict causes no model errors. Story/simplified blocks say CTA = §8, FAQ = §9; the frozen master prompt and `task-faq.ts` say CTA = §9, FAQ = §8. Confirm the model emits the CTA, emits no FAQ, and the JSON keys map correctly.
-- [ ] **One-time human check of the F1 golden diff:** `test/fixtures/golden/` is untracked so has no HEAD baseline. Manually confirm that only 3 entries were re-captured and that only the two `CONSUMABLES MODE` notes were removed (text deletion only).
-- [ ] **Commit obligation:** `.arch-guard-checksums` must be committed in the SAME commit as the 3 OD-9-approved frozen-file edits (`src/prompts/task-a.ts`, `src/prompts/task-c.ts`, `src/utils/output-validator.ts`).
+- [ ] **One-time human check of the F1 golden diff:** `test/fixtures/golden/` is new in this PR, so the diff shows the file whole with no pre-Story baseline. Manually confirm that only 3 entries were re-captured and that only the two `CONSUMABLES MODE` notes were removed (text deletion only).
+- [x] **Commit obligation:** `.arch-guard-checksums` is committed in the SAME commit as the 3 OD-9-approved frozen-file edits (`src/prompts/task-a.ts`, `src/prompts/task-c.ts`, `src/utils/output-validator.ts`) — the `feat(US-2.2)` commit.
 
 ## Rules checked that nothing automates
 
@@ -106,11 +106,11 @@ Real results, carried from `docs/verification/US-2.2-quality-gate-report.md` v2.
 
 - **CTA/FAQ numbering conflict** (non-blocking, human decision; see live-check item). Options recorded by the verifier: accept as is; renumber simplified blocks to master numbering and update pinned tests; or separately approve a master-prompt edit.
 - **Golden re-capture (F1)** is not independently diffable (see checklist).
-- **Branch name** still says US-2.1 (flagged, not renamed).
+- **Branch name:** now `feat/US-2.2-simplified-content-template-schemas` (the old US-2.1 branch was already merged).
 - Strict null checks are off; optional-paragraph readers were hand-audited by the builder.
 - Large deletion footprint (about 2884 deletions) is the authorized OD-14 removal of the consumables pipeline and its fixtures.
 - AC-8 wording assertion is permissive and OD-6 flag persistence is pinned by source text (reconciliation N3/N4, non-blocking).
-- No commits exist yet for this Story: all changes are in the working tree and should be committed as complete working changes per AGENTS.md §7.8/§13.
+- Commits: two — one `feat(US-2.2)` commit (code, tests, fixtures, frozen-file edits and the re-baselined `.arch-guard-checksums`) and one `docs(US-2.2)` commit (Story, spec, plan, test and review artifacts, workflow state).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
@@ -125,8 +125,8 @@ https://claude.ai/code/session_01J1uyVrQHHnrYYcoprtrbnP
 | Quality gate has real output for all six commands | Yes |
 | No unresolved blocking security finding | Yes (none) |
 | Every `AC-n` cleared all three reconciliation levels | Yes (AC-1..AC-16) |
-| Commits contain only what `task_breakdown` named | Not assessable: nothing committed yet; verifier found the diff matches T1-T17 and OD-14 |
-| No fixup-run, no `--no-verify`, no phase batching | N/A, no commits yet; working tree is one Story only |
-| Frozen-file change has same-commit re-baseline | Satisfiable, NOT yet true (uncommitted); listed as merge/commit condition |
-| No secret in any commit, including removed ones | Yes: diff scan for key patterns clean; no commits yet |
+| Commits contain only what `task_breakdown` named | Yes: the `feat(US-2.2)` commit holds only T1-T17 and OD-14 work (verifier confirmed the diff matches); the `docs(US-2.2)` commit holds Story artifacts only |
+| No fixup-run, no `--no-verify`, no phase batching | Yes: no fixup commits, no `--no-verify`, code and docs are separate commits for one Story |
+| Frozen-file change has same-commit re-baseline | Yes: `.arch-guard-checksums` is in the same commit as the frozen-file edits |
+| No secret in any commit, including removed ones | Yes: diff scan for key patterns clean; the commits were scanned as part of the diff |
 | `.env.example` current with placeholders | Yes: no setting added, no diff |
