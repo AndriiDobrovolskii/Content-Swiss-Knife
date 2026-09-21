@@ -1,0 +1,17 @@
+<select
+  class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 outline-none transition-all cursor-pointer text-sm text-slate-800 dark:text-slate-200 {{ selectClass() }}"
+  (change)="onSelect($event)">
+  @for (option of options(); track option.value) {
+    <option [value]="option.value" [selected]="value() === option.value" class="dark:bg-slate-800">{{ option.label }}</option>
+  }
+</select>
+@if (showFunctionalityToggle()) {
+  <label class="flex items-center gap-2 mt-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+    <input
+      type="checkbox"
+      class="rounded border-slate-300 dark:border-slate-600"
+      [checked]="functionalityChecked()"
+      (change)="onToggle($event)">
+    <span>{{ labels().includeFunctionality }}</span>
+  </label>
+}

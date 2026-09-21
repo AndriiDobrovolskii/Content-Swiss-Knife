@@ -379,14 +379,14 @@ export function validateSentenceLengthDoc(
   const check = makeSentenceChecker(band, locale, context, issues, seen);
 
   check(doc.hook, 'hook');
-  doc.killerSpecs.forEach((k, i) => check(k.why, `killerSpecs[${i}].why`));
+  (doc.killerSpecs ?? []).forEach((k, i) => check(k.why, `killerSpecs[${i}].why`));
 
-  doc.keyBenefits.forEach((b, i) => checkBlock(b, `keyBenefits[${i}]`, check));
-  doc.functionality.forEach((s, i) => checkSubsection(s, `functionality[${i}]`, check));
-  (doc.applications.blocks ?? []).forEach((b, i) => checkBlock(b, `applications.blocks[${i}]`, check));
+  (doc.keyBenefits ?? []).forEach((b, i) => checkBlock(b, `keyBenefits[${i}]`, check));
+  (doc.functionality ?? []).forEach((s, i) => checkSubsection(s, `functionality[${i}]`, check));
+  (doc.applications?.blocks ?? []).forEach((b, i) => checkBlock(b, `applications.blocks[${i}]`, check));
   if (doc.compatibility) checkSubsection(doc.compatibility, 'compatibility', check);
 
-  doc.applications.items.forEach((it, i) => check(it.text, `applications.items[${i}].text`));
+  (doc.applications?.items ?? []).forEach((it, i) => check(it.text, `applications.items[${i}].text`));
   doc.packageContents?.items.forEach((item, i) => check(item, `packageContents.items[${i}]`));
 
   // specs.categories[].rows[].value is intentionally NOT scanned — see the SCOPE note above.

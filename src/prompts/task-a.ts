@@ -1,7 +1,9 @@
 import { ProductInput, ImageManifestEntry, CONTENT_TEMPLATES } from '../app/types';
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { getStore, isExpert3dStore, isCenter3dPrintStore, CONSUMABLES_SIMPLIFIED_SCHEMA, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY, buildDeliveryRegionBlock, MASTER_LOCALE, NO_LEAKED_REASONING_CLAUSE, resolveOfficialBrand } from '../prompt-core/constants';
+import { getStore, isExpert3dStore, isCenter3dPrintStore, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY, buildDeliveryRegionBlock, MASTER_LOCALE, NO_LEAKED_REASONING_CLAUSE, resolveOfficialBrand } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
+import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
+import { buildSimplifiedHtmlOverlay } from './simplified-template-blocks';
 import { productShort } from '../prompt-core/product-name-core';
 import { extractVideoEmbeds } from '../utils/video-manifest';
 
@@ -24,19 +26,6 @@ one sentence, emit a short lead-in <p> followed by a <ul> with one <li> per item
 a single long sentence. Applies to §3 and §5 body text only — never to the §1 hook, the §2
 or §7 tables, or the §9 closing. Two items stay inside the sentence. Do not place a <figure>
 directly after a </ul>: an image still needs its own lead-in <p>.`;
-
-// ── Consumables instruction (replaces §1–§9 entirely) ─────────────────────
-
-const TASK_A_CONSUMABLES_INSTRUCTION =
-  `TASK A — GENERATE BASE-LANGUAGE HTML DESCRIPTION (CONSUMABLES MODE)
-OUTPUT: pure HTML body only (no JSON, no Markdown, no code fences).
-${NO_LEAKED_REASONING_CLAUSE}
-This product is a CONSUMABLE MATERIAL (filament / resin / adhesive).
-Apply the CONSUMABLES SIMPLIFIED SCHEMA below. Do NOT use Schema v3.0 §1–§9.
-No Killer Specs table. No Functionality section. No CTA-TRUST block.
-Hard visible-text limit: ≤ 5500 characters (strip all HTML tags before counting).
-
-${CONSUMABLES_SIMPLIFIED_SCHEMA}`;
 
 // ── Image-manifest helper ──────────────────────────────────────────────────
 
@@ -102,10 +91,8 @@ Build src as {base}{brandFolder}/{modelFolder}/{filename}. ${example ? 'Example:
  *  images were present to crowd it out (EXPERT3D XGRIDS L2 Pro, 2026-07-29).
  *
  *  Returns '' when the source has no embed, so the overwhelmingly common no-video case leaves
- *  userContent byte-identical and the prompt cache unaffected. Consumables mode has no §3 and a
- *  2,500-char ceiling, so it gets no video block either. */
-function buildVideoBlock(input: ProductInput, isConsumables: boolean): string {
-  if (isConsumables) return '';
+ *  userContent byte-identical and the prompt cache unaffected. */
+function buildVideoBlock(input: ProductInput): string {
   const embeds = extractVideoEmbeds(input.description);
   if (embeds.length === 0) return '';
   const lines = embeds
@@ -126,12 +113,12 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
   const isExpert3d = isExpert3dStore(input.website.name);
   const isC3d = isCenter3dPrintStore(input.website.name);
   const baseLanguage = baseLanguageOverride ?? (isUs ? 'American English (en-US)' : 'European English (en-GB)');
-  const isConsumables = input.templateId === 'consumables-resin';
+  const simplifiedId = isSimplifiedTemplateId(input.templateId) ? input.templateId : undefined;
 
-  // Template hint is skipped for consumables — the simplified schema is self-contained
-  // and the heading/focus fields from CONTENT_TEMPLATES are irrelevant in consumables mode.
+  // Template hint is skipped for a simplified template — its overlay below is self-contained
+  // and the heading/focus fields from CONTENT_TEMPLATES are irrelevant for it (US-2.2).
   let template = '';
-  if (!isConsumables && (input.templateId || input.customTemplate)) {
+  if (!simplifiedId && (input.templateId || input.customTemplate)) {
     const t = CONTENT_TEMPLATES.find(x => x.id === input.templateId);
     const s = { ...(t?.structure ?? {}), ...(input.customTemplate ?? {}) };
     template = `\n[TEMPLATE] title=${s.titlePattern ?? ''}; headings=${s.headingStructure?.join(' → ') ?? ''}; focus=${s.bodyFocus ?? ''}; keywords=${s.keywordStrategy ?? ''}`;
@@ -141,9 +128,13 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
     ? `\n[USER INSTRUCTIONS]\n${input.customInstructions.trim()}`
     : '';
 
-  // Reinforcement in the user turn so the model can't miss the mode switch.
-  const consumablesMode = isConsumables
-    ? '\n[CONSUMABLES MODE ACTIVE] Apply §C1–§C6 only. Hard limit ≤ 5500 stripped chars.'
+  // Simplified content template (US-2.2): the paragraph set, v4 ranges and soft ceiling ride in the
+  // user turn, so systemBlocks (and prompt caching) stay untouched.
+  const simplifiedOverlay = simplifiedId
+    ? `\n${buildSimplifiedHtmlOverlay(simplifiedId, {
+        includeFunctionality: input.includeFunctionality,
+        hasSpecs: Boolean(input.specs?.trim()),
+      })}`
     : '';
 
   const userContent =
@@ -157,15 +148,14 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
 [Official Brand]: ${resolveOfficialBrand(input.name, input.website.name) ?? 'None — do not claim official representation for this product'}
 ${buildDeliveryRegionBlock(input.website.name, MASTER_LOCALE)}
 [Supplemental Content]: ${input.supplementalContent || 'None provided.'}
-${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input, isConsumables)}${template}${custom}${consumablesMode}
+${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input)}${template}${custom}${simplifiedOverlay}
 
 Generate the description in ${baseLanguage}. Primary keyword "${input.name}" appears ~1× per section in BODY PROSE only — headings are excluded from that count and follow [HEADING FORM], which forbids the full name outright.`;
 
   return {
     systemBlocks: [
       { text: MASTER_SYSTEM_PROMPT, cache: true },
-      // Cache key differs per schema type — correct behaviour, two independent cache slots.
-      { text: isConsumables ? TASK_A_CONSUMABLES_INSTRUCTION : TASK_A_INSTRUCTION, cache: true },
+      { text: TASK_A_INSTRUCTION, cache: true },
       // EXPERT3D-only ToV voice block. Appended as a cached suffix so the shared
       // master+task prefix stays byte-stable (cache hit) for all other stores.
       ...(isExpert3d ? [{ text: EXPERT3D_TOV_BASE_OVERLAY, cache: true }] : []),

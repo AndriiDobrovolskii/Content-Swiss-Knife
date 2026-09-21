@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../services/content-orchestrator.service';
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
-import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, CONTENT_TEMPLATES, TemplateStructure, ImageManifestEntry, TabDescriptor } from './types';
+import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, TemplateStructure, ImageManifestEntry, TabDescriptor } from './types';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
@@ -16,6 +16,8 @@ import { SourceInputComponent } from './components/source-input/source-input.com
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { HtmlEditorComponent } from './components/html-editor/html-editor.component';
 import { ModelSettingsComponent } from './components/model-settings/model-settings.component';
+import { ContentTemplateSelectComponent } from './components/content-template-select/content-template-select.component';
+import { TEMPLATE_LABELS } from './content-template-labels';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
 import { FeedbackContextService } from '../services/feedback-context.service';
 import { buildFeedbackUrl } from '../utils/feedback-url';
@@ -175,8 +177,7 @@ const TRANSLATIONS = {
     getKeywords: 'Get Suggestions',
     analyzingKeywords: 'Analyzing...',
     contentTemplate: 'Content Template',
-    selectTemplate: 'Select Template...',
-    consumablesTemplateName: 'Consumables / Accessories',
+    ...TEMPLATE_LABELS.en,
     customTemplate: 'Custom Template Structure',
     titlePattern: 'Title Pattern',
     headingStructure: 'Heading Structure (comma separated)',
@@ -345,8 +346,7 @@ const TRANSLATIONS = {
     getKeywords: 'Отримати ідеї',
     analyzingKeywords: 'Аналіз...',
     contentTemplate: 'Шаблон контенту',
-    selectTemplate: 'Оберіть шаблон...',
-    consumablesTemplateName: 'Витратні матеріали / Аксесуари',
+    ...TEMPLATE_LABELS.uk,
     customTemplate: 'Власна структура шаблону',
     titlePattern: 'Патерн заголовка',
     headingStructure: 'Структура підзаголовків (через кому)',
@@ -391,7 +391,7 @@ const TOOL_LABEL: Record<AppMode, string> = {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent, ModelSettingsComponent],
+  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent, ModelSettingsComponent, ContentTemplateSelectComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent {
@@ -439,10 +439,11 @@ export class AppComponent {
   generatorUseThinking = signal<boolean>(true); // Default to true as per original behavior
 
   // --- TEMPLATE STATE ---
-  availableTemplates = CONTENT_TEMPLATES;
   selectedTemplateId = signal<string>('');
   customTemplate = signal<Partial<TemplateStructure>>({});
   showCustomTemplate = signal<boolean>(false);
+  /** Accessories only (US-2.2 FR-9): include §3. Unchecked by default, reset on any template change, never persisted. */
+  includeAccessoriesFunctionality = signal<boolean>(false);
 
   // --- OPTIMIZER STATE ---
   optimizerInputHtml = signal<string>('');
@@ -810,9 +811,9 @@ export class AppComponent {
     this.slugSelectedWebsite.set(this.websiteOptions.find(w => w.name === name) ?? null);
   }
 
-  onTemplateChange(event: Event) {
-    const templateId = (event.target as HTMLSelectElement).value;
+  onTemplateChange(templateId: string) {
     this.selectedTemplateId.set(templateId);
+    this.includeAccessoriesFunctionality.set(false);
     if (!templateId) {
       this.showCustomTemplate.set(false);
     }
@@ -883,6 +884,7 @@ export class AppComponent {
       supplementalContent: this.supplementalContent(),
       customInstructions: this.customInstructions(),
       templateId: this.selectedTemplateId() || undefined,
+      includeFunctionality: this.selectedTemplateId() === 'accessories' ? this.includeAccessoriesFunctionality() : undefined,
       customTemplate: Object.keys(this.customTemplate()).length > 0 ? this.customTemplate() : undefined,
       imageManifest: manifest.length > 0 ? manifest : undefined,
       brandFolder: this.genBrandFolder().trim() || undefined,

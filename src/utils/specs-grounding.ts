@@ -382,7 +382,7 @@ export function validateSpecsGroundingDoc(
   const labelAnchorTrusted = options.labelAnchorTrusted ?? true;
   const issues: ValidationIssue[] = [];
   if (!sourceSpecs?.trim()) return issues;
-  if (doc.specs.categories.length === 0) return issues; // nothing in scope → no-op
+  if (!doc.specs || doc.specs.categories.length === 0) return issues; // nothing in scope (or §7 omitted) → no-op
 
   // COUNT-PARITY PRECONDITION — see validateSpecsGrounding's own comment for the full rationale.
   // countActualSpecRowsDoc has no -1 "DOMParser unavailable" sentinel to guard against, unlike its

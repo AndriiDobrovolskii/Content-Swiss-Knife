@@ -674,8 +674,8 @@ export const SENTENCE_LENGTH_BANDS: Record<string, SentenceLengthBand> = {
   // were the tightest and were exactly where real generations overshot — 21/22/22 words against the
   // uk-UA ceiling of 20 (Ortur H20 20 W, Center 3D Print, 2026-07-27). The model cannot count its
   // own words, so the target must sit far enough below the ceiling that a normal overshoot still
-  // lands under it. Same doctrine as task-a.ts's consumables rule ("AIM LOW (~4700) to leave
-  // headroom; budget words, do not measure").
+  // lands under it. Same doctrine as an earlier length rule: aim low to leave
+  // headroom; budget words, do not measure.
   //
   // Ceilings are acceptance criteria and deliberately NOT moved — lowering one would hide the
   // problem rather than fix it. hero/faq are untouched: both already carry far more headroom and
@@ -851,152 +851,13 @@ count abbreviation change.`;
 
 /**
  * Shared core rule for `<b>Label:</b> continuation` bullets, wherever that pattern appears —
- * the master's §2b/§4 (regular mode) and the consumables schema's §C3/§C5 below. Defined once so
- * the exact wording can't drift between the HTML base-generation path and the JSON Doc pipeline
- * (`task-a-consumables-doc.ts`), which restates its own instruction text rather than inheriting
- * this file's prose.
+ * the master's §2b/§4. Defined once so the exact wording can't drift between the HTML
+ * base-generation path and the JSON Doc pipeline.
  */
 export const COLON_CAPITALIZATION_RULE =
   `put a space after the colon; for uk-UA, ru-UA, and pl-PL output the continuation starts with a
 lowercase letter (the colon introduces an explanation of the label, not a new sentence); for de-DE
 and all English variants, keep the default capitalized start.`;
-
-/**
- * Simplified HTML schema for consumable products (filament / resin / adhesive).
- * Used by task-a.ts when templateId === 'consumables-resin'.
- * Overrides Schema v3.0 §1–§9. All other master-prompt rules stay in effect:
- * unit cyrillization, number separators, no H1, no microdata, anti-anglicism.
- * Hard visible-text limit: 5 500 characters (HTML tags stripped).
- */
-export const CONSUMABLES_SIMPLIFIED_SCHEMA =
-  `[CONSUMABLES SIMPLIFIED SCHEMA — overrides Schema v3.0 §1–§9]
-Product is a consumable material (filament / resin / adhesive). Use this schema exclusively.
-IGNORE: §1 Hook, §2 Killer Specs, §3 Functionality, §4 Applications, §5 Compatibility,
-        §6 Package Contents, §9 CTA-TRUST from the master [CONTENT STRUCTURE].
-KEEP ALL OTHER MASTER RULES: unit cyrillization, number separators, no H1, no microdata, anti-anglicism.
-
-TARGET LENGTH: ~4700 visible characters (HTML tags stripped). HARD CEILING: 5500 — validation FAILS above this.
-You cannot count your own characters, so AIM LOW (~4700) to leave headroom; budget words, do not measure.
-Translations into German/Russian/Spanish expand 10–30% vs. English — that headroom is what keeps them under 5500.
-Write efficiently — never pad to a minimum length.
-
-SECTIONS — emit in this exact order, no extras:
-
-§C1 HOOK  (plain <p>, 40–60 words)
-  What the material is + base polymer/chemistry. Core differentiating property.
-  Primary workflow it serves. No heading. No <section> wrapper.
-  ANTI-REPETITION: identify the descriptive root in the Product Name (e.g. "Reflective"/"Marker",
-  "Filament"/"PLA"). State that concept ONCE. If you need to reference it again in the same
-  paragraph, use a different word or a pronoun — NEVER a cognate of the same root (e.g. do not
-  follow "Reflective Markers" with "retroreflective… marker-based"). Before finalizing, re-read the
-  hook and rewrite if any root/cognate appears twice.
-  BODY-WIDE ANTI-REPETITION (§C1–§C6): the same rule applies across the WHOLE description, not just
-  the hook. Within any one bullet or paragraph, do not repeat a content root in successive sentences
-  (e.g. "виявлення… виявлення", "діапазону… діапазону", "range… range"). Vary with domain synonyms:
-  detection→capture/registration, range→reach/distance, target/marker→point/reference point. Spec
-  values are exempt — never alter a number or unit to avoid repetition.
-
-§C2 FEATURES & MATERIAL PROPERTIES  (<h2> + <ul>, 4–6 items)
-  en H2: "Features & Material Properties"
-  Each <li>: <b>[Feature label.]</b> [1–2 sentences — concrete outcome, no marketing fluff.]
-
-§C3 APPLICATIONS  (<h2> + <ul>, 3–4 items)
-  en H2: "Applications"
-  Each <li>: <b>[Scenario]:</b> [1 sentence on what this material enables here.]
-
-§C4 PRINT SETTINGS + SPEC TABLES  (one <h2> per parameter group)
-  en H2: "Print Settings" (required if printing parameters are provided)
-  Optional: one-sentence print tip (e.g. active-cooling recommendation).
-  Table: <div class="table-responsive"><table><tbody>
-    <tr><td>[Parameter]</td><td>[Value + unit]</td></tr>
-  </tbody></table></div>
-  PARAMETER LABELS: each [Parameter] must read as a self-contained noun phrase ("Inner diameter",
-  "Markers per sheet", "Total markers") — never a clipped sentence fragment.
-  COUNT/QUANTITY ROWS (MANDATORY): a quantity row is any row whose Value is a count of discrete
-  items (markers/sheets/pieces/units per sheet/pack/box, or a grand total). EVERY such row MUST
-  carry the count abbreviation in its Value cell — no bare integers. Apply it uniformly: if the
-  total row has it, the per-sheet and per-pack rows MUST have it too. Localized form:
-    en "15 pcs" · uk/ru "15 шт." (WITH trailing period) · pl "15 szt." · de "15 Stk" ·
-    es-ES "15 uds" · es-MX "15 pzas" · pt-PT "15 un.".
-  Self-check before output: scan every quantity row; if any shows a bare number, add the abbreviation.
-  If mechanical properties provided → add separate <h2> + table. en H2: "Mechanical Properties"
-  If physical properties provided   → add separate <h2> + table. en H2: "Physical Properties"
-  NO <thead>. NO <h3>. NEVER invent parameter values.
-
-§C5 STORAGE GUIDELINES  (<h2> + <ul>, 2–3 items)
-  en H2: "Storage Guidelines"
-  Each <li>: <b>[Label]:</b> [concrete storage/handling instruction.]
-
-COLON CAPITALIZATION (§C3, §C5 only — §C2's label ends in "." and correctly starts a new sentence):
-  when a bullet's bold label ends with ":", ${COLON_CAPITALIZATION_RULE}
-BOLD-LABEL SEPARATION (§C2, §C3, §C5 — any bullet's label): whichever side of </b> carries the
-  space, it must be an actual character — terminal punctuation alone is not a substitute (a
-  browser inserts no gap at a tag boundary).
-
-§C6 CLOSING CTA  (<hr> + plain <p>, 1–2 sentences)
-  Product name + store name + availability/shipping.
-  One internal category link where contextually natural. No <p class="cta">. No H2.
-
-FORBIDDEN for consumables:
-  §2 Killer-Specs 3-column table · §3 Functionality H2/H3 blocks · §5 Compatibility section
-  §6 Package Contents · <section class="specs"> · itemprop / microdata · <h3> · <p class="cta">`;
-/**
-* Translation overlay for consumables. Appended to whichever task-c instruction is
-* selected when templateId === 'consumables-resin'. Stops the translator from re-inflating
-* the simplified §C1–§C6 structure into a printer/scanner-style description, and carries the
-* 5500-char limit into every target language (DE/RU expand vs EN). Single source of truth.
-*/
-export const CONSUMABLES_TRANSLATION_OVERLAY =
-  `[CONSUMABLES MODE — TRANSLATION OVERLAY — these rules WIN over any [LABELS]/closing-H2 instruction above]
-The source uses the CONSUMABLES SIMPLIFIED SCHEMA (§C1–§C6), NOT Schema v3.0.
-Translate it AS-IS. Do NOT restructure it into a printer/scanner-style description.
-
-- NO "What's in the box" / Package Contents section exists here. If a [LABELS] line mentions one, IGNORE it — emit none.
-- The closing CTA is a plain <p> after <hr> (§C6). DO NOT convert it into a "Why buy … from [Store]?" H2 block. Keep it a short closing paragraph.
-- DO NOT add Killer-Specs 3-column table, Functionality, or Compatibility sections — they are absent from the source.
-- Translate only the §C2/§C3/§C4/§C5 H2 headings actually present.
-- COLON CAPITALIZATION in §C2/§C3/§C5 items ("<b>Label:</b> continuation"): for uk-UA, ru-UA,
-  pl-PL — lowercase the first letter after the colon (it introduces an explanation of the bold
-  label, not a new sentence; house style — uk "Великі об'єкти: автомобільні панелі…" NOT
-  "…: Автомобільні…"). For de-DE keep the German default (capitalize when a complete clause
-  follows — that is correct German orthography). For en-GB/en-ES/en-US keep the English default
-  (capitalized, as a sentence).
-- SPEC-TABLE PARAMETER RE-NOMINALIZATION: translating a §C4 quantity [Parameter] (EN "Markers per
-  sheet" / "Sheets per pack" / "Total markers") word-for-word often lands in the genitive/partitive
-  case and reads like a clipped sentence — WRONG, e.g. uk "Маркерів на аркуші", ru "Маркеров на
-  листе". Rephrase as a clean nominative noun phrase, adding a quantity head-noun if needed: uk
-  "Кількість маркерів на аркуші" / "Кількість аркушів у наборі" / "Загальна кількість маркерів";
-  ru "Количество маркеров на листе" / "Количество листов в наборе" / "Общее количество маркеров";
-  pl "Liczba znaczników na arkusz" / "Liczba arkuszy w opakowaniu" / "Łączna liczba znaczników".
-  Apply the same nominative-phrase check to every other §C4 label in the target language.
-- COUNT-ABBREVIATION CONSISTENCY: if the source table's quantity rows carry the count abbreviation
-  inconsistently, FIX it on translation — every quantity row gets the same localized abbreviation,
-  not just the total row. Forms: uk/ru "шт." (WITH trailing period), pl "szt.", de "Stk",
-  es-ES "uds", es-MX "pzas", pt-PT "un.". Add it to any quantity row that shows a bare integer.
-- BODY-WIDE ANTI-REPETITION also applies to the translation: do not let a content root repeat in
-  successive sentences of any §C1–§C6 bullet/paragraph; vary with target-language synonyms. Never
-  alter spec values to do so.
-- ANTI-ANGLICISM (target language only — applies to uk-UA, ru-UA, pl-PL, de-DE, es-ES, es-MX):
-  before finalizing, scan the draft for unnecessary English loanwords/calques and replace with the
-  native term, using this classification:
-    BAD (jargon/anglicism/morphological calque) — e.g. uk "ретровідбиваючі" (mechanical "-ючі" calque,
-    not a real Ukrainian adjective form), "прінт", "софт".
-    GOOD (native/normative equivalent) — uk "світловідбивальний" or, in technical/ДСТУ context,
-    "світлоповертальний" (replaces "ретровідбиваючі"); "друк" (not "прінт"); "ПЗ" (not "софт").
-    ALLOWED (no direct native equivalent — established technical/industry term, keep as-is):
-    filament, nozzle, extruder, scanner/skaner/сканер, USB, Wi-Fi.
-  Prefer the literary/normative adjective form over inventing a hybrid calque of the English or
-  Russian root. When in doubt whether a term is BAD or ALLOWED, default to the native form.
-  EDITOR-LOCKED TERMS (uk-UA, confirmed against gold-edited reference, takes precedence over any
-  literal translation): "reference point(s)" → "реперна(-і) точка(-и)" (NOT "опорна точка" /
-  "референсна точка"); "digitisation/digitalization" → "оцифрування" (already standard — do not
-  drift to "діджитизація"/"цифровізація"). Apply the same precedence logic in ru/pl/de/es when an
-  equivalent editor-confirmed term exists in the glossary.
-
-HARD LIMIT: translated visible text (HTML tags stripped) MUST stay at or below 4700 characters (ceiling 5500).
-Since you cannot count characters, COMPRESS structurally: keep §C2/§C3/§C5 bullets to one short sentence each, drop adjectives. Never pad, never add sentences.
-If the target language expands vs. the source, COMPRESS §C2/§C3/§C5 prose to stay under the limit. Never pad, never add sentences.
-Preserve every spec-table row and numeric value verbatim (only localize unit/separator as instructed above).`;
 
 /**
  * EXPERT3D Tone of Voice — BASE-GENERATION overlay (Task A only, EXPERT3D).
@@ -1178,7 +1039,7 @@ what the mandatory brand-guarantee sentence and the source actually state:
 /**
  * EXPERT3D Tone of Voice — TRANSLATION overlay (Task C, EXPERT3D locales).
  * Appended to whichever task-c instruction is selected — same mechanism as
- * CONSUMABLES_TRANSLATION_OVERLAY. Carries the per-locale FORMAL register, the es-ES
+ * the other Task C overlays. Carries the per-locale FORMAL register, the es-ES
  * forbidden-calque list and the uk-UA forbidden-word stems into every EXPERT3D language
  * version and preserves the brand voice through translation. These rules WIN over any
  * conflicting [STYLE]/register line above (notably the legacy "use tú" line — B2B industrial
@@ -1377,22 +1238,6 @@ only. The master rule named on the left is REPLACED by the form on the right:
    exactly as SIGNATURE MOVE #2 already requires ("Лазерний модуль", "Безпека", "Електроніка та
    підключення"). Emit every <h3> the master schema calls for.
 
-CONSUMABLES MODE (§C1-§C6): when the [CONSUMABLES SIMPLIFIED SCHEMA] is active instead of Schema
-v3.0, this voice still governs its list items. The schema's SECTIONS, ORDER, TABLES, H2 set and
-FORBIDDEN list are untouched — only the item grammar changes:
-- §C2 items "<b>[Feature label.]</b>": the bold opener becomes VERB-LED (it already ends in a
-  period, so only the noun-to-verb shift is needed).
-- §C3 items "<b>[Scenario]:</b>": verb-led, ending in a period. No colon. Same form as OVERRIDE #1.
-- §C5 items "<b>[Label]:</b>": a bold IMPERATIVE opener ending in a period, matching SIGNATURE
-  MOVE #3 — storage and handling instructions are advice, so the imperative is the natural register
-  there. No colon.
-- BUDGET GUARD: §C is capped at 5500 characters. In this mode each item takes the verb/imperative
-  opener plus EXACTLY ONE supporting sentence, not SIGNATURE MOVE #1's 1-3. If the budget is still
-  tight, cut supporting detail — never drop a required §C section or a spec value.
-The COLON CAPITALIZATION rule in the consumables overlay describes the form these items USED to
-take; with no colon left in §C2/§C3/§C5 it simply has nothing to apply to. Do not reintroduce a
-colon in order to satisfy it.
-
 SCOPE OF THIS ToV: it changes WORDING and BULLET GRAMMAR only. Section order, <hr> placement,
 spec-table structure and row count, figure/video markup, the no-H1 and no-microdata rules, unit
 localization, number formatting, product-name localization, the per-locale sentence-length budget
@@ -1417,8 +1262,7 @@ SELF-CHECK BEFORE OUTPUT:
 
 /**
  * Center 3D Print ToV — TRANSLATION overlay (Task C, C3D locales). Appended to whichever task-c
- * instruction is selected — same mechanism as CONSUMABLES_TRANSLATION_OVERLAY /
- * EXPERT3D_TOV_TRANSLATION_OVERLAY.
+ * instruction is selected — same mechanism as EXPERT3D_TOV_TRANSLATION_OVERLAY.
  *
  * Its primary job is preventing RE-NOMINALIZATION: translating a verb-led opener into Polish or
  * German pulls hard toward a noun label ("Вміщує великі деталі." -> "Pojemność komory:" /
@@ -1482,13 +1326,6 @@ in this section, because "Zastosowanie:" / "Anwendung:" read as natural section 
   GOOD <li><b>Schneidet Acrylschilder ohne Nachschliff. </b>Das 20-W-Modul…</li>
 Keep the SAME number of <li> as the source — list-item counts are checked deterministically, not
 merely requested.
-
-CONSUMABLES MODE (§C1-§C6): if the consumables translation overlay is also present, its §C2/§C3/§C5
-items arrive VERB-LED (or, in §C5, imperative-led) and period-terminated, because this store's base
-voice already replaced their colon-label form. Translate them as they arrive. Its COLON
-CAPITALIZATION rule describes the form those items USED to take — with no colon left in §C2/§C3/§C5
-it has nothing to apply to, so do not reintroduce a colon in order to satisfy it. Every other
-consumables rule (section set, tables, the 5500-character cap) still applies unchanged.
 
 Direct second-person address stays confined to the CTA — do not spread it elsewhere.
 

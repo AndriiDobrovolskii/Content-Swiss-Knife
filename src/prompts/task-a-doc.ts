@@ -25,6 +25,8 @@ import { buildPromptA } from './task-a';
 import type { PromptPayload } from '../prompt-core/payload';
 import type { HookPattern } from '../prompt-core/hook-pattern';
 import type { ProductInput } from '../app/types';
+import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
+import { buildSimplifiedDocInstruction, buildSimplifiedRunFacts } from './simplified-template-blocks';
 
 /**
  * The output contract, replacing TASK_A_INSTRUCTION's "pure HTML body only".
@@ -164,16 +166,32 @@ WORD VOLUMES — writing targets that shape the draft. They are guidance for len
  * `[0]` (master) and any trailing store overlay untouched. Index 1 is the task block by the
  * PromptPayload convention documented in payload.ts, and the spec asserts the surrounding blocks
  * survive so a change to that layout fails loudly rather than silently dropping a store's voice.
+ *
+ * US-2.2 — a simplified content template (`filaments-resins-powders`, `accessories`, `spare-parts`)
+ * swaps in a per-template task instruction (a fixed string per template, so it stays cacheable) and
+ * appends the per-run facts (empty specs, the Accessories checkbox, the conditional §5) to the
+ * UNCACHED userContent. The frozen base is called with `templateId: undefined` so its legacy
+ * `[TEMPLATE]` hint never double-instructs the Doc path. With no template (Full description, an
+ * empty, unknown or stale id) the output is byte-identical to what it was before the Story.
  */
 export function buildPromptADoc(
   input: ProductInput,
   baseLanguageOverride?: string,
   hookPattern?: HookPattern,
 ): PromptPayload {
-  const base = buildPromptA(input, baseLanguageOverride);
+  const templateId = isSimplifiedTemplateId(input.templateId) ? input.templateId : undefined;
+  const base = buildPromptA(templateId ? { ...input, templateId: undefined } : input, baseLanguageOverride);
+  const taskInstruction = templateId ? buildSimplifiedDocInstruction(templateId) : TASK_A_DOC_INSTRUCTION;
+  const runFacts = templateId
+    ? buildSimplifiedRunFacts(templateId, {
+        includeFunctionality: input.includeFunctionality,
+        hasSpecs: Boolean(input.specs?.trim()),
+      })
+    : '';
+  const userBase = templateId ? `${base.userContent}\n\n${runFacts}` : base.userContent;
   return {
     systemBlocks: base.systemBlocks.map((block, i) =>
-      i === 1 ? { text: TASK_A_DOC_INSTRUCTION, cache: true } : block,
+      i === 1 ? { text: taskInstruction, cache: true } : block,
     ),
     // The FR-14 hook pattern rides in userContent and NOWHERE else. payload.ts documents this as
     // the one block that is dynamic and never cached, which is exactly what a per-product value
@@ -187,7 +205,7 @@ export function buildPromptADoc(
     // existing two-argument call sites, and T8 is a separate task on a different track; a required
     // parameter here would break the build between the two commits.
     userContent: hookPattern
-      ? `${base.userContent}\n\n[§1 HOOK PATTERN]\n${hookPattern.instruction}`
-      : base.userContent,
+      ? `${userBase}\n\n[§1 HOOK PATTERN]\n${hookPattern.instruction}`
+      : userBase,
   };
 }

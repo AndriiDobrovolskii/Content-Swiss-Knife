@@ -1,6 +1,8 @@
 import { PromptPayload } from '../prompt-core/payload';
 import { UNIT_LOCALIZATION_RULES, TRANSLATOR_LANGUAGES, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 import { UA_TRANSLATION_STYLE_GUIDE } from '../prompt-core/ua-translation-style-guide';
+import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
+import { SIMPLIFIED_TRANSLATION_CLAUSE } from './simplified-template-blocks';
 
 /**
  * Standalone Translator tool — a PURE, store-agnostic translation prompt builder.
@@ -127,7 +129,7 @@ function normalizeLabel(label: string): string {
  */
 export type TranslationContext = 'user-facing-content' | 'internal-matching-only';
 
-function buildInstruction(targetLangLabel: string, context: TranslationContext): string {
+function buildInstruction(targetLangLabel: string, context: TranslationContext, templateId?: string): string {
   const config = LANG_CONFIG[normalizeLabel(targetLangLabel)];
   const heading = config
     ? `TRANSLATE THE INPUT INTO ${config.name.toUpperCase()}.`
@@ -141,7 +143,10 @@ function buildInstruction(targetLangLabel: string, context: TranslationContext):
   const styleGuide = context === 'user-facing-content' && normalizeLabel(targetLangLabel) === 'ukrainian'
     ? `\n\n${UA_TRANSLATION_STYLE_GUIDE}`
     : '';
-  return `${heading}${notes}\n\n${UNIT_LOCALIZATION_RULES}${styleGuide}`;
+  // US-2.2 FR-19: a simplified template's master omits paragraphs on purpose. Full description (no id,
+  // or an unknown one) adds nothing, so its bytes are unchanged.
+  const simplifiedClause = isSimplifiedTemplateId(templateId) ? `\n\n${SIMPLIFIED_TRANSLATION_CLAUSE}` : '';
+  return `${heading}${notes}\n\n${UNIT_LOCALIZATION_RULES}${styleGuide}${simplifiedClause}`;
 }
 
 /**
@@ -150,16 +155,19 @@ function buildInstruction(targetLangLabel: string, context: TranslationContext):
  * @param targetLangLabel  one of TRANSLATOR_LANGUAGES (case-insensitive); an unknown label falls
  *   back to a safe generic instruction instead of throwing.
  * @param context  what the output is for — see TranslationContext. Gates the Ukrainian style guide.
+ * @param templateId  optional simplified content template id (US-2.2): adds the "translate only what
+ *   the master holds" clause. Undefined, empty or unknown ids leave the prompt byte-identical.
  */
 export function buildTranslatePrompt(
   text: string,
   targetLangLabel: string,
   context: TranslationContext,
+  templateId?: string,
 ): PromptPayload {
   return {
     systemBlocks: [
       { text: TRANSLATOR_SYSTEM_BLOCK, cache: true },
-      { text: buildInstruction(targetLangLabel, context), cache: true },
+      { text: buildInstruction(targetLangLabel, context, templateId), cache: true },
     ],
     userContent: text,
   };

@@ -128,8 +128,8 @@ function figurePositions(doc: ProductDescriptionDoc): Map<number, number> {
  * image); every later one is lazy. See image-figure.ts and output-validator.ts's
  * `lcp-image-lazy` / `image-not-lazy` pair.
  *
- * Exported so render-consumables.ts can reuse it rather than re-deriving the same src-building and
- * lazy-loading rule a second time — see that file's header comment.
+ * Exported so a sibling renderer can reuse it rather than re-deriving the same src-building and
+ * lazy-loading rule a second time.
  */
 export function renderFigure(f: Figure, position: number, ctx: RenderContext): string {
   const lazy = position > 0 ? ' loading="lazy"' : '';
@@ -240,7 +240,7 @@ function renderSubsection(
 function renderKillerSpecs(doc: ProductDescriptionDoc, ctx: RenderContext): string {
   const [paramHeader, benefitHeader] =
     getRenderRules(ctx.storeName ?? '').killerSpecsHeaders(doc.locale) ?? KILLER_SPECS_HEADERS['en-gb'];
-  const rows = doc.killerSpecs
+  const rows = (doc.killerSpecs ?? [])
     .map(s => `<tr><td>${esc(s.label)}: ${esc(s.value)}</td><td>${prose(s.why)}</td></tr>`)
     .join('\n');
   return (
@@ -275,12 +275,12 @@ function renderKillerSpecs(doc: ProductDescriptionDoc, ctx: RenderContext): stri
  */
 function renderKeyBenefitsV4(doc: ProductDescriptionDoc): string {
   const headings = V4_SECTION_HEADINGS[doc.locale.toLowerCase()] ?? V4_SECTION_HEADINGS['en-gb'];
-  const specItems = doc.killerSpecs.map(
+  const specItems = (doc.killerSpecs ?? []).map(
     s => `<li><b>${esc(s.label)}: ${esc(s.value)}</b> — ${prose(s.why)}</li>`,
   );
   // Only `bullets` Blocks carry items, and for `'4.0'` the schema admits no other kind — the
   // filter is what makes that guarantee explicit rather than a cast.
-  const benefitItems = doc.keyBenefits.flatMap(b =>
+  const benefitItems = (doc.keyBenefits ?? []).flatMap(b =>
     b.kind === 'bullets' ? b.items.map(i => `<li><b>${esc(i.lead)}</b>${prose(i.text)}</li>`) : [],
   );
   const items = [...specItems, ...benefitItems].join('\n');
@@ -296,12 +296,36 @@ function renderKeyBenefitsV4(doc: ProductDescriptionDoc): string {
  * A multi-valued parameter renders comma-joined in a single cell. It used to be a nested
  * <ul><li>; the store's template replaced that, and master §7 was changed to match.
  */
-function renderSpecs(heading: string, categories: SpecCategory[], locale: string): string {
+function renderSpecs(
+  heading: string,
+  categories: SpecCategory[],
+  locale: string,
+  flat = false,
+): string {
   const [paramHeader, valueHeader] =
     SPEC_TABLE_HEADERS[locale.toLowerCase()] ?? SPEC_TABLE_HEADERS['en-gb'];
   const thead =
     `<thead><tr><td style="${SPEC_PARAM_COL_STYLE}"><b>${esc(paramHeader)}</b></td>` +
     `<td><b>${esc(valueHeader)}</b></td></tr></thead>`;
+
+  if (flat) {
+    // US-2.2 FR-8: one table, one <tbody>, no <h3> and no category title row. Total and lossless: with
+    // several categories the rows are concatenated in order (a defensive shape only; the completeness
+    // gate rejects a multi-category simplified Doc before it is rendered).
+    const flatRows = categories
+      .flatMap(c => c.rows)
+      .map(r => {
+        const value = Array.isArray(r.value) ? r.value.map(esc).join(', ') : esc(r.value);
+        return `<tr><td>${esc(r.label)}</td><td>${value}</td></tr>`;
+      })
+      .join('\n');
+    return (
+      `<section class="specs">\n<h2>${esc(heading)}</h2>\n` +
+      `<div class="table-responsive"><table class="${SPEC_TABLE_CLASS}" style="${SPEC_TABLE_STYLE}">\n` +
+      `${thead}\n<tbody>\n${flatRows}\n</tbody>\n` +
+      `</table></div>\n</section>`
+    );
+  }
 
   const blocks = categories.map(c => {
     const rows = c.rows
@@ -340,7 +364,11 @@ function renderSpecs(heading: string, categories: SpecCategory[], locale: string
  * holds — there is simply one section to follow. Order is unchanged:
  * §1 → §2 → §3 → §4 → §5? → §6? → §7 → §9.
  */
-export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext): string {
+export function renderDescription(
+  doc: ProductDescriptionDoc,
+  ctx: RenderContext,
+  opts?: { flatSpecs?: boolean },
+): string {
   const positions = figurePositions(doc);
   const block = (b: Block) => renderBlock(b, doc, positions, ctx);
 
@@ -349,29 +377,39 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
   // figurePositions, the <section>/<hr> discipline — is version-blind and stays that way.
   const isV4 = doc.schemaVersion === '4.0';
 
+  // US-2.2 FR-18: an absent paragraph is skipped without markup. §2 renders when either half is present.
+  const hasSection2 = Boolean(doc.killerSpecs?.length) || Boolean(doc.keyBenefits?.length);
+
   const parts: string[] = [
     `<p>${prose(doc.hook)}</p>`,
     // §2. The `'3.0'` arm is the §2a table followed by the keyBenefits Blocks, byte-for-byte what
     // it always was — leak L6's detector is test/render-reconciliation.spec.ts on both corpus items.
-    ...(isV4
-      ? [renderKeyBenefitsV4(doc)]
-      : [renderKillerSpecs(doc, ctx), ...doc.keyBenefits.map(block)]),
-    ...doc.functionality.map(s => renderSubsection(s, doc, positions, ctx)),
+    ...(hasSection2
+      ? isV4
+        ? [renderKeyBenefitsV4(doc)]
+        : [
+            ...(doc.killerSpecs?.length ? [renderKillerSpecs(doc, ctx)] : []),
+            ...(doc.keyBenefits ?? []).map(block),
+          ]
+      : []),
+    ...(doc.functionality ?? []).map(s => renderSubsection(s, doc, positions, ctx)),
   ];
 
   // §4 Applications — heading, then any lead-in blocks, then the item list. Real artifacts put a
   // paragraph and a figure between the <h2> and the <ul>; the list itself keeps the same
   // <li><b>lead</b> text</li> shape as key benefits, with the model supplying its own punctuation
   // after the scenario label.
-  const applicationItems = doc.applications.items
-    // Same rule as renderBullets: no injected whitespace — see its comment.
-    .map(i => `<li><b>${esc(i.scenario)}</b>${prose(i.text)}</li>`)
-    .join('\n');
-  parts.push([
-    `<h2>${esc(doc.applications.heading)}</h2>`,
-    ...(doc.applications.blocks ?? []).map(block),
-    `<ul>\n${applicationItems}\n</ul>`,
-  ].join('\n'));
+  if (doc.applications) {
+    const applicationItems = doc.applications.items
+      // Same rule as renderBullets: no injected whitespace — see its comment.
+      .map(i => `<li><b>${esc(i.scenario)}</b>${prose(i.text)}</li>`)
+      .join('\n');
+    parts.push([
+      `<h2>${esc(doc.applications.heading)}</h2>`,
+      ...(doc.applications.blocks ?? []).map(block),
+      `<ul>\n${applicationItems}\n</ul>`,
+    ].join('\n'));
+  }
 
   if (doc.compatibility) {
     parts.push(renderSubsection(doc.compatibility, doc, positions, ctx));
@@ -396,7 +434,11 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
   }
 
   // §7 is the only <section>, and the only <hr> follows it.
-  parts.push(`${renderSpecs(doc.specs.heading, doc.specs.categories, doc.locale)}\n<hr>`);
+  if (doc.specs) {
+    parts.push(
+      `${renderSpecs(doc.specs.heading, doc.specs.categories, doc.locale, opts?.flatSpecs === true)}\n<hr>`,
+    );
+  }
 
   // §9. For `'4.0'` the heading is ASSEMBLED from the per-locale template (FR-11, D6) and
   // `doc.cta.heading` is discarded — which is what makes FR-11's "a heading off the template fails

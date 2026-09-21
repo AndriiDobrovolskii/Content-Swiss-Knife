@@ -325,7 +325,7 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
       // So on a Doc artifact this ladder resolves in one field-scoped pass; on an HTML artifact
       // the field-scoped pass harmlessly no-ops and the SECOND pass reaches block-scoped, which
       // does the real work via whichever gate's `repairBlocks: this.blockRepairer(...)` is wired
-      // (Task C, the consumables master, FAQ — see content-orchestrator.service.ts).
+      // (Task C, FAQ — see content-orchestrator.service.ts).
       ladder: ['field-scoped', 'block-scoped'],
       fieldInstruction: (current, issue) => [
         'Rewrite this heading so it satisfies the constraint below. Return ONLY the corrected',

@@ -79,9 +79,9 @@ describe('validateSpecCategoryShape', () => {
       expect(issues).toEqual([]);
     });
 
-    it('for consumables, whose simplified §C4 schema forbids <h3> by design', () => {
+    it('for a simplified template, whose flat single-category §7 has no <h3> by design (US-2.2 FR-8)', () => {
       const html = specsSection([['Характеристики', 15]]);
-      expect(validateSpecCategoryShape(html, 'HTML (base)', { templateId: 'consumables-resin' }))
+      expect(validateSpecCategoryShape(html, 'HTML (base)', { templateId: 'filaments-resins-powders' }))
         .toEqual([]);
       // …and still fires for the same HTML under any other template, proving the exemption is
       // what silenced it rather than the input being harmless.
@@ -232,9 +232,9 @@ describe('validateSpecCategoryShapeDoc', () => {
       expect(detail).not.toContain('<table>');
     });
 
-    it('for consumables, whose simplified §C4 schema forbids categories by design', () => {
+    it('for a simplified template, whose flat single-category §7 is correct by design (US-2.2 FR-8)', () => {
       const doc = docWithCategories([{ title: 'Характеристики', rows: rows('Х', 15) }]);
-      expect(validateSpecCategoryShapeDoc(doc, 'Doc (base)', { templateId: 'consumables-resin' })).toEqual([]);
+      expect(validateSpecCategoryShapeDoc(doc, 'Doc (base)', { templateId: 'accessories' })).toEqual([]);
       expect(validateSpecCategoryShapeDoc(doc, 'Doc (base)', { templateId: 'printer' })).toHaveLength(1);
     });
   });
