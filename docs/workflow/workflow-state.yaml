@@ -3,12 +3,12 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-2.2
-current_stage: PR_CREATION
-status: IN_PROGRESS
+current_stage: COMPLETED
+status: COMPLETED
 started_at: 2026-09-21T13:30:40Z
-updated_at: 2026-09-21T18:28:30Z
+updated_at: 2026-09-21T19:00:39Z
 pending_human_gate: null
 stage_attempts: {}
 track: prompt
 blockers: []
-note: "Approver condition before merge: live Spare parts generation check to confirm the CTA/FAQ numbering conflict (Story CTA=§8/FAQ=§9 vs frozen master prompt CTA=§9/FAQ=§8) causes no model errors. Confirm the F1 golden diff at the PR. .arch-guard-checksums must be committed with the frozen-file edits."
+note: "PR #127 verified by human. Awaiting merge: COMPLETED gate requires the PR to be merged into main before /so:approve (then ARCHIVED). Human items before merge: live Spare parts check, F1 golden diff check."
