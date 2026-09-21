@@ -125,7 +125,7 @@ Doc path and the translation path alike — positively instructing the model to 
 way. That is the paper-over, not the fix.
 
 **The approved plan reaches the same conclusion, in its own words**, in the §9 request's *"Why the
-edit cannot be avoided"* paragraph (`implementation_plan:690-696`):
+edit cannot be avoided"* paragraph (`implementation_plan:691-696`):
 
 > `MASTER_SYSTEM_PROMPT` is `systemBlocks[0]` on the Doc path and is cached; `TASK_A_DOC_INSTRUCTION`
 > explicitly says *"Every [CONTENT STRUCTURE] rule about WHAT each section contains still applies"* …
@@ -134,6 +134,8 @@ edit cannot be avoided"* paragraph (`implementation_plan:690-696`):
 > a v3 rule contradicts block 1 and the schema at once.**
 
 The plan wrote that to justify granting the approval it got. It applies to `:217` word for word.
+(The plan cites that sentence as `task-a-doc.ts:41`; it sits at **`:44`** in the tree today, because
+T7 grew the file above it. Same sentence, verified byte-for-byte.)
 
 ### Path B — the frozen edit, under a new approval
 
@@ -204,7 +206,7 @@ The grant (`history.jsonl`, HUMAN_PLAN_APPROVAL, 2026-09-21) reads:
 Both lists are enumerated in `implementation_plan` v2's §9 request, and `:217` is in neither.
 
 **NI-1 is the one invariant that touches this clause, and it is a word range only**
-(`implementation_plan:629-631`):
+(`implementation_plan:632-634`):
 
 > **NI-1 (FR-1).** No clause states a §1 hook word range other than **40–85**.
 > *Evidence:* `:27` (section map), `:216` (clause head), `:218` (**inside the `:216` clause** — the
@@ -213,7 +215,7 @@ Both lists are enumerated in `implementation_plan` v2's §9 request, and `:217` 
 The evidence cites `:216` and `:218` — the two lines carrying `40–75` — and skips `:217` between them.
 NI-2..NI-5 govern §2, §3, §9 and §6 respectively and do not reach §1 at all.
 
-**Tier 2 is a closed table of exactly six lines** (`implementation_plan:662-679`): `:42`, `:103`,
+**Tier 2 is a closed table of exactly six lines** (`implementation_plan:662-674`): `:42`, `:103`,
 `:153-154`, `:221`, `:270-272`, `:309`. It is not an open-ended "anything that contradicts v4" clause
 — its own preamble scopes it to clauses that *"reference a construct the edit removes or renames"*,
 and it is introduced *"so the human can see that one approval covers two severities"*. `:217` states
@@ -248,17 +250,27 @@ exactly the property the human approved.
    Open with: "[Product] is a [Category] designed for [use-case], featuring [key specs]."
 ```
 
-**Proposed replacement** (the em dash is literal **U+2014**, matching the U+2014 already pinned by
-AC-2's rendered killer-spec form):
+**Proposed replacement** (the dash in the quoted shape is a literal **U+2014** em dash, matching the
+U+2014 already pinned by AC-2's rendered killer-spec form — not U+2013):
 
 ```
    Open with the INVARIANT START (v4 §1 «Незмінний старт»), which never varies: the product
-   name wrapped in <b>…</b>, then a space, an em dash and a space, then the product type or
-   category — "<b>[Product]</b> — [Category] for [use-case]". The §1 patterns vary what
-   follows the em dash; none of them varies the start.
+   name wrapped in <b>…</b>, then a space, an em dash, a space, and then the product type or
+   category, its use-case and its key specs. The shape is exactly
+   "<b>[Product]</b> — [Category] for [use-case], featuring [key specs]."
+   The §1 patterns vary what follows the em dash; none of them varies the start.
 ```
 
-**Three things the reviewer should not have to check, checked here:**
+**This deletes no content element — it repairs the opening form only.** The current `:217` carries
+three things: the opening form, that the hook names the category and use-case, and that it names the
+key specs. The replacement keeps all three and changes only the first. That is deliberate: a
+one-line opening-form repair is what is being asked for, and quietly dropping `featuring [key specs]`
+inside a frozen file would turn it into an unannounced content deletion. (`:220-222` separately
+governs *how* numbers may appear in the hook, and FR-2's "2–4 technical values" is declared
+unenforced prose by the Specification, so the key-specs element could arguably go — but not on this
+approval, and not without saying so.)
+
+**Four things the reviewer should not have to check, checked here:**
 
 1. **`<b>` does not breach the same clause's "plain `<p>`, zero attributes."** That phrase governs
    *attributes*, and `<b>` is an attribute-free inline tag. `[FORMAT]` already instructs
@@ -268,6 +280,15 @@ AC-2's rendered killer-spec form):
    `<` of the §1 hook paragraph"* is true of `<p><b>Name</b> — …`.
 3. **`bash arch-guard.sh --rebaseline` must ride in the same commit as the edit**, per the original
    grant's own terms and AGENTS.md §9. It will.
+4. **No test pins the sentence being replaced, so H1 needs no test change.** Checked directly rather
+   than by keyword grep: `master-system-prompt.v4.spec.ts`'s NI-1 block (`:51-62`) contains exactly
+   two assertions about §1 — `occurrences('40–75')` is `0` and `occurrences('40–85') >= 2`. The
+   replacement introduces no `40–75` and touches neither `40–85` occurrence (they live at `:216` and
+   `:218`, which this request does not alter). No assertion anywhere in the suite references
+   `Open with`, `[Category]`, `designed for` or `featuring [key specs]` in the prompt — swept across
+   `src/**` and `test/**`. **H1 therefore carries no `changes_required_tests` dependency**, which
+   matters because the approver should know before granting whether saying yes also commits the
+   pipeline to a TEST_WRITING loop. It does not.
 
 **Blast radius, stated with the request.** `MASTER_SYSTEM_PROMPT` is `systemBlocks[0]` on the Doc
 path, and is also imported by FROZEN `src/prompts/task-c.ts:87` (the translation path, all nine
