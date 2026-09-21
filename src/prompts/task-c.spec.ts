@@ -93,12 +93,12 @@ describe('buildPromptC — Center 3D Print ToV', () => {
     expect(payload.systemBlocks[1].text).not.toContain(EXPERT3D_TOV_TRANSLATION_OVERLAY);
   });
 
-  it('consumables mode keeps the simplified schema and layers the ToV on top of it', () => {
-    const payload = buildPromptC(SAMPLE_HTML, 'PL', 'Center 3D Print', undefined, 'consumables-resin');
+  it('a simplified template keeps the omitted-paragraph clause and layers the ToV after it (US-2.2 FR-19)', () => {
+    const payload = buildPromptC(SAMPLE_HTML, 'PL', 'Center 3D Print', undefined, 'spare-parts');
     const taskBlock = payload.systemBlocks[1].text;
-    expect(taskBlock).toContain('CONSUMABLES MODE');
+    expect(taskBlock).toContain('TRANSLATE WHAT IS PRESENT');
     expect(taskBlock).toContain(C3D_TOV_TRANSLATION_OVERLAY);
-    expect(taskBlock.indexOf('CONSUMABLES MODE')).toBeLessThan(taskBlock.indexOf(C3D_TOV_TRANSLATION_OVERLAY));
+    expect(taskBlock.indexOf('TRANSLATE WHAT IS PRESENT')).toBeLessThan(taskBlock.indexOf(C3D_TOV_TRANSLATION_OVERLAY));
   });
 });
 

@@ -1,6 +1,8 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { buildDeliveryRegionBlock, taskLangToIso, US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, CONSUMABLES_TRANSLATION_OVERLAY, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
+import { buildDeliveryRegionBlock, taskLangToIso, US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
+import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
+import { SIMPLIFIED_TRANSLATION_CLAUSE } from './simplified-template-blocks';
 
 const IMAGE_PRESERVATION_MANIFEST = `[IMAGE MANIFEST]
 TRANSLATION PASS — NOT base generation: [BASE HTML] below already contains the FINAL, approved
@@ -122,10 +124,10 @@ export function buildPromptC(
   // Applies to every variant — see HEADING_FIDELITY's own doc-comment for the regression.
   instruction += `\n\n${HEADING_FIDELITY}`;
 
-  // …then, for consumables, append the overlay so the simplified §C1–§C6 structure and the
-  // 5500-char limit survive translation regardless of which variant was chosen above.
-  if (templateId === 'consumables-resin') {
-    instruction += `\n\n${CONSUMABLES_TRANSLATION_OVERLAY}`;
+  // …then, for a simplified content template (US-2.2), append the "translate only what the master
+  // holds" clause so omitted paragraphs stay omitted and no length limit is enforced.
+  if (isSimplifiedTemplateId(templateId)) {
+    instruction += `\n\n${SIMPLIFIED_TRANSLATION_CLAUSE}`;
   }
 
   // EXPERT3D Tone of Voice: formal register + forbidden calques + brand voice.
@@ -136,8 +138,8 @@ export function buildPromptC(
   }
 
   // Center 3D Print "Style B" Tone of Voice: verb-led benefit bullets must survive translation.
-  // Placed after the consumables overlay so the simplified §C1–§C6 structure still wins where
-  // both apply — this ToV then governs bullet grammar inside that structure.
+  // Placed after the simplified-template clause so the omitted-paragraph rule still wins where
+  // both apply — this ToV then governs bullet grammar inside the paragraphs that are present.
   if (isCenter3dPrintStore(storeName)) {
     instruction += `\n\n${C3D_TOV_TRANSLATION_OVERLAY}`;
   }

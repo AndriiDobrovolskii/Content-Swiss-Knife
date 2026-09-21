@@ -184,22 +184,24 @@ function subsectionSpans(sub: Subsection, path: string): DocTextSpan[] {
 function collectScopedSpans(doc: ProductDescriptionDoc): DocTextSpan[] {
   const spans: DocTextSpan[] = [{ path: 'hook', text: doc.hook }];
 
-  doc.killerSpecs.forEach((k, i) => {
+  (doc.killerSpecs ?? []).forEach((k, i) => {
     spans.push({ path: `killerSpecs[${i}].label`, text: k.label });
     spans.push({ path: `killerSpecs[${i}].value`, text: k.value });
     spans.push({ path: `killerSpecs[${i}].why`, text: k.why });
   });
 
-  doc.keyBenefits.forEach((b, i) => spans.push(...blockSpans(b, `keyBenefits[${i}]`)));
-  doc.functionality.forEach((s, i) => spans.push(...subsectionSpans(s, `functionality[${i}]`)));
+  (doc.keyBenefits ?? []).forEach((b, i) => spans.push(...blockSpans(b, `keyBenefits[${i}]`)));
+  (doc.functionality ?? []).forEach((s, i) => spans.push(...subsectionSpans(s, `functionality[${i}]`)));
 
-  spans.push({ path: 'applications.heading', text: doc.applications.heading });
-  (doc.applications.blocks ?? []).forEach((b, i) =>
-    spans.push(...blockSpans(b, `applications.blocks[${i}]`)));
-  doc.applications.items.forEach((it, i) => {
-    spans.push({ path: `applications.items[${i}].scenario`, text: it.scenario });
-    spans.push({ path: `applications.items[${i}].text`, text: it.text });
-  });
+  if (doc.applications) {
+    spans.push({ path: 'applications.heading', text: doc.applications.heading });
+    (doc.applications.blocks ?? []).forEach((b, i) =>
+      spans.push(...blockSpans(b, `applications.blocks[${i}]`)));
+    doc.applications.items.forEach((it, i) => {
+      spans.push({ path: `applications.items[${i}].scenario`, text: it.scenario });
+      spans.push({ path: `applications.items[${i}].text`, text: it.text });
+    });
+  }
 
   if (doc.compatibility) spans.push(...subsectionSpans(doc.compatibility, 'compatibility'));
 
@@ -209,8 +211,8 @@ function collectScopedSpans(doc: ProductDescriptionDoc): DocTextSpan[] {
       spans.push({ path: `packageContents.items[${i}]`, text: item }));
   }
 
-  spans.push({ path: 'specs.heading', text: doc.specs.heading });
-  doc.specs.categories.forEach((cat, ci) => {
+  if (doc.specs) spans.push({ path: 'specs.heading', text: doc.specs.heading });
+  (doc.specs?.categories ?? []).forEach((cat, ci) => {
     spans.push({ path: `specs.categories[${ci}].title`, text: cat.title });
     cat.rows.forEach((row, ri) => {
       spans.push({ path: `specs.categories[${ci}].rows[${ri}].label`, text: row.label });

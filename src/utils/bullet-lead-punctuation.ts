@@ -78,7 +78,7 @@ export function validateBulletLeadPunctuationDoc(
     }
   });
 
-  for (const item of doc.applications.items) {
+  for (const item of doc.applications?.items ?? []) {
     if (collides(item.scenario, item.text)) issues.push(collisionIssue(context, item.scenario, item.text));
   }
 
@@ -123,7 +123,7 @@ export function normalizeBulletLeadPunctuation(
     for (const item of block.items) fixLead(item, 'lead');
   });
 
-  for (const item of clone.applications.items) fixLead(item, 'scenario');
+  for (const item of clone.applications?.items ?? []) fixLead(item, 'scenario');
 
   return { doc: clone, fixed };
 }

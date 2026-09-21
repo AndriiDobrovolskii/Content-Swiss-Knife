@@ -159,10 +159,10 @@ describe('validateSpecCountParity', () => {
 });
 
 /**
- * Regression suite: the Consumables Doc pipeline's rendered HTML never has a <section class="specs">
- * wrapper (§C forbids it — render-consumables.ts), so the default scoping always matched zero
+ * Regression suite: a document family whose rendered HTML never has a <section class="specs">
+ * wrapper, so the default scoping always matched zero
  * tables and the check silently no-opped no matter how many rows the model actually dropped. These
- * cases mirror validateSpecCountParity's own describe above, called with the consumables overrides
+ * cases mirror validateSpecCountParity's own describe above, called with the unscoped overrides
  * (tableSelector: 'table', sectionLabel: '§C4 spec-group') instead of a second, duplicated function.
  */
 function specGroupHtml(rowCount: number): string {
@@ -170,12 +170,12 @@ function specGroupHtml(rowCount: number): string {
   return `<h2>Print Settings</h2><div class="table-responsive"><table><tbody>${rows}</tbody></table></div>`;
 }
 
-const CONSUMABLES_OPTS = { tableSelector: 'table', sectionLabel: '§C4 spec-group' };
+const UNSCOPED_TABLE_OPTS = { tableSelector: 'table', sectionLabel: '§C4 spec-group' };
 
 describe('validateSpecCountParity — consumables scoping (tableSelector/sectionLabel overrides)', () => {
   it('returns no issues when counts match', () => {
     const issues = validateSpecCountParity(
-      specGroupHtml(15), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', CONSUMABLES_OPTS,
+      specGroupHtml(15), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', UNSCOPED_TABLE_OPTS,
     );
     expect(issues).toHaveLength(0);
   });
@@ -193,7 +193,7 @@ describe('validateSpecCountParity — consumables scoping (tableSelector/section
 
   it('flags a shortfall of 5 as an ERROR with the "§C4 spec-group" wording, not "§7"', () => {
     const issues = validateSpecCountParity(
-      specGroupHtml(10), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', CONSUMABLES_OPTS,
+      specGroupHtml(10), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', UNSCOPED_TABLE_OPTS,
     );
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe('error');
@@ -204,7 +204,7 @@ describe('validateSpecCountParity — consumables scoping (tableSelector/section
 
   it('flags an off-by-one shortfall as a WARNING', () => {
     const issues = validateSpecCountParity(
-      specGroupHtml(14), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', CONSUMABLES_OPTS,
+      specGroupHtml(14), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', UNSCOPED_TABLE_OPTS,
     );
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe('warning');
@@ -212,14 +212,14 @@ describe('validateSpecCountParity — consumables scoping (tableSelector/section
 
   it('flags extra rows (actual > expected) as a WARNING', () => {
     const issues = validateSpecCountParity(
-      specGroupHtml(18), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', CONSUMABLES_OPTS,
+      specGroupHtml(18), ORTUR_H20_SPECS, 'H20 Laser Engraving Machine', 'HTML (uk-UA)', UNSCOPED_TABLE_OPTS,
     );
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe('warning');
   });
 
   it('no-ops when canonicalSpecs has no detectable table', () => {
-    const issues = validateSpecCountParity(specGroupHtml(3), 'free text, no table here', '', 'HTML (uk-UA)', CONSUMABLES_OPTS);
+    const issues = validateSpecCountParity(specGroupHtml(3), 'free text, no table here', '', 'HTML (uk-UA)', UNSCOPED_TABLE_OPTS);
     expect(issues).toHaveLength(0);
   });
 });

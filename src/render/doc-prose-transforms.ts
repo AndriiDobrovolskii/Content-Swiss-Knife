@@ -102,24 +102,35 @@ export function mapDocText(doc: ProductDescriptionDoc, fn: TextTransform): Produ
     localizedName: fn(doc.localizedName),
 
     hook: fn(doc.hook),
-    killerSpecs: doc.killerSpecs.map(s => ({ label: fn(s.label), value: fn(s.value), why: fn(s.why) })),
-    keyBenefits: doc.keyBenefits.map(b => mapBlock(b, fn)),
-    functionality: doc.functionality.map(s => mapSubsection(s, fn)),
-    applications: {
-      heading: fn(doc.applications.heading),
-      ...(doc.applications.blocks
-        ? { blocks: doc.applications.blocks.map(b => mapBlock(b, fn) as typeof b) }
-        : {}),
-      items: doc.applications.items.map(i => ({ scenario: fn(i.scenario), text: fn(i.text) })),
-    },
+    // US-2.2: a paragraph a simplified template omitted stays omitted (no key), never an empty shell.
+    ...(doc.killerSpecs
+      ? { killerSpecs: doc.killerSpecs.map(s => ({ label: fn(s.label), value: fn(s.value), why: fn(s.why) })) }
+      : {}),
+    ...(doc.keyBenefits ? { keyBenefits: doc.keyBenefits.map(b => mapBlock(b, fn)) } : {}),
+    ...(doc.functionality ? { functionality: doc.functionality.map(s => mapSubsection(s, fn)) } : {}),
+    ...(doc.applications
+      ? {
+          applications: {
+            heading: fn(doc.applications.heading),
+            ...(doc.applications.blocks
+              ? { blocks: doc.applications.blocks.map(b => mapBlock(b, fn) as typeof b) }
+              : {}),
+            items: doc.applications.items.map(i => ({ scenario: fn(i.scenario), text: fn(i.text) })),
+          },
+        }
+      : {}),
     ...(doc.compatibility ? { compatibility: mapSubsection(doc.compatibility, fn) } : {}),
     ...(doc.packageContents
       ? { packageContents: { heading: fn(doc.packageContents.heading), items: doc.packageContents.items.map(fn) } }
       : {}),
-    specs: {
-      heading: fn(doc.specs.heading),
-      categories: doc.specs.categories.map(c => mapCategory(c, fn)),
-    },
+    ...(doc.specs
+      ? {
+          specs: {
+            heading: fn(doc.specs.heading),
+            categories: doc.specs.categories.map(c => mapCategory(c, fn)),
+          },
+        }
+      : {}),
     cta: { heading: fn(doc.cta.heading), text: fn(doc.cta.text) },
 
     figures: doc.figures.map(f => ({ file: f.file, alt: fn(f.alt), caption: fn(f.caption) })),

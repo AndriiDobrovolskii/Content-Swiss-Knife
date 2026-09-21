@@ -134,14 +134,18 @@ export interface ProductDescriptionDoc {
   /** Authoritative localized product name — replaces the [H1 LOCK] prompt block in task-c.ts. */
   localizedName: string;
 
+  /*
+   * US-2.2: §2, §3, §4, §5, §6 and §7 may be absent (a simplified template omits paragraphs). §1 (hook)
+   * and §8 (cta) are always present. A consumer treats an absent paragraph as "not rendered".
+   */
   /** §1 */
   hook: Prose;
   /** §2a — 3–4 rows. */
-  killerSpecs: KillerSpec[];
+  killerSpecs?: KillerSpec[];
   /** §2b */
-  keyBenefits: Block[];
+  keyBenefits?: Block[];
   /** §3 — one Subsection per H2. */
-  functionality: Subsection[];
+  functionality?: Subsection[];
   /**
    * §4.
    *
@@ -149,7 +153,7 @@ export interface ProductDescriptionDoc {
    * real artifact seen so far, one figure. `items` remains §4's own list mechanism; the schema
    * keeps `bullets` out of `blocks` so the section can never grow a second, competing <ul>.
    */
-  applications: {
+  applications?: {
     heading: string;
     blocks?: ApplicationsBlock[];
     items: { scenario: string; text: Prose }[];
@@ -159,7 +163,7 @@ export interface ProductDescriptionDoc {
   /** §6 — conditional. */
   packageContents?: { heading: string; items: string[] };
   /** §7 */
-  specs: { heading: string; categories: SpecCategory[] };
+  specs?: { heading: string; categories: SpecCategory[] };
   /** §9 */
   cta: { heading: string; text: Prose };
 
@@ -191,8 +195,8 @@ export function forEachBlockInOrder(
     s.subsections?.forEach(walkSubsection);
   };
 
-  walkBlocks(doc.keyBenefits);
-  doc.functionality.forEach(walkSubsection);
-  walkBlocks(doc.applications.blocks ?? []);
+  walkBlocks(doc.keyBenefits ?? []);
+  (doc.functionality ?? []).forEach(walkSubsection);
+  walkBlocks(doc.applications?.blocks ?? []);
   if (doc.compatibility) walkSubsection(doc.compatibility);
 }

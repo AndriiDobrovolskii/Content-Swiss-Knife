@@ -248,28 +248,18 @@ describe('Center 3D Print ToV — §4 Applications list grammar', () => {
   });
 });
 
-describe('Center 3D Print ToV — consumables mode (§C)', () => {
-  it('both overlays extend the voice into §C2/§C3/§C5', () => {
-    expect(C3D_TOV_BASE_OVERLAY).toContain('CONSUMABLES MODE (§C1-§C6)');
-    expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('CONSUMABLES MODE (§C1-§C6)');
-  });
-
-  it('carries the 5500-character budget guard that caps supporting sentences at one', () => {
-    expect(C3D_TOV_BASE_OVERLAY).toContain('BUDGET GUARD');
-    expect(C3D_TOV_BASE_OVERLAY).toMatch(/EXACTLY ONE supporting sentence/);
-  });
-
-  /**
-   * CONSUMABLES_SIMPLIFIED_SCHEMA and CONSUMABLES_TRANSLATION_OVERLAY are shared by all eight
-   * stores, so the colon rule there must NOT be edited — the C3D overlays neutralize it for this
-   * store only. Both overlays are wrapped prose, so compare on collapsed whitespace.
-   */
-  it('neutralizes the shared colon-capitalization rule without editing it', () => {
-    // Sentence-initial in the base overlay, mid-sentence in the translation one — hence toLowerCase.
-    const flat = (s: string) => s.replace(/\s+/g, ' ').toLowerCase();
+describe('Center 3D Print ToV — no consumables-mode text remains (US-2.2 FR-20)', () => {
+  it('neither overlay carries the removed consumables-mode notes', () => {
     for (const overlay of [C3D_TOV_BASE_OVERLAY, C3D_TOV_TRANSLATION_OVERLAY]) {
-      expect(flat(overlay)).toContain('do not reintroduce a colon in order to satisfy it');
+      expect(overlay).not.toContain('CONSUMABLES MODE');
+      expect(overlay).not.toMatch(/§C[1-6]/);
+      expect(overlay).not.toContain('BUDGET GUARD');
     }
+  });
+
+  it('both overlays still carry the Center 3D Print voice the notes sat inside', () => {
+    expect(C3D_TOV_BASE_OVERLAY).toContain('SCOPE OF THIS ToV');
+    expect(C3D_TOV_TRANSLATION_OVERLAY).toContain('Direct second-person address stays confined to the CTA');
   });
 });
 

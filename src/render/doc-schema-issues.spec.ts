@@ -114,8 +114,7 @@ describe('docSchemaIssues', () => {
 });
 
 /**
- * withDocRepairFeedback — the retry prompt for the two Doc-shaped gates (runDocGate,
- * runConsumablesDocGate). See its own doc comment for why the generic appendRepairFeedback wording
+ * withDocRepairFeedback — the retry prompt for the Doc-shaped gate (runDocGate). See its own doc comment for why the generic appendRepairFeedback wording
  * alone was not enough: it names WHAT failed but never restates THAT the response must be JSON.
  */
 describe('withDocRepairFeedback', () => {
@@ -133,9 +132,8 @@ describe('withDocRepairFeedback', () => {
     expect(result.userContent).toContain('not HTML');
   });
 
-  it('is worded schema-agnostically, since it also covers the consumables Doc gate', () => {
-    // Must not name ProductDescriptionDoc specifically — runConsumablesDocGate validates against a
-    // different schema (ConsumablesDescriptionDocSchema) and shares this same wrapper.
+  it('is worded schema-agnostically ("the schema you were given")', () => {
+    // Must not name ProductDescriptionDoc specifically: the wrapper is worded for any Doc schema.
     expect(withDocRepairFeedback(basePayload, errors).userContent).not.toContain('ProductDescriptionDoc');
   });
 

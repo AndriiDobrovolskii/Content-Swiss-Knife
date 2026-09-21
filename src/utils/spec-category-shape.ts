@@ -22,6 +22,7 @@ import type { ValidationIssue } from './output-validator';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
 import { parseSpecCategories, DEFAULT_MIN_ROWS } from './spec-category-merge';
 import { SPEC_TABLE_HEADERS, resolveLocaleValue } from '../prompt-core/constants';
+import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
 
 /**
  * Minimum number of merge-surviving categories §7 must carry. Matches the "3-6 categories"
@@ -45,8 +46,10 @@ export const MIN_ROWS_TO_REQUIRE_CATEGORIES = MIN_SPEC_CATEGORIES * DEFAULT_MIN_
  * Counting emitted categories instead would pass "5 categories of 2 rows", which merges down to
  * the single catch-all category this guard exists to prevent.
  *
- * @param options.templateId  'consumables-resin' disables the check — the consumables simplified
- *                            schema (§C4) forbids <h3> outright, so every consumable would fire.
+ * @param options.templateId  A simplified template id (US-2.2) disables the multi-category collapse
+ *                            check: its §7 is one flat category, which would otherwise fire it. The
+ *                            inverse invariant (exactly one category) is enforced by the completeness
+ *                            gate (Doc) and simplified-specs-shape.ts (HTML).
  * @param options.locale      Drives the example column headers in the repair message; defaults to
  *                            the uk-UA master's.
  */
@@ -55,7 +58,7 @@ export function validateSpecCategoryShape(
   context: string,
   options?: { templateId?: string; locale?: string },
 ): ValidationIssue[] {
-  if (options?.templateId === 'consumables-resin') return [];
+  if (isSimplifiedTemplateId(options?.templateId)) return [];
 
   const parsed = parseSpecCategories(html);
   if (!parsed) return []; // no <section class="specs"> — nothing to judge
@@ -119,10 +122,8 @@ export function validateSpecCategoryShape(
  *
  * @param doc     the ProductDescriptionDoc under validation
  * @param context reporting label, e.g. "Doc (base)"
- * @param options.templateId 'consumables-resin' disables the check — same carve-out as the HTML
- *                            sibling (the Doc pipeline never runs for consumables in the first
- *                            place — see doc-pipeline-flag.ts — but the parameter is accepted for
- *                            symmetry with the HTML sibling's call shape).
+ * @param options.templateId A simplified template id disables the check — same carve-out as the HTML
+ *                            sibling.
  * @param options.locale      drives the example column headers in the repair message; defaults to
  *                            the uk-UA master's.
  */
@@ -131,9 +132,9 @@ export function validateSpecCategoryShapeDoc(
   context: string,
   options?: { templateId?: string; locale?: string },
 ): ValidationIssue[] {
-  if (options?.templateId === 'consumables-resin') return [];
+  if (isSimplifiedTemplateId(options?.templateId)) return [];
 
-  const categories = doc.specs.categories;
+  const categories = doc.specs?.categories ?? [];
   const totalRows = categories.reduce((sum, cat) => sum + cat.rows.length, 0);
   const surviving = categories.filter(cat => cat.rows.length >= DEFAULT_MIN_ROWS).length;
 

@@ -14,7 +14,7 @@
  */
 import { describe, it, expect } from 'vitest';
 
-import { CONSUMABLES_DOC_PIPELINE_ENABLED, DOC_PIPELINE_STORES, usesConsumablesDocPipeline, usesDocPipeline } from './doc-pipeline-flag';
+import { DOC_PIPELINE_STORES, usesDocPipeline } from './doc-pipeline-flag';
 import { STORE_REGISTRY } from './constants';
 
 describe('usesDocPipeline', () => {
@@ -41,15 +41,8 @@ describe('usesDocPipeline', () => {
     expect(STORE_REGISTRY['Expert-3DPrinter'].imageBaseUrl).toBe('');
   });
 
-  /**
-   * The impossibility, not a precaution. A §C artifact has no §2a and no §7, which the schema
-   * requires — so this must hold for an enabled store too.
-   */
-  it('never enables consumables, even for an enabled store', () => {
-    expect(usesDocPipeline('EXPERT3D', 'consumables-resin')).toBe(false);
-  });
-
-  it('still enables an enabled store for a non-consumables template', () => {
+  /** US-2.2 FR-7: a simplified template no longer forces the legacy path; see doc-pipeline-flag.simplified.spec.ts. */
+  it('still enables an enabled store for any template', () => {
     expect(usesDocPipeline('EXPERT3D', 'fdm-printer')).toBe(true);
     expect(usesDocPipeline('EXPERT3D', undefined)).toBe(true);
   });
@@ -71,25 +64,5 @@ describe('usesDocPipeline', () => {
   it('lists only stores that can actually render', () => {
     const unrenderable = DOC_PIPELINE_STORES.filter(s => !STORE_REGISTRY[s]?.imageBaseUrl);
     expect(unrenderable).toEqual([]);
-  });
-});
-
-/**
- * The consumables Doc pipeline's own gate — separate from usesDocPipeline. Flipped on for the live
- * probe (2026-08-08); see doc-pipeline-flag.ts's doc comment on CONSUMABLES_DOC_PIPELINE_ENABLED
- * for the rollback (flip back to false, no other code change needed).
- */
-describe('usesConsumablesDocPipeline', () => {
-  it('is currently enabled — the live probe is in progress', () => {
-    expect(CONSUMABLES_DOC_PIPELINE_ENABLED).toBe(true);
-  });
-
-  it('is true for the consumables template while the flag is on', () => {
-    expect(usesConsumablesDocPipeline('consumables-resin')).toBe(true);
-  });
-
-  it('is false for any non-consumables template regardless of the flag', () => {
-    expect(usesConsumablesDocPipeline('fdm-printer')).toBe(false);
-    expect(usesConsumablesDocPipeline(undefined)).toBe(false);
   });
 });

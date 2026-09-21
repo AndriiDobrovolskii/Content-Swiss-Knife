@@ -1,5 +1,6 @@
 import { SeoResponse } from '../app/types';
 import { LEAKED_PREAMBLE_PATTERN, normalizeForIntegrityCheck, scanForLeakedPreamble } from './llm-output-integrity';
+import { validateSimplifiedTemplateHtml } from './simplified-word-ranges';
 
 /**
  * Post-generation validation of the hard acceptance criteria from Schema v3.0.
@@ -385,34 +386,6 @@ function charLength(s: string): number {
   return Array.from(s).length;
 }
 
-// ── Consumables char-limit helpers ─────────────────────────────────────────
-
-/** Hard limit on visible text for consumable products (templateId = 'consumables-resin'). */
-const CONSUMABLES_MAX_STRIPPED_CHARS = 5500;
-
-/**
- * Strip HTML tags and decode common entities to get the visible character count
- * as a CMS or reader would see it.
- */
-function stripHtmlTags(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/** Public exports for the deterministic consumables trimmer (utils/consumables-trim.ts). */
-export const CONSUMABLES_CHAR_LIMIT = CONSUMABLES_MAX_STRIPPED_CHARS;
-export function strippedVisibleLength(html: string): number {
-  return charLength(stripHtmlTags(html));
-}
-
 /**
  * Matches `name` even where fixNumberFormatting has since inserted a space between a digit
  * and an immediately-following unit letter (e.g. product name typed as "10W" but appearing
@@ -501,23 +474,9 @@ export function validateGeneratedHtml(
     return issues;
   }
 
-  // CONSUMABLES: hard char-count gate (visible text only, HTML stripped).
-  if (options?.templateId === 'consumables-resin') {
-    const len = charLength(stripHtmlTags(html));
-    if (len > CONSUMABLES_MAX_STRIPPED_CHARS) {
-      const over = len - CONSUMABLES_MAX_STRIPPED_CHARS;
-      const liToCut = Math.ceil(over / 90) + 1; // ~90 visible chars per bullet, +1 buffer
-      issues.push({
-        severity: 'error',
-        rule: 'consumables-char-limit',
-        detail: `Visible text is ${len} chars; ceiling ${CONSUMABLES_MAX_STRIPPED_CHARS} (you are ${over} over). ` +
-          `You cannot count characters, so make STRUCTURAL cuts: remove ${liToCut} entire <li> items ` +
-          `(start with §C5 Storage, then §C3 Applications), shorten the §C1 hook to one sentence, drop adjectives in §C2. ` +
-          `Aim for ~4700 for safety. NEVER remove or alter any spec-table row or numeric value.`,
-        context,
-      });
-    }
-  }
+  // Simplified content templates (US-2.2): v4 word ranges on the uk-UA master plus the flat
+  // single-table §7 shape check. The 5500-character narrative ceiling is soft and raises no issue.
+  issues.push(...validateSimplifiedTemplateHtml(html, options?.templateId, locale ?? '', context));
 
   // CRITICAL: <h1> in description body creates a duplicate H1 (CMS auto-generates H1).
   if (/<h1\b/i.test(html)) {

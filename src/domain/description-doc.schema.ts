@@ -167,17 +167,26 @@ const SubsectionSchema = makeSubsectionSchema(LeafSubsectionSchema);
 // §5 compatibility only — a datasheet may confirm just 2 physical accessories. See RelaxedBlockSchema.
 const RelaxedSubsectionSchema = makeSubsectionSchema(RelaxedLeafSubsectionSchema);
 
+/**
+ * US-2.2 FR-17: omit-or-null for a paragraph a simplified template may leave out. `null` is
+ * normalised to `undefined` so every consumer (renderer, validators, walkers) sees one absent shape.
+ * Bounds on the inner schema still apply whenever the paragraph is present (OD-13c).
+ */
+function omittable<T extends z.ZodTypeAny>(schema: T) {
+  return schema.nullish().transform(v => v ?? undefined);
+}
+
 export const ProductDescriptionDocSchema = z.object({
   schemaVersion: z.enum(['3.0', '4.0']),
   locale: NonEmpty,
   localizedName: NonEmpty,
 
   hook: Prose,
-  killerSpecs: z.array(KillerSpecSchema).min(3).max(4),
+  killerSpecs: omittable(z.array(KillerSpecSchema).min(3).max(4)),
   // RelaxedBlockSchema (floor 2), not BlockSchema — see the comment on RelaxedBlockSchema above.
-  keyBenefits: z.array(RelaxedBlockSchema).min(1),
-  functionality: z.array(SubsectionSchema).min(1),
-  applications: z.object({
+  keyBenefits: omittable(z.array(RelaxedBlockSchema).min(1)),
+  functionality: omittable(z.array(SubsectionSchema).min(1)),
+  applications: omittable(z.object({
     heading: NonEmpty,
     // Narrower than BlockSchema on purpose. `bullets` would give §4 a second <ul> alongside
     // `items`, which already is its list — two competing mechanisms in one section, and no
@@ -188,10 +197,10 @@ export const ProductDescriptionDocSchema = z.object({
     // renderer needs no special case, and the schema is the gate.
     blocks: z.array(ApplicationsBlockSchema).optional(),
     items: z.array(z.object({ scenario: NonEmpty, text: Prose })).min(4).max(8),
-  }),
-  compatibility: RelaxedSubsectionSchema.optional(),
-  packageContents: z.object({ heading: NonEmpty, items: z.array(NonEmpty).min(1) }).optional(),
-  specs: z.object({
+  })),
+  compatibility: omittable(RelaxedSubsectionSchema),
+  packageContents: omittable(z.object({ heading: NonEmpty, items: z.array(NonEmpty).min(1) })),
+  specs: omittable(z.object({
     heading: NonEmpty,
     categories: z.array(z.object({
       title: NonEmpty,
@@ -203,7 +212,7 @@ export const ProductDescriptionDocSchema = z.object({
         value: z.union([NonEmpty, z.array(NonEmpty).min(1)]),
       })).min(1),
     })).min(1),
-  }),
+  })),
   cta: z.object({ heading: NonEmpty, text: Prose }),
 
   figures: z.array(z.object({ file: NonEmpty, alt: NonEmpty, caption: Prose })),
@@ -306,7 +315,7 @@ export const ProductDescriptionDocSchema = z.object({
   // FR-4 — §2 is exactly one <h2> over one <ul>, so every §2 Block must be `bullets`.
   // EVERY offending Block is named, not just the first: an implementation that stops at the first
   // one leaves the model repairing a single field per attempt against the FR-30 budget.
-  doc.keyBenefits.forEach((block, i) => {
+  (doc.keyBenefits ?? []).forEach((block, i) => {
     if (block.kind !== 'bullets') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -321,18 +330,19 @@ export const ProductDescriptionDocSchema = z.object({
   // FR-17 — the ceiling is on the COMBINED rendered list, which is why no single field owns it and
   // why the issue sits at `keyBenefits`. `measured` carries the operands so the tier-1 repair
   // instruction can state the exact surplus instead of restating the rule (D7, R2).
-  const benefitItems = doc.keyBenefits.reduce(
+  const benefitItems = (doc.keyBenefits ?? []).reduce(
     (n, block) => n + (block.kind === 'bullets' ? block.items.length : 0),
     0,
   );
-  const combined = doc.killerSpecs.length + benefitItems;
+  const killerCount = doc.killerSpecs?.length ?? 0;
+  const combined = killerCount + benefitItems;
   if (combined > 8) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['keyBenefits'],
       message:
         `§2 renders killerSpecs and keyBenefits as ONE list of at most 8 items, but this document ` +
-        `would render ${combined} (${doc.killerSpecs.length} killer specs + ${benefitItems} benefits). ` +
+        `would render ${combined} (${killerCount} killer specs + ${benefitItems} benefits). ` +
         `Remove ${combined - 8}.`,
       params: { measured: { actual: combined, limit: 8, unit: 'items' } },
     });
@@ -340,7 +350,7 @@ export const ProductDescriptionDocSchema = z.object({
 
   // FR-10 — a §7 value is a single string for 4.0; multiple values are comma-joined BY THE MODEL
   // into one row (FR-9). The `'3.0'` array branch stays legal on its own path.
-  doc.specs.categories.forEach((category, c) => {
+  (doc.specs?.categories ?? []).forEach((category, c) => {
     category.rows.forEach((row, r) => {
       if (Array.isArray(row.value)) {
         ctx.addIssue({
@@ -365,7 +375,7 @@ export const ProductDescriptionDocSchema = z.object({
   // It is ALSO why `makeSubsectionSchema` is not given a `.min(2)`: that factory builds the shape
   // shared by `functionality` and, via RelaxedSubsectionSchema, by §5 `compatibility` — so a bound
   // there would reject cached `'3.0'` documents AND govern a section FR-27 says nothing about.
-  doc.functionality.forEach((group, i) => {
+  (doc.functionality ?? []).forEach((group, i) => {
     if (group.subsections?.length === 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

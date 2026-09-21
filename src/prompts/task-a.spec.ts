@@ -140,9 +140,9 @@ describe('buildPromptA — lists instead of run-on sentences', () => {
     expect(taskBlock(inputFor('3DPrinter'))).toMatch(/<figure>\s*directly after/i);
   });
 
-  it('does NOT add the rule to consumables, which has no §3 or §5', () => {
-    const consumables = { ...inputFor('3DPrinter'), templateId: 'consumables-resin' };
-    expect(taskBlock(consumables)).not.toMatch(/three or more parallel items/i);
+  it('a simplified template leaves the shared task block untouched — its overlay rides in userContent (US-2.2 NFR-1)', () => {
+    const simplified = { ...inputFor('3DPrinter'), templateId: 'spare-parts' };
+    expect(taskBlock(simplified)).toBe(taskBlock(inputFor('3DPrinter')));
   });
 });
 
@@ -208,9 +208,9 @@ describe('buildPromptA — [VIDEO MANIFEST]', () => {
     expect(buildPromptA(plain).userContent).not.toContain('[VIDEO MANIFEST]');
   });
 
-  it('emits no video block in consumables mode, which has no §3', () => {
-    const consumables = { ...withVideo(), templateId: 'consumables-resin' };
-    expect(buildPromptA(consumables).userContent).not.toContain('[VIDEO MANIFEST]');
+  it('keeps the video block for a simplified template: an embed in the source survives (US-2.2 FR-23)', () => {
+    const simplified = { ...withVideo(), templateId: 'spare-parts' };
+    expect(buildPromptA(simplified).userContent).toContain('[VIDEO MANIFEST]');
   });
 
   it('ignores a non-video iframe such as an embedded map', () => {

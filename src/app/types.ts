@@ -42,6 +42,8 @@ export interface ProductInput {
   supplementalContent?: string;
   customInstructions?: string;
   templateId?: string;
+  /** Accessories template only: include paragraph §3 (Functionality). Ignored for every other template (US-2.2 FR-9). */
+  includeFunctionality?: boolean;
   customTemplate?: Partial<ContentTemplate['structure']>;
   imageManifest?: ImageManifestEntry[];
   brandFolder?: string;
@@ -130,8 +132,18 @@ export const WEBSITE_OPTIONS: WebsiteOption[] = [
 
 export const CONTENT_TEMPLATES: ContentTemplate[] = [
   {
-    id: 'consumables-resin',
-    description: 'Simplified consumables schema (filament/resin/adhesive) — focuses on material properties, mechanical strength, and finish, with a 5500-character visible-text ceiling.',
+    id: 'filaments-resins-powders',
+    description: 'Simplified template for filaments, resins and powders: hook, key specs, applications, compatibility, specifications and CTA.',
+    geo: ['UA', 'EU', 'ES', 'US']
+  },
+  {
+    id: 'accessories',
+    description: 'Simplified template for accessories: hook, key specs, optional functionality, compatibility, specifications and CTA.',
+    geo: ['UA', 'EU', 'ES', 'US']
+  },
+  {
+    id: 'spare-parts',
+    description: 'Simplified template for spare parts: hook, compatibility and CTA only.',
     geo: ['UA', 'EU', 'ES', 'US']
   }
 ];

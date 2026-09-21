@@ -79,9 +79,9 @@ describe('NO_LEAKED_REASONING_CLAUSE wiring — frozen builders (edited with app
     expect(flatten(buildPromptA(PRODUCT_INPUT))).toContain(NO_LEAKED_REASONING_CLAUSE);
   });
 
-  it('task-a.ts — consumables branch', () => {
-    const consumablesInput: ProductInput = { ...PRODUCT_INPUT, templateId: 'consumables-resin' };
-    expect(flatten(buildPromptA(consumablesInput))).toContain(NO_LEAKED_REASONING_CLAUSE);
+  it('task-a.ts — simplified-template branch', () => {
+    const simplifiedInput: ProductInput = { ...PRODUCT_INPUT, templateId: 'spare-parts' };
+    expect(flatten(buildPromptA(simplifiedInput))).toContain(NO_LEAKED_REASONING_CLAUSE);
   });
 
   it('task-b.ts (buildPromptB)', () => {

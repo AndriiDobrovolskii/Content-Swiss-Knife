@@ -319,11 +319,11 @@ function subsectionHeadings(sub: Subsection, path: string, level: 'h2' | 'h3'): 
  */
 function collectHeadings(doc: ProductDescriptionDoc): DocHeading[] {
   const out: DocHeading[] = [];
-  doc.functionality.forEach((s, i) => out.push(...subsectionHeadings(s, `doc.functionality[${i}]`, 'h2')));
-  out.push({ text: doc.applications.heading, level: 'h2', path: 'doc.applications.heading' });
+  (doc.functionality ?? []).forEach((s, i) => out.push(...subsectionHeadings(s, `doc.functionality[${i}]`, 'h2')));
+  if (doc.applications) out.push({ text: doc.applications.heading, level: 'h2', path: 'doc.applications.heading' });
   if (doc.compatibility) out.push(...subsectionHeadings(doc.compatibility, 'doc.compatibility', 'h2'));
   if (doc.packageContents) out.push({ text: doc.packageContents.heading, level: 'h2', path: 'doc.packageContents.heading' });
-  out.push({ text: doc.specs.heading, level: 'h2', path: 'doc.specs.heading' });
+  if (doc.specs) out.push({ text: doc.specs.heading, level: 'h2', path: 'doc.specs.heading' });
   out.push({ text: doc.cta.heading, level: 'h2', path: 'doc.cta.heading' });
   return out;
 }
@@ -453,7 +453,7 @@ export function validateHeadingStyleDoc(
 
   const mandatedNominal = MANDATED_NOMINAL_H2[localeKey] ?? [];
 
-  doc.functionality.forEach((section, i) => {
+  (doc.functionality ?? []).forEach((section, i) => {
     const text = (section.heading ?? '').replace(/\s+/g, ' ').trim();
     if (!text) return;
     const lower = text.toLowerCase();

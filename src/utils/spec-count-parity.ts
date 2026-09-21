@@ -184,8 +184,8 @@ export function countExpectedSpecRows(canonicalSpecs: string, productName: strin
 /** Sums <tbody><tr> rows across every table matching `tableSelector`. Default scopes to
  *  <section class="specs"> — mirrors the scoping used by specs-grounding.ts's
  *  validateSpecsGrounding, correct for the machine ProductDescriptionDoc pipeline
- *  (render-description.ts). Callers for a document family with no such wrapper (e.g. Consumables —
- *  see validateSpecCountParity's SpecCountParityOptions doc comment) pass an unscoped selector. */
+ *  (render-description.ts). Callers for a document family with no such wrapper
+ *  (see validateSpecCountParity's SpecCountParityOptions doc comment) pass an unscoped selector. */
 export function countActualSpecRows(html: string, tableSelector = 'section.specs table'): number {
   let doc: Document;
   try {
@@ -204,7 +204,7 @@ export function countActualSpecRows(html: string, tableSelector = 'section.specs
  * is no -1 "DOMParser unavailable" sentinel for callers to check.
  */
 export function countActualSpecRowsDoc(doc: ProductDescriptionDoc): number {
-  return doc.specs.categories.reduce((n, c) => n + c.rows.length, 0);
+  return (doc.specs?.categories ?? []).reduce((n, c) => n + c.rows.length, 0);
 }
 
 /**
@@ -217,21 +217,15 @@ export interface SpecCountParityOptions {
    * CSS selector the actual row count is scanned from. Default: 'section.specs table' — the
    * machine pipeline's scoping (render-description.ts's one <section class="specs">).
    *
-   * The Consumables Doc pipeline (render-consumables.ts) passes 'table' unscoped: that renderer
-   * never emits a <section> wrapper anywhere — §C forbids it outright (see that file's own doc
-   * comment on renderConsumablesDoc()) — and specGroup() is the ONLY source of <table> anywhere in
-   * that document family (bulletGroup emits <ul>/<li>, figures emit <figure>, hook/cta are bare
-   * <p>, and every prose field is escaped by prose()/esc() before rendering — only literal
-   * <b>/<strong> ever survive — so a model-authored string cannot smuggle a stray <table> in
-   * either). Scoping to `section.specs` there always matches zero tables — NOT a silent no-op:
-   * `actual` becomes a permanent 0 regardless of the doc's real content, so the check fires a
-   * constant, content-independent "row count is 0, expected N" false claim on every generation
-   * with a canonical input table. Exactly the bug this option exists to fix.
+   * A document family that never emits a <section class="specs"> wrapper passes 'table' unscoped:
+   * scoping to `section.specs` there always matches zero tables — NOT a silent no-op: `actual`
+   * becomes a permanent 0 regardless of the doc's real content, so the check fires a constant,
+   * content-independent "row count is 0, expected N" false claim on every generation with a
+   * canonical input table. Exactly the bug this option exists to fix.
    */
   tableSelector?: string;
   /** Label used in the detail message for where the count came from. Default: '§7 spec-table'
-   *  (machine pipeline). The Consumables Doc pipeline passes '§C4 spec-group' — the prompt's own
-   *  section name for spec parameters (task-a-consumables-doc.ts). */
+   *  (machine pipeline). A document family with its own section name for spec parameters passes it. */
   sectionLabel?: string;
 }
 
@@ -350,6 +344,9 @@ export function validateSpecCountParityDoc(
 
   const expected = countExpectedSpecRows(canonicalSpecs, productName);
   if (expected === 0) return issues; // no canonical table detected — cannot verify count parity
+
+  // US-2.2 FR-11: a document that omitted §7 (no specs supplied) has nothing to count.
+  if (!doc.specs) return issues;
 
   const actual = countActualSpecRowsDoc(doc);
 

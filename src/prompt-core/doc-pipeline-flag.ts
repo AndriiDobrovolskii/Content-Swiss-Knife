@@ -56,36 +56,14 @@ export const DOC_PIPELINE_STORES: readonly string[] = [
 ];
 
 /**
- * Consumables are excluded unconditionally, and this is a proven impossibility rather than caution.
- * A §C1–§C6 artifact cannot be expressed as a ProductDescriptionDoc at all: both MANDATORY fields
- * have no source in it — there is no `<thead>` killer-specs table for §2a, and no
- * `<section class="specs">` for §7 (§C4 "Склад комплекту" is a bare `div.table-responsive` sitting
- * inside an `<h2>` group, a position the model has no slot for). Consumables now have their own
- * document model — see ConsumablesDescriptionDoc (src/domain/consumables-doc.ts) and
- * usesConsumablesDocPipeline() below — but this function's exclusion stays exactly as-is:
- * ProductDescriptionDoc still cannot express §C shape, and that fact does not change. See the §C
- * tests in test/tools/scaffold-doc.spec.ts.
+ * Whether a store's Task A runs through the Doc pipeline. Every template (Full description and the
+ * three simplified content templates alike) takes the pipeline the store is enrolled in; the
+ * template id plays no part (US-2.2 FR-7). The parameter is accepted so call sites keep passing it
+ * and a later template-specific rule has a place to land; it is deliberately ignored today.
  */
-export function usesDocPipeline(storeName: string, templateId?: string): boolean {
-  if (templateId === 'consumables-resin') return false;
+export function usesDocPipeline(storeName: string, _templateId?: string): boolean {
   if (!DOC_PIPELINE_STORES.includes(storeName)) return false;
   // A store with no image base cannot render — renderContextFor() throws rather than emit relative
   // <img src>. Checked here too so a registry edit cannot turn an enabled store into a hard failure.
   return !!STORE_REGISTRY[storeName]?.imageBaseUrl;
-}
-
-/**
- * Separate, independent gate for the NEW consumables document model (ConsumablesDescriptionDoc +
- * renderConsumablesDoc). Flipped to true for the live probe — the same evidence bar that settled
- * DOC_PIPELINE_STORES above: one real product, schema-valid JSON from a real model call, zero
- * validator errors after render. If a real generation surfaces a defect this pass cannot repair,
- * flip this back to false — that alone restores the plain-HTML path with no other code change.
- *
- * No store dimension here: consumables is selected by templateId, not by which storefront it's
- * generated for, so there is nothing analogous to DOC_PIPELINE_STORES to enumerate.
- */
-export const CONSUMABLES_DOC_PIPELINE_ENABLED = true;
-
-export function usesConsumablesDocPipeline(templateId?: string): boolean {
-  return templateId === 'consumables-resin' && CONSUMABLES_DOC_PIPELINE_ENABLED;
 }

@@ -185,9 +185,8 @@ export function assertDocRendered(html: string, context: string, issues: Validat
  * appended, against a cached master system prompt that is otherwise HTML-oriented.
  *
  * WORDED SCHEMA-AGNOSTICALLY ("the schema you were given", not "ProductDescriptionDoc"), because
- * this same wrapper is wired into both the main Doc gate (runDocGate, ProductDescriptionDocSchema)
- * and the consumables Doc gate (runConsumablesDocGate, ConsumablesDescriptionDocSchema) — both have
- * the identical failure shape.
+ * this wrapper stays free of any one schema's name and is reusable by any Doc-shaped gate
+ * (today runDocGate, ProductDescriptionDocSchema), which all share the identical failure shape.
  *
  * NOT a change to appendRepairFeedback itself: that function is shared by the HTML, FAQ, SEO,
  * Translator and Copywriter repair gates, whose artifacts are plain strings, not JSON — its generic

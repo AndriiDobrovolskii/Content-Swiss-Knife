@@ -26,7 +26,7 @@ describe('invariantCore', () => {
     // "Laser Master" is NOT excluded, because "Master" is not a stopword, so "Laser" reads as part
     // of the model designator there instead.
     ['Creality Falcon2 22W Laser Engraver', 'Creality Falcon2 22W'],
-    // Real product name (see consumables-doc.ts, 2026-08-25) — "Grid"/"Panel" are not stopwords,
+    // Real product name (2026-08-25) — "Grid"/"Panel" are not stopwords,
     // so the Laser-modifier lookahead never fires and the whole name is still captured, unchanged.
     ['Bambu Lab Laser Grid Panel', 'Bambu Lab Laser Grid Panel'],
     // Stops at the generic category noun, so the localizable part is excluded.

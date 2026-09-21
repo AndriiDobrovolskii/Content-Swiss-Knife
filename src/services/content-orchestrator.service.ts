@@ -22,7 +22,6 @@ import {
 import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
 import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
-import { normalizeConsumablesBulletLeadPunctuation } from '../utils/consumables-bullet-lead-punctuation';
 import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation, normalizeRawBulletLeadPunctuation } from '../utils/bullet-lead-punctuation';
 import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
@@ -38,18 +37,13 @@ import { buildPromptADoc } from '../prompts/task-a-doc';
 // crosses into the service; the instruction STRING stays inside task-a-doc.ts, so AGENTS.md §3
 // rule 3 (no prompt text in services) still holds.
 import { selectHookPattern } from '../prompt-core/hook-pattern';
-import { buildPromptAConsumablesDoc } from '../prompts/task-a-consumables-doc';
-import { usesDocPipeline, usesConsumablesDocPipeline } from '../prompt-core/doc-pipeline-flag';
+import { usesDocPipeline } from '../prompt-core/doc-pipeline-flag';
 import { ProductDescriptionDocSchema } from '../domain/description-doc.schema';
-import { ConsumablesDescriptionDocSchema } from '../domain/consumables-doc.schema';
 import { renderDescription } from '../render/render-description';
-import { renderConsumablesDoc } from '../render/render-consumables';
 import type { RenderContext } from '../render/render-description';
 import { normalizeDocProse } from '../render/doc-prose-transforms';
-import { normalizeConsumablesDocProse } from '../render/consumables-prose-transforms';
 import { renderContextFor, getRenderRules } from '../prompt-core/store-render-rules';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
-import type { ConsumablesDescriptionDoc } from '../domain/consumables-doc';
 import { docSchemaIssues, assertDocRendered, isUnrepairableGenerationError, providerDetail, withDocRepairFeedback } from '../render/doc-schema-issues';
 import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
@@ -74,10 +68,12 @@ import {
 } from '../utils/repair-gate';
 import { createBlockRepairExecutor } from '../utils/block-tier';
 import { createDocBlockRepairExecutor } from '../utils/doc-tier';
-import { trimConsumablesToLimit } from '../utils/consumables-trim';
 import { PromptPayload } from '../prompt-core/payload';
 import { mergeSmallSpecCategories } from '../utils/spec-category-merge';
 import { validateSpecCategoryShape, validateSpecCategoryShapeDoc } from '../utils/spec-category-shape';
+import { validateTemplateCompleteness } from '../domain/description-doc.completeness';
+import { validateSimplifiedRangesDoc } from '../utils/simplified-word-ranges';
+import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
 import { finalizeTablesForDisplay } from '../utils/table-finalize';
 import { validateLanguageConsistency } from '../utils/language-consistency';
 
@@ -120,19 +116,6 @@ export interface DocAttempt {
   preValidationFixed?: number;
 }
 
-/** The consumables sibling of DocAttempt — same contract, ConsumablesDescriptionDoc instead. */
-export interface ConsumablesDocAttempt {
-  doc: ConsumablesDescriptionDoc | null;
-  issues: ValidationIssue[];
-  /**
-   * Count of bullet-lead/text collisions normalizeConsumablesBulletLeadPunctuation fixed in this
-   * attempt's raw JSON before schema validation — undefined/0 when nothing needed fixing. Threaded
-   * through the return value rather than updated in place: produceTaskAConsumablesDoc doesn't have
-   * the gate label needed to update bulletLeadFixTally itself (see runConsumablesDocGate's produce
-   * closure, which does).
-   */
-  preValidationFixed?: number;
-}
 
 // ── Orchestrator ────────────────────────────────────────────────────────────
 
@@ -547,6 +530,16 @@ export class ContentOrchestratorService {
           // store — see image-manifest-coverage.ts and spec-category-shape.ts's *Doc siblings.
           ...validateImageManifestCoverageDoc(doc.figures, opts.imgManifest, opts.label),
           ...validateSpecCategoryShapeDoc(doc, opts.label, { templateId: opts.input.templateId, locale: opts.locale }),
+          // US-2.2. Which paragraphs the selected template requires or excludes, the flat single-category
+          // §7 (FR-8) and the v4 word ranges (FR-14) are all checked on the Doc BEFORE rendering, so a
+          // violation reaches the standard repair loop with a field path. Full description (no template
+          // id) gets the pre-Story mandatory set back (R2), because the schema itself no longer
+          // requires those paragraphs.
+          ...validateTemplateCompleteness(doc, opts.input.templateId, {
+            includeFunctionality: opts.input.includeFunctionality,
+            hasSpecs: Boolean(opts.input.specs?.trim()),
+          }),
+          ...validateSimplifiedRangesDoc(doc, opts.input.templateId, opts.localeIso, opts.label),
           // A bold bullet lead with no separator before its text renders as one glued word in
           // EVERY store's house style — a mechanical fact, not a judgement call, hence error
           // severity (see bullet-lead-punctuation.ts for why this is not a renderer fix).
@@ -614,176 +607,11 @@ export class ContentOrchestratorService {
     const html = renderDescription(
       normalizeDocProse(result.artifact.doc, opts.locale),
       renderContextFor(opts.input.website.name, opts.input.brandFolder, opts.input.modelFolder),
+      // A simplified template renders §7 as one flat table (FR-8); Full description is unchanged.
+      { flatSpecs: isSimplifiedTemplateId(opts.input.templateId) },
     );
 
     return { ...result, artifact: html };
-  }
-
-  /**
-   * Consumables sibling of produceTaskADoc — same contract, ConsumablesDescriptionDocSchema instead
-   * of ProductDescriptionDocSchema. Only reachable when usesConsumablesDocPipeline() is true (see
-   * doc-pipeline-flag.ts), which is off by default pending a live probe.
-   */
-  private async produceTaskAConsumablesDoc(opts: {
-    payload: PromptPayload;
-    useThinking: boolean;
-    isInitialAttempt: boolean;
-    input: ProductInput;
-    contextLabel: string;
-    docTaskLabel: string;
-  }): Promise<ConsumablesDocAttempt> {
-    const { payload, useThinking, isInitialAttempt, input, contextLabel, docTaskLabel } = opts;
-
-    let raw: unknown;
-    try {
-      raw = await this.llm.generateJson<ConsumablesDescriptionDoc>(payload, useThinking, { taskLabel: docTaskLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
-      // Pre-parse fix-up: eliminates any bullet-lead/text collision (features/applications/storage)
-      // BEFORE the schema's own refine can throw on it — see consumables-bullet-lead-punctuation.ts's
-      // header comment for why this must run here, not post-parse like the plain pipeline's
-      // normalizeBulletLeadPunctuation. `raw` itself is left untouched: the catch block below still
-      // logs the model's true, unmodified output for debugging.
-      const { raw: candidate, fixed } = normalizeConsumablesBulletLeadPunctuation(raw);
-      // parse(), not safeParse() or its return value: an invalid Doc must reach the repair gate as
-      // a thrown error. The return value is DISCARDED and `candidate` is cast instead — same
-      // TSCONFIG workaround as produceTaskADoc's identical comment above: without strictNullChecks,
-      // zod's inferred type comes back all-optional and does not satisfy ConsumablesDescriptionDoc.
-      // parse() still does the validating, so nothing is weakened.
-      ConsumablesDescriptionDocSchema.parse(candidate);
-      return { doc: candidate as ConsumablesDescriptionDoc, issues: [], preValidationFixed: fixed };
-    } catch (err) {
-      // Same escape hatch as produceTaskADoc — see its comment for the full rationale.
-      if (isInitialAttempt && isUnrepairableGenerationError(err)) throw new Error(providerDetail(err) ?? String(err));
-      const issues = docSchemaIssues(err, contextLabel);
-      if (raw !== undefined) console.error(`[${contextLabel}] raw model output failed schema validation:`, raw);
-      return { doc: null, issues };
-    }
-  }
-
-  /**
-   * The consumables Doc-pipeline gate. Unlike runDocGate, this renders on EVERY attempt (not once
-   * after acceptance) and validates the rendered HTML with the SAME validators already proven for
-   * the plain-HTML consumables path — no new *Doc-suffixed validator family needed. That family
-   * exists for the main pipeline because runDocGate validates pre-render specifically to skip
-   * structural checks the renderer already guarantees; here, rendering first is what lets the
-   * existing string validators apply unmodified, and rendering is pure and cheap (unlike the LLM
-   * call), so paying for it on every attempt costs nothing that matters.
-   *
-   * Returns RepairGateResult<string> — same shape as runDocGate and the plain-HTML gate — so every
-   * line of code after the call site stays oblivious to which of the three pipelines ran.
-   */
-  private async runConsumablesDocGate(opts: {
-    label: string;
-    contextLabel: string;
-    docTaskLabel: string;
-    maxRepairs: number;
-    basePayload: PromptPayload;
-    useThinking: boolean;
-    locale: string;
-    localeIso: string;
-    input: ProductInput;
-    groundingSpecs: string;
-    allowedSpecParams: string[];
-    groundingDisabled: boolean;
-    grounding: GroundingInspection;
-    imgManifest?: ImageManifestEntry[];
-    onAttempt: (n: number, c: number) => void;
-  }): Promise<RepairGateResult<string>> {
-    // Figures are modelled now (see consumables-doc.ts), so ctx.imageBaseUrl is load-bearing. Built
-    // directly rather than via renderContextFor(), which THROWS for a store with an empty
-    // imageBaseUrl (Expert-3DPrinter) — buildImageBlock (task-a.ts) already forces that store's
-    // manifest to "None — skip all <img>", so its consumables generations never populate `figures`
-    // and must keep working, exactly as the plain-HTML path does today. getRenderRules() answers
-    // '' for that store without throwing, which is what we want here.
-    const ctx: RenderContext = {
-      imageBaseUrl: getRenderRules(opts.input.website.name).imageBaseUrl,
-      storeName: opts.input.website.name,
-      brandFolder: opts.input.brandFolder,
-      modelFolder: opts.input.modelFolder,
-    };
-
-    // runRepairGate's produce signature is `(payload) => Promise<T>` — it does not pass an
-    // isInitialAttempt flag. Tracked via closure, same pattern runDocGate's own produce uses.
-    let isFirstAttempt = true;
-    const produce = async (payload: PromptPayload): Promise<{ html: string | null; issues: ValidationIssue[] }> => {
-      const initial = isFirstAttempt;
-      isFirstAttempt = false;
-      const attempt = await this.produceTaskAConsumablesDoc({
-        payload, useThinking: opts.useThinking, isInitialAttempt: initial, input: opts.input,
-        contextLabel: opts.contextLabel, docTaskLabel: opts.docTaskLabel,
-      });
-      // Same tally, same reporting path as runDocGate's produce closure (see its own comment) —
-      // opts.label is in scope here but not inside produceTaskAConsumablesDoc, which is why the
-      // count is threaded through the attempt instead of applied there directly.
-      if (attempt.preValidationFixed) {
-        this.bulletLeadFixTally.set(opts.label, (this.bulletLeadFixTally.get(opts.label) ?? 0) + attempt.preValidationFixed);
-        console.info(`[bullet-lead-punctuation] ${opts.label}: ${attempt.preValidationFixed} lead(s) normalized before validation`);
-      }
-      if (!attempt.doc) return { html: null, issues: attempt.issues };
-      return { html: renderConsumablesDoc(normalizeConsumablesDocProse(attempt.doc, opts.locale), ctx), issues: [] };
-    };
-
-    const result = await runRepairGate<{ html: string | null; issues: ValidationIssue[] }>({
-      label: opts.label,
-      maxRepairs: opts.maxRepairs,
-      basePayload: opts.basePayload,
-      produce,
-      validate: (attempt) => {
-        if (attempt.html === null) return attempt.issues;
-        const html = attempt.html;
-        // Copied 1:1 from the plain-HTML consumables validate array (see generate()'s and
-        // generateUaContent()'s non-Doc branch) — reused unmodified, minus video coverage, which is
-        // moot for consumables (§C has no §3 slot, so videoEmbeds is always [] there too).
-        return [
-          ...validateGeneratedHtml(html, opts.contextLabel, opts.input.name, opts.locale, { templateId: opts.input.templateId, imageManifest: opts.imgManifest }),
-          ...validateSpecsGrounding(html, opts.groundingSpecs, opts.contextLabel, opts.allowedSpecParams,
-            { labelAnchorTrusted: !!opts.groundingSpecs }),
-          // section.specs never exists in consumables output (render-consumables.ts — §C forbids
-          // the wrapper outright), so the default machine-pipeline scoping always matched zero
-          // tables — NOT a silent no-op: it fired a permanently-wrong "row count is 0, expected N"
-          // error on every generation with a canonical input table, regardless of the doc's real
-          // content (verified: spec-count-parity.spec.ts's own "consumables scoping" describe).
-          // Pass the consumables scoping/wording explicitly — see SpecCountParityOptions's doc
-          // comment — so this reports the real count instead.
-          ...validateSpecCountParity(html, opts.input.specs, opts.input.name, opts.contextLabel, {
-            tableSelector: 'table',
-            sectionLabel: '§C4 spec-group',
-          }),
-          ...validateAltNumericFidelity(html, this.numericFidelitySources(opts.input, opts.imgManifest), opts.contextLabel),
-          ...validateSecondPersonScope(html, opts.localeIso, opts.input.website.name),
-          ...validateHeadingStyle(html, opts.localeIso, opts.input.website.name, opts.input.name),
-          ...validateSentenceLength(html, opts.localeIso, opts.contextLabel),
-          // Always a no-op for consumables — see validateSpecCategoryShape's own carve-out — kept
-          // for exact parity with the plain-HTML branch rather than special-cased away here.
-          ...validateSpecCategoryShape(html, opts.contextLabel, { templateId: opts.input.templateId, locale: opts.locale }),
-          ...(opts.groundingDisabled ? [{
-            severity: 'warning' as const,
-            rule: 'specs-grounding-disabled',
-            detail:
-              'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
-              + 'source specifications. Cause: '
-              + (opts.grounding.failure ? describeGroundingFailure(opts.grounding.failure) : 'unknown')
-              + '.',
-            context: opts.contextLabel,
-          }] : []),
-        ];
-      },
-      withFeedback: withDocRepairFeedback,
-      // Block-scoped rung, reusing the HTML executor unchanged: this gate validates the RENDERED
-      // HTML (see produce() above), not the Doc — the Doc is a local variable inside produce() and
-      // is never carried in the gate's artifact state, so there is nothing Doc-shaped to patch here.
-      // The Doc is never persisted separately from the rendered HTML anywhere in this codebase, so
-      // patching the HTML directly is complete, not a shortcut around a "real" source of truth.
-      repairBlocks: async (attempt, issues) => {
-        if (!attempt.html) return attempt;
-        const html = await this.blockRepairer(opts.localeIso, opts.label, opts.input)(attempt.html, issues);
-        return html === attempt.html ? attempt : { ...attempt, html };
-      },
-      onAttempt: opts.onAttempt,
-    });
-
-    // Every attempt failed the schema → nothing to render. Same '' sentinel and same rationale as
-    // runDocGate's identical guard — see its comment for why throwing here would be the bug.
-    return { ...result, artifact: result.artifact.html ?? '' };
   }
 
   async generate(input: ProductInput, useThinking = false): Promise<void> {
@@ -803,11 +631,10 @@ export class ContentOrchestratorService {
     // Expert-3DPrinter is image-free by policy — no manifest, no coverage check.
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
 
-    const isConsumables = input.templateId === 'consumables-resin';
-    // Video embeds the source supplied — the output is obliged to contain every one of them.
-    // Consumables mode has no §3 to put a video in, so it opts out entirely.
-    const videoEmbeds = isConsumables ? [] : extractVideoEmbeds(input.description);
-    const repairBudget = isConsumables ? 2 : this.maxRepairs();
+    // Video embeds the source supplied — the output is obliged to contain every one of them, for every
+    // template (US-2.2 FR-23: a simplified template keeps a source embed too).
+    const videoEmbeds = extractVideoEmbeds(input.description);
+    const repairBudget = this.maxRepairs();
     // Extra headroom for the master specifically when an image manifest exists — Task A
     // doesn't reliably hit "exactly N images" on the first pass, and a dropped image is a
     // hard error (see checkImageManifestCoverage). Translations don't need this: they inherit
@@ -860,16 +687,10 @@ export class ContentOrchestratorService {
       // Opt-in and narrow on purpose: the live probe passed 4/4, but on ONE product, ONE store,
       // ONE locale. That settles feasibility, not reliability. See doc-pipeline-flag.ts.
       const useDocPipeline = usesDocPipeline(input.website.name, input.templateId);
-      // Separate, independent gate for the NEW consumables document model — off by default pending
-      // a live probe. See doc-pipeline-flag.ts. Mutually exclusive with useDocPipeline: consumables
-      // never satisfies usesDocPipeline() (proven impossible — see its own doc comment).
-      const useConsumablesDocPipeline = usesConsumablesDocPipeline(input.templateId);
       const basePayloadA = useDocPipeline
         // The pattern is selected from the PRODUCT's own name + website pair, not from masterInput,
         // so the same product draws the same hook however this path assembled its input (NFR-5).
         ? buildPromptADoc(masterInput, 'Ukrainian (uk-UA)', selectHookPattern(input.name, input.website.name))
-        : useConsumablesDocPipeline
-        ? buildPromptAConsumablesDoc(masterInput, 'Ukrainian (uk-UA)')
         : buildPromptA(masterInput, 'Ukrainian (uk-UA)');
       // What the LAST produce call had to splice back — plain-HTML path only (restoreMissingVideos
       // is a string-splicing mechanism; the Doc path's own validateVideoCoverageDoc, wired inside
@@ -888,15 +709,6 @@ export class ContentOrchestratorService {
             maxRepairs: masterRepairBudget, basePayload: basePayloadA, useThinking,
             locale: 'uk-UA', localeIso: 'uk-UA', input, groundingSpecs, allowedSpecParams,
             groundingDisabled, grounding, videoEmbeds, imgManifest,
-            onAttempt: (n, c) =>
-              this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
-          })
-        : useConsumablesDocPipeline
-        ? await this.runConsumablesDocGate({
-            label: 'HTML (base)', contextLabel: 'HTML (base)', docTaskLabel: 'Doc (base, consumables)',
-            maxRepairs: masterRepairBudget, basePayload: basePayloadA, useThinking,
-            locale: 'uk-UA', localeIso: 'uk-UA', input, groundingSpecs, allowedSpecParams,
-            groundingDisabled, grounding, imgManifest,
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           })
@@ -970,7 +782,7 @@ export class ContentOrchestratorService {
         store: input.website.name,
         locale: 'uk-UA',
         productName: input.name,
-        pipeline: useDocPipeline ? 'doc' : useConsumablesDocPipeline ? 'consumables-doc' : 'html',
+        pipeline: useDocPipeline ? 'doc' : 'html',
         outcome: !htmlAResult.artifact.trim() ? 'failed-schema'
           : htmlAResult.repairsUsed > 0 ? 'repaired'
           : 'ok',
@@ -979,7 +791,7 @@ export class ContentOrchestratorService {
 
       // Every attempt failed the schema → the gate's best result is ''. Saving that would be a
       // silent data loss; fail loudly instead. Inert on the HTML path, which cannot produce ''.
-      if (useDocPipeline || useConsumablesDocPipeline) assertDocRendered(htmlAResult.artifact, 'HTML (base)', htmlAResult.finalIssues);
+      if (useDocPipeline) assertDocRendered(htmlAResult.artifact, 'HTML (base)', htmlAResult.finalIssues);
       const { artifact: htmlEn, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlAResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (base): ${aRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('HTML (base)', htmlAResult, this.blockPatchTally.get('HTML (base)'), this.preValidationFixesFor('HTML (base)'))]);
@@ -988,7 +800,7 @@ export class ContentOrchestratorService {
       // handed to Task C, so every downstream consumer sees the same, already-merged master.
       const mergedHtmlEn = mergeSmallSpecCategories(htmlEn);
       // mainHtmlUa now holds the uk-UA MASTER — see mainHtmlLocale. Renamed to versions['uk-UA'] in PR #1.
-      const finalMasterHtml = isConsumables ? trimConsumablesToLimit(mergedHtmlEn) : mergedHtmlEn;
+      const finalMasterHtml = mergedHtmlEn;
       this.content.update(c => ({ ...c, mainHtmlUa: finalMasterHtml }));
       // Scope translation image-manifest validation to what the master actually shipped, not
       // the raw upload manifest — a translation must mirror the master (validateStructuralParity
@@ -997,11 +809,7 @@ export class ContentOrchestratorService {
       // es-ES regression: repair feedback for "missing" manifest images the master never had
       // drove the model to invent structure instead of translating).
       const masterImageManifest = imgManifest?.filter(({ urlFilename }) => finalMasterHtml.includes(urlFilename));
-      this.validationIssues.set(
-        isConsumables
-          ? validateGeneratedHtml(finalMasterHtml, 'HTML (base)', input.name, 'uk-UA', { templateId: input.templateId, imageManifest: imgManifest })
-          : htmlIssues,
-      );
+      this.validationIssues.set(htmlIssues);
 
       // Step 2 — SEO slugs FIRST. The localized `name` per locale is the single source of
       // truth for the storefront product-name field (→ H1) AND the Task B title core.
@@ -1148,7 +956,7 @@ export class ContentOrchestratorService {
         if (langFinalIssues.length > 0) {
           this.validationIssues.update(issues => [...issues, ...langFinalIssues]);
         }
-        const finalLangHtml = isConsumables ? trimConsumablesToLimit(htmlLang) : htmlLang;
+        const finalLangHtml = htmlLang;
         this.content.update(c => ({
           ...c,
           translations: { ...c.translations, [lang]: finalLangHtml }
@@ -1265,12 +1073,11 @@ export class ContentOrchestratorService {
     // Expert-3DPrinter is image-free by policy — no manifest, no coverage check.
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
 
-    const isConsumables = input.templateId === 'consumables-resin';
     // See the sibling comment in generate().
-    const videoEmbeds = isConsumables ? [] : extractVideoEmbeds(input.description);
-    const repairBudget = isConsumables ? 2 : this.maxRepairs();
+    const videoEmbeds = extractVideoEmbeds(input.description);
+    const repairBudget = this.maxRepairs();
     // Same floor as generate()'s masterRepairBudget (line 813) — this call site targets the
-    // identical runDocGate/runConsumablesDocGate/plain-HTML gates and had the same single-attempt
+    // identical runDocGate/plain-HTML gates and had the same single-attempt
     // failure mode: a full-document regeneration is the only repair instrument the Doc pipeline has
     // for a schema-shape failure, and this.maxRepairs()'s default of 1 proved too narrow a window
     // for that reroll to land (see the identical rationale at masterRepairBudget's definition).
@@ -1309,14 +1116,10 @@ export class ContentOrchestratorService {
       // doc-pipeline-flag.ts. UA Description targets the same locale ('uk-UA') the Doc pipeline
       // already renders in generate(), so a store's enrollment applies here identically.
       const useDocPipelineUa = usesDocPipeline(input.website.name, input.templateId);
-      // See the sibling comment in generate().
-      const useConsumablesDocPipelineUa = usesConsumablesDocPipeline(input.templateId);
       const basePayloadA = useDocPipelineUa
         // BOTH call sites, not one. A pattern selected at generate() and not here would make the
         // rotation depend on which code path a run took — see the sibling comment there.
         ? buildPromptADoc(uaInput, UA_BASE_LANGUAGE, selectHookPattern(input.name, input.website.name))
-        : useConsumablesDocPipelineUa
-        ? buildPromptAConsumablesDoc(uaInput, UA_BASE_LANGUAGE)
         : buildPromptA(uaInput, UA_BASE_LANGUAGE);
       // See the sibling comment in generate() — plain-HTML path only.
       let restoredVideos: SourceVideoEmbed[] = [];
@@ -1333,15 +1136,6 @@ export class ContentOrchestratorService {
             maxRepairs: uaRepairBudget, basePayload: basePayloadA, useThinking,
             locale: UA_ISO, localeIso: UA_ISO, input, groundingSpecs, allowedSpecParams,
             groundingDisabled, grounding, videoEmbeds, imgManifest,
-            onAttempt: (n, c) =>
-              this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
-          })
-        : useConsumablesDocPipelineUa
-        ? await this.runConsumablesDocGate({
-            label: 'HTML (uk-UA)', contextLabel: 'HTML (uk-UA)', docTaskLabel: 'Doc (uk-UA, consumables)',
-            maxRepairs: uaRepairBudget, basePayload: basePayloadA, useThinking,
-            locale: UA_ISO, localeIso: UA_ISO, input, groundingSpecs, allowedSpecParams,
-            groundingDisabled, grounding, imgManifest,
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           })
@@ -1406,7 +1200,7 @@ export class ContentOrchestratorService {
         store: input.website.name,
         locale: UA_ISO,
         productName: input.name,
-        pipeline: useDocPipelineUa ? 'doc' : useConsumablesDocPipelineUa ? 'consumables-doc' : 'html',
+        pipeline: useDocPipelineUa ? 'doc' : 'html',
         outcome: !htmlUaResult.artifact.trim() ? 'failed-schema'
           : htmlUaResult.repairsUsed > 0 ? 'repaired'
           : 'ok',
@@ -1415,19 +1209,15 @@ export class ContentOrchestratorService {
       // Every attempt failed the schema → the gate's best result is ''. Saving that would be a
       // silent data loss; fail loudly instead. See the identical guard in generate() — inert on
       // the HTML path, which cannot produce ''.
-      if (useDocPipelineUa || useConsumablesDocPipelineUa) assertDocRendered(htmlUaResult.artifact, 'HTML (uk-UA)', htmlUaResult.finalIssues);
+      if (useDocPipelineUa) assertDocRendered(htmlUaResult.artifact, 'HTML (uk-UA)', htmlUaResult.finalIssues);
       const { artifact: htmlUa, finalIssues: htmlIssues, repairsUsed: aRepairs } = htmlUaResult;
       if (aRepairs > 0) console.info(`[repair-gate] HTML (uk-UA): ${aRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('HTML (uk-UA)', htmlUaResult, this.blockPatchTally.get('HTML (uk-UA)'), this.preValidationFixesFor('HTML (uk-UA)'))]);
       // Deterministic §7 category merge — see the identical hook in generate() for rationale.
       const mergedHtmlUa = mergeSmallSpecCategories(htmlUa);
-      const finalHtmlUa = isConsumables ? trimConsumablesToLimit(mergedHtmlUa) : mergedHtmlUa;
+      const finalHtmlUa = mergedHtmlUa;
       this.content.update(c => ({ ...c, mainHtmlUa: finalHtmlUa }));
-      this.validationIssues.set(
-        isConsumables
-          ? validateGeneratedHtml(finalHtmlUa, 'HTML (uk-UA)', input.name, UA_ISO, { templateId: input.templateId, imageManifest: imgManifest })
-          : htmlIssues,
-      );
+      this.validationIssues.set(htmlIssues);
 
       // Step 2 — Slug for ALL site languages, grounded in the uk-UA description. Localized name
       // is the single source of truth for H1 + Task B title core. Non-blocking: a slug failure
