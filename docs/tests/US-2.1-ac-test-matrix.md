@@ -1,12 +1,12 @@
 ---
 artifact: ac_test_matrix
 story: US-2.1
-version: 2
+version: 3
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-09-21T12:00:00Z
-updated_at: 2026-09-21T18:00:00Z
-supersedes: docs/tests/US-2.1-ac-test-matrix.md#1
+updated_at: 2026-09-22T16:00:00Z
+supersedes: docs/tests/US-2.1-ac-test-matrix.md#2
 inputs_consumed:
   - key: story
     version: 1
@@ -19,7 +19,7 @@ inputs_consumed:
   - key: plan_review
     version: 2
   - key: pipeline_status
-    version: 1
+    version: 4
 open_decisions_blocking: false
 ---
 
@@ -45,6 +45,17 @@ as a characterization or baseline.
 > keeps its file, its test name and all three of its assertions) and in `src/prompts/task-a-doc.spec.ts`
 > (the superseded `"3.0"` version pin), which no row in this matrix has ever named. See the test
 > strategy §0 and §9 and the test generation report §8.
+
+> **v3 — three rows are RED again, on the N9 ruling, and they are the suite's only red.** The human
+> decision of `2026-09-22T15:00:00Z` resolved N9 in favour of FR-16: `uk-UA` **preserves** its
+> thousands grouping. Three assertions in two **pre-existing** spec files
+> (`src/render/doc-prose-transforms.spec.ts`, `src/render/consumables-prose-transforms.spec.ts`)
+> encoded the opposite, legacy, locale-blind behaviour and now state FR-16's group-2 standard
+> instead. They are added to AC-10 below, marked `⬤`, and are red **now** rather than only at
+> authoring time — `IMPLEMENTATION` has not yet passed the target locale at
+> `doc-prose-transforms.ts:156` / `consumables-prose-transforms.ts:97`. The full logic suite is
+> `2 failed | 120 passed (122) / 3 failed | 2809 passed | 3 skipped (2815)`; every other row named
+> in this matrix remains green. **No other row's file or test name changed at v3.**
 
 ---
 
@@ -201,6 +212,9 @@ validator is the standing one.*
 | `src/utils/number-format-fixer.v4.spec.ts` | `FR-16 group 3 … › regroups a dot-grouped number for de-DE / es-ES / pt-PT` | FR-16 | ⬤ |
 | `src/utils/number-format-fixer.v4.spec.ts` | `FR-16 groups 1 and 2 … › leaves a group-1 number alone for <locale>` | FR-16 | ⬤ |
 | `src/utils/number-format-fixer.v4.spec.ts` | `FR-21 … › never changes a digit or a unit, and keeps the space between them` | FR-21 | ○ |
+| `src/render/doc-prose-transforms.spec.ts` | `normalizeDocProse — the production chain, on Doc fields › preserves the uk-UA non-breaking-space thousands grouping and localizes the decimal` | FR-16 | ⬤ |
+| `src/render/doc-prose-transforms.spec.ts` | `normalizeDocProse — the production chain, on Doc fields › applies to every text field, not just the hook` | FR-16 | ⬤ |
+| `src/render/consumables-prose-transforms.spec.ts` | `normalizeConsumablesDocProse — the production chain, on Doc fields › applies to every text field, not just the hook` | FR-16 | ⬤ |
 | `src/prompt-core/master-system-prompt.v4.spec.ts` | `NI-2 / FR-4 … › no longer routes a figure into §2 body text, nor weaves figures into §2 prose` | FR-23 | ⬤ |
 | `src/prompts/task-a-doc.v4.spec.ts` | `V10 / FR-23, FR-24 … › names §3 as where a video embed goes` | FR-24 | ⬤ |
 | `src/prompts/task-a-doc.v4.spec.ts` | `V10 / FR-23, FR-24 … › keeps the lead-in <p> obligation attached to every figure` | FR-23 | ⬤ |
@@ -208,6 +222,15 @@ validator is the standing one.*
 *The localized iframe `title` is model-authored prose the renderer escapes and never rewrites; the
 conformance matrix asserts it survives verbatim into every store's output. **R3 is recorded, not
 closed**: the group-3 switch ships with no automated detector — see the test strategy §7.*
+
+*The three `⬤` prose-transform rows are v3's, on the N9 ruling. They assert AC-10's thousands-separator
+clause **end-to-end through the production normalization chain**, which the two
+`number-format-fixer.v4.spec.ts` rows above assert only at the pure-function level: `normalizeDocProse`
+and `normalizeConsumablesDocProse` are what production actually calls, and they were reaching
+`fixNumberFormatting` **without a locale**, so a group-2 number was flattened after the fixer had been
+given the correct per-group behaviour. Each row asserts the positive — a U+00A0-grouped `uk-UA`
+number survives the whole chain verbatim — with the `20000` negative retained beside it. The
+codepoint derivation is in the test strategy §0a.*
 
 ### AC-11 — emitted document has `schemaVersion: '4.0'`; `'3.0'` per OD-2
 

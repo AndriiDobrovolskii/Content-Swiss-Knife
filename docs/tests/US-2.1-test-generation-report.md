@@ -1,12 +1,12 @@
 ---
 artifact: test_generation_report
 story: US-2.1
-version: 2
+version: 3
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-09-21T12:00:00Z
-updated_at: 2026-09-21T18:00:00Z
-supersedes: docs/tests/US-2.1-test-generation-report.md#1
+updated_at: 2026-09-22T16:00:00Z
+supersedes: docs/tests/US-2.1-test-generation-report.md#2
 inputs_consumed:
   - key: story
     version: 1
@@ -21,7 +21,7 @@ inputs_consumed:
   - key: plan_review
     version: 2
   - key: pipeline_status
-    version: 1
+    version: 4
 open_decisions_blocking: false
 ---
 
@@ -620,4 +620,157 @@ cannot return `undefined` for an index `Array.from` produced. `prompt-core` clea
 - **No workflow state written.** `docs/workflow/workflow-state.yaml` and `history.jsonl` untouched.
 - **The staged US-1.1 rollback in the working tree was not disturbed.** Every commit names its paths
   explicitly; no `git add -A`, no `git add .`, no `git commit -a`.
+- **No Pull Request pushed, opened or merged.**
+
+---
+
+## 9. v3 — the N9 loop-back, attempt 1 of 3
+
+`IMPLEMENTATION` returned `CHANGES_REQUIRED` with loop-back key `changes_required_tests` on a
+**single** issue, N9, resolved by the human ruling recorded in `docs/workflow/history.jsonl` at
+`2026-09-22T15:00:00Z`: FR-16's group-2 standard, under which `uk-UA` **preserves** its thousands
+grouping, is the v4 standard and overrides the legacy locale-blind behaviour encoded in two
+pre-existing spec files. The approver stated this is a legitimate update to match a new
+requirement, **not** an AGENTS.md §7.7 weakening.
+
+### 9.1 The character, derived from FR-16 — U+00A0
+
+The loop-back described it as "a non-breaking space". That was verified rather than taken on trust,
+and the result agrees, at **U+00A0 NO-BREAK SPACE**:
+
+| Source | What it says | Weight |
+|---|---|---|
+| `docs/specifications/US-2.1-spec.md:373` — FR-16's group table | group 2 (`uk-UA`, `ru-UA`, `pl-PL`): decimal comma, thousands **"non-breaking space"**, example `1 234 567,89` | **Authoritative in words.** The rendered example is typed with ordinary U+0020 in the Markdown source (hexdump: `1 ... 2 3 4 ... 5 6 7 , 8 9`, byte `0x20`) — a source-typing artifact, not a specification of the codepoint |
+| `src/prompt-core/constants.ts:626` — `NUMBER_FORMAT_RULES` | `- uk-UA / ru-UA: decimal comma, thousands non-breaking space  → 1 234 567,89` | Same: the words are the rule, the example's separators are U+0020 in the source |
+| `src/utils/number-format-fixer.ts:158` | `const NBSP = '<U+00A0>';` — hexdump `c o n s t   N B S P   =   ' 302 240 ' ;`, and `0xC2 0xA0` is UTF-8 for **U+00A0** | **Decisive.** This is the constant the fixer emits |
+| `src/utils/number-format-fixer.ts:73-75` — `regroupDotThousands` | group 3 replaces each thousands dot with **that same `NBSP`** | **Decisive by parity.** Groups 2 and 3 share one "non-breaking space" wording in FR-16, and group 3's implementation nominates U+00A0 |
+| `src/utils/number-format-fixer.ts:124` — `stripThousandsSeparators` | matches `[ \u00A0\u202F]` | **Not** a target. U+202F is a *tolerated input*, never an output the codebase nominates |
+
+**Conclusion: U+00A0, not U+202F, not U+0020.** The tests write it as the named ASCII-source
+constant `String.fromCharCode(0xa0)` rather than as a literal, so the expectation is legible in a
+diff. `consumables-prose-transforms.spec.ts` reuses the `NBSP` constant it already declared at
+`:95`, verified U+00A0 by hexdump (`' 302 240 '`).
+
+### 9.2 The three assertions
+
+| File | Site | Was | Is |
+|---|---|---|---|
+| `src/render/doc-prose-transforms.spec.ts` | `out.hook` (was `:161`) | `.not.toContain('20 000')` | ``.toContain(`20${NBSP_U00A0}000`)`` **+** `.not.toContain('20000')` |
+| `src/render/doc-prose-transforms.spec.ts` | `out.cta.text` (was `:183`) | `.not.toContain('20 000')` | ``.toContain(`20${NBSP_U00A0}000`)`` **+** `.not.toContain('20000')` |
+| `src/render/consumables-prose-transforms.spec.ts` | `out.cta` (was `:109`) | `.not.toContain('20 000')` | ``.toContain(`20${NBSP}000`)`` **+** `.not.toContain('20000')` |
+
+**Each site gained a positive assertion; none merely lost a negative.** The task's instruction was
+to assert the positive property rather than settle for deleting the negative, and the retained
+`not.toContain('20000')` pins the specific regression — flattening — that FR-16 forbids.
+
+**The fixture inputs changed to the FR-16-conformant form, deliberately.** They previously fed a
+U+0020-grouped number. Under FR-16 a U+0020-grouped `uk-UA` number is **non-conformant input**,
+about which FR-16 says nothing: the group-2 branch preserves it only incidentally, because
+`processTextNode` (`number-format-fixer.ts:112`) is a blanket no-op for that group. An assertion
+over it would state a property of the *implementation*, not of the *requirement* — the exact failure
+the skill contract names. One title changed with it, for honesty:
+`'strips a thousands separator and localizes the decimal for uk-UA'` →
+`'preserves the uk-UA non-breaking-space thousands grouping and localizes the decimal'`. The
+`describe`-level comment that read "thousands separators are stripped before the decimal pass" was
+corrected to "thousands grouping is settled before the decimal pass" and given the FR-16 rationale;
+leaving it would have left a comment contradicting the assertion directly beneath it.
+
+**Nothing else in either file changed.** `git diff` confirms: the two hunks in
+`doc-prose-transforms.spec.ts` and the one in `consumables-prose-transforms.spec.ts`, plus the
+`NBSP_U00A0` declaration and the corrected comment. Sixteen other tests across the two files are
+byte-identical and green, which is also the evidence neither module was taken down.
+
+### 9.3 The observed failure — verbatim, and it is the right reason
+
+```
+ FAIL  src/render/consumables-prose-transforms.spec.ts > normalizeConsumablesDocProse — the production chain, on Doc fields > applies to every text field, not just the hook
+AssertionError: expected 'Швидкість друку 20000 мм/хв.' to contain '20 000'
+
+ FAIL  src/render/doc-prose-transforms.spec.ts > normalizeDocProse — the production chain, on Doc fields > preserves the uk-UA non-breaking-space thousands grouping and localizes the decimal
+AssertionError: expected 'Швидкість 20000 мм/хв за 1,75 мм.' to contain '20 000'
+
+ FAIL  src/render/doc-prose-transforms.spec.ts > normalizeDocProse — the production chain, on Doc fields > applies to every text field, not just the hook
+AssertionError: expected 'Швидкість 20000 мм/хв.' to contain '20 000'
+```
+
+*(The `'20 000'` in the* expected *clause is the U+00A0 form; the terminal renders U+00A0 the same
+as a space. The* received *strings show the flattening.)*
+
+**Right reason, on the one discriminator that matters.** The received string is **exactly**
+`20000` — the group collapsed, with no separator of any kind left. That is the legacy
+locale-blind `stripThousandsSeparators` path and nothing else: had any later step in the chain
+(`fixDecimalSeparator`, `restoreIdentifierDots`, `cyrillizeUnits`, `normalizeTerminology`,
+`canonicalizeMultiInOne`) been mangling or relocating the U+00A0, the received string would show a
+surviving-but-altered separator instead. It does not. The rest of each string confirms the chain is
+otherwise working: `1.75 mm` → `1,75 мм` (decimal localized, unit cyrillized) in the first case.
+
+No failure is a missing import, a module-resolution error or a type error.
+
+### 9.4 Verified satisfiable — the fix is exactly the two call sites
+
+The tests must be red **and** reachable. Probed directly against the fixer, outside the repository
+tree (throwaway script, deleted; no repository file added):
+
+```
+input        : "Швидкість 20<U+00A0>000 мм/хв за 1.75 mm."
+locale-blind : "Швидкість 20000 мм/хв за 1.75 mm."        ← fixNumberFormatting(input)
+uk-UA        : "Швидкість 20<U+00A0>000 мм/хв за 1.75 mm." ← fixNumberFormatting(input, '', 'uk-UA')
+preserved?   : true
+```
+
+So the group-2 branch already behaves per FR-16; what is missing is the **locale argument** at the
+two production call sites, both of which still call `fixNumberFormatting(text)` bare:
+
+- `src/render/doc-prose-transforms.ts:156`
+- `src/render/consumables-prose-transforms.ts:97`
+
+Both are `IMPLEMENTATION`'s and were **not** touched by this stage. This is the TDD gate working as
+designed (AGENTS.md §5): the tests state the right expectation first, and `so-builder` turns them
+green.
+
+### 9.5 The numbers
+
+| Command | Result |
+|---|---|
+| `npx vitest run` — **baseline, before this stage's edits** | `Test Files 122 passed (122)` / `Tests 2812 passed \| 3 skipped (2815)` — **zero** pre-existing red |
+| `npx vitest run` — **after** | `Test Files 2 failed \| 120 passed (122)` / `Tests 3 failed \| 2809 passed \| 3 skipped (2815)` |
+| `npm run lint` (`tsc --noEmit`) | **exit 0, no output** — green |
+
+**All three red are this stage's, and there is no ambient red to separate them from.** 2812 − 3 =
+2809 exactly: no collateral. The staged US-1.1 rollback in the working tree (deleted
+`server/cors-policy.js` and `test/cors-policy.spec.ts`, modified `server/index.js`) contributes
+**no** failure — the baseline run above was taken on that same tree and was fully green.
+
+### 9.6 Recorded for RECONCILIATION — not acted on
+
+**NB-1 (carried, unchanged, and deliberately not closed here).** AC-1's `<b>{product}</b> —`
+opening form still has **no row in this matrix and no assertion anywhere in the suite**, and that is
+now also true of the schema rule landed at `50ead2a`, whose reject branch no test reaches.
+
+**Judgement, since the loop-back asked for one either way: a row and an assertion are genuinely
+owed, and this is not the stage to add them.** The behaviour is real and assertable — `50ead2a`'s
+reject branch is live code with a definite contract — so this is a true coverage gap, not a
+non-testable prose property. But adding it here would widen a loop-back a human scoped to one
+issue, and it would contaminate the red baseline this stage owes `so-builder`: the orchestrator
+needs "3 red, all N9" to hand over, not "4 red, 3 of them N9 and 1 unrelated". Recorded for
+RECONCILIATION to route deliberately.
+
+**N11 (settled, not widened).** The human confirmed the hook validator stays strict on `<b>` and
+correctly rejects `<strong>` at the hook start. The narrowness is intended. No test in this suite
+was broadened to accept `<strong>`, and none was added.
+
+### 9.7 Constraints honoured at v3
+
+- **Only `*.spec.ts` files were edited under `src/`.** `git diff --stat` for this revision touches
+  exactly `src/render/doc-prose-transforms.spec.ts`,
+  `src/render/consumables-prose-transforms.spec.ts` and the three artifacts. **`doc-prose-transforms.ts`
+  and `consumables-prose-transforms.ts` were not touched** — they are `IMPLEMENTATION`'s.
+- **`vitest.config.ts`, every threshold and every coverage `include` untouched.**
+- **No assertion weakened, deleted, skipped or relaxed.** Each of the three sites gained a positive
+  assertion and kept a negative. No `.skip`, no `.only`.
+- **No workflow state written.** `docs/workflow/workflow-state.yaml` and `history.jsonl` untouched —
+  the orchestrator owns both.
+- **The staged US-1.1 rollback was not disturbed.** The commit names its paths explicitly; no
+  `git add -A`, no `git add .`, no `git commit -a`. Porcelain went 32 → 34 entries, the two added
+  being this stage's modified spec files.
 - **No Pull Request pushed, opened or merged.**

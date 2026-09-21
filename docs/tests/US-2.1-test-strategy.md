@@ -1,12 +1,12 @@
 ---
 artifact: test_strategy
 story: US-2.1
-version: 2
+version: 3
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-09-21T12:00:00Z
-updated_at: 2026-09-21T18:00:00Z
-supersedes: docs/tests/US-2.1-test-strategy.md#1
+updated_at: 2026-09-22T16:00:00Z
+supersedes: docs/tests/US-2.1-test-strategy.md#2
 inputs_consumed:
   - key: story
     version: 1
@@ -21,11 +21,67 @@ inputs_consumed:
   - key: plan_review
     version: 2
   - key: pipeline_status
-    version: 1
+    version: 4
 open_decisions_blocking: false
 ---
 
 # Test Strategy — US-2.1: Migrate product descriptions to the v4.0 UA content schema
+
+## 0a. v3 — the N9 ruling, and the one thing it changed
+
+`IMPLEMENTATION` returned `CHANGES_REQUIRED` a second time, with loop-back key
+`changes_required_tests`, on a **single** issue: N9. The human ruling recorded in
+`docs/workflow/history.jsonl` at `2026-09-22T15:00:00Z` resolved N9 **in favour of FR-16**. FR-16's
+group-2 standard — under which `uk-UA` **preserves** its thousands grouping — is the v4 standard,
+and it overrides the locale-blind behaviour two pre-existing spec files encode. Those two files are
+updated to expect preservation.
+
+**Scope of v3: three assertions in two files. Nothing else in this suite is re-authored.**
+
+| File | Sites | Was | Is |
+|---|---|---|---|
+| `src/render/doc-prose-transforms.spec.ts` | 2 (`hook`, `cta.text`) | `expect(...).not.toContain('20 000')` | `expect(...).toContain(\`20${NBSP}000\`)` **and** `.not.toContain('20000')` |
+| `src/render/consumables-prose-transforms.spec.ts` | 1 (`cta`) | `expect(out.cta).not.toContain('20 000')` | `expect(out.cta).toContain(\`20${NBSP}000\`)` **and** `.not.toContain('20000')` |
+
+**The character, derived from FR-16 rather than taken from the loop-back prompt.** FR-16's group
+table (`docs/specifications/US-2.1-spec.md:373`) gives group 2 — `uk-UA`, `ru-UA`, `pl-PL` —
+"thousands: non-breaking space" **in words**. The table's rendered example `1 234 567,89` is typed
+with ordinary U+0020 in the Markdown source, as is `NUMBER_FORMAT_RULES`'
+(`src/prompt-core/constants.ts:626`) — those are source-typing artifacts and are **not** the
+authority. The codepoint is settled from the code that FR-16 governs: `number-format-fixer.ts:158`
+defines `const NBSP = '\u00A0'`, and group 3's `regroupDotThousands` (`:73-75`) emits **that**
+constant as its output separator. **U+00A0 NO-BREAK SPACE** is therefore the only character this
+codebase ever nominates as an output thousands separator, and it is what these tests assert.
+U+202F appears only inside `stripThousandsSeparators`' *input* character class
+(`[ \u00A0\u202F]`, `:124`) — a tolerated input, never a target. **Not** U+202F, **not** U+0020.
+
+**Why the fixture input changed too, and why that is not scope creep.** The three tests previously
+fed a U+0020-grouped number. Under FR-16 a U+0020-grouped `uk-UA` number is **non-conformant
+input**, about which FR-16 says nothing; the group-2 branch preserves it only incidentally, because
+`processTextNode` (`:112`) is a blanket no-op for that group. Asserting on it would state a
+property of the *implementation* rather than of the *requirement*. The inputs are therefore the
+FR-16-conformant U+00A0 form, and the assertion is that **that** form survives the chain. This is
+the skill's "write the assertion from the criterion, not from the proposed implementation" rule
+applied literally.
+
+**The separator is a named code-point constant, never a literal.** `doc-prose-transforms.spec.ts`
+gains `const NBSP_U00A0 = String.fromCharCode(0xa0)`; `consumables-prose-transforms.spec.ts` reuses
+the `NBSP` constant it already declares at `:95` (verified U+00A0 by hexdump). An invisible
+character in a diff is unreviewable, and this loop-back turns on a human ruling about exactly which
+character is expected, so it must be readable as such.
+
+**This is not an AGENTS.md §7.7 weakening, and the approver said so explicitly.** The assertions
+move to match an approved functional requirement, not to accommodate an implementation. They also
+got **stronger**, not weaker: each site replaced one negative (`not.toContain`) with a **positive**
+assertion of the required form plus a retained negative that the flattened `20000` does not appear.
+Deleting the negative and stopping there was available and was not taken.
+
+**These three tests are RED at the end of this stage, and that is the gate working.** The two
+`fixNumberFormatting` call sites that make them green —
+`src/render/doc-prose-transforms.ts:156` and `src/render/consumables-prose-transforms.ts:97`, both
+still calling `fixNumberFormatting(text)` with no locale — are `IMPLEMENTATION`'s. Verified
+directly against the fixer: `fixNumberFormatting(input, '', 'uk-UA')` returns the U+00A0 group
+intact, while `fixNumberFormatting(input)` flattens it to `20000`. See the test generation report §9.
 
 ## 0. v2 — what the loop-back changed, and what it did not
 
@@ -64,6 +120,12 @@ error about the module rather than one failure per contract. So:
   `render-conformance.spec.ts` and `render-reconciliation.spec.ts` are **not edited**.
 - The one exception at v1 was `src/prompts/optimizer.spec.ts`, which is appended to — every import
   it needs already resolves, so the new block cannot take the existing five tests down.
+- **v3 adds a third and fourth exception**, both on the N9 ruling and both outside the thirteen
+  new files: `src/render/doc-prose-transforms.spec.ts` (two assertions) and
+  `src/render/consumables-prose-transforms.spec.ts` (one). These are **pre-existing** tests that
+  predate this Story — last touched at `021f467` and `2747ad8` respectively, with
+  `git log 0622de6~1..HEAD --` on them empty — encoding the legacy locale-blind behaviour FR-16
+  supersedes. §0a carries the reasoning; every other test in both files is byte-identical.
 - **v2 adds a second exception**: `src/prompts/task-a-doc.spec.ts`, whose single superseded
   `schemaVersion` assertion is updated in place. v1 listed that file as not edited and recorded
   the update as T7's; `so-builder` correctly declined it because it may not edit tests, so it is
@@ -241,6 +303,13 @@ Untouched and green: `description-doc.schema.spec.ts`, `render-description.spec.
 `store-render-rules.spec.ts`, `scaffold-doc.spec.ts`. **`task-a-doc.spec.ts` left this list at v2**
 — one assertion in it is updated, for the reasons three bullets down; the file's other twelve tests
 are untouched and green.
+
+**`doc-prose-transforms.spec.ts` and `consumables-prose-transforms.spec.ts` are edited at v3**, and
+are the only two files this stage touches on this attempt. Three assertions in them stated the
+legacy locale-blind behaviour FR-16 group 2 supersedes; §0a records the ruling, the derived
+codepoint and why the change strengthens rather than weakens them. **They are the suite's only red
+at the end of this stage** — sixteen other tests in the same two files stay green and prove the
+edit did not take either module down.
 
 Five files are load-bearing for a decision in this suite:
 
