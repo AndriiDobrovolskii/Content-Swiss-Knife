@@ -72,6 +72,16 @@ const KillerSpecSchema = z.object({ label: NonEmpty, value: NonEmpty, why: Prose
 const ENDS_WITH_ALNUM = /[\p{L}\p{N}]$/u;
 const STARTS_WITH_ALNUM = /^[\p{L}\p{N}]/u;
 
+/**
+ * v4 §1's «Незмінний старт» — see the FR-1 rule in the version-guarded refinement at the bottom of
+ * this file, which is its only consumer.
+ *
+ * Lazy `.*?` so the FIRST `</b>` closes the name rather than the last: a hook that bolds a spec
+ * later in the sentence must still be measured on its opening element. `[\s\S]` rather than `.`
+ * because a model may wrap the hook across lines and `.` would not cross one.
+ */
+const HOOK_INVARIANT_START = /^<b>[\s\S]*?<\/b> — /;
+
 const BulletItemSchema = z.object({ lead: NonEmpty, text: Prose }).refine(
   i => !(ENDS_WITH_ALNUM.test(i.lead) && STARTS_WITH_ALNUM.test(i.text)),
   {
@@ -265,6 +275,33 @@ export const ProductDescriptionDocSchema = z.object({
  */
 .superRefine((doc: ProductDescriptionDoc, ctx) => {
   if (doc.schemaVersion !== '4.0') return;
+
+  // FR-1 / AC-1 — v4 §1's «Незмінний старт». The hook opens with the product name in <b>…</b>,
+  // then a space, an em dash and a space; what follows the dash is what the five §1 patterns vary.
+  //
+  // This is the structural half of FR-1, which states that a hook not in this form "is a structural
+  // defect and the generation is rejected by structural validation". Until now nothing rejected it:
+  // the prompt instructed the form (block 0's §1 clause) and the renderer emitted `<p>${prose(...)}</p>`
+  // without inspecting it.
+  //
+  // WHY `<b>` AND NOT ALSO `<strong>`. `Prose` admits both, and [FORMAT] tells the model to use
+  // <strong> for brands and model names — so a generation opening `<strong>Name</strong> — …` is
+  // plausible and would be rejected here. That is deliberate and narrow: FR-1 and AC-1 both name
+  // <b> specifically, and v4 §1's own five patterns are written `<b>[Назва]</b> — …`. Widening the
+  // rule would make the schema admit a shape the renderer's §2 <b> convention does not use.
+  // Recorded as a finding rather than decided silently.
+  //
+  // U+2014 EM DASH, not U+2013. The same character AC-2's rendered killer-spec form pins.
+  if (!HOOK_INVARIANT_START.test(doc.hook)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['hook'],
+      message:
+        'A 4.0 §1 hook opens with the invariant start: the product name wrapped in <b></b>, then ' +
+        'a space, an em dash (—) and a space, and only then the category. Rewrite the opening so ' +
+        'it reads "<b>{product name}</b> — {category} …"; vary what follows the dash, never the start.',
+    });
+  }
 
   // FR-4 — §2 is exactly one <h2> over one <ul>, so every §2 Block must be `bullets`.
   // EVERY offending Block is named, not just the first: an implementation that stops at the first
