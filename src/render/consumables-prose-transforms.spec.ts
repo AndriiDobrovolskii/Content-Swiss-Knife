@@ -103,10 +103,14 @@ describe('normalizeConsumablesDocProse — the production chain, on Doc fields',
 
   it('applies to every text field, not just the hook', () => {
     const doc = docWithEveryField();
-    doc.cta = 'Швидкість друку 20 000 мм/хв.';
+    // FR-16 group 2: uk-UA groups thousands with a NON-BREAKING SPACE (U+00A0), so the number pass
+    // must preserve that grouping rather than flatten it the locale-blind legacy way. See the
+    // matching note in doc-prose-transforms.spec.ts — the two chains are identical by design.
+    doc.cta = `Швидкість друку 20${NBSP}000 мм/хв.`;
     doc.specGroups[0].rows[0].value = '1.75 mm';
     const out = normalizeConsumablesDocProse(doc, 'uk-UA');
-    expect(out.cta).not.toContain('20 000');
+    expect(out.cta).toContain(`20${NBSP}000`);
+    expect(out.cta).not.toContain('20000');
     expect(out.specGroups[0].rows[0].value).toBe(`1,75${NBSP}мм`);
   });
 
