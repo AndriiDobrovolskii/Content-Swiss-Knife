@@ -5,7 +5,7 @@ slug: migrate-descriptions-to-v4-schemas
 title: Migrate product descriptions to the v4.0 UA content schema
 track: prompt
 version: 1
-status: DRAFT
+status: ARCHIVED
 owner: so-story-writer
 created_at: 2026-09-19T00:00:00Z
 updated_at: 2026-09-19T00:00:00Z

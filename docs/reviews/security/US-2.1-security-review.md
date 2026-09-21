@@ -3,7 +3,7 @@ artifact: security_review
 story: US-2.1
 version: 3
 supersedes: docs/reviews/security/US-2.1-security-review.md@v2
-status: APPROVED
+status: ARCHIVED
 owner: so-security-reviewer
 created_at: 2026-09-21T00:00:00Z
 updated_at: 2026-09-21T11:05:00Z

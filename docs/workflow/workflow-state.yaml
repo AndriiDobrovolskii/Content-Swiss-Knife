@@ -3,10 +3,10 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-2.1
-current_stage: PR_CREATION
-status: IN_PROGRESS
+current_stage: ARCHIVED
+status: ARCHIVED
 started_at: 2026-09-19T08:28:31Z
-updated_at: 2026-09-21T12:24:17Z
+updated_at: 2026-09-21T12:41:10Z
 pending_human_gate: null
 stage_attempts: {}
 track: prompt
