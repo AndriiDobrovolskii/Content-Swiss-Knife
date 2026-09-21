@@ -57,7 +57,14 @@ export function normalizeSeoNumbers(seo: SeoResponse, productName = ''): SeoResp
       // fixNumberFormatting is tag-aware via mapHtmlText; on a string with no tags the whole
       // value is a single text segment, so it behaves as a plain-text formatter here. It neither
       // decodes nor escapes entities, which is why "➔" and comma-decimals ("0,5") survive.
-      meta_description: item.meta_description ? fixNumberFormatting(item.meta_description, productName) : item.meta_description,
+      // `item.language` is the entry's own BCP47 target (FR-16). Passing it is what makes the
+      // locale-aware grouping branch reachable from production at all: without it every entry was
+      // formatted locale-blind, so a de-DE/es-ES/pt-PT description kept the dot grouping FR-16
+      // requires be republished with a non-breaking space, and an already-correct uk-UA grouping
+      // was flattened. The per-entry field is the right source here rather than a parameter —
+      // seo_data carries one entry PER LOCALE, so one locale for the whole response would be wrong
+      // for every entry but one.
+      meta_description: item.meta_description ? fixNumberFormatting(item.meta_description, productName, item.language) : item.meta_description,
     })),
   };
 }
