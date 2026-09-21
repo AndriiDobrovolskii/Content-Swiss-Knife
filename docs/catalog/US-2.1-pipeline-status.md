@@ -274,12 +274,25 @@ same gap could hide another clause. `:146-148` is exactly that shape: no numeral
 **Proposed replacement** — the dash is **U+2014**, matching `:217` and AC-2:
 
 ```
-- Open with a featured-snippet fact: the first sentence states what the product IS and what it
-  is best for. Substitute every fluff opener ("In the modern world…", "cutting-edge", "perfect
-  choice", "game-changer") with the §1 INVARIANT START defined in [CONTENT STRUCTURE] —
-  "<b>[Product]</b> — [Category] for [use-case]…" — never with a copula formula.
-  Keep such wording only when it is a literally verifiable fact from the input.
+- Open with a featured-snippet fact: the description's FIRST sentence states what the product is
+  and what it is best for. Substitute every fluff opener ("In the modern world…",
+  "cutting-edge", "perfect choice", "game-changer") with a plain factual statement wherever one
+  appears. Keep such wording only when it is a literally verifiable fact from the input.
+  For §1's opening sentence ONLY, that factual statement is the INVARIANT START defined in
+  [CONTENT STRUCTURE] clause 1 — never a copula formula. Later sections are governed by
+  HEADING FORM above and still never open by restating the product name.
 ```
+
+**THE TWO SCOPES ARE SPLIT DELIBERATELY, and a first draft of this request got it wrong.** The
+current clause fuses a *document-level* rule ("the first sentence is a featured-snippet fact",
+i.e. §1) with a *global* one ("substitute **every** fluff opener", which applies wherever one
+appears, including §3 and §4 section openings). A replacement that simply swaps the copula formula
+for the invariant start inherits that fusion and tells the model to open **every** section with a
+bolded product name and an em dash. That would collide head-on with two rules a few lines above —
+`:137` *"NO `<h3>` EVER CONTAINS THE PRODUCT NAME"* and `:140-143` *"Do not restate the full product
+name at the start of each section"* — and would leave block 0 in a worse state than it is today. So
+the ban stays global and unformulaic, and the invariant start is scoped to §1 explicitly, with a
+closing sentence that defers to `:140-143` rather than silently overriding it.
 
 **Checked so the reviewer does not have to:**
 
@@ -287,11 +300,14 @@ same gap could hide another clause. `:146-148` is exactly that shape: no numeral
    phrases and the verifiability proviso all survive. Only the *formula* changes, and it changes to
    a cross-reference rather than a restatement — so `[CONTENT STRUCTURE]` §1 stays the single
    authority and this does not recreate the two-authorities problem from the other side.
-2. **No test pins the text being replaced.** Swept across `src/**` and `test/**`: no assertion
-   references `featured-snippet`, `What is / Best for`, `designed for`, or any of the four banned
-   phrases. `occurrences('40–75')`/`('40–85')` are untouched — `:146-148` carries no numeral, which
-   is exactly why the numeral sweep missed it. **`B2` carries no `changes_required_tests`
-   dependency.**
+2. **No test pins the text being replaced.** Swept across `src/**` and `test/**` for
+   `featured-snippet`, `What is / Best for`, `fluff`, `designed for` and all four banned phrases.
+   **One hit, and it is not an assertion about this prompt:** `language-consistency.spec.ts:98`
+   builds an HTML *input* fixture containing *"The xTool F2 is a compact laser system designed
+   for …"*. That file does not import `MASTER_SYSTEM_PROMPT` and asserts nothing about it.
+   `occurrences('40–75')`/`('40–85')` are untouched — `:146-148` carries no numeral, which is
+   exactly why the numeral sweep missed it. **`B2` therefore carries no `changes_required_tests`
+   dependency**, which the approver should know before granting.
 3. **`bash arch-guard.sh --rebaseline` must ride in the same commit**, per §9 and the standing
    terms. It will, and the checksum diff will be shown to be one line as it was for B1.
 4. **Blast radius is the same as B1's** and needs no separate analysis: the same cached block 0, the
