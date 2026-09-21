@@ -3,7 +3,7 @@ artifact: quality_gate_report
 story: US-2.2
 version: 2
 supersedes: docs/verification/US-2.2-quality-gate-report.md v1
-status: APPROVED
+status: ARCHIVED
 owner: so-gate-enforcer
 stage: QUALITY_GATE
 created_at: 2026-09-21T23:00:00Z

@@ -5,7 +5,7 @@ slug: simplified-content-template-schemas
 title: Add simplified v4 content-template schemas and update the Content Template dropdown
 track: prompt
 version: 1
-status: DRAFT
+status: ARCHIVED
 owner: so-story-writer
 created_at: 2026-09-21T13:03:00Z
 updated_at: 2026-09-21T13:03:00Z

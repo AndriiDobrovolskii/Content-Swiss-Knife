@@ -2,7 +2,7 @@
 artifact: implementation_plan
 story: US-2.2
 version: 2
-status: APPROVED
+status: ARCHIVED
 owner: so-planner
 created_at: 2026-09-21T17:00:00Z
 updated_at: 2026-09-21T19:00:00Z

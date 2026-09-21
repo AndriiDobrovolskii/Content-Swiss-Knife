@@ -2,7 +2,7 @@
 artifact: specification
 story: US-2.2
 version: 1
-status: APPROVED
+status: ARCHIVED
 owner: so-spec-writer
 created_at: 2026-09-21T16:30:00Z
 updated_at: 2026-09-21T13:59:30Z
