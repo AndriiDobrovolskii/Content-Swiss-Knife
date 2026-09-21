@@ -357,9 +357,18 @@ it, so no task's acceptance check could have caught it.
 The sanctioned **US-1.1 rollback was not touched.** Its staged deletions (`docs/**/US-1.1-*`,
 `server/cors-policy.js`, `test/cors-policy.spec.ts`) and its unstaged `server/index.js` and
 `.env.example` edits remain exactly as handed over, as do the five untracked upstream stage reports.
-The single commit on this pass used an explicit pathspec and carries
-`docs/catalog/US-2.1-pipeline-status.md` alone — verified with `git show --stat HEAD`. Neither
-`git add -A`, `git add .` nor `git commit -a` was run.
+**Every** commit on this pass used an explicit pathspec and carries
+`docs/catalog/US-2.1-pipeline-status.md` **alone** — verified with `git show --stat` on each. Neither
+`git add -A`, `git add .` nor `git commit -a` was run, and `git diff --stat 5ee05c7..HEAD -- src/ test/`
+is **empty**.
+
+This artifact was recorded across more than one commit rather than one, and that is stated rather
+than glossed: `1cf20b8` wrote v3, and the follow-up corrected the §9 request text itself — the actual
+deliverable of a `BLOCKED` stage — after a review pass found that the proposed replacement line
+silently dropped `featuring [key specs]`, that the approver had not been told whether H1 forces a
+test change, and that three `implementation_plan` line citations were off by a few lines. Since no
+source file changed, AGENTS.md §13's "one complete working change" is not at stake; what would have
+been at stake is handing a human an approval request with a wrong replacement string in it.
 
 `docs/workflow/workflow-state.yaml` and `docs/workflow/history.jsonl` were **not written**; they
 remain the orchestrator's. No branch was pushed and no Pull Request was opened, updated or merged.
