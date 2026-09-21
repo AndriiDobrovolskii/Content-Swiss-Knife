@@ -33,6 +33,11 @@ import { validateProductNameConsistency, validateProductNameH1SlugAgreement } fr
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptADoc } from '../prompts/task-a-doc';
+// FR-14 — the service layer is the only one that sees input.name and input.website BEFORE the
+// prompt payload is built, which is where the Specification puts this choice. A HookPattern VALUE
+// crosses into the service; the instruction STRING stays inside task-a-doc.ts, so AGENTS.md §3
+// rule 3 (no prompt text in services) still holds.
+import { selectHookPattern } from '../prompt-core/hook-pattern';
 import { buildPromptAConsumablesDoc } from '../prompts/task-a-consumables-doc';
 import { usesDocPipeline, usesConsumablesDocPipeline } from '../prompt-core/doc-pipeline-flag';
 import { ProductDescriptionDocSchema } from '../domain/description-doc.schema';
@@ -362,9 +367,12 @@ export class ContentOrchestratorService {
     const restoredVideos = restoration.restored;
     html = wrapVideoFigures(html, input.name, 'uk-UA');
     html = wrapImageFigures(html);
-    html = fixNumberFormatting(html, input.name);
-    // Immediately after fixNumberFormatting, which has already stripped thousands separators —
-    // so the decimal pass sees one unambiguous number shape per value.
+    html = fixNumberFormatting(html, input.name, 'uk-UA');
+    // Immediately after fixNumberFormatting, so the decimal pass sees one canonical number shape
+    // per value. NOTE: now that a locale is passed, uk-UA takes FR-16's group-2 branch and the
+    // grouping is PRESERVED rather than stripped — the ordering still holds, because
+    // MEASURED_DECIMAL_RE excludes a 3-digit group itself (`\d+\.(?!\d{3}(?!\d))`) and never
+    // depended on the stripping for correctness.
     html = fixDecimalSeparator(html, 'uk-UA');
     // The inverse: a comma the MODEL wrote inside an identifier (F/2,0, 2,4G). Nothing else
     // catches those — the validator only looks for the opposite. Safe next to the forward
@@ -857,7 +865,9 @@ export class ContentOrchestratorService {
       // never satisfies usesDocPipeline() (proven impossible — see its own doc comment).
       const useConsumablesDocPipeline = usesConsumablesDocPipeline(input.templateId);
       const basePayloadA = useDocPipeline
-        ? buildPromptADoc(masterInput, 'Ukrainian (uk-UA)')
+        // The pattern is selected from the PRODUCT's own name + website pair, not from masterInput,
+        // so the same product draws the same hook however this path assembled its input (NFR-5).
+        ? buildPromptADoc(masterInput, 'Ukrainian (uk-UA)', selectHookPattern(input.name, input.website.name))
         : useConsumablesDocPipeline
         ? buildPromptAConsumablesDoc(masterInput, 'Ukrainian (uk-UA)')
         : buildPromptA(masterInput, 'Ukrainian (uk-UA)');
@@ -1093,7 +1103,7 @@ export class ContentOrchestratorService {
               html = this.applySpanishExpert3dReplacements(html);
             }
             // Covers ru-UA, a real Center 3D Print target; a no-op for pl/de/en.
-            html = normalizeTerminology(cyrillizeUnits(restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(html, input.name), locale), locale), locale), locale);
+            html = normalizeTerminology(cyrillizeUnits(restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(html, input.name, locale), locale), locale), locale), locale);
             html = canonicalizeMultiInOne(html, locale);
             // TIER 0 — deterministic, no LLM. A real es-ES artifact shipped with all seven image
             // URLs broken because the model rewrote the folder's ASCII hyphen as an EN DASH
@@ -1185,7 +1195,7 @@ export class ContentOrchestratorService {
               // and latin-unit-in-cyrillic-text findings that no instrument can reach (the FAQ had
               // no block rung either) — held to the master's standard without the master's tooling.
               // Ordering mirrors produceHtmlA above and is documented there.
-              html = fixNumberFormatting(html, input.name);
+              html = fixNumberFormatting(html, input.name, isoCode);
               html = fixDecimalSeparator(html, isoCode);
               html = restoreIdentifierDots(html, isoCode);
               html = cyrillizeUnits(html, isoCode);
@@ -1302,7 +1312,9 @@ export class ContentOrchestratorService {
       // See the sibling comment in generate().
       const useConsumablesDocPipelineUa = usesConsumablesDocPipeline(input.templateId);
       const basePayloadA = useDocPipelineUa
-        ? buildPromptADoc(uaInput, UA_BASE_LANGUAGE)
+        // BOTH call sites, not one. A pattern selected at generate() and not here would make the
+        // rotation depend on which code path a run took — see the sibling comment there.
+        ? buildPromptADoc(uaInput, UA_BASE_LANGUAGE, selectHookPattern(input.name, input.website.name))
         : useConsumablesDocPipelineUa
         ? buildPromptAConsumablesDoc(uaInput, UA_BASE_LANGUAGE)
         : buildPromptA(uaInput, UA_BASE_LANGUAGE);
@@ -1499,7 +1511,7 @@ export class ContentOrchestratorService {
             let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
             html = stripCodeFences(html);
             // Same normalizer chain as the sibling FAQ produce in generate() — see the rationale there.
-            html = fixNumberFormatting(html, input.name);
+            html = fixNumberFormatting(html, input.name, UA_ISO);
             html = fixDecimalSeparator(html, UA_ISO);
             html = restoreIdentifierDots(html, UA_ISO);
             html = cyrillizeUnits(html, UA_ISO);

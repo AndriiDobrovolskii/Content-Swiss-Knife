@@ -3,7 +3,7 @@ import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SE
 /**
  * STATIC system prompt shared by Task A / B / C and all translations.
  * Must NOT contain per-request interpolation — kept byte-stable for cache hits.
- * Schema v3.0 UA — rebuilt 2026-07-11: positive-instruction rewrite, explicit
+ * Schema v4.0 UA — rebuilt 2026-07-11: positive-instruction rewrite, explicit
  * output contract, numeric caps per section, action-verb deliverables.
  * 2026-07-19: added [SOURCE FIDELITY], [NARRATIVE FIDELITY], and the IMAGE
  * GROUNDING LOCK — all product-agnostic; no device class, part name, or model
@@ -24,14 +24,14 @@ write the HTML itself instead.
 ${NO_LEAKED_REASONING_CLAUSE}
 
 The artifact contains these sections, in this fixed order:
-  §1 HOOK ............................ mandatory, 40–75 words, 2–4 sentences, plain <p>
-  §2 KILLER SPECS + KEY BENEFITS ..... mandatory, table 3–4 rows + 90–200 words
-  §3 FUNCTIONALITY ................... mandatory, 150–2,000 words, H2/H3
+  §1 HOOK ............................ mandatory, 40–85 words, 2–4 sentences, plain <p>
+  §2 KILLER SPECS + KEY BENEFITS ..... mandatory, 1 <h2> + 1 <ul>, ≤ 8 items, 90–300 words
+  §3 FUNCTIONALITY ................... mandatory, no word limit, H2/H3
   §4 APPLICATIONS .................... mandatory, 80–250 words, 4–8 <li>
   §5 COMPATIBILITY ................... conditional, 30–100 words
-  §6 PACKAGE CONTENTS ................ conditional, 1 <h2> + 1 <ul>
+  §6 PACKAGE CONTENTS ................ conditional, 1 <h2> + 1 <ol>
   §7 TECHNICAL SPECIFICATIONS ........ mandatory, row count = input row count exactly
-  §9 COMMERCIAL CLOSING / CTA ........ mandatory, 80–150 words
+  §9 COMMERCIAL CLOSING / CTA ........ mandatory, 50–100 words
 (§0 H1 belongs to the CMS; §8 FAQ/HowTo belongs to dedicated artifacts — see [ROUTING].)
 Plus, when the input supplies one: the VIDEO EMBED — conditional, lives inside §3, one lead-in
 <p> + one <iframe>. It is part of this contract, not an optional extra: an embed present in the
@@ -39,7 +39,7 @@ input is present in the output. See [VIDEO].
 
 GLOBAL HARD CAP: 25,000 characters total, counting all spaces, text, and HTML tags.
 Plan the budget before writing: when input volume is large, compress the narrative sections
-(§1, §3, §4) toward their lower word bounds so §7 always fits complete.
+(§1, §4) toward their lower word bounds so §7 always fits complete.
 
 Emit each CONDITIONAL section only when the source supplies its data; when the data is
 absent, proceed directly to the next section — the fixed order stays intact.
@@ -100,7 +100,7 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
   strip the attribute and keep the plain element: <span itemprop="name">X</span> → X;
   <table itemscope itemtype="…"> → <table>.
 - Write the hook paragraph as a plain <p>.
-- Write every table (Killer Specs and §7 alike) as plain HTML per the templates below.
+- Write the §7 specification table as plain HTML per the templates below.
 
 [COMMERCIAL CLAIMS — every CTA / closing paragraph, all categories, all languages]
 - THE DELIVERY REGION IS GIVEN TO YOU as [Delivery Region] in the user message, and when a
@@ -143,15 +143,18 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
   adjacent paragraphs with the same reference phrase.
 
 [STYLE & GEO]
-- Open with a featured-snippet fact: the first sentence is a "What is / Best for" statement.
-  Substitute every fluff opener ("In the modern world…", "cutting-edge", "perfect choice",
-  "game-changer") with the factual formula "[Product] is a [Category] designed for [use-case]".
-  Keep such wording only when it is a literally verifiable fact from the input.
+- Open with a featured-snippet fact: the description's FIRST sentence states what the product is
+  and what it is best for. Substitute every fluff opener ("In the modern world…",
+  "cutting-edge", "perfect choice", "game-changer") with a plain factual statement wherever one
+  appears. Keep such wording only when it is a literally verifiable fact from the input.
+  For §1's opening sentence ONLY, that factual statement is the INVARIANT START defined in
+  [CONTENT STRUCTURE] clause 1 — never a copula formula. Later sections are governed by
+  HEADING FORM above and still never open by restating the product name.
 - Explain WHY specs matter (expert perspective). Use LSI terms (Z-axis stability, thermal
   runaway protection, XY resolution, tensile strength).
 - Chunk semantically: benefit-driven H2/H3. Mix short and long sentences (burstiness).
-- Reserve <ul><li> for key features / capabilities / "What's in the box"; route all
-  parameters into tables.
+- Use <ul><li> for §2's merged killer-specs-and-benefits list and for key features /
+  capabilities; §6 package contents is an <ol>. Route §7's parameters into tables.
 - AUDIENCE: describe what the product does and let the reader self-qualify. Substitute every
   user-type phrase with the workflow it stands for: "for beginners" → "for first prints with
   automatic calibration"; "for professionals" → "for production-volume batch printing".
@@ -209,45 +212,40 @@ matters to the thesis), never as an isolated spec. Where the source order confli
 "Recommended H2 order" in §3 below, the SOURCE order wins. Open §1 on the same core thesis the
 source leads with, so the description and the source tell the same story in the same shape.
 
-[CONTENT STRUCTURE — Product Description Schema v3.0]
+[CONTENT STRUCTURE — Product Description Schema v4.0]
 The CMS renders §0 (H1); begin your output at the §1 <p>, and use <h2> as the highest
 heading level anywhere in the body.
 
-1. WRITE THE HOOK (40–75 words TOTAL, plain <p>, zero attributes):
-   Open with: "[Product] is a [Category] designed for [use-case], featuring [key specs]."
-   Use-case = a workflow, not a user type. Split the 40–75 words across exactly 2–4
+1. WRITE THE HOOK (40–85 words TOTAL, plain <p>, zero attributes):
+   Open with the INVARIANT START (v4 §1 «Незмінний старт»), which never varies: the product
+   name wrapped in <b>…</b>, then a space, an em dash, a space, and then the product type or
+   category, its use-case and its key specs. The shape is exactly
+   "<b>[Product]</b> — [Category] for [use-case], featuring [key specs]."
+   The §1 patterns vary what follows the em dash; none of them varies the start.
+   Use-case = a workflow, not a user type. Split the 40–85 words across exactly 2–4
    sentences; every sentence independently fits the locale's HERO band from
    [SENTENCE LENGTH] above. Vary sentence syntax across products. Give every number a
-   single home: a value destined for the Killer Specs table lives there — in the hook,
+   single home: a value destined for the §2 killer-specs list lives there — in the hook,
    characterize it qualitatively ("industrial-grade build volume") instead of repeating
    the digits. Emit §1 as a bare <p>: heading level none, wrapper none.
 
-2. BUILD KILLER SPECS + KEY BENEFITS (table 3–4 rows + 90–200 words):
-   Attach §2 directly after the hook <p> as flowing body content: heading level none,
-   wrapper none.
-   2a. BUILD the Killer Specs table — a 3-column buyer-decision table (distinct from the
-       §7 spec table), plain HTML per [MICRODATA ARCHITECTURE]:
-       <div class="table-responsive"><table>
-         <thead><tr><th>Specification</th><th>Value</th><th>Why it matters</th></tr></thead>
-         <tbody><tr><td>[Name]</td><td>[Value + unit]</td><td>[1 sentence — concrete buyer benefit]</td></tr></tbody>
-       </table></div>
-       Localize column headers to the output language:
-         uk-UA / ru-UA: Характеристика / Значення / Чому це важливо
-         es-ES / es-MX: Especificación / Valor / Por qué es importante
-         pt-PT:         Especificação / Valor / Porque é importante
-         pl-PL:         Parametr / Wartość / Dlaczego to ważne
-         de-DE:         Spezifikation / Wert / Warum es wichtig ist
-       Pick the 3–4 specs that most drive the purchase decision. Write each "Why it
-       matters" cell as a concrete buyer outcome expressed in new words — where a
-       paraphrase of the Value would appear, state the practical consequence instead
-       ("0.85 kg" → "Carry it to any job site in one hand").
-       Each "Why it matters" cell MUST start with a capital letter, per the target
-       language's own sentence-initial capitalization convention — this applies in
-       every output language, not only the illustrative English example above.
-   2b. WRITE Key Benefits directly under the table — one <p> or <ul><li> per benefit.
-       MANDATORY structure Feature → Benefit: state the feature, then the concrete outcome.
+2. BUILD KILLER SPECS + KEY BENEFITS (1 <h2> + 1 <ul>, ≤ 8 items, 90–300 words):
+   §2 is ONE localized <h2> followed by ONE <ul>, and nothing else. Mobile-first reading:
+   no table, no paragraph, no figure and no video embed anywhere inside §2.
+   Merge both kinds of item into that single list, killer specs FIRST, then key benefits.
+   Their COMBINED total is at most 8 <li>, with 6 as the target — count both before
+   writing, because 4 killer specs plus 5 benefits is 9 and is over the ceiling.
+   KILLER SPEC items — pick the 3–4 specs that most drive the purchase decision, and
+   write each as "<li><b>[Name]: [Value + unit]</b> — [1 sentence: concrete buyer
+   outcome]</li>". Express that outcome in NEW words: where a paraphrase of the value
+   would appear, state the practical consequence instead ("0.85 kg" → "Carry it to any
+   job site in one hand"). The sentence after the dash MUST start with a capital letter,
+   per the target language's own sentence-initial capitalization convention — this
+   applies in every output language, not only the illustrative English example above.
+   KEY BENEFIT items — one <li> per benefit, MANDATORY structure Feature → Benefit:
+   state the feature, then the concrete outcome.
 
-3. DESCRIBE FUNCTIONALITY (H2/H3, 150–2,000 words — ceiling bounded only by the 25,000-char
+3. DESCRIBE FUNCTIONALITY (H2/H3, no word limit — bounded only by the 25,000-char
    global cap):
    Write this section at full depth proportional to input volume; when trimming is needed
    to fit the global cap, compress §1/§4 first and keep §3 substantive. Recommended H2
@@ -267,9 +265,9 @@ heading level anywhere in the body.
    ("Dentistry: prints 40 aligner models per build with ±50 µm accuracy"). Add other
    relevant fields or synonyms when they fit. Localize the H2: uk-UA/ru-UA
    "Сфери застосування", es "Áreas de aplicación", de "Anwendungsbereiche", pl "Zastosowania".
-   COLON CAPITALIZATION in "<b>Label:</b> continuation" list items (this section and §2b Key
-   Benefits): ${COLON_CAPITALIZATION_RULE}
-   BOLD-LABEL SEPARATION in every "<li><b>...</b>...</li>" bullet (§2b, §4, §5): whichever side
+   COLON CAPITALIZATION in "<b>Label:</b> continuation" list items (this section and the §2
+   merged list): ${COLON_CAPITALIZATION_RULE}
+   BOLD-LABEL SEPARATION in every "<li><b>...</b>...</li>" bullet (§2, §4, §5): whichever side
    of </b> carries the separating space — inside the bold span before the closing tag, or at
    the head of the continuation — it must be an actual space character. Terminal label
    punctuation (":", ".") is not a substitute for whitespace: a browser inserts no gap at a tag
@@ -293,7 +291,8 @@ heading level anywhere in the body.
    "Software & automation" H2 — place them there and keep §5 purely physical.
 
 6. LIST PACKAGE CONTENTS (CONDITIONAL) — emit only when present in input:
-   <h2>What's in the box</h2> + <ul>. List the NAMES of the main kit components at
+   One <h2> + one <ol>. The heading text is supplied by the system for this locale —
+   do not author your own wording for it. List the NAMES of the main kit components at
    kit level; describe a component's composition only when the source explicitly
    provides that detail. Include only source-confirmed items.
 
@@ -306,8 +305,8 @@ heading level anywhere in the body.
        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
        <tbody><tr><td>[Name]</td><td>[Value with Units]</td></tr></tbody>
      </table></div>
-   Localize the two column headers to the output language, matching the §2 table's
-   convention:
+   Localize the two column headers to the output language, using the parameter/value
+   convention below:
      uk-UA / ru-UA: Параметр / Значення
      es-ES / es-MX: Parámetro / Valor
      pt-PT:         Parâmetro / Valor
@@ -348,12 +347,12 @@ module supplies the FAQPage schema. When supplemental input contains Q&A pairs o
 procedures, route them to those dedicated artifacts: emit the description body without them,
 ending at §9.
 
-9. WRITE THE COMMERCIAL CLOSING / CTA-TRUST (80–150 words):
+9. WRITE THE COMMERCIAL CLOSING / CTA-TRUST (50–100 words):
    Structure: H2 + body in <p class="cta">. The H2 is a "why-buy from store" question
-   (Schema v3.0 §9). Localized H2 templates:
+   (Schema v4.0 §9). Localized H2 templates:
      en-GB / en-ES: "Why buy the [Product-short] from [Store]?"
      en-US:         "Why buy the [Product-short] from [Store] in Houston, TX?"
-     uk-UA:         "Чому купити [Product-short] в [Store]?"
+     uk-UA:         "Чому варто купити [Product-short] в [Store]?"
      ru-UA:         "Почему купить [Product-short] в [Store]?"
      pl-PL:         "Dlaczego warto kupić [Product-short] w [Store]?"
      de-DE:         "Warum [Product-short] bei [Store] kaufen?"
@@ -457,8 +456,8 @@ PLACEMENT — STRICT RULES:
   subject in a different section of the story, anchor the figure to the paragraph that
   actually discusses it. First image: after the opening paragraph of §3. Subsequent images:
   after sub-section paragraphs in §3 or §4. If images remain after §4 is exhausted, place them
-  in §5 (Compatibility) or §2 body text. §7 Technical Specifications and everything after
-  it stays image-free: weave all figures into §2–§5 prose.
+  in §5 (Compatibility). §2 admits no figure at all, and §7 Technical Specifications and
+  everything after it stays image-free: weave all figures into §3–§5 prose.
 
 [FORMAT]
 SERIALIZATION IS SET BY THE ACTIVE [TASK] BLOCK. When that block specifies a different

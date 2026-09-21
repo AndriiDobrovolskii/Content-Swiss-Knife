@@ -3,7 +3,7 @@ import { PromptPayload } from '../prompt-core/payload';
 import { NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 
 // ── Optimizer task instruction ─────────────────────────────────────────────
-// Reuses MASTER_SYSTEM_PROMPT's Schema v3.0 §1–§9 [CONTENT STRUCTURE] as the
+// Reuses MASTER_SYSTEM_PROMPT's Schema v4.0 §1–§9 [CONTENT STRUCTURE] as the
 // target shape for the rewrite, instead of hardcoding a separate list of
 // section names here — the Generator and Optimizer must never drift apart on
 // what a "correct" description looks like. Only the clauses that don't fit a
@@ -18,7 +18,7 @@ SCOPE OVERRIDE — LOCALE INDEPENDENCE (read before everything below): this task
 [Store Name] and is not bound to any store, region, or currency. The entire [REGIONAL STRATEGY]
 section in [MASTER_SYSTEM_PROMPT] above is INAPPLICABLE here — do not use it to select language,
 currency, or region, and do not infer a store from an image URL's domain or a brand's country of
-origin. Every language-keyed table elsewhere in this prompt (§2a/§7 column headers, §9 H2
+origin. Every language-keyed table elsewhere in this prompt (§7 column headers, §9 H2
 templates, [COMMERCIAL CLAIMS] phrase substitutions, [PRODUCT NAME LOCALIZATION], [UNIT
 LOCALIZATION]) is a REFERENCE PATTERN, not an allow-list: [INPUT HTML]'s language may be ANY
 language, including ones with no worked example above. When it isn't listed, apply the SAME
@@ -37,8 +37,8 @@ ${NO_LEAKED_REASONING_CLAUSE}
 
 OUTPUT LANGUAGE (HARD CONSTRAINT): determine the output language SOLELY from the language of
 [INPUT HTML]'s own visible prose — its paragraphs, headings, and list items. Write 100% of the
-output in that one language: every paragraph, heading, table cell (in both the §2a highlight table
-and the full §7 table), figcaption, and list item, from the first character to the last, with zero
+output in that one language: every paragraph, heading, list item in the §2 merged list, §7 table
+cell, and figcaption, from the first character to the last, with zero
 language switching partway through. Do NOT let brand names, company names, or any URL's domain/path
 (e.g. an <img src> pointing at a .es domain, or a company name that sounds Spanish/French/etc.)
 influence this decision — those are not language signal, and this task has produced incorrect
@@ -46,20 +46,33 @@ output before by treating them as if they were. If [INPUT HTML] itself already m
 match the language of its longest/majority stretch of prose and normalize the entire output into
 that single language.
 
-SCOPE: this is a REWRITE task: restructure [INPUT HTML] below into the Schema v3.0 §1–§9 order
+SCOPE: this is a REWRITE task: restructure [INPUT HTML] below into the Schema v4.0 §1–§9 order
 already defined in [CONTENT STRUCTURE] above (Hook → Killer Specs + Key Benefits → Functionality →
 Applications → Compatibility [conditional] → Package Contents [conditional] → Technical
 Specifications → Commercial Closing/CTA), reusing that schema's exact section names, heading
-templates, and table formats — including the §2a Killer Specs highlight table (3–4 rows,
-Specification / Value / Why it matters, localized headers) and the full §7 Technical
-Specifications section.
+templates, and table formats.
+
+MIGRATE A LEGACY §2 TO THE v4 SHAPE. [INPUT HTML] was very often written to the previous schema,
+in which §2 was a three-column buyer-decision table followed by separate benefit paragraphs. Do
+NOT reproduce that table. Merge its rows and those benefits into ONE <ul> under ONE localized
+<h2>, killer specs first, at most 8 <li> combined — drop the weakest items when the source has
+more. Write each migrated table row as "<li><b>[Name]: [Value + unit]</b> — [1 sentence: concrete
+buyer outcome]</li>", carrying the row's "why it matters" text across as that sentence. §2 in the
+output contains no table, no paragraph and no figure.
+
+FORMAT §6 PACKAGE CONTENTS AS AN <ol> under its localized <h2>, not a <ul>, whenever the input
+supplies kit contents at all.
+
+§7 MULTI-VALUE CELLS: where the input spreads one parameter over several rows, or nests a list
+inside a value cell, comma-join those values into ONE row with a single plain-text value
+("PA 12, PA 11, PA 12 GB"). One parameter, one row, no nested list.
 
 FACT SOURCE (HARD CONSTRAINT): build every fact, spec, number, claim, and image exclusively from
 [INPUT HTML]. Where a gap invites a plausible-sounding addition, keep the gap and write only
 source-confirmed content. §7 COMPLETENESS applies here too — count every spec row in the input
-first and reproduce exactly that many rows in the final Technical Specifications section; keep the
-§2a highlight table additive (a curated 3–4-row preview drawn from those same rows) so the full §7
-table always ships complete alongside it.
+first and reproduce exactly that many rows in the final Technical Specifications section, after any
+comma-joining above has merged split rows of the SAME parameter; keep §2's merged list additive (a
+curated preview drawn from those same specs) so the full §7 table always ships complete alongside it.
 
 OVERRIDE — [IMAGE HANDLING] source of truth: for this task, [INPUT HTML] itself is the image
 manifest. Keep every <img src> found in the input verbatim — the output contains exactly as many

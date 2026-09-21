@@ -133,8 +133,8 @@ export function mapDocText(doc: ProductDescriptionDoc, fn: TextTransform): Produ
  * ORDER IS COPIED FROM THE ORCHESTRATOR'S HTML CHAIN, NOT RE-DERIVED, and its reasons are recorded
  * there:
  *
- *   1. fixNumberFormatting   strips thousands separators, so the decimal pass below sees one
- *                            unambiguous number shape per value.
+ *   1. fixNumberFormatting   normalizes thousands grouping per locale (FR-16: group-1 strips,
+ *                            group-2 such as uk-UA preserves), ahead of the decimal pass below.
  *   2. fixDecimalSeparator   localizes a decimal — only when a unit follows it.
  *   3. restoreIdentifierDots the inverse: a comma the MODEL wrote inside an identifier (F/2,0,
  *                            2,4G) is not a decimal. Nothing else catches those; the validator only
@@ -153,7 +153,7 @@ export function normalizeDocProse(doc: ProductDescriptionDoc, locale: string): P
     canonicalizeMultiInOne(
       normalizeTerminology(
         cyrillizeUnits(
-          restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(text), locale), locale),
+          restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(text, '', locale), locale), locale),
           locale,
         ),
         locale,

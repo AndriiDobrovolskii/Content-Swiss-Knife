@@ -147,18 +147,32 @@ describe('mapDocText — completeness', () => {
   });
 });
 
+/**
+ * FR-16 group 2's thousands separator: U+00A0 NO-BREAK SPACE. Written as a code point rather than
+ * a literal so the expectation is legible in a diff instead of being an invisible character — this
+ * is the exact character the ruling on N9 settled on, and it must be readable as such.
+ */
+const NBSP_U00A0 = String.fromCharCode(0xa0);
+
 describe('normalizeDocProse — the production chain, on Doc fields', () => {
   /**
-   * Order is load-bearing and is documented at the orchestrator's HTML chain: thousands separators
-   * are stripped before the decimal pass so it sees one unambiguous number shape, the identifier
+   * Order is load-bearing and is documented at the orchestrator's HTML chain: thousands grouping is
+   * settled before the decimal pass so it sees one unambiguous number shape, the identifier
    * pass runs after it as the inverse, units are cyrillized before terminology so its Cyrillic
    * word-boundary lookarounds see final orthography. Relocating must preserve that, not re-derive it.
+   *
+   * FR-16 group 2 (`uk-UA`, `ru-UA`, `pl-PL`) sets the thousands separator to a NON-BREAKING SPACE
+   * (U+00A0) and the decimal to a comma. Published uk-UA output is therefore already correct on
+   * grouping, so the number pass must PRESERVE the grouping rather than flatten it — the
+   * locale-blind legacy path strips U+0020/U+00A0/U+202F groups alike and would turn a conformant
+   * `20 000` into `20000`. That behaviour is superseded here on the human ruling recorded for N9.
    */
-  it('strips a thousands separator and localizes the decimal for uk-UA', () => {
+  it('preserves the uk-UA non-breaking-space thousands grouping and localizes the decimal', () => {
     const doc = docWithEveryField();
-    doc.hook = 'Швидкість 20 000 мм/хв за 1.75 mm.';
+    doc.hook = `Швидкість 20${NBSP_U00A0}000 мм/хв за 1.75 mm.`;
     const out = normalizeDocProse(doc, 'uk-UA');
-    expect(out.hook).not.toContain('20 000');
+    expect(out.hook).toContain(`20${NBSP_U00A0}000`);
+    expect(out.hook).not.toContain('20000');
     expect(out.hook).toContain('1,75');
   });
 
@@ -177,10 +191,11 @@ describe('normalizeDocProse — the production chain, on Doc fields', () => {
 
   it('applies to every text field, not just the hook', () => {
     const doc = docWithEveryField();
-    doc.cta.text = 'Швидкість 20 000 мм/хв.';
+    doc.cta.text = `Швидкість 20${NBSP_U00A0}000 мм/хв.`;
     doc.figures[0].caption = 'Точність 0.05 mm.';
     const out = normalizeDocProse(doc, 'uk-UA');
-    expect(out.cta.text).not.toContain('20 000');
+    expect(out.cta.text).toContain(`20${NBSP_U00A0}000`);
+    expect(out.cta.text).not.toContain('20000');
     expect(out.figures[0].caption).toContain('0,05');
   });
 

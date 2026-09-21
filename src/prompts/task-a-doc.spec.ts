@@ -78,8 +78,17 @@ describe('TASK_A_DOC_INSTRUCTION — the output contract', () => {
     expect(TASK_A_DOC_INSTRUCTION).toMatch(/no code fences|without code fences/i);
   });
 
+  /**
+   * 🔴 THE PINNED VERSION IS `"4.0"` AS OF US-2.1, AND THAT IS A CONTRACT CHANGE, NOT A WEAKENING.
+   * FR-15 ("every new generation emits `schemaVersion: '4.0'`") governs what this prompt asks for;
+   * `'3.0'` remains accepted only at PARSE and RENDER, for documents already cached — which is
+   * `description-doc.schema.spec.ts`'s and `render-description.spec.ts`'s subject, not this one.
+   * FR-30 and plan D16 forbid a downgrade path, so the model is never shown `"3.0"` as an option;
+   * `task-a-doc.v4.spec.ts` carries that negative beside the positive here. The two assertions were
+   * mutually unsatisfiable against one string while this one still read `"3.0"`.
+   */
   it('pins the schema version the validator expects', () => {
-    expect(TASK_A_DOC_INSTRUCTION).toContain('"schemaVersion": "3.0"');
+    expect(TASK_A_DOC_INSTRUCTION).toContain('"schemaVersion": "4.0"');
   });
 
   /** Constraints the zod schema enforces — if the prompt omits them, every generation fails late. */

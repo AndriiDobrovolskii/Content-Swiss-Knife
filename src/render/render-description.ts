@@ -23,7 +23,7 @@ import type {
   Subsection,
   VideoEmbed,
 } from '../domain/description-doc';
-import { KILLER_SPECS_HEADERS, SPEC_TABLE_HEADERS } from '../prompt-core/constants';
+import { KILLER_SPECS_HEADERS, SPEC_TABLE_HEADERS, V4_SECTION_HEADINGS } from '../prompt-core/constants';
 import { getRenderRules } from '../prompt-core/store-render-rules';
 import { ensureRel0 } from '../utils/video-url';
 // From video-title.ts, NOT video-figure.ts: that module calls new DOMParser(), and this one
@@ -252,6 +252,42 @@ function renderKillerSpecs(doc: ProductDescriptionDoc, ctx: RenderContext): stri
 }
 
 /**
+ * §2 for a `'4.0'` document — one <h2> over ONE <ul> merging killer specs and key benefits.
+ *
+ * This is the whole of FR-4's composition change. Under `'3.0'` the same content is a two-column
+ * table (renderKillerSpecs, above) followed by whatever Blocks `keyBenefits` carried; under
+ * `'4.0'` the schema has already guaranteed those Blocks are `bullets` only and that the combined
+ * item count is at most 8, so this function can flatten without checking.
+ *
+ * THE ITEM FORM, and why its whitespace is the renderer's to supply. The killer-spec lead is
+ * `{label}: {value}` inside the <b>, then a LITERAL em dash (U+2014) with a space on each side
+ * OUTSIDE it, then the benefit. `esc()` replaces only `& < > "`, so the dash stays a real
+ * character rather than an entity. The renderer supplies that separator because it COMPOSES the
+ * lead — the "whitespace is authored content" rule governs fields the model wrote, and this
+ * separator is not one of them. The space after `</b>` is also what keeps the form clear of
+ * `bold-label-glue` (output-validator.ts:333-341), which needs a letter immediately after `</b>`.
+ *
+ * The heading falls back to en-gb for an unlisted locale, matching renderKillerSpecs and
+ * renderSpecs above. That differs from `getRenderRules(...).ctaHeading`, which throws instead, and
+ * the difference is deliberate: this is a section label, where the neighbouring functions' English
+ * fallback is the established behaviour, while §9's CTA is a full sentence naming the store, where
+ * a silent English fallback would ship wrong-language PROSE rather than a wrong-language label.
+ */
+function renderKeyBenefitsV4(doc: ProductDescriptionDoc): string {
+  const headings = V4_SECTION_HEADINGS[doc.locale.toLowerCase()] ?? V4_SECTION_HEADINGS['en-gb'];
+  const specItems = doc.killerSpecs.map(
+    s => `<li><b>${esc(s.label)}: ${esc(s.value)}</b> — ${prose(s.why)}</li>`,
+  );
+  // Only `bullets` Blocks carry items, and for `'4.0'` the schema admits no other kind — the
+  // filter is what makes that guarantee explicit rather than a cast.
+  const benefitItems = doc.keyBenefits.flatMap(b =>
+    b.kind === 'bullets' ? b.items.map(i => `<li><b>${esc(i.lead)}</b>${prose(i.text)}</li>`) : [],
+  );
+  const items = [...specItems, ...benefitItems].join('\n');
+  return `<h2>${esc(headings.keyBenefitsH2)}</h2>\n<ul>\n${items}\n</ul>`;
+}
+
+/**
  * §7 — one <h3> + one themed table per category. [VERBATIM shape from table-finalize.ts
  * restyleSpecTables]: an uppercase comment marker, the category <h3>, and a table carrying the
  * store's theme classes whose <thead> row is two <td><b>…</b></td> cells (NOT <th> — see the
@@ -308,10 +344,18 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
   const positions = figurePositions(doc);
   const block = (b: Block) => renderBlock(b, doc, positions, ctx);
 
+  // The ONE version branch this renderer takes, at three points: §2's composition here, §6's list
+  // element, and §9's CTA heading below. Everything else — renderFigure, renderVideo, renderSpecs,
+  // figurePositions, the <section>/<hr> discipline — is version-blind and stays that way.
+  const isV4 = doc.schemaVersion === '4.0';
+
   const parts: string[] = [
     `<p>${prose(doc.hook)}</p>`,
-    renderKillerSpecs(doc, ctx),
-    ...doc.keyBenefits.map(block),
+    // §2. The `'3.0'` arm is the §2a table followed by the keyBenefits Blocks, byte-for-byte what
+    // it always was — leak L6's detector is test/render-reconciliation.spec.ts on both corpus items.
+    ...(isV4
+      ? [renderKeyBenefitsV4(doc)]
+      : [renderKillerSpecs(doc, ctx), ...doc.keyBenefits.map(block)]),
     ...doc.functionality.map(s => renderSubsection(s, doc, positions, ctx)),
   ];
 
@@ -333,15 +377,35 @@ export function renderDescription(doc: ProductDescriptionDoc, ctx: RenderContext
     parts.push(renderSubsection(doc.compatibility, doc, positions, ctx));
   }
 
+  // §6. The list container is the third and last of D8's version-conditional points: an <ol> for
+  // `'4.0'` (FR-6, AC-5), a <ul> for `'3.0'`. The <h2> and every <li> are identical on both paths.
+  //
+  // VERSION-SCOPED, NOT UNCONDITIONAL, and this must not be "simplified" to save one ternary.
+  // FR-15 says a `'3.0'` document keeps the previous handling rules WHEREVER THEY DIFFER, and the
+  // <ul> is such a rule: it is the element every already-shipped `'3.0'` artifact carries. An
+  // unconditional <ol> would make a re-render of a cached document differ from what shipped, for a
+  // change no requirement makes retroactive.
+  //
+  // AND IT IS THE ONE CHANGE THE CORPUS CANNOT SEE: neither committed .doc.json carries
+  // packageContents at all, so test/render-reconciliation.spec.ts is byte-for-byte green under
+  // EITHER choice of element. V15 is this change's only detector, in both directions.
   if (doc.packageContents) {
     const items = doc.packageContents.items.map(i => `<li>${esc(i)}</li>`).join('\n');
-    parts.push(`<h2>${esc(doc.packageContents.heading)}</h2>\n<ul>\n${items}\n</ul>`);
+    const [open, close] = isV4 ? ['<ol>', '</ol>'] : ['<ul>', '</ul>'];
+    parts.push(`<h2>${esc(doc.packageContents.heading)}</h2>\n${open}\n${items}\n${close}`);
   }
 
   // §7 is the only <section>, and the only <hr> follows it.
   parts.push(`${renderSpecs(doc.specs.heading, doc.specs.categories, doc.locale)}\n<hr>`);
 
-  parts.push(`<h2>${esc(doc.cta.heading)}</h2>\n<p class="cta">${prose(doc.cta.text)}</p>`);
+  // §9. For `'4.0'` the heading is ASSEMBLED from the per-locale template (FR-11, D6) and
+  // `doc.cta.heading` is discarded — which is what makes FR-11's "a heading off the template fails
+  // validation" path unreachable rather than merely checked. The CTA paragraph is unchanged on
+  // both paths; only the heading branches.
+  const ctaHeading = isV4
+    ? getRenderRules(ctx.storeName ?? '').ctaHeading(doc.locale, doc.localizedName)
+    : doc.cta.heading;
+  parts.push(`<h2>${esc(ctaHeading)}</h2>\n<p class="cta">${prose(doc.cta.text)}</p>`);
 
   return parts.join('\n\n');
 }

@@ -94,7 +94,7 @@ export function normalizeConsumablesDocProse(doc: ConsumablesDescriptionDoc, loc
     canonicalizeMultiInOne(
       normalizeTerminology(
         cyrillizeUnits(
-          restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(text), locale), locale),
+          restoreIdentifierDots(fixDecimalSeparator(fixNumberFormatting(text, '', locale), locale), locale),
           locale,
         ),
         locale,
