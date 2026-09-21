@@ -2,7 +2,7 @@
 artifact: quality_gate_report
 story: US-2.1
 version: 3
-status: APPROVED
+status: ARCHIVED
 owner: so-gate-enforcer
 created_at: 2026-09-21T20:30:00Z
 updated_at: 2026-09-23T13:00:00Z
