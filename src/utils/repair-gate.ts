@@ -1,6 +1,8 @@
 import { PromptPayload } from '../prompt-core/payload';
 import { ValidationIssue } from './output-validator';
-import { REPAIR_STRATEGIES, RepairTier, getAtPath, isLadderCandidate, resolveLadder, setAtPath } from './repair-strategy';
+import {
+  NON_REGENERABLE_RULES, REPAIR_STRATEGIES, RepairTier, getAtPath, isLadderCandidate, resolveLadder, setAtPath,
+} from './repair-strategy';
 
 export interface RepairGateOptions<T> {
   label: string;
@@ -115,6 +117,13 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
   const attempts: RepairAttemptRecord[] = [];
 
   const errCount = (is: ValidationIssue[]) => is.filter(i => i.severity === 'error').length;
+  // US-3.1 T4 (FR-2(b), plan D3). Same shape as errCount, but excludes a NON_REGENERABLE_RULES
+  // member — no full-document regeneration can ever resolve one, so it must not keep the main loop
+  // below spending attempts on a run whose only remaining error is unfixable by that instrument.
+  // `errCount`/`best.errors` themselves stay as-is: they still drive the strictly-better tie-break,
+  // which must keep counting every error, regenerable or not, to compare attempts honestly.
+  const regenerableErrorCount = (is: ValidationIssue[]) =>
+    is.filter(i => i.severity === 'error' && !NON_REGENERABLE_RULES.has(i.rule)).length;
   const issueKey = (i: ValidationIssue) => `${i.rule}::${i.context}`;
 
   /**
@@ -340,7 +349,9 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
   best = { artifact, issues, errors: errCount(issues), attempt: 0 };
 
   while (repairsUsed < opts.maxRepairs) {
-    if (best.errors === 0) break;
+    // US-3.1 T4 (FR-2(b)): a NON_REGENERABLE_RULES-only remainder must not keep burning the
+    // regeneration budget — see regenerableErrorCount's own doc comment above.
+    if (regenerableErrorCount(best.issues) === 0) break;
     const issuesBefore = issues.filter(i => i.severity === 'error');
     opts.onAttempt?.(repairsUsed + 1, errCount(issues));
     artifact = await opts.produce(opts.withFeedback(opts.basePayload, issuesBefore));
@@ -494,8 +505,11 @@ export function toArtifactReport(
   preValidationFixes?: RepairArtifactReport['preValidationFixes'],
 ): RepairArtifactReport {
   const finalErrors = result.finalIssues.filter(i => i.severity === 'error').length;
+  // US-3.1 T4 (FR-2(b)(iii)): reordered so `repairsUsed === 0` no longer implies `finalErrors === 0`
+  // — a NON_REGENERABLE_RULES-only run now legitimately has repairsUsed 0 AND a persisting
+  // error-severity issue, which the old `repairsUsed === 0 ? 'clean' : …` ordering misreported.
   const status: RepairArtifactReport['status'] =
-    result.repairsUsed === 0 ? 'clean' : finalErrors === 0 ? 'repaired' : 'unresolved';
+    finalErrors > 0 ? 'unresolved' : result.repairsUsed === 0 ? 'clean' : 'repaired';
   return {
     label,
     repairsUsed: result.repairsUsed,

@@ -385,6 +385,20 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
  * behaves exactly as it did before the ladder existed — reported, never repaired — which keeps the
  * un-migrated rules in output-validator.ts unaffected.
  */
+/**
+ * Rules no repair instrument can ever resolve within one run — US-3.1 T4 (FR-2(b), plan D3).
+ *
+ * `specs-grounding-disabled` is exactly that: it fires when the specs-translation call behind §7
+ * grounding could not be completed (even after retry — see `groundingSpecs()`,
+ * content-orchestrator.service.ts), and no rewrite of any FIELD changes whether that call
+ * succeeded. Spending a full-document regeneration on a run whose only error-severity issue is
+ * this one is a disproportionate cost for a condition regeneration cannot fix — `repair-gate.ts`'s
+ * main loop excludes a `NON_REGENERABLE_RULES` member from its "anything left worth another
+ * attempt" check, while still counting it toward `finalIssues`/`toArtifactReport`'s status so the
+ * failure is never silently reported as `'clean'`.
+ */
+export const NON_REGENERABLE_RULES: ReadonlySet<string> = new Set(['specs-grounding-disabled']);
+
 export function isLadderCandidate(issue: ValidationIssue): boolean {
   if (issue.severity === 'error') return true;
   return !!issue.path && REPAIR_STRATEGIES.has(issue.rule);
