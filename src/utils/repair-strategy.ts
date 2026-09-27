@@ -278,6 +278,9 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
         return [
           'Shorten this meta_title so it fits the character limit.',
           `Current length: ${actual} characters. Limit: ${limit}. Remove at least ${surplus}.`,
+          'If this title ends in a single mark character not part of the product name (added so ' +
+            "the title is never identical to the page's H1 value), keep that mark while " +
+            'shortening — never drop it, and never let the result become identical to the H1 value.',
           'Return ONLY the corrected title as plain text — no quotes, no commentary, no JSON.',
           '',
           current,
