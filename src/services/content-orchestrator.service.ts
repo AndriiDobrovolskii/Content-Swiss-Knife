@@ -15,6 +15,7 @@ import {
 import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
+import { validateSeoMetadataShape } from '../utils/seo-metadata-shape';
 import {
   validateSpecsGrounding, validateSpecsGroundingDoc, isAlreadyCyrillic, inspectGroundedTranslation,
   describeGroundingFailure, type GroundingInspection,
@@ -898,7 +899,12 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }), input.name),
-        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
+        validate: (json) => [
+          ...validateSeoMetadata(json, NO_CURRENCY_CHECK),
+          // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
+          // living outside the FROZEN output-validator.ts (OD-4's resolution).
+          ...validateSeoMetadataShape(json, 'SEO metadata'),
+        ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -1299,7 +1305,12 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }), input.name),
-        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
+        validate: (json) => [
+          ...validateSeoMetadata(json, NO_CURRENCY_CHECK),
+          // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
+          // living outside the FROZEN output-validator.ts (OD-4's resolution).
+          ...validateSeoMetadataShape(json, 'SEO metadata'),
+        ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -1397,7 +1408,12 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }), input.name),
-        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
+        validate: (json) => [
+          ...validateSeoMetadata(json, NO_CURRENCY_CHECK),
+          // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
+          // living outside the FROZEN output-validator.ts (OD-4's resolution).
+          ...validateSeoMetadataShape(json, 'SEO metadata'),
+        ],
         withFeedback: appendRepairFeedback,
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
@@ -1680,6 +1696,8 @@ export class ContentOrchestratorService {
       ...validateSentenceLength(c.mainHtmlUa, masterLocale, `HTML (${masterLocale})`),
       ...validateProductNameConsistency(c.mainHtmlUa, localizedNames?.[masterLocale], masterLocale, `HTML (${masterLocale})`),
       ...validateSeoMetadata(c.seoData, NO_CURRENCY_CHECK),
+      // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — see the repair-gate call sites' identical composition.
+      ...validateSeoMetadataShape(c.seoData, 'SEO metadata'),
       ...validateSlugs(c.slugData ?? null, productName),
       ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
     ];

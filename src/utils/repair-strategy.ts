@@ -180,9 +180,10 @@ export function setAtPath<T>(artifact: T, path: string, value: unknown): T {
 /**
  * Cuts `text` to `limit` characters on a word boundary.
  *
- * A trailing " | Suffix" segment is preserved when one exists and still fits — task-b.ts's own
- * meta_title example uses the "Product - spec | StoreName" convention, and blindly cutting the tail
- * would drop the store name, which is the part with the least redundancy.
+ * US-3.1 T9 (FR-8): no longer preserves a trailing " | Suffix" segment. AC-4's approved template
+ * removes the `| {site_name}` suffix entirely — a correctly-shaped `meta_title` never carries one
+ * to preserve, and preserving one here would actively reintroduce the exact suffix FR-8 exists to
+ * remove (see `meta-title-template-shape`, seo-metadata-shape.ts).
  *
  * This is a CORRECTNESS terminator, not a quality path: its output is deliberately worse prose than
  * a tier-1 rewrite, which is exactly why meta-title-length attempts tier 1 first. Returns null when
@@ -191,18 +192,6 @@ export function setAtPath<T>(artifact: T, path: string, value: unknown): T {
 export function truncateAtWordBoundary(text: string, limit: number): string | null {
   const chars = Array.from(text.trim());
   if (chars.length <= limit) return text.trim();
-
-  const sepIndex = text.lastIndexOf(' | ');
-  if (sepIndex > 0) {
-    const suffix = text.slice(sepIndex); // includes " | "
-    const head = text.slice(0, sepIndex);
-    const headBudget = limit - Array.from(suffix).length;
-    // Only worth preserving when the suffix leaves room for a non-trivial head.
-    if (headBudget >= 8) {
-      const cutHead = cutOnWordBoundary(head, headBudget);
-      if (cutHead) return `${cutHead}${suffix}`;
-    }
-  }
 
   return cutOnWordBoundary(text, limit);
 }
@@ -289,7 +278,6 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
         return [
           'Shorten this meta_title so it fits the character limit.',
           `Current length: ${actual} characters. Limit: ${limit}. Remove at least ${surplus}.`,
-          'Keep the product name and the store suffix after " | " if one is present.',
           'Return ONLY the corrected title as plain text — no quotes, no commentary, no JSON.',
           '',
           current,
