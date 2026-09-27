@@ -99,10 +99,14 @@ const NO_CURRENCY_CHECK = '';
 /**
  * Result of one Doc-path Task A generation attempt (produceTaskADoc).
  *
- * `doc: null` means the raw model output failed ProductDescriptionDocSchema.parse() (or never
- * arrived as parseable JSON at all) — `issues` then carries docSchemaIssues() output so the repair
- * gate's validate() has something to report other than "empty-output". `doc` non-null always pairs
- * with `issues: []`: a successfully parsed Doc has nothing to say about the failure it didn't have.
+ * `doc: null` means the model response never became a candidate object at all — a network
+ * failure, or JSON that never parsed. `doc` non-null and `issues: []` is a Doc that fully passed
+ * `ProductDescriptionDocSchema`. US-3.1 T1 (FR-10, AC-6): `doc` may ALSO be non-null while `issues`
+ * is non-empty — a candidate that parsed as JSON but failed schema validation now survives on
+ * `doc` (instead of becoming `null`) so a field-scoped repair can address it by path via
+ * `docSchemaIssues()`'s `doc.<hops>` addressing. Every consumer that reads `doc` must re-`safeParse`
+ * before trusting its shape (see runDocGate's `produce`/`validate` closures and its post-loop
+ * render guard) rather than assume non-null means schema-valid.
  */
 export interface DocAttempt {
   doc: ProductDescriptionDoc | null;
@@ -396,8 +400,13 @@ export class ContentOrchestratorService {
     const { payload, useThinking, isInitialAttempt, input, contextLabel, docTaskLabel } = opts;
 
     // Kept outside the try so a schema failure can still log what the model actually sent —
-    // without this, debugging a hallucinated Doc means reproducing the call by hand.
+    // without this, debugging a hallucinated Doc means reproducing the call by hand. `candidate`
+    // is ALSO hoisted (US-3.1 T1) so the catch block can return it as `doc` — schema-invalid, but
+    // an addressable candidate a field-scoped repair can still work against — instead of `null`,
+    // whenever normalizeRawBulletLeadPunctuation() itself succeeded (i.e. the model did return
+    // parseable, object-shaped JSON; only ProductDescriptionDocSchema rejected it).
     let raw: unknown;
+    let candidate: unknown;
     try {
       raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: docTaskLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
       // Pre-parse fix-up: eliminates any bullets-block lead/text collision (keyBenefits/
@@ -405,7 +414,8 @@ export class ContentOrchestratorService {
       // normalizeRawBulletLeadPunctuation's header comment for why this must run here, not
       // post-parse like normalizeBulletLeadPunctuation. `raw` itself is left untouched: the catch
       // block below still logs the model's true, unmodified output for debugging.
-      const { raw: candidate, fixed } = normalizeRawBulletLeadPunctuation(raw);
+      const normalized = normalizeRawBulletLeadPunctuation(raw);
+      candidate = normalized.raw;
       // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
       // rather than be treated as valid.
       //
@@ -415,7 +425,7 @@ export class ContentOrchestratorService {
       // description-doc.schema.ts; this is the same workaround, not a new one. parse() still
       // does the validating, so nothing is weakened.
       ProductDescriptionDocSchema.parse(candidate);
-      return { doc: candidate as ProductDescriptionDoc, issues: [], preValidationFixed: fixed };
+      return { doc: candidate as ProductDescriptionDoc, issues: [], preValidationFixed: normalized.fixed };
     } catch (err) {
       // …unless the provider refused to produce anything in the first place, AND this is the
       // initial attempt (no `best` yet exists to fall back to — repair-gate.ts:112). A
@@ -439,7 +449,10 @@ export class ContentOrchestratorService {
       // with what the model actually sent than with "specs.categories.0: expected array". Only
       // logged when generateJson itself succeeded; a network/parse failure never set raw.
       if (raw !== undefined) console.error(`[${contextLabel}] raw model output failed schema validation:`, raw);
-      return { doc: null, issues };
+      // US-3.1 T1 (FR-10, AC-6): a candidate that parsed as JSON but failed schema validation
+      // survives as `doc` (schema-invalid, addressable by path) instead of becoming `null` — a
+      // genuinely unparseable response (candidate never assigned) still returns `doc: null`.
+      return { doc: candidate !== undefined ? (candidate as ProductDescriptionDoc) : null, issues };
     }
   }
 
@@ -490,6 +503,13 @@ export class ContentOrchestratorService {
       // gets here, so this call is effectively applications.items[].scenario-only in practice now,
       // but stays as-is since it's still correct and still the only thing that fixes that field.
       if (!attempt.doc) return attempt;
+      // US-3.1 T1 (FR-10, AC-6): attempt.doc may now hold a schema-invalid candidate
+      // (produceTaskADoc no longer returns null for a parsed-but-rejected response — see
+      // DocAttempt's own doc comment). normalizeBulletLeadPunctuation assumes a schema-valid
+      // ProductDescriptionDoc shape, so only run it once a fresh safeParse confirms the candidate
+      // actually is one; a still-invalid candidate is returned as-is and drives the repair ladder
+      // off its own `issues` instead.
+      if (!ProductDescriptionDocSchema.safeParse(attempt.doc).success) return attempt;
       const { doc, fixed } = normalizeBulletLeadPunctuation(attempt.doc);
       const totalFixed = (attempt.preValidationFixed ?? 0) + fixed;
       if (totalFixed > 0) {
@@ -511,6 +531,14 @@ export class ContentOrchestratorService {
       produce,
       validate: (attempt) => {
         if (!attempt.doc) return attempt.issues;
+        // US-3.1 T1 (FR-10, AC-6): re-safeParse rather than trust attempt.issues, which may be
+        // stale — a field-scoped repair mutates attempt.doc directly (via setAtPath, keyed on the
+        // doc-schema issue's own `doc.<hops>` path) without going through produceTaskADoc again, so
+        // attempt.issues would otherwise still report the ORIGINAL failure after it was fixed. A
+        // still-invalid candidate returns a freshly-derived docSchemaIssues() (not attempt.issues)
+        // so the retry prompt always describes the candidate's CURRENT state.
+        const parsed = ProductDescriptionDocSchema.safeParse(attempt.doc);
+        if (!parsed.success) return docSchemaIssues(parsed.error, opts.contextLabel);
         const doc = attempt.doc;
         return [
           ...validateSpecsGroundingDoc(doc, opts.groundingSpecs, opts.label, opts.allowedSpecParams,
@@ -595,7 +623,14 @@ export class ContentOrchestratorService {
     // assertDocRendered(htmlAResult.artifact, ...)` runs AFTER their recordGeneration call, so
     // returning '' here (instead of throwing) restores that original order — assertDocRendered is
     // now called in exactly one place, at the call sites, not inside this method too.
-    if (!result.artifact.doc) return { ...result, artifact: '' };
+    // US-3.1 T1 (FR-10, AC-6): result.artifact.doc may be a non-null but SCHEMA-INVALID candidate
+    // (every attempt exhausted its repair budget without ever reaching a valid Doc) — re-safeParse
+    // rather than trust non-null, or a still-broken candidate would reach renderDescription()/
+    // normalizeDocProse(), neither of which is safe to run against a shape ProductDescriptionDocSchema
+    // rejected.
+    if (!result.artifact.doc || !ProductDescriptionDocSchema.safeParse(result.artifact.doc).success) {
+      return { ...result, artifact: '' };
+    }
 
     // The ONE render call for this Task A generation — see the method doc comment above. Runs
     // AFTER every Tier-1 validator above, which is an ORDER FLIP from the old HTML path (there,

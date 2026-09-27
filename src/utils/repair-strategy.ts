@@ -91,8 +91,19 @@ function parsePath(path: string): Segment[] {
  * Descends one segment. `mutating` selects the contract: reads degrade to undefined on a missing
  * hop, writes throw — a silent no-op would let a failed repair look like a successful one.
  * Returns undefined only in the read case.
+ *
+ * `isLast` narrows the array-without-index check to intermediate hops only (US-3.1 T1, FR-10(a)).
+ * A DROPPED index on an INTERMEDIATE hop ("doc.functionality.heading", "seo_data.meta_title") is
+ * always a caller bug — the walk still has further hops to make and an array cannot supply the
+ * next one. At the FINAL hop, though, `doc-schema-issues.ts`'s Zod-path converter can now legally
+ * address a leaf whose current (invalid) value happens to be an array — e.g. a
+ * `z.union([NonEmpty, z.array(NonEmpty).min(1)])` field that failed its array branch with zero
+ * elements. That leaf IS field-scoped-repairable (the model can return a string or a short array),
+ * so the terminal position must not throw; it simply reads/overwrites the array value like any
+ * other leaf. No rule addresses a bare array leaf without this exception (the case the original,
+ * unconditional check was written to catch is exclusively an intermediate-hop mistake).
  */
-function step(container: unknown, seg: Segment, path: string, mutating: boolean): unknown {
+function step(container: unknown, seg: Segment, path: string, mutating: boolean, isLast: boolean): unknown {
   if (container === null || container === undefined) {
     if (!mutating) return undefined;
     throw new Error(`repair-strategy: cannot resolve "${seg.prop}" in path "${path}" — the containing value is missing`);
@@ -102,7 +113,8 @@ function step(container: unknown, seg: Segment, path: string, mutating: boolean)
   if (seg.index === undefined) {
     // The dropped-index caller bug — see the note above. Loud in BOTH directions: a read that
     // quietly returned undefined here is exactly the silent no-op this check exists to prevent.
-    if (Array.isArray(value)) {
+    // Not for the final hop — see this function's own doc comment.
+    if (Array.isArray(value) && !isLast) {
       throw new Error(`repair-strategy: unsupported path "${path}" ("${seg.prop}" is an array addressed without an index)`);
     }
     return value;
@@ -121,9 +133,10 @@ function step(container: unknown, seg: Segment, path: string, mutating: boolean)
 
 /** Reads the value a `path` addresses, or undefined when any hop is missing. */
 export function getAtPath(artifact: unknown, path: string): unknown {
+  const segments = parsePath(path);
   let current: unknown = artifact;
-  for (const seg of parsePath(path)) {
-    current = step(current, seg, path, false);
+  for (let i = 0; i < segments.length; i++) {
+    current = step(current, segments[i], path, false, i === segments.length - 1);
     if (current === undefined) return undefined;
   }
   return current;
@@ -144,7 +157,7 @@ export function setAtPath<T>(artifact: T, path: string, value: unknown): T {
     const seg = segments[depth];
     const last = depth === segments.length - 1;
     // Validates this hop and surfaces the same errors a read would skip past.
-    const child = step(container, seg, path, true);
+    const child = step(container, seg, path, true, last);
     // Named for the hop that is actually missing, not the one below it: with `doc.cta` absent,
     // "cannot resolve \"cta\"" points at the gap, while descending first would blame "heading".
     if (!last && (child === null || child === undefined)) {
@@ -236,6 +249,28 @@ export function slugify(text: string): string | null {
 // stay out for the older reason: they are genuine prose-quality judgements.
 
 export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<string, RepairStrategy>([
+  [
+    'doc-schema',
+    {
+      // US-3.1 T1 (FR-10, AC-6, plan D7). Field-scoped only — a schema-level failure needing more
+      // than one field's value corrected has no addressable single leaf, and never reaches this
+      // ladder at all: doc-schema-issues.ts's toDocPath() only assigns a `path` when the finding is
+      // one addressable leaf (see its own doc comment), so an un-addressable finding already falls
+      // straight through resolveLadder's `!issue.path` branch to `['full-regen']` before this entry
+      // is even consulted. No deterministic tier: there is no mechanical way to invent a missing
+      // required string.
+      ladder: ['field-scoped'],
+      fieldInstruction: (current, issue) => [
+        'Rewrite this field so it satisfies the schema requirement below. Return ONLY the corrected',
+        'value as plain text — no quotes, no HTML tags, no commentary, no JSON.',
+        '',
+        // issue.detail already names the exact Zod validation failure — never re-derived here.
+        issue.detail,
+        '',
+        `Current value: "${current}"`,
+      ].join('\n'),
+    },
+  ],
   [
     'meta-title-length',
     {
