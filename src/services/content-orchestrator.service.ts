@@ -16,6 +16,7 @@ import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
 import { validateSeoMetadataShape } from '../utils/seo-metadata-shape';
+import { retryAsync } from '../utils/async-retry';
 import {
   validateSpecsGrounding, validateSpecsGroundingDoc, isAlreadyCyrillic, inspectGroundedTranslation,
   describeGroundingFailure, type GroundingInspection,
@@ -273,30 +274,42 @@ export class ContentOrchestratorService {
   private async groundingSpecs(input: ProductInput): Promise<GroundingInspection> {
     if (!input.specs?.trim()) return { text: '' };
     if (isAlreadyCyrillic(input.specs)) return { text: input.specs };
-    try {
-      const translated = await this.llm.generateText(
-        // 'internal-matching-only' — NOT a display translation. This output is anchor text for
-        // validateSpecsGrounding, which matches spec rows by stemmed label; the Ukrainian style
-        // guide's anti-calque rules would reword exactly what has to stay matchable.
-        buildTranslatePrompt(input.specs, 'Ukrainian', 'internal-matching-only'),
-        false, // fast model — a cheap lookup call, not master generation
-        { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
-      );
-      const inspection = inspectGroundedTranslation(translated, masterScriptFor(input.website.name));
-      if (inspection.failure) {
-        console.warn(
-          `[groundingSpecs] Specs grounding DISABLED for "${input.name}": ` +
-          describeGroundingFailure(inspection.failure),
+
+    // US-3.1 T3 (FR-1). The try/catch body is unchanged internally — it still never throws out of
+    // the wrapped attempt, and still never substitutes input.specs as a grounded translation (FR-4,
+    // the Ortur H20 no-silent-fallback guarantee) — only now wrapped as retryAsync's `attempt`, so a
+    // single transient failure on any of the three business-semantic triggers (throw, empty/
+    // whitespace-only text, wrong-script) no longer disables grounding by itself.
+    const attempt = async (): Promise<GroundingInspection> => {
+      try {
+        const translated = await this.llm.generateText(
+          // 'internal-matching-only' — NOT a display translation. This output is anchor text for
+          // validateSpecsGrounding, which matches spec rows by stemmed label; the Ukrainian style
+          // guide's anti-calque rules would reword exactly what has to stay matchable.
+          buildTranslatePrompt(input.specs, 'Ukrainian', 'internal-matching-only'),
+          false, // fast model — a cheap lookup call, not master generation
+          { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
         );
+        return inspectGroundedTranslation(translated, masterScriptFor(input.website.name));
+      } catch (err) {
+        // The ERROR OBJECT, not a message: the stack trace is what says whether this was a timeout,
+        // a 4xx, or a bug on our side. It used to be swallowed whole, leaving the run with a warning
+        // that named the wrong cause.
+        console.error(`[groundingSpecs] Specs translation threw for "${input.name}".`, err);
+        return { text: '', failure: { kind: 'provider-error' } };
       }
-      return inspection;
-    } catch (err) {
-      // The ERROR OBJECT, not a message: the stack trace is what says whether this was a timeout,
-      // a 4xx, or a bug on our side. It used to be swallowed whole, leaving the run with a warning
-      // that named the wrong cause.
-      console.error(`[groundingSpecs] Specs translation threw for "${input.name}".`, err);
-      return { text: '', failure: { kind: 'provider-error' } };
+    };
+
+    const result = await retryAsync(attempt, { maxAttempts: 3, isRetryable: r => !!r.failure });
+    // Logged once, after the retry budget is exhausted — never per attempt, and always the LAST
+    // attempt's own cause, matching what groundingSpecs() actually reports to the caller.
+    if (result.failure) {
+      console.warn(
+        `[groundingSpecs] Specs grounding DISABLED for "${input.name}": ` +
+        describeGroundingFailure(result.failure),
+      );
     }
+    return result;
   }
 
   /**
