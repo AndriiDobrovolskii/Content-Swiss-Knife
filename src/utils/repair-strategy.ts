@@ -261,6 +261,26 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
     },
   ],
   [
+    'slug-name-designator-lost',
+    {
+      // US-3.1 T11 (FR-11, AC-6, plan D8). Field-scoped only — this rule is addressed at a single
+      // localized name field (slugs[i].name, slug-validator.ts:75,88) and a rewrite of that one
+      // field is exactly what resolves it; no deterministic tier exists because reconstructing the
+      // lost invariant core mechanically is not possible from the corrupted string alone.
+      ladder: ['field-scoped'],
+      fieldInstruction: (current, issue) => [
+        'Rewrite this localized product name so it satisfies the constraint below. Return ONLY',
+        'the corrected name as plain text — no quotes, no HTML tags, no commentary.',
+        '',
+        // issue.detail already names the exact invariant core that must survive — never re-derived
+        // here, so the instruction always matches whatever this run's product actually is.
+        issue.detail,
+        '',
+        `Current name: "${current}"`,
+      ].join('\n'),
+    },
+  ],
+  [
     'meta-title-length',
     {
       // Tier 1 FIRST: meta-title wording carries SEO value. Tier 0 is the guaranteed terminator.
