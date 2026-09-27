@@ -587,7 +587,7 @@ export class ContentOrchestratorService {
           // severity (see bullet-lead-punctuation.ts for why this is not a renderer fix).
           ...validateBulletLeadPunctuationDoc(doc, opts.label),
           ...(opts.groundingDisabled ? [{
-            severity: 'warning' as const,
+            severity: 'error' as const,
             rule: 'specs-grounding-disabled',
             detail:
               'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
@@ -802,7 +802,7 @@ export class ContentOrchestratorService {
                 context: 'HTML (base)',
               })),
               ...(groundingDisabled ? [{
-                severity: 'warning' as const,
+                severity: 'error' as const,
                 rule: 'specs-grounding-disabled',
                 // The cause is named, not guessed. The old wording asserted the script explanation
                 // even when the call had thrown, which made the one observable signal actively
@@ -1224,7 +1224,7 @@ export class ContentOrchestratorService {
                 context: 'HTML (uk-UA)',
               })),
               ...(groundingDisabled ? [{
-                severity: 'warning' as const,
+                severity: 'error' as const,
                 rule: 'specs-grounding-disabled',
                 // The cause is named, not guessed. The old wording asserted the script explanation
                 // even when the call had thrown, which made the one observable signal actively
