@@ -1,13 +1,13 @@
 ---
 artifact: pipeline_status
 story: US-3.1
-version: 5
+version: 6
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-09-27T10:00:00Z
-updated_at: 2026-09-28T11:50:00Z
-supersedes: docs/catalog/US-3.1-pipeline-status.md#4
+updated_at: 2026-09-28T12:20:00Z
+supersedes: docs/catalog/US-3.1-pipeline-status.md#5
 inputs_consumed:
   - key: story
     version: 1
@@ -27,194 +27,150 @@ inputs_consumed:
     version: 4
   - key: ac_test_matrix
     version: 4
+  - key: reconciliation_report
+    version: 1
 open_decisions_blocking: false
 ---
 
 # Pipeline Status — US-3.1: Make the repair gate actually block ungrounded content and stop the brand-core/heading-form rule conflict
 
-**Verdict (attempt 3 of the IMPLEMENTATION retry, final attempt under the 3-attempt cap): `PASS`.**
-All 12 in-track tasks (T1-T12) are done and committed. The two findings that blocked v4
-(`task-b.spec.ts`'s destructuring bug and the stale `full-description.golden.spec.ts` fixture) were
-both resolved by `TEST_WRITING` in the prior loop-back round; this round independently re-verified
-both fixes, confirmed the full suite is green **against `HEAD`** (not merely against an uncommitted
-working tree), and committed T8's previously-parked FROZEN-file change. `IMPLEMENTATION` is complete
-for this Story.
+**Verdict this round (RECONCILIATION loop-back, attempt 1 of 3): `CHANGES_REQUIRED` →
+`loop_back_stage: changes_required_tests` (routes to `TEST_WRITING`).** No production code was
+written this round. `RECONCILIATION` v1's blocking Finding 0 (AC-6 / FR-11) was independently
+re-verified against source and is real: `slug-name-designator-lost`'s registered field-scoped
+repair strategy (`src/utils/repair-strategy.ts:264-281`, T11's own work) is never reachable in
+production because none of the three Slugs `runRepairGate` call sites in
+`src/services/content-orchestrator.service.ts` (lines 878, 1286, 1459) supply a `repairField`
+executor — `src/utils/repair-gate.ts:219` gates the field-scoped rung on that option's presence,
+and `grep -rn "repairField:" src/**/*.ts` shows exactly one production supplier in the whole
+codebase, wired only to the unrelated Doc gate at `content-orchestrator.service.ts:612`.
 
-Branch: `feat/US-3.1-qa-gate-brand-core-fixes` (unchanged).
+**The fix itself is small and well-precedented** (mirror `runDocGate`'s existing `repairField:`
+pattern at line 612 onto the three Slugs call sites, and — per RECONCILIATION's non-blocking
+Finding 5, same root cause — the three SEO call sites at lines 909, 1315, 1419). It was **not**
+implemented this round because, per this dispatch's own instruction and independent verification
+below, **no test in this codebase currently exercises a Slugs- or SEO-shaped `runRepairGate` call
+with a `repairField` executor supplied.** AGENTS.md §5 is unambiguous: "No implementation code, in
+any layer, may be written before a test that fails for the right reason exists." `so-builder` does
+not own test files and may not write one to unblock itself. This round therefore reports the gap
+rather than closing it, and loops back to `TEST_WRITING` for the missing red test(s), per this
+dispatch's own explicit instruction for exactly this situation.
 
-**Authorization for this round's FROZEN-file commit (carried forward unchanged from v4's own
-record, per `AGENTS.md` §9 and `IMPLEMENTATION_VERIFICATION`'s check for it):** the orchestrator's
-dispatch that produced T8/T10 relayed the user's own in-session, file-by-file authorization naming
-all three FROZEN files T8/T10 touch — `src/prompt-core/master-system-prompt.ts`,
-`src/prompts/task-a.ts` and `src/prompts/task-b.ts` — individually, satisfying §9's requirement that
-the user name the specific file in the current session. `so-builder` performed the §9
-stop-and-confirm ritual in-session (stating the exact change and its source in the Task
-Breakdown/Implementation Plan) before each edit, per Task Breakdown v6's own T8/T10 Notes sections.
-No fresh authorization was needed this round — this dispatch verified the already-applied,
-already-authorized T8 edit was still correct (git diff against `HEAD` showed exactly the two files
-and two clauses described in §3.2) and committed it, under this same authorization, once T8's
-blocking test-fixture gap was closed.
+Branch: `feat/US-3.1-qa-gate-brand-core-fixes` (unchanged). No commit made this round — nothing was
+written to `src/` or `test/`.
 
-## 0. What changed this round
+## 1. Verification performed this round (why this is not merely trusting RECONCILIATION's own claim)
 
-This round did **not** write any new production code. It:
+1. Read `src/services/content-orchestrator.service.ts:612` (the Doc gate's `repairField:` wiring)
+   directly, to understand the established pattern before judging whether it applies cleanly to
+   Slugs/SEO. It does: `repairField` is a one-line `async payload => stripCodeFences(await
+   this.llm.generateText(payload, false, { taskLabel: ..., productName: ..., store: ... }))`, and
+   `runRepairGate` internally builds the minimal, cache-preserving payload via
+   `repairFieldPayload()` before calling it — the executor itself needs no knowledge of the field
+   being repaired.
+2. Read all three Slugs call sites (`content-orchestrator.service.ts:878-889` in `generate()`,
+   `:1286-1297` in `generateUaContent()`, `:1459-1470` in `generateSlugs()`) and all three SEO call
+   sites (`:909-924`, `:1315-1330`, `:1419-1433`) directly. Confirmed: none supplies `repairField`.
+3. Read `src/utils/repair-gate.ts:219` directly: `applyTier()`'s field-scoped branch is gated on
+   `strategy.fieldInstruction && opts.repairField` — confirming the registered strategy is a true
+   no-op (cursor advances, no repair attempted) whenever `repairField` is absent, exactly as
+   RECONCILIATION describes.
+4. Read `src/utils/repair-strategy.ts:264-281` directly: `slug-name-designator-lost` has
+   `ladder: ['field-scoped']` and **no** `deterministic` tier, so a missing `repairField` leaves
+   this rule with zero working repair instrument in production (it falls straight to
+   `full-regen`, which `resolveLadder` appends automatically for an error-severity rule).
+5. **Checked the TDD-gate caveat directly rather than accepting RECONCILIATION's own flag at face
+   value** — searched every spec file for `repairField` usage:
+   `grep -rn "repairField" src/services/*.spec.ts` returns matches **only** in
+   `content-orchestrator.doc-gate.spec.ts` (the Doc gate's own dedicated integration tests, lines
+   762-801, proving `runDocGate`'s field-scoped rung end-to-end: one call to `generateText`, zero
+   full regenerations, and a documented fallback test for when the field-scoped call itself fails).
+   No `content-orchestrator.*.spec.ts` file exercises `repairField` for Slugs or SEO.
+6. Read `src/utils/repair-gate.spec.ts`'s `'validateSlugs feeding a real repair loop'` describe
+   block (lines 1496-1578) in full: all three of its tests call `runRepairGate<SlugResponse>`
+   directly with the real `validateSlugs`, but **none of the three passes a `repairField` option**
+   — every one resolves `slug-name-designator-lost` by asserting `produce` is called a second time
+   (full regeneration), which is the gate-level mechanism test for the no-`repairField` path, not a
+   test of the wiring this round would add.
+7. Read `src/utils/repair-strategy.spec.ts`'s `slug-name-designator-lost` block (line 482 on):
+   confirms only the registry entry's shape (`ladder`, `fieldInstruction` text) — it never calls
+   `runRepairGate` at all, so it cannot stand in for a wiring test either.
+8. Conclusion: adding `repairField:` to the three Slugs (and three SEO) call sites today would be
+   production code with **no failing test to turn green** — a direct AGENTS.md §5 violation. This
+   confirms RECONCILIATION's own caveat rather than merely repeating it.
 
-1. Independently re-confirmed (git diff, not narrative) that the working tree held exactly the
-   changes the prior round's report described: T8's two FROZEN-file edits plus a matching
-   `.arch-guard-checksums` rebaseline, `TEST_WRITING`'s recalibrated golden fixture, and
-   `TEST_WRITING`'s two-line `task-b.spec.ts` destructuring fix (both loop bodies).
-2. Ran the full suite (both runners), lint and `bash arch-guard.sh` against that working tree —
-   green (§4).
-3. Split the working-tree changes into two commits, since they address two independent findings
-   and AGENTS.md §13 asks for one coherent change per commit:
-   - `c5e6139` — `src/prompts/task-b.spec.ts` alone: the `[locales, budgetStr]` →
-     `[, locales, budgetStr]` destructuring fix (§3.1 below). Unrelated to T8; `task-b.ts` itself is
-     untouched by T8.
-   - `1c02c89` — T8's full, coherent change: `src/prompt-core/master-system-prompt.ts`,
-     `src/prompts/task-a.ts`, `.arch-guard-checksums` (both FROZEN-file rows), plus
-     `master-system-prompt.spec.ts`, `task-a.spec.ts` (T8's own pinning tests) and
-     `test/fixtures/golden/full-description-prompts.json` (the recalibrated golden fixture,
-     landing with the change it pins — §3.2 below).
-4. Re-ran the full suite, lint and `bash arch-guard.sh` a second time **against `HEAD`** after both
-   commits, so the green result is evidence for the committed state itself, not just for a
-   working tree that no longer exists in that form (§4).
-5. Confirmed `git status` after both commits shows no modified file under `src/` or `test/` — only
-   `so-orchestrator`-owned state files and this Story's own untracked upstream docs remain.
+## 2. What TEST_WRITING needs to add (routed via `loop_back_stage: changes_required_tests`)
 
-## 1. Task outcomes
+**Blocking half (AC-6 / FR-11).** A service-level integration test, in a new or extended
+`content-orchestrator.*.spec.ts` file, mirroring `content-orchestrator.doc-gate.spec.ts:762-801`'s
+own pattern (DI + `makeMockLlm`-style stubbing of `LlmService`, not `TestBed`) for the Slugs gate:
 
-| Task | Track | Outcome | Commit | Notes |
-|---|---|---|---|---|
-| T1 | angular | done | `df9ec36` | Unchanged since v1-v4. |
-| T2 | angular | done | `e48fa1b` | Unchanged since v1-v4. |
-| T3 | angular | done | `a01bd12` | Unchanged since v1-v4. |
-| T4 | angular | done | `4dfccf0` | Unchanged since v1-v4. |
-| T5 | angular | done | `fb03d68` | Unchanged since v1-v4. |
-| T6 | angular | done | `fbf4859` | Unchanged since v1-v4. |
-| T7 | angular | done, with one disclosed finding | `ad4c678` | Unchanged since v3-v4. |
-| T8 | prompt | **done, committed** | `1c02c89` | FROZEN-file `[HEADING FORM]` disambiguation, committed this round once the golden fixture (§3.2) unblocked it. |
-| T9 | angular | done | `c78e6da` | Unchanged since v1-v4. |
-| T10 | prompt | **done, committed; test destructuring defect now fixed** | `3d89c86` (task-b.ts), `c5e6139` (test fix) | See §3.1. |
-| T11 | angular | done | `0c14353` | Unchanged since v1-v4. |
-| T12 | angular | done | `3e36e4e` | Unchanged since v1-v4. |
+- Stub `generateJson` to return a `SlugResponse` whose `name` for one locale lacks the product's
+  invariant core (e.g. `'Ortur F10 Laser Engraver 10 W'` against source name `'Ortur F10 10W'` —
+  the same fixture shape `repair-gate.spec.ts:1497-1520` already uses).
+- Stub `generateText` to return the corrected name (e.g. `'Ortur F10 10W Laser Engraver'`).
+- Drive it through whichever Slugs call site is cheapest to reach directly — `generateSlugs()`
+  (`content-orchestrator.service.ts:1446-1482`) needs no HTML/Doc fixture at all, unlike the other
+  two sites which sit inside `generate()`/`generateUaContent()`'s full pipeline.
+- Assert: `generateJson` called **exactly once** for the Slug produce (no full regeneration);
+  `generateText` called **exactly once**, and — the cache-preservation contract `repair-gate.ts`'s
+  own doc comment states for `repairFieldPayload()` — with `systemBlocks` identical **by
+  reference** to the base Slug payload's `systemBlocks`; `repairsUsed === 0`; the shipped
+  `slugData.slugs[i].name` equals the corrected name; no `slug-name-designator-lost` finding
+  survives in `finalIssues`.
+- A negative-control sibling (mirroring `doc-gate.spec.ts:784-800`) where the field-scoped
+  `generateText` call itself fails to produce a usable value, proving the ladder still escalates to
+  full regeneration rather than silently shipping the broken name.
+- This is the test that is currently red against `HEAD`: today, wiring `repairField` into
+  `generateSlugs()` with no other change would make `generateJson` fire **twice** (full
+  regeneration) and `generateText` **zero** times, failing the assertions above outright — proof
+  the gap is real, not merely a missing option nobody has exercised.
+- Two design questions the new test should pin down explicitly rather than leave implicit (the
+  advisor flagged these; so-builder should not decide them unilaterally): (a) whether
+  `slugs[i].slug` should be re-derived from a field-repaired `name` (today `normalizeSlugResponse`
+  runs only inside `produce`, so a field-scoped rewrite of `name` alone would leave `slug` stale);
+  (b) whether the field-repaired name should still pass through `canonicalizeMultiInOne` the way
+  every `produce()` output already does. Whatever the test asserts here becomes the contract the
+  next `IMPLEMENTATION` round builds to.
 
-All 12 in-track tasks are done and committed. No task remains uncommitted or unimplemented.
+**Non-blocking half (F5 / T12, bundled in the same TEST_WRITING pass to avoid a second loop-back
+later, since it is the identical wiring gap at the identical mechanism).** The same test shape for
+the SEO gate's `meta-title-length` rule: `generateJson` returns an over-length `meta_title`,
+`generateText` returns a corrected, still-differentiated title; assert `generateText` is called
+(the field-scoped rung actually ran) and that the shipped title is the model's returned text, not
+`truncateAtWordBoundary`'s deterministic word-boundary cut — proving the field-scoped rung, not
+just its deterministic terminator, is reachable. Same open question as (b) above applies to
+`canonicalizeSeoData`.
 
-## 2. This round's housekeeping
+**Heads-up for TEST_WRITING:** any existing end-to-end spec that queues ordered
+`mockResolvedValueOnce` values for `generateText` across a full `generate()`/`generateUaContent()`
+run may need its call-count expectations re-checked once a Slugs or SEO fixture in that same test
+can now trigger a field-scoped `generateText` call it did not make before.
 
-None beyond the two commits in §0 — `TEST_WRITING`'s prior loop-back round already committed the
-eleven-spec housekeeping batch (`c48a51c`, recorded in v4 §2).
+## 3. Scope note carried forward from RECONCILIATION (not a finding against this round)
 
-## 3. T8/T10 — both findings from v4 now resolved
+Task Breakdown v6's T11 (`docs/plans/US-3.1-task-breakdown.md:1108-1144`) and T12
+(`:1148-` on) both scope their Files table to `src/utils/repair-strategy.ts` only; neither names
+the `content-orchestrator.service.ts` wiring in its Files table or Acceptance check. `so-builder`
+built exactly what T11/T12 asked for in every prior round — this is why the gap survived
+QUALITY_GATE, IMPLEMENTATION_VERIFICATION and SECURITY_REVIEW and was only caught at RECONCILIATION.
+Recorded here for the orchestrator's visibility, not re-litigated as a planning defect by this
+skill (RECONCILIATION already routed this as an IMPLEMENTATION-stage fix, not back to planning).
 
-### 3.1 T10 — `task-b.spec.ts` destructuring defect, now fixed (`c5e6139`)
+## 4. Files changed this round
 
-v4 §3.1 identified that `task-b.spec.ts:70,73` destructured the raw `RegExpMatchArray` as
-`[locales, budgetStr]` instead of `[, locales, budgetStr]`, putting the locale-name capture group
-into `budgetStr` and making `Number(budgetStr)` evaluate to `NaN` regardless of `task-b.ts`'s actual
-content. `TEST_WRITING` fixed this in the prior loop-back round. This round confirmed the diff is
-exactly the two-line index fix described (`git diff` against the prior commit: 2 insertions,
-2 deletions, both lines changing only `[locales, budgetStr]` → `[, locales, budgetStr]`) — no
-assertion was weakened, no expected value changed, only the indexing bug was corrected — and
-committed it standalone as `c5e6139` since it is unrelated to any FROZEN-file change.
+None. No `src/` or `test/` file was read-and-modified; the file reads in §1 were inspection only.
+`docs/catalog/US-3.1-pipeline-status.md` (this file) is the only artifact this round wrote, and it
+is `so-builder`'s own owned artifact per `artifact-paths.yaml`.
 
-### 3.2 T8 — golden fixture recalibrated, FROZEN-file change now committed (`1c02c89`)
+## 5. Conclusion
 
-v4 §3.2 identified that T8's `[HEADING FORM]` disambiguation (one new bullet in
-`master-system-prompt.ts`, one reworded closing line in `task-a.ts`) turned 10 cases in
-`full-description.golden.spec.ts` red, because those cases pin `MASTER_SYSTEM_PROMPT`/
-`TASK_A_INSTRUCTION`'s exact bytes from before US-3.1, and no US-3.1 artifact had scoped that file
-as touched. `TEST_WRITING` recalibrated `test/fixtures/golden/full-description-prompts.json` in the
-prior loop-back round with T8's exact, independently-verified delta.
-
-This round independently re-verified that delta by diffing every case in the fixture
-programmatically (not by trusting the prior round's narrative): for every one of the 10 cases that
-embeds `MASTER_SYSTEM_PROMPT` in `systemBlocks[0]`, the only change is the one inserted bullet
-("This exception holds unchanged even when [Product-short] equals the full product name...")
-immediately after the "...not a place to repeat the keyword." line and before "NO <h3> EVER
-CONTAINS..."; for the subset of those cases that reach `buildPromptA()`'s `userContent` tail
-(`doc/expert3d`, `doc/expert3d+hook`, `doc/c3d`, `html/expert3d`, `html/legacy`,
-`html/legacy+lang`, `html/c3d+customTemplate`), the only further change is the appended clause
-"...which forbids the full name outright except at the two blessed positions it names." replacing
-"...which forbids the full name outright." The fixture's `c/*` case family (`c/expert3d-es`,
-`c/eu-en`, `c/us-uk`) does embed `MASTER_SYSTEM_PROMPT` in `systemBlocks[0]` — and so gained the
-same bullet as the other 7 cases above — but its `userContent` does not reach the task-a.ts
-closing-line restatement T8 reworded, so `userContent` is unchanged for these three. The fixture's
-separate `translate/*` family (`translate/uk-user`, `translate/de-internal`) is the one that genuinely
-never embeds `MASTER_SYSTEM_PROMPT` at all — confirmed here by a programmatic key-by-key diff of the
-full fixture (12 keys total: `doc/*` ×3, `html/*` ×4, `c/*` ×3, `translate/*` ×2); neither block
-changed for those two. So 10 of the 12 cases changed (the ones v4 counted), and the remaining 2
-(`translate/*`) are correctly untouched — not because they are the same family as `c/*`, but because
-they don't embed the shared system prompt at all. No other byte in the fixture differs. This matches
-T8's own two-file, two-clause acceptance scope exactly and confirms `TEST_WRITING`'s recalibration
-did not smuggle in any other change.
-
-With the fixture recalibrated, `master-system-prompt.ts` and `task-a.ts` (already correctly edited
-and already rebaselined in `.arch-guard-checksums` from the prior round) needed no re-edit and no
-fresh §9 stop — only committing, together with the fixture and T8's own two pinning spec files, as
-`1c02c89`.
-
-## 4. Measured state (real command output, against `HEAD` after both commits)
-
-| Check | Result |
-|---|---|
-| `npm run test:logic` (`vitest run`) | **147 files passed (147), 3884 passed \| 3 skipped (3887), 0 failed.** Run twice: once against the pre-commit working tree (identical result), once against `HEAD` after both commits. |
-| `npm run test:components` (`ng test`) | **2 files passed, 23 passed, 0 failed.** Run twice (pre- and post-commit); identical result both times. |
-| `npm run lint` (`tsc --noEmit`) | **clean, 0 errors.** Run twice; identical both times. |
-| `bash arch-guard.sh` | **ALL CHECKS PASSED** — Rule #1 (no direct SDK calls outside providers/), Rule #3 (no hard-coded prompts in services), Rule #4 (no API keys in frontend source), and FROZEN (all frozen files match the committed `.arch-guard-checksums`) all green. Run twice; identical both times. |
-| `git status` after both commits | Only `so-orchestrator`-owned state files (`docs/catalog/stories.yaml`, `docs/workflow/active-story.yaml`, `docs/workflow/history.jsonl`, `docs/workflow/workflow-state.yaml` — untouched by this skill, per its own constraints) and this Story's untracked upstream docs (clarification report, open decisions, impact analysis, plans, reviews, spec, story, test docs — all pre-existing inputs to this stage, not written by `so-builder`) remain. **No `src/` or `test/` file is modified.** |
-| `npm run test:coverage` / `npm run build` / `npm run validate:harness` | not run — out of `so-builder`'s scope; `QUALITY_GATE`'s concern (`so-gate-enforcer`), consistent with v1-v4's own convention. |
-
-## 5. Non-blocking findings
-
-Findings 1-9 are unchanged from v1-v4 (see v3 §5) — all already landed, committed, or (finding 8,
-the Bambu Lab "Hardened Steel" D5(f) worked-example defect) still open and out of this Story's
-scope. Finding 10 is a closed process note, carried forward for the record; finding 11 remains
-open:
-
-10. **Closed — carried forward for the record only, no action needed.** A first T10 draft's
-    mid-round self-correction (v4 §5 finding 10) was a process finding about how the draft was
-    produced, not a defect in what shipped; it was already resolved before `3d89c86` was committed.
-
-11. Implementation Plan v7 D11(a)'s `buildPromptB()` excerpt code can total 1001 characters in the
-    specs-section branch against its own stated 1000-character cap, by one character, in a path no
-    current test checks. Flagged for `IMPLEMENTATION_VERIFICATION` / a future Plan revision.
-
-12. **New, informational only — not a defect.** v4 §3.2 suggested a one-line header-comment update
-    to `full-description.golden.spec.ts` noting it must stay green across future authorized
-    FROZEN-file edits. `TEST_WRITING`'s recalibration round did not make that header edit (confirmed:
-    not present in the diff this round independently verified). It does not block `PASS` — the
-    fixture itself is correctly recalibrated and green — but is worth a follow-up for the next Story
-    that legitimately edits these files, so it isn't caught by the same blast-radius gap T8 was.
-
-## 6. Files changed (summary)
-
-Committed this round:
-- `c5e6139` — `src/prompts/task-b.spec.ts` (destructuring fix, §3.1). Staged and committed as
-  `TEST_WRITING` left it; `so-builder` did not edit it.
-- `1c02c89` — `src/prompt-core/master-system-prompt.ts`, `src/prompts/task-a.ts` (T8's FROZEN-file
-  edit, already applied and authorized in a prior round), `.arch-guard-checksums` (both FROZEN rows
-  rebaselined in the same commit, per AGENTS.md §9), `src/prompt-core/master-system-prompt.spec.ts`,
-  `src/prompts/task-a.spec.ts` (T8's own pinning tests), `test/fixtures/golden/full-description-prompts.json`
-  (recalibrated by `TEST_WRITING`, independently re-verified this round, §3.2).
-
-Committed in earlier rounds (unchanged): `df9ec36`, `e48fa1b`, `a01bd12`, `4dfccf0`, `fb03d68`,
-`fbf4859`, `ad4c678`, `c78e6da`, `3d89c86`, `0c14353`, `3e36e4e`, `c48a51c`.
-
-Not touched, not authorized: `src/prompts/task-c.ts`, `src/utils/output-validator.ts` (both FROZEN,
-untouched, confirmed by `bash arch-guard.sh` against `HEAD`).
-
-Not touched: `docs/workflow/workflow-state.yaml`, `docs/workflow/history.jsonl`,
-`docs/workflow/active-story.yaml`, `docs/catalog/stories.yaml` — `so-orchestrator`'s alone, per
-this skill's own constraints; left exactly as found in the working tree.
-
-## 7. Conclusion
-
-All 12 in-track tasks for US-3.1 (T1-T12) are done and committed. The full test suite is green
-against `HEAD` — 3884/3884 logic tests passing (3 pre-existing, unrelated skips), 23/23 component
-tests passing, 0 failures across both runners. Lint is clean. `bash arch-guard.sh` passes every
-rule, including FROZEN-file integrity. No test was weakened, skipped, or had its expected value
-altered to reach this state — the two defects blocking v4 (a genuine destructuring bug in a test
-file, and a stale golden fixture not yet recalibrated for an authorized FROZEN-file change) were
-both fixed by `TEST_WRITING` at the source, and both fixes were independently re-verified here
-before being committed. `IMPLEMENTATION` is complete for this track and this Story.
+The blocking AC-6/FR-11 gap RECONCILIATION found is confirmed, independently, by direct source
+read and by this codebase's own existing tests. The fix (`repairField:` wiring, mirroring the Doc
+gate's established pattern) is straightforward but cannot be written yet: no test in the
+repository currently exercises a Slugs- or SEO-shaped `runRepairGate` call with `repairField`
+supplied, so AGENTS.md §5's TDD gate blocks `so-builder` from writing it. Routed
+`changes_required_tests` → `TEST_WRITING` with the precise test specification in §2. Once that test
+exists and is red for the stated reason, the wiring itself is a same-day IMPLEMENTATION task: one
+`repairField:` line per call site (six total), each an exact mirror of
+`content-orchestrator.service.ts:612`.
