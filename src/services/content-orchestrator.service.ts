@@ -884,10 +884,23 @@ export class ContentOrchestratorService {
             ),
             validate: json => validateSlugs(json, input.name),
             withFeedback: appendRepairFeedback,
+            // US-3.1 IMPLEMENTATION retry 2 (AC-6/FR-11, RECONCILIATION v1 Finding 0): wires a
+            // repairField executor so slug-name-designator-lost's field-scoped rung
+            // (repair-strategy.ts) is reachable in production — mirrors runDocGate's own
+            // repairField wiring above (~line 612).
+            repairField: async payload => stripCodeFences(await this.llm.generateText(
+              payload, false, { taskLabel: 'Slugs field repair', productName: input.name, store: input.website.name },
+            )),
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           });
-          const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
+          const { artifact: rawSlugData, repairsUsed: slugRepairs } = slugResult;
+          // A field-scoped repair writes `slugs[i].name` directly via setAtPath, bypassing
+          // produce()'s own normalizeSlugResponse — re-running it here re-derives `.slug` from
+          // the (possibly field-repaired) name and re-canonicalizes `.name`, the same invariant
+          // every full generation already gets (produce() calls it too). Idempotent when nothing
+          // was field-repaired.
+          const slugData = this.normalizeSlugResponse(rawSlugData);
           if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
           this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
           this.content.update(c => ({ ...c, slugData }));
@@ -919,10 +932,20 @@ export class ContentOrchestratorService {
           ...validateSeoMetadataShape(json, 'SEO metadata'),
         ],
         withFeedback: appendRepairFeedback,
+        // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5, bundled with Finding 0's
+        // same root cause): wires a repairField executor so meta-title-length's field-scoped
+        // rung (repair-strategy.ts, T12) is reachable in production.
+        repairField: async payload => stripCodeFences(await this.llm.generateText(
+          payload, false, { taskLabel: 'SEO metadata field repair', productName: input.name, store: input.website.name },
+        )),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
-      const { artifact: seoJson, repairsUsed: bRepairs } = seoResult;
+      const { artifact: rawSeoJson, repairsUsed: bRepairs } = seoResult;
+      // Same reasoning as the Slugs gate above: a field-scoped repair writes meta_title directly
+      // via setAtPath, bypassing produce()'s own canonicalizeSeoData — re-run it here so the
+      // field-repaired value gets the same normalization every full generation already gets.
+      const seoJson = this.canonicalizeSeoData(rawSeoJson, input.name);
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
@@ -1292,10 +1315,17 @@ export class ContentOrchestratorService {
           ),
           validate: json => validateSlugs(json, input.name),
           withFeedback: appendRepairFeedback,
+          // US-3.1 IMPLEMENTATION retry 2 (AC-6/FR-11) — see generate()'s identical Slugs gate
+          // above for the full rationale.
+          repairField: async payload => stripCodeFences(await this.llm.generateText(
+            payload, false, { taskLabel: 'Slugs field repair', productName: input.name, store: input.website.name, lang: UA_ISO },
+          )),
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
-        const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
+        const { artifact: rawSlugData, repairsUsed: slugRepairs } = slugResult;
+        // See generate()'s identical Slugs gate above for why this re-normalization is required.
+        const slugData = this.normalizeSlugResponse(rawSlugData);
         if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
         this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
         this.content.update(c => ({ ...c, slugData }));
@@ -1325,10 +1355,17 @@ export class ContentOrchestratorService {
           ...validateSeoMetadataShape(json, 'SEO metadata'),
         ],
         withFeedback: appendRepairFeedback,
+        // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5) — see generate()'s
+        // identical SEO gate above for the full rationale.
+        repairField: async payload => stripCodeFences(await this.llm.generateText(
+          payload, false, { taskLabel: 'SEO metadata field repair', productName: input.name, store: input.website.name, lang: UA_ISO },
+        )),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
-      const { artifact: seoJson, repairsUsed: bRepairs } = seoResult;
+      const { artifact: rawSeoJson, repairsUsed: bRepairs } = seoResult;
+      // See generate()'s identical SEO gate above for why this re-normalization is required.
+      const seoJson = this.canonicalizeSeoData(rawSeoJson, input.name);
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
@@ -1428,10 +1465,17 @@ export class ContentOrchestratorService {
           ...validateSeoMetadataShape(json, 'SEO metadata'),
         ],
         withFeedback: appendRepairFeedback,
+        // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5) — see generate()'s
+        // identical SEO gate for the full rationale.
+        repairField: async payload => stripCodeFences(await this.llm.generateText(
+          payload, false, { taskLabel: 'SEO metadata field repair', productName: input.name, store: input.website.name },
+        )),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
-      const { artifact: seoJson, repairsUsed: bRepairs } = seoResult;
+      const { artifact: rawSeoJson, repairsUsed: bRepairs } = seoResult;
+      // See generate()'s identical SEO gate for why this re-normalization is required.
+      const seoJson = this.canonicalizeSeoData(rawSeoJson, input.name);
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
@@ -1465,10 +1509,17 @@ export class ContentOrchestratorService {
         ),
         validate: json => validateSlugs(json, input.name),
         withFeedback: appendRepairFeedback,
+        // US-3.1 IMPLEMENTATION retry 2 (AC-6/FR-11) — see generate()'s identical Slugs gate for
+        // the full rationale.
+        repairField: async payload => stripCodeFences(await this.llm.generateText(
+          payload, false, { taskLabel: 'Slugs field repair', productName: input.name, store: input.website.name },
+        )),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
-      const { artifact: slugData, finalIssues: slugFinalIssues, repairsUsed: slugRepairs } = slugResult;
+      const { artifact: rawSlugData, finalIssues: slugFinalIssues, repairsUsed: slugRepairs } = slugResult;
+      // See generate()'s identical Slugs gate for why this re-normalization is required.
+      const slugData = this.normalizeSlugResponse(rawSlugData);
       if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
       this.content.update(c => ({ ...c, slugData }));
