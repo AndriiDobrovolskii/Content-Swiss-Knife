@@ -66,7 +66,11 @@ function makeDoc(specRows: Array<{ label: string; value: string }>) {
       ],
     },
     specs: { heading: 'Specs', categories: [{ title: 'Cat', rows: specRows }] },
-    cta: { heading: 'CTA', text: 'Buy it.' },
+    // US-3.1 T7 (Impact Analysis v4 Corrections #3 / Defect B): 'CTA' never named the fixture's own
+    // product — untruthful once heading-brand-core-missing (FR-7) enforces mandatory presence at
+    // the CTA-heading position. Made truthful here, before T7 lands, per AGENTS.md §7.7 and Task
+    // Breakdown T7's own division of labor (TEST_WRITING owns this fixture fix).
+    cta: { heading: 'Чому варто купити Test Product у EXPERT3D?', text: 'Buy it.' },
     figures: [],
     videos: [],
   };
@@ -95,6 +99,18 @@ function groundingFixedDoc() {
     { label: 'Вага', value: '500 г' },
     { label: 'Матеріал', value: 'Пластик' },
   ]);
+}
+
+/**
+ * A Doc the schema rejects on ONE addressable, field-level failure — the Story's own quoted
+ * example ("`doc-schema` (an empty required string)"). Unlike `invalidSchemaDoc()` (a
+ * killerSpecs array-length failure, which has no addressable index and is unaffected by T1 —
+ * still, correctly, a full-regen case), `cta.text` is a plain string leaf: its Zod path
+ * (`['cta', 'text']`) converts to `doc.cta.text` with no array hop at all, so it is exactly the
+ * shape FR-10(a)'s path converter must address.
+ */
+function emptyRequiredStringDoc() {
+  return { ...makeDoc([{ label: 'Вага', value: '500 г' }]), cta: { heading: 'Чому варто купити Test Product у EXPERT3D?', text: '' } };
 }
 
 function bootOrchestrator(mockLlm: {
@@ -248,6 +264,29 @@ describe('runDocGate — renders exactly once (acceptance criterion #2)', () => 
 
     expect(mockLlm.generateJson).toHaveBeenCalledTimes(2);
     expect(renderSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * US-3.1 T5 (FR-2(a), AC-1) — behavioural proof for `runDocGate()`'s own emission site
+ * (~547-549). The other two sites (`generate()`/`generateUaContent()`'s inline HTML-gate
+ * closures) are proven structurally in `content-orchestrator.grounding-retry.spec.ts`, since they
+ * are not independently callable the way `runDocGate` is.
+ */
+describe('runDocGate — FR-2(a): an unresolved grounding failure is reported at error severity', () => {
+  it('emits specs-grounding-disabled at severity "error", not "warning", when groundingDisabled is true', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValue(makeDoc([{ label: 'Вага', value: '500 г' }]));
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asDocGate(orchestrator).runDocGate(baseGateOpts({
+      groundingDisabled: true,
+      grounding: { text: '', failure: { kind: 'provider-error' } },
+    }));
+
+    const groundingIssue = result.finalIssues.find((i: { rule: string }) => i.rule === 'specs-grounding-disabled');
+    expect(groundingIssue).toBeDefined();
+    expect(groundingIssue!.severity).toBe('error');
   });
 });
 
@@ -705,5 +744,58 @@ describe('generate() — routes an enrolled store through the Doc pipeline end-t
     expect(mockLlm.recordGeneration).toHaveBeenCalledWith(
       expect.objectContaining({ locale: 'uk-UA', pipeline: 'doc', outcome: expect.stringMatching(/^(ok|repaired)$/) }),
     );
+  });
+});
+
+/**
+ * US-3.1 T1 (FR-10, AC-6, plan D7). `doc-schema` gets a targeted, field-scoped repair for an
+ * addressable finding (the Story's own example: an empty required string) instead of always
+ * falling through to a full-document regeneration — the exact disproportionate-cost regression
+ * AC-6 exists to close (the QA report's own repair log: two full-regen attempts for one field).
+ *
+ * `invalidSchemaDoc()`'s own scenario (killerSpecs below the schema minimum, an array-LENGTH
+ * failure with no addressable index) is deliberately UNCHANGED by this Story — it still falls
+ * through to full-regen today (see the describe block above, "ships a valid artifact on attempt
+ * 2", `repairsUsed: 1`) and must keep doing so: `emptyRequiredStringDoc()` below is a different,
+ * genuinely addressable failure shape, not a stronger claim about the array-length case.
+ */
+describe('runDocGate — FR-10: an addressable doc-schema finding is repaired field-scoped, without a full regeneration', () => {
+  it('repairs a Story-example empty required string (cta.text) via the field-scoped rung, spending zero full regenerations', async () => {
+    const mockLlm = makeMockLlm();
+    // Attempt 1: schema-invalid (cta.text === ''). Only ONE generateJson call is expected overall —
+    // a field-scoped repair must not trigger a second full produce() call.
+    mockLlm.generateJson.mockResolvedValueOnce(emptyRequiredStringDoc());
+    // The field-scoped rung's own LLM call (runDocGate's `repairField`, wired to generateText) —
+    // returns a valid, non-empty replacement for the addressed field only.
+    mockLlm.generateText.mockResolvedValueOnce('Buy the Test Product today for reliable results.');
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asDocGate(orchestrator).runDocGate(baseGateOpts({ groundingSpecs: GROUNDING_SOURCE, maxRepairs: 2 }));
+
+    // Zero full-document regenerations — the field-scoped rung alone resolved it.
+    expect(result.repairsUsed).toBe(0);
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    // The repaired artifact actually rendered — proving the graduated candidate reached the one
+    // render call, not the empty-artifact sentinel.
+    expect(result.artifact.length).toBeGreaterThan(0);
+    expect(result.finalIssues.filter((i: { rule: string }) => i.rule === 'doc-schema')).toEqual([]);
+  });
+
+  it('a candidate that never repairs (no repairField executor available) still falls through to full-regen, never silently ships the invalid value', async () => {
+    // Same broken fixture, but this time the field-scoped rung's own call also fails to produce a
+    // usable value (empty response) — proving the field-scoped rung is not itself a silent-success
+    // trap: an unrepaired addressable finding must still escalate rather than ship cta.text === ''.
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson
+      .mockResolvedValueOnce(emptyRequiredStringDoc())
+      .mockResolvedValueOnce(makeDoc([{ label: 'Вага', value: '500 г' }])); // full-regen recovers it
+    mockLlm.generateText.mockResolvedValueOnce(''); // field-scoped rung fails to produce a value
+
+    const orchestrator = bootOrchestrator(mockLlm);
+    const result = await asDocGate(orchestrator).runDocGate(baseGateOpts({ maxRepairs: 2 }));
+
+    expect(result.finalIssues.filter((i: { rule: string }) => i.rule === 'doc-schema')).toEqual([]);
+    // It DID need the full-regen this time — the field-scoped rung alone could not resolve it.
+    expect(result.repairsUsed).toBeGreaterThanOrEqual(1);
   });
 });

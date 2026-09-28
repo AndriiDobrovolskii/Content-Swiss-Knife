@@ -1576,3 +1576,151 @@ describe('validateSlugs feeding a real repair loop', () => {
     expect(validate).toHaveBeenCalledTimes(2); // initial + the one post-regen validate, no cleanup re-validate
   });
 });
+
+/**
+ * US-3.1 T4 (FR-2(b), plan D3) — an unresolved `specs-grounding-disabled` finding must not spend
+ * the run's full-document-regeneration budget on a condition no regeneration can ever fix.
+ *
+ * These fixtures are entirely synthetic — `specs-grounding-disabled` is not yet error-severity
+ * anywhere in the real code path until T5 lands (see Task Breakdown T4's own Notes) — proving the
+ * exclusion mechanism works today against any error-severity issue sharing this rule name.
+ */
+describe('runRepairGate — FR-2(b): specs-grounding-disabled is excluded from the attempt-spending test', () => {
+  const groundingIssue = (): ValidationIssue => ({
+    severity: 'error',
+    rule: 'specs-grounding-disabled',
+    detail: 'Specs grounding was DISABLED for this run.',
+    context: 'HTML (base)',
+  });
+
+  it('(i) a grounding-only error spends ZERO full-document-regeneration attempts', async () => {
+    const artifact = { value: 'ok-but-ungrounded' };
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const validate = vi.fn().mockReturnValue([groundingIssue()]);
+
+    const result = await runRepairGate({
+      label: 'HTML (base)',
+      maxRepairs: 3,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.repairsUsed).toBe(0);
+    expect(produce).toHaveBeenCalledTimes(1); // the initial generation only — no regen attempted
+    expect(result.finalIssues).toEqual([groundingIssue()]);
+  });
+
+  it('(ii) a grounding error alongside another repairable error: the other is repaired normally, grounding persists', async () => {
+    const artifacts = [{ v: 'bad' }, { v: 'good' }];
+    const produce = vi.fn()
+      .mockResolvedValueOnce(artifacts[0])
+      .mockResolvedValue(artifacts[1]);
+    const validate = vi.fn()
+      .mockReturnValueOnce([groundingIssue(), makeIssue('seo-empty')])
+      .mockReturnValue([groundingIssue()]); // seo-empty resolved by the regen; grounding cannot be
+
+    const result = await runRepairGate({
+      label: 'HTML (base)',
+      maxRepairs: 3,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    // The regenerable error drove exactly one repair attempt — undisturbed by the grounding
+    // finding's presence alongside it.
+    expect(result.repairsUsed).toBe(1);
+    expect(result.artifact).toBe(artifacts[1]);
+    expect(result.finalIssues.map(i => i.rule)).toEqual(['specs-grounding-disabled']);
+  });
+
+  it('(iii) a grounding error alone still appears in finalIssues after the loop exits without spending a regen', async () => {
+    const artifact = { value: 'ok' };
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const validate = vi.fn().mockReturnValue([groundingIssue()]);
+
+    const result = await runRepairGate({
+      label: 'HTML (base)',
+      maxRepairs: 2,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.finalIssues).toHaveLength(1);
+    expect(result.finalIssues[0].rule).toBe('specs-grounding-disabled');
+    expect(result.repairsUsed).toBe(0);
+  });
+
+  it('a run with OTHER genuinely repairable error-severity issues keeps repairing them, undisturbed', async () => {
+    // No grounding issue present at all — a plain regression guard that this exclusion did not
+    // widen to swallow ordinary repairable errors.
+    const artifacts = [{ v: 1 }, { v: 2 }];
+    const produce = vi.fn().mockResolvedValueOnce(artifacts[0]).mockResolvedValueOnce(artifacts[1]);
+    const validate = vi.fn().mockReturnValueOnce([makeIssue('seo-empty')]).mockReturnValueOnce([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata',
+      maxRepairs: 2,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.repairsUsed).toBe(1);
+    expect(result.finalIssues).toEqual([]);
+  });
+});
+
+/**
+ * T4's load-bearing companion fix: `toArtifactReport`'s `status` derivation currently assumes
+ * `repairsUsed === 0` implies `finalErrors === 0`. Once the exclusion above lands, that stops being
+ * true (a grounding-only run has `repairsUsed === 0` AND `finalErrors > 0`), and the CURRENT
+ * ternary — `result.repairsUsed === 0 ? 'clean' : …` — would misreport that state as `'clean'`.
+ * This is exercised directly against a synthetic `RepairGateResult`, independent of whether
+ * `runRepairGate` itself has been wired to produce `repairsUsed === 0` for a real grounding
+ * failure yet (T5's job), so it fails for its own, standalone reason.
+ */
+describe('toArtifactReport — FR-2(b)(iii): repairsUsed===0 must not imply status "clean" when an error persists', () => {
+  const groundingOnlyResult: RepairGateResult<unknown> = {
+    artifact: { value: 'ungrounded-but-otherwise-fine' },
+    finalIssues: [{
+      severity: 'error',
+      rule: 'specs-grounding-disabled',
+      detail: 'Specs grounding was DISABLED for this run.',
+      context: 'HTML (base)',
+    }],
+    repairsUsed: 0,
+    attempts: [],
+    blockScopedResolved: 0,
+    shippedAttempt: 0,
+  };
+
+  it('reports "unresolved", never "clean", when repairsUsed is 0 but an error-severity issue remains', () => {
+    const report = toArtifactReport('HTML (base)', groundingOnlyResult);
+    expect(report.status).toBe('unresolved');
+  });
+
+  it('still reports "clean" for the ordinary case: repairsUsed 0 AND no errors', () => {
+    const cleanResult: RepairGateResult<unknown> = {
+      ...groundingOnlyResult,
+      finalIssues: [],
+    };
+    expect(toArtifactReport('HTML (base)', cleanResult).status).toBe('clean');
+  });
+
+  it('still reports "repaired" when repairs were used and nothing remains', () => {
+    const repairedResult: RepairGateResult<unknown> = {
+      ...groundingOnlyResult,
+      repairsUsed: 1,
+      finalIssues: [],
+      shippedAttempt: 1,
+    };
+    expect(toArtifactReport('HTML (base)', repairedResult).status).toBe('repaired');
+  });
+});

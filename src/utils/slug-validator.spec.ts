@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { validateSlugs } from './slug-validator';
 import type { SlugResponse } from '../app/types';
+import { REPAIR_STRATEGIES, resolveLadder, getAtPath, setAtPath } from './repair-strategy';
 
 describe('validateSlugs', () => {
   it('flags slug-empty when there is no slug data', () => {
@@ -133,5 +134,48 @@ describe('validateSlugs — model-designator fidelity', () => {
       '3D-принтер Elegoo Centauri Carbon 2',
     ), '3D printer Elegoo Centauri Carbon 2');
     expect(issues).toEqual([]);
+  });
+});
+
+/**
+ * US-3.1 T11 (FR-11, AC-6, plan D8) — `slug-name-designator-lost` gets a targeted, actually-
+ * reachable repair-ladder entry instead of always falling through to a full-document regeneration.
+ * `slug-validator.ts`'s own check logic is unchanged by this Story — only its repairability.
+ */
+describe('validateSlugs — slug-name-designator-lost is repairable via the tiered ladder (T11)', () => {
+  const SOURCE = 'XGRIDS L2 Pro 32/300 Standard Package';
+
+  it('resolves through a field-scoped rung, not the implicit full-regen-only fallback', () => {
+    const response: SlugResponse = {
+      site_name: 'Center 3D Print',
+      slugs: [{ language: 'pl-PL', name: 'XGRIDS L2 Pro 32 300 Skaner 3D Standardowy', slug: 'xgrids-l2-pro' }],
+    };
+    const [issue] = validateSlugs(response, SOURCE).filter(i => i.rule === 'slug-name-designator-lost');
+    expect(issue).toBeDefined();
+    expect(resolveLadder(issue)).toEqual(['field-scoped', 'full-regen']);
+    expect(resolveLadder(issue)).not.toEqual(['full-regen']);
+  });
+
+  /** Applying the ladder's own path-addressing to the real artifact shape, end to end — a
+   *  field-scoped rewrite of `slugs[i].name` alone repairs the finding without touching any other
+   *  field, mirroring how `slug-charset`'s existing entry already behaves on this same artifact. */
+  it('a field-scoped rewrite of only the addressed slugs[i].name field clears the finding', () => {
+    const response: SlugResponse = {
+      site_name: 'Center 3D Print',
+      slugs: [{ language: 'pl-PL', name: 'XGRIDS L2 Pro 32 300 Skaner 3D Standardowy', slug: 'xgrids-l2-pro' }],
+    };
+    const [issue] = validateSlugs(response, SOURCE).filter(i => i.rule === 'slug-name-designator-lost');
+    expect(issue.path).toBe('slugs[0].name');
+
+    const strategy = REPAIR_STRATEGIES.get('slug-name-designator-lost');
+    expect(strategy).toBeDefined();
+
+    const current = getAtPath(response, issue.path!);
+    expect(typeof current).toBe('string');
+    const repaired = setAtPath(response, issue.path!, 'XGRIDS L2 Pro 32/300 Skaner 3D Standardowy');
+
+    expect(validateSlugs(repaired, SOURCE).filter(i => i.rule === 'slug-name-designator-lost')).toEqual([]);
+    // Only the addressed field changed — the slug itself is untouched.
+    expect(repaired.slugs[0].slug).toBe(response.slugs[0].slug);
   });
 });

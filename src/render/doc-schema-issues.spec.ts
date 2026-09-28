@@ -114,6 +114,58 @@ describe('docSchemaIssues', () => {
 });
 
 /**
+ * US-3.1 T1 (FR-10(a), AC-6). A field-level Zod failure must carry a `path` in
+ * `repair-strategy.ts`'s own `"doc.<hops>"` addressing grammar (numeric segments attach as `[n]`
+ * to the preceding string segment) — not only folded into the human-readable `detail` string, as
+ * today. Without this, `runDocGate`'s `validate()` closure has no addressable location to hand the
+ * field-scoped repair rung, and a `doc-schema` finding falls through to full-regen regardless of
+ * whether `REPAIR_STRATEGIES` registers a strategy for it.
+ */
+describe('docSchemaIssues — FR-10(a): the Zod-path → doc.<hops> converter', () => {
+  it('assigns a doc.<hops> path for a nested array + object field-level failure', () => {
+    const [issue] = issuesFor((() => {
+      const doc = brokenDoc() as Record<string, unknown>;
+      doc['specs'] = { heading: 'h', categories: [{ title: 't', rows: [{ label: 'l', value: [] }] }] };
+      return doc;
+    })()).filter(i => i.detail.includes('specs.categories.0.rows.0.value'));
+    expect(issue).toBeDefined();
+    expect(issue.path).toBe('doc.specs.categories[0].rows[0].value');
+  });
+
+  it('assigns a doc.<hops> path for a simple array-indexed field (killerSpecs)', () => {
+    const issues = issuesFor(brokenDoc());
+    const killerSpecsIssue = issues.find(i => i.detail.startsWith('killerSpecs'));
+    expect(killerSpecsIssue).toBeDefined();
+    // killerSpecs itself is array-valued at the ROOT (no further object hop below the array), so
+    // the zod path is exactly `killerSpecs` with no index — repair-strategy.ts's own path grammar
+    // requires an index whenever the addressed value is an array; a bare `doc.killerSpecs` would
+    // throw "unsupported path" if ever passed to getAtPath/setAtPath, so this must NOT be assigned
+    // a `path` at all (falls through to full-regen exactly as an unaddressable root failure does).
+    expect(killerSpecsIssue!.path).toBeUndefined();
+  });
+
+  it('assigns no path for a root-level failure ((root))', () => {
+    const [issue] = docSchemaIssues({ issues: [{ path: [], message: 'Required' }] }, 'ctx');
+    expect(issue.path).toBeUndefined();
+  });
+
+  it('assigns no path for a non-zod failure (malformed JSON, provider error, etc.)', () => {
+    const issue = docSchemaIssues(new Error('Unexpected token } in JSON at position 42'), 'ctx')[0];
+    expect(issue.path).toBeUndefined();
+  });
+
+  it('every doc-schema issue with a path still resolves through repair-strategy.ts\'s own path grammar', async () => {
+    // Cross-check against the real parser rather than re-implementing the grammar's rules here.
+    const { getAtPath } = await import('../utils/repair-strategy');
+    const doc = brokenDoc() as Record<string, unknown>;
+    doc['specs'] = { heading: 'h', categories: [{ title: 't', rows: [{ label: 'l', value: [] }] }] };
+    const issue = issuesFor(doc).find(i => i.path);
+    expect(issue).toBeDefined();
+    expect(() => getAtPath({ doc, issues: [] }, issue!.path!)).not.toThrow();
+  });
+});
+
+/**
  * withDocRepairFeedback — the retry prompt for the Doc-shaped gate (runDocGate). See its own doc comment for why the generic appendRepairFeedback wording
  * alone was not enough: it names WHAT failed but never restates THAT the response must be JSON.
  */
