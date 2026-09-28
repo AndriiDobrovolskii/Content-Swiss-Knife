@@ -6,7 +6,7 @@ status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-09-27T10:00:00Z
-updated_at: 2026-09-28T11:35:00Z
+updated_at: 2026-09-28T11:50:00Z
 supersedes: docs/catalog/US-3.1-pipeline-status.md#4
 inputs_consumed:
   - key: story
@@ -42,12 +42,18 @@ for this Story.
 
 Branch: `feat/US-3.1-qa-gate-brand-core-fixes` (unchanged).
 
-**Authorization for this round's FROZEN-file commit:** T8 ([HEADING FORM] disambiguation,
-`src/prompt-core/master-system-prompt.ts` and `src/prompts/task-a.ts`) was already authorized in
-this session per the §9 stop-and-confirm ritual performed in the round that first implemented it
-(recorded in pipeline_status v4 §"Authorization"). No fresh authorization was needed this round —
-this dispatch only verified the already-applied, already-authorized edit was still correct and
-committed it once its blocking test-fixture gap was closed.
+**Authorization for this round's FROZEN-file commit (carried forward unchanged from v4's own
+record, per `AGENTS.md` §9 and `IMPLEMENTATION_VERIFICATION`'s check for it):** the orchestrator's
+dispatch that produced T8/T10 relayed the user's own in-session, file-by-file authorization naming
+all three FROZEN files T8/T10 touch — `src/prompt-core/master-system-prompt.ts`,
+`src/prompts/task-a.ts` and `src/prompts/task-b.ts` — individually, satisfying §9's requirement that
+the user name the specific file in the current session. `so-builder` performed the §9
+stop-and-confirm ritual in-session (stating the exact change and its source in the Task
+Breakdown/Implementation Plan) before each edit, per Task Breakdown v6's own T8/T10 Notes sections.
+No fresh authorization was needed this round — this dispatch verified the already-applied,
+already-authorized T8 edit was still correct (git diff against `HEAD` showed exactly the two files
+and two clauses described in §3.2) and committed it, under this same authorization, once T8's
+blocking test-fixture gap was closed.
 
 ## 0. What changed this round
 
@@ -56,7 +62,7 @@ This round did **not** write any new production code. It:
 1. Independently re-confirmed (git diff, not narrative) that the working tree held exactly the
    changes the prior round's report described: T8's two FROZEN-file edits plus a matching
    `.arch-guard-checksums` rebaseline, `TEST_WRITING`'s recalibrated golden fixture, and
-   `TEST_WRITING`'s one-line `task-b.spec.ts` destructuring fix.
+   `TEST_WRITING`'s two-line `task-b.spec.ts` destructuring fix (both loop bodies).
 2. Ran the full suite (both runners), lint and `bash arch-guard.sh` against that working tree —
    green (§4).
 3. Split the working-tree changes into two commits, since they address two independent findings
@@ -130,10 +136,18 @@ CONTAINS..."; for the subset of those cases that reach `buildPromptA()`'s `userC
 (`doc/expert3d`, `doc/expert3d+hook`, `doc/c3d`, `html/expert3d`, `html/legacy`,
 `html/legacy+lang`, `html/c3d+customTemplate`), the only further change is the appended clause
 "...which forbids the full name outright except at the two blessed positions it names." replacing
-"...which forbids the full name outright." Cases that do not reach that tail (`c/expert3d-es`,
-`c/eu-en`, `c/us-uk` — the `translate/*`-style cases) show no `userContent` change at all. No other
-byte in the fixture differs. This matches T8's own two-file, two-clause acceptance scope exactly and
-confirms `TEST_WRITING`'s recalibration did not smuggle in any other change.
+"...which forbids the full name outright." The fixture's `c/*` case family (`c/expert3d-es`,
+`c/eu-en`, `c/us-uk`) does embed `MASTER_SYSTEM_PROMPT` in `systemBlocks[0]` — and so gained the
+same bullet as the other 7 cases above — but its `userContent` does not reach the task-a.ts
+closing-line restatement T8 reworded, so `userContent` is unchanged for these three. The fixture's
+separate `translate/*` family (`translate/uk-user`, `translate/de-internal`) is the one that genuinely
+never embeds `MASTER_SYSTEM_PROMPT` at all — confirmed here by a programmatic key-by-key diff of the
+full fixture (12 keys total: `doc/*` ×3, `html/*` ×4, `c/*` ×3, `translate/*` ×2); neither block
+changed for those two. So 10 of the 12 cases changed (the ones v4 counted), and the remaining 2
+(`translate/*`) are correctly untouched — not because they are the same family as `c/*`, but because
+they don't embed the shared system prompt at all. No other byte in the fixture differs. This matches
+T8's own two-file, two-clause acceptance scope exactly and confirms `TEST_WRITING`'s recalibration
+did not smuggle in any other change.
 
 With the fixture recalibrated, `master-system-prompt.ts` and `task-a.ts` (already correctly edited
 and already rebaselined in `.arch-guard-checksums` from the prior round) needed no re-edit and no
@@ -155,10 +169,12 @@ fresh §9 stop — only committing, together with the fixture and T8's own two p
 
 Findings 1-9 are unchanged from v1-v4 (see v3 §5) — all already landed, committed, or (finding 8,
 the Bambu Lab "Hardened Steel" D5(f) worked-example defect) still open and out of this Story's
-scope. Finding 10 and 11 (v4 §5) are also unchanged and still open:
+scope. Finding 10 is a closed process note, carried forward for the record; finding 11 remains
+open:
 
-10. A first T10 draft's mid-round self-correction (v4 §5 finding 10) — process finding only,
-    already resolved in the committed `3d89c86`. No action needed.
+10. **Closed — carried forward for the record only, no action needed.** A first T10 draft's
+    mid-round self-correction (v4 §5 finding 10) was a process finding about how the draft was
+    produced, not a defect in what shipped; it was already resolved before `3d89c86` was committed.
 
 11. Implementation Plan v7 D11(a)'s `buildPromptB()` excerpt code can total 1001 characters in the
     specs-section branch against its own stated 1000-character cap, by one character, in a path no
