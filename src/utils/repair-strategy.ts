@@ -386,6 +386,42 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
       ].join('\n'),
     },
   ],
+  [
+    'heading-brand-core-missing',
+    {
+      // US-3.1 T7 (FR-7, plan D5). Mirrors heading-product-name-stuffing's own ladder shape above
+      // — the same dual Doc/HTML-shape handling its sibling/inverse rule on these same two
+      // positions already needs (see that entry's own comment for the full field-scoped/
+      // block-scoped no-op mechanism).
+      //
+      // ONE rule identity, its fieldInstruction dispatched by issue.path — not two rule identities.
+      // A `doc.localizedName`-path issue gets bare-name wording mirroring
+      // slug-name-designator-lost's own, since a heading-oriented instruction applied to this leaf
+      // would make the shape requirement (heading-style.ts's localizedNameShapeIssue) fail on that
+      // rung near-systematically. The one remaining genuine heading leaf (`doc.cta.heading`) and
+      // the HTML closing-heading path (`block[n]`) both keep heading-product-name-stuffing's
+      // existing heading-oriented wording, unchanged.
+      ladder: ['field-scoped', 'block-scoped'],
+      fieldInstruction: (current, issue) =>
+        issue.path === 'doc.localizedName'
+          ? [
+              'Rewrite this localized product name so it satisfies the constraint below.',
+              'Return ONLY the corrected name as plain text — no quotes, no HTML tags, no commentary.',
+              '',
+              issue.detail,
+              '',
+              `Current name: "${current}"`,
+            ].join('\n')
+          : [
+              'Rewrite this heading so it satisfies the constraint below. Return ONLY the corrected',
+              'heading text as plain text — no quotes, no HTML tags, no commentary.',
+              '',
+              issue.detail,
+              '',
+              `Current heading: "${current}"`,
+            ].join('\n'),
+    },
+  ],
 ]);
 
 /**
