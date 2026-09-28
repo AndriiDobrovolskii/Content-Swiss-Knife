@@ -51,6 +51,24 @@ describe('buildPromptA — ToV system-block scoping', () => {
     }
   });
 
+  /**
+   * US-3.1 T8 (FR-12, §9 Story D3 authorization). Line ~153's restatement of [HEADING FORM]
+   * currently reads "which forbids the full name outright" as an unqualified absolute — the exact
+   * shape SPEC-ROOT FR-12 exists to reword, since it contradicts, by omission, [HEADING FORM]'s own
+   * two-blessed-position exception. Negative-pins the OLD unqualified sentence and positive-pins a
+   * qualifier naming the two allowed positions, at the outcome level rather than one exact string
+   * (Implementation Plan D10 states the requirement, not the wording).
+   */
+  it('no longer restates [HEADING FORM] as an unqualified "forbids the full name outright" absolute', () => {
+    const { userContent } = buildPromptA(inputFor('EXPERT3D'));
+    // The OLD sentence ended right at "outright." with nothing after it — a reworded version must
+    // not end the whole prompt there.
+    expect(userContent.trim().endsWith('which forbids the full name outright.')).toBe(false);
+    expect(userContent).toMatch(/\[HEADING FORM\]/);
+    // A qualifier naming the exception must survive, referencing the two blessed positions.
+    expect(userContent).toMatch(/except[\s\S]{0,120}(two|blessed|first §3|§9)/i);
+  });
+
   it('only Center 3D Print sees the §4 verb-led-<ul> override', () => {
     for (const store of Object.keys(STORE_REGISTRY)) {
       const joined = buildPromptA(inputFor(store)).systemBlocks.map(b => b.text).join('\n');

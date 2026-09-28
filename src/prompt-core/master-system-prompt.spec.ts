@@ -110,3 +110,36 @@ describe('MASTER_SYSTEM_PROMPT — §5 LIST COMPATIBILITY: item-count floor', ()
     expect(normalized).toMatch(/write one short paragraph instead \(no <ul>\)/i);
   });
 });
+
+/**
+ * US-3.1 T8 (FR-12, AC-2, AC-3; §9 Story D3 authorization). `[HEADING FORM]`'s existing text
+ * ("AT MOST TWO <h2> ... may contain [Product-short]: the FIRST §3 heading and the §9
+ * commercial-closing heading") does not state whether the exception still holds when
+ * `[Product-short]` happens to equal the full product name — the degenerate case
+ * `productShort("Makera Cyclone Dust Collector")` hits (no configuration code or packaging suffix
+ * to drop). Read literally, "THE FULL PRODUCT NAME IS FORBIDDEN IN EVERY HEADING" gives the model
+ * no textual basis to keep `[Product-short]` at the two blessed positions in exactly that case —
+ * the prompt-side contributor to the es-ES/pt-PT regression AC-2/AC-3 close on the validator side.
+ *
+ * Asserted at the OUTCOME level (a clause stating the exception holds in the degenerate case),
+ * not against one hard-coded sentence — the exact wording is so-builder's/so-planner's to choose
+ * (Implementation Plan D10 states the requirement, not the string).
+ */
+describe('MASTER_SYSTEM_PROMPT — [HEADING FORM]: the two-heading exception holds when short === full (FR-12)', () => {
+  it('states, after the "AT MOST TWO ... [Product-short]" sentence, that the exception is unaffected when [Product-short] equals the full product name', () => {
+    // The added clause must sit inside the [HEADING FORM] BLOCK HEADER itself — not one of the
+    // several other places in the prompt that merely REFERENCE "[HEADING FORM]" by name (e.g.
+    // PRODUCT_NAME_LOCALIZATION's "...and [HEADING FORM] governs them: the §7 header is...",
+    // spliced in earlier in the composed string). Anchored on the block's own opening bracket.
+    const headingFormBlock = normalized.match(/\[HEADING FORM — applies to every[\s\S]{0,1200}/)?.[0] ?? '';
+    expect(headingFormBlock).toMatch(/AT MOST TWO[\s\S]{0,400}\[Product-short\]/i);
+    expect(headingFormBlock).toMatch(
+      /\[Product-short\][\s\S]{0,250}(equals?|is identical to|is the same as|is unchanged from)[\s\S]{0,150}(the )?full product name/i,
+    );
+  });
+
+  it('does not otherwise alter the "AT MOST TWO" ceiling or the two named blessed positions', () => {
+    expect(normalized).toMatch(/AT MOST TWO/);
+    expect(normalized).toMatch(/the FIRST §3 heading and\s*the §9 commercial-closing heading/i);
+  });
+});
