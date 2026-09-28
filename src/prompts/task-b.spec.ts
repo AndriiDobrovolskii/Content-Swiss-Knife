@@ -67,10 +67,10 @@ describe('meta_title budgets never exceed what the validator accepts', () => {
     expect(deDeRows.length).toBeGreaterThan(0);
     expect(generalRows.length).toBeGreaterThan(0);
 
-    for (const [locales, budgetStr] of generalRows) {
+    for (const [, locales, budgetStr] of generalRows) {
       expect(Number(budgetStr), `general row "${locales}"`).toBe(ceiling - 1); // 54
     }
-    for (const [locales, budgetStr] of deDeRows) {
+    for (const [, locales, budgetStr] of deDeRows) {
       expect(Number(budgetStr), `de-DE row "${locales}"`).toBe(ceiling - 4); // 51
     }
   });
