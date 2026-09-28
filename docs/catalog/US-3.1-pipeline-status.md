@@ -1,13 +1,13 @@
 ---
 artifact: pipeline_status
 story: US-3.1
-version: 3
+version: 4
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-09-27T10:00:00Z
-updated_at: 2026-09-28T07:37:00Z
-supersedes: docs/catalog/US-3.1-pipeline-status.md#2
+updated_at: 2026-09-28T09:15:00Z
+supersedes: docs/catalog/US-3.1-pipeline-status.md#3
 inputs_consumed:
   - key: story
     version: 1
@@ -32,218 +32,216 @@ open_decisions_blocking: false
 
 # Pipeline Status — US-3.1: Make the repair gate actually block ungrounded content and stop the brand-core/heading-form rule conflict
 
-**Verdict (attempt 2 of the IMPLEMENTATION retry, angular track, T7 only): `CHANGES_REQUIRED` →
-`partial`.** T7 is now **done and committed** (`ad4c678`) — `TEST_WRITING`'s v3 recalibration of
-the two tests v2 reported as blocking (`heading-style.spec.ts:268-272`,
-`content-orchestrator.simplified.spec.ts:351-364`) is independently verified correct (§2) and both
-now pass against T7's popped code, with no regression anywhere else in either runner. This
-dispatch's own scope was T7 alone; **T8/T10 remain not attempted** (`track: prompt`, FROZEN files,
-no fresh in-session "modify [filename]" instruction this dispatch — unchanged since v1/v2, see
-§4), so `IMPLEMENTATION` as a whole is not yet complete for this Story and the verdict is
-`partial`, not `PASS`.
+**Verdict (attempt 2 of the IMPLEMENTATION retry, T8/T10, prompt track): `CHANGES_REQUIRED` →
+`changes_required_tests`.** T10 is **done and committed** (`3d89c86`), with one disclosed,
+pre-existing, content-independent test-file defect left red (§3.1). T8 is **fully implemented and
+independently verified against its own named tests (89/89 passing)**, but is deliberately left
+**uncommitted** — landing it now would ship a real regression in an out-of-scope test file no
+US-3.1 artifact (Impact Analysis, Implementation Plan, Task Breakdown) identified as touched by a
+`[HEADING FORM]`/line-153 edit (§3.2). Both items route to `TEST_WRITING`, not to a
+`so-builder`-authored fix, per AGENTS.md §7.7 and `so-builder/SKILL.md`'s "never modify a test
+file" constraint. `IMPLEMENTATION` is not yet complete for this Story.
 
 Branch: `feat/US-3.1-qa-gate-brand-core-fixes` (unchanged).
+
+**Authorization actually used this dispatch, recorded verbatim per `AGENTS.md` §9 and
+`IMPLEMENTATION_VERIFICATION`'s own check for it:** the orchestrator's dispatch to this round of
+`so-builder` relayed the user's exact in-session words, "modify
+src/prompt-core/master-system-prompt.ts, src/prompts/task-a.ts, and src/prompts/task-b.ts" — all
+three FROZEN files T8/T10 touch, named individually, satisfying §9's "explicitly says 'modify
+[filename]' for that specific file in the current session" requirement for exactly these three and
+no other FROZEN file. `so-builder` performed the §9 stop-and-confirm ritual in-session (stating the
+exact change and its source in the Task Breakdown/Implementation Plan) before each edit, per Task
+Breakdown v6's own T8/T10 Notes sections.
 
 ## 1. Task outcomes
 
 | Task | Track | Outcome | Commit | Notes |
 |---|---|---|---|---|
-| T1 | angular | done | `df9ec36` | Unchanged since v1/v2. |
-| T2 | angular | done | `e48fa1b` | Unchanged since v1/v2. |
-| T3 | angular | done | `a01bd12` | Unchanged since v1/v2. |
-| T4 | angular | done | `4dfccf0` | Unchanged since v1/v2. |
-| T5 | angular | done | `fb03d68` | Unchanged since v1/v2. |
-| T6 | angular | done | `fbf4859` | Unchanged since v1/v2. |
-| T7 | angular | **done, with one disclosed finding** | `ad4c678` | Rebuilt in full against Implementation Plan v7's D5/D5(e)/D5(f) design (v2's own stash, popped and verified this round — see §2). All of T7's own named tests pass (174/174 across the four target files); the two pre-existing tests v2 reported as blocked now pass against `TEST_WRITING`'s v3 recalibration. One plan-conformance defect found via due diligence on `TEST_WRITING`'s F5, not covered by any test — see §5 finding 8. |
-| T8 | prompt | **not attempted** | — | Out of scope this dispatch (angular only); FROZEN file, no fresh-session "modify" instruction. Unchanged since v1/v2 — see §4. |
-| T9 | angular | done | `c78e6da` | Unchanged since v1/v2. |
-| T10 | prompt | **not attempted** | — | Out of scope this dispatch; FROZEN `task-b.ts`, no fresh-session "modify" instruction. Unchanged since v1/v2 — see §4. |
-| T11 | angular | done | `0c14353` | Unchanged since v1/v2. |
-| T12 | angular | done | `3e36e4e` | Unchanged since v1/v2. |
+| T1 | angular | done | `df9ec36` | Unchanged since v1-v3. |
+| T2 | angular | done | `e48fa1b` | Unchanged since v1-v3. |
+| T3 | angular | done | `a01bd12` | Unchanged since v1-v3. |
+| T4 | angular | done | `4dfccf0` | Unchanged since v1-v3. |
+| T5 | angular | done | `fb03d68` | Unchanged since v1-v3. |
+| T6 | angular | done | `fbf4859` | Unchanged since v1-v3. |
+| T7 | angular | done, with one disclosed finding | `ad4c678` | Unchanged since v3; test recalibrations committed this round (§2). |
+| T8 | prompt | **implemented, own tests 89/89 green, held uncommitted** | — (working tree only) | FROZEN-file edit complete and verified against its own named tests; not committed because it regresses `full-description.golden.spec.ts` (§3.2), a test no US-3.1 artifact scoped to T8. Routed to `TEST_WRITING`. |
+| T9 | angular | done | `c78e6da` | Unchanged since v1-v3. |
+| T10 | prompt | **done, committed, one disclosed pre-existing red test** | `3d89c86` | See §3.1. |
+| T11 | angular | done | `0c14353` | Unchanged since v1-v3. |
+| T12 | angular | done | `3e36e4e` | Unchanged since v1-v3. |
 
-## 2. T7 — popped, independently verified, committed
+## 2. This round's housekeeping: TEST_WRITING's remaining uncommitted spec files
 
-### 2.1 What was popped
+`c48a51c` — commits the eleven spec files `TEST_WRITING` had left uncommitted across T1-T7/T9/T11/T12's
+rounds (`heading-style.spec.ts`, `content-orchestrator.simplified.spec.ts`, plus nine more recalibrated
+or newly-added spec files), per pipeline_status v3 §5 finding 9's own bisectability concern and this
+dispatch's explicit instruction to check and commit them. `so-builder` did not edit any of these files —
+staged and committed byte-for-byte as found, verified green in the same full-suite runs reported in §4.
+Excludes `master-system-prompt.spec.ts`, `task-a.spec.ts` and `task-b.spec.ts`, which land with their
+respective FROZEN-file commits so each production change and the test that pins it travel together.
 
-`git stash pop stash@{0}` — v2's own parked T7 rebuild (`src/utils/heading-style.ts`,
-`src/utils/repair-strategy.ts`), identical to the diff v2 §3.1 described. The pop applied cleanly
-with no conflicts against the working tree (which by this point already carried `TEST_WRITING`'s
-v3 recalibration of the two spec files, uncommitted). `git stash show -p stash@{0}` was read in
-full before popping and confirmed to match v2's own description exactly — this was v2's own prior
-work, not a fresh rebuild.
+## 3. T8/T10 — implemented this round; two findings routed to `TEST_WRITING`
 
-### 2.2 The two recalibrations — verified independently, not taken on faith
+### 3.1 T10 — committed (`3d89c86`); one pre-existing, content-independent test defect
 
-Per this dispatch's own instruction and `so-builder`'s constraint (never trust a test change
-without checking it against the actual design), both of `TEST_WRITING`'s v3 recalibrations were
-read and reasoned through against T7's actual code before running anything:
+`task-b.ts`'s `TASK_B_INSTRUCTION` "— meta_title —" block, budget table and four few-shot anchors,
+plus `buildPromptB()`'s excerpt-construction code, were rewritten per Implementation Plan v7 D11(a)-(d)
+— read directly from the Plan (not re-derived from the Task Breakdown's prose alone, after an initial
+draft that deviated from D11's concrete text was caught and corrected mid-round; see §5 finding 1).
+29 of `task-b.spec.ts`'s 31 tests were already green before this round's D11-conformant rewrite; all
+31 target tests pass except one:
 
-1. **`heading-style.spec.ts:268-272`, `'tolerates the unit-spacing normalization…'`.** Diffed
-   against the last-committed version (`git show HEAD:src/utils/heading-style.spec.ts`): the
-   assertion itself (`issues.filter(i => i.rule === 'heading-product-name-stuffing')).toHaveLength(1)`)
-   is **unchanged** — the filter already existed in the committed version. The only change is the
-   fixture: a generic, non-product-named heading (`h2('Загальний вступ')`) is now prepended before
-   the tested heading, so the tested `<h2>` is no longer structurally first (and therefore no
-   longer blessed) in a single-heading document. This is exactly the fixture-only fix v2 §3.2
-   described as needed — no assertion was weakened, only the fixture's shape changed, and the
-   test's own stated intent (digit/letter-spacing tolerance in the pattern match) is preserved
-   because the heading no longer needs blessed-position exemption to be evaluated.
-2. **`content-orchestrator.simplified.spec.ts:351-364`, `'the FAQ request does not depend on the
-   template…'`.** v2's own suggested recalibration (§3.2, finding 2) was to pass `name` only on the
-   `full` harness's `generate()` call. `TEST_WRITING`'s actual v3 fix is broader and correct where
-   v2's own suggestion would not have been: it gives **both** harnesses (`simp` and `full`) the same
-   `name: 'Ortur H20 20 W'`, and additionally overrides `sparePartsDoc()`'s `localizedName` on the
-   `simp` side to the same value. Reasoned through: `simp` uses a `schemaVersion: '4.0'` doc, so
-   FR-7 checks `doc.localizedName` there, not `input.name` directly — patching only `full`'s `name`
-   (v2's own suggestion) would have left `simp`'s `sparePartsDoc().localizedName` at its own
-   unrelated default, which does not itself trip FR-7 (it already matches `simp`'s own default
-   `input().name`) but would make the two harnesses' FAQ prompts diverge on the interpolated
-   product name, failing the test's own `userContent` equality assertion for a new reason.
-   `TEST_WRITING`'s test-generation report v3 records this exact failure mode as empirically
-   observed before arriving at the two-sided fix. The applied recalibration is therefore the
-   correct form of v2's own weaker suggestion, not a deviation from it.
+**`task-b.spec.ts:55-76`, `'every budget equals ceiling-1 (general rows) or ceiling-4 (de-DE) exactly'`
+(lines 70 and 73) — a pre-existing, content-independent destructuring defect, not a T10 regression.**
+Both loops destructure the raw `RegExpMatchArray` as `const [locales, budgetStr] of generalRows` /
+`deDeRows`. A `RegExpMatchArray` is array-like with index 0 = the full match, index 1 = the first
+capture group (the locale-name text), index 2 = the second capture group (the digit budget). The
+destructuring should be `const [, locales, budgetStr] of ...` (skipping index 0); as written,
+`budgetStr` actually receives index 1 — the locale-name string (e.g. `"en-GB, en-US, en-ES"`) — so
+`Number(budgetStr)` is `NaN` regardless of what numeric value the prompt actually states. Confirmed
+content-independent with a throwaway Node reproduction (not committed): feeding the exact same regex
+match against both the old (48/45) and new (54/51) row text produces the identical `NaN` failure mode.
+This test could never pass as written, for any `task-b.ts` content — it was going to be part of the
+originally-reported 10 red tests (pipeline_status v3 §4) for this same structural reason, independent
+of which numbers T10 ultimately wrote. Per `so-builder/SKILL.md` ("Never modify a test file... A test
+that seems wrong is a finding to report... not a test to edit — you do not own the test files") and
+AGENTS.md §7.7, this is **not fixed here**. **Fix needed:** `task-b.spec.ts:70` and `:73`,
+`[locales, budgetStr]` → `[, locales, budgetStr]`. Evidence the content itself is correct: the
+`it.each` budget-value tests (`rows.map(r => [r[1].trim(), Number(r[2])])`, correctly indexed) already
+pass with titles "...budget (54 chars)..." / "...budget (51 chars)..." — sourced from the same `rows`
+array via correct indexing — confirming `task-b.ts` states exactly the OD-8-reconciled 54/51 values the
+broken test intends to check.
 
-Neither recalibration weakens an assertion, skips a case, or narrows what is checked — both are
-fixture/input-data corrections only, matching AGENTS.md §7.7.
+`.arch-guard-checksums` rebaselined for `task-b.ts` alone (`git diff` against the prior commit shows
+exactly one changed line), committed in the same commit as the `task-b.ts` edit, kept separate from
+T8's rebaseline per Implementation Plan Risk 8.
 
-### 2.3 Measured state (real command output, after popping and before committing)
+### 3.2 T8 — implemented, own tests green, held uncommitted: a real regression in an unscoped test
+
+`master-system-prompt.ts`'s `[HEADING FORM]` block gained one new bullet (after the existing "AT MOST
+TWO... may contain [Product-short]" sentence) stating the two-blessed-position exception holds
+unchanged when `[Product-short]` equals the full product name; `task-a.ts`'s line-153 restatement was
+reworded from "...which forbids the full name outright." to "...which forbids the full name outright
+except at the two blessed positions it names." No other line in either file changed. All four of T8's
+own named tests pass (`task-a.spec.ts`, `task-a.simplified.spec.ts`, `master-system-prompt.spec.ts`,
+`master-system-prompt.v4.spec.ts` — 89/89).
+
+**Verified by independently un-stashing just these two files against `HEAD`:** the edit alone —
+nothing else in the working tree — turns 10 tests in `src/prompts/full-description.golden.spec.ts`
+from green to red (confirmed both ways: red with the edit applied, green with it stashed out, on an
+otherwise-identical tree). This is `TEST_WRITING`'s own US-2.2 byte-identical prompt-caching regression
+guard: it pins `MASTER_SYSTEM_PROMPT`/`TASK_A_INSTRUCTION`'s exact bytes for every "no `templateId`"
+("Full description") case, captured from the tree *before* US-2.2. **No US-3.1 artifact — Impact
+Analysis v4, Implementation Plan v7, Task Breakdown v6 — names `full-description.golden.spec.ts` or
+its backing fixture (`test/fixtures/golden/full-description-prompts.json`) as a file T8 touches or
+exposes.** This is a genuine blast-radius gap in this Story's own planning, not a defect in T8's
+implementation of the Task Breakdown's design (which was itself followed exactly: the new clause
+states the required exception; the line-153 reword ends with "...positions it names.", not "...
+outright."; no other line changed).
+
+The fixture's own file-header comment (`test/fixtures/full-description-inputs.ts`) explicitly forbids
+`so-builder` (or anyone) from regenerating it from the implemented tree: "Do NOT regenerate the JSON
+after implementation starts: doing so would make the guard assert the implementation back to itself."
+Regenerating it is a fixture edit in any case — forbidden to `so-builder` regardless of that comment,
+per AGENTS.md §7.7 / `so-builder/SKILL.md`. **T8's code is therefore left applied in the working tree,
+uncommitted**, rather than shipping a commit that turns 10 previously-green tests red (violates the
+Definition of Done's "every test that passed before still passes"). This follows the same precedent
+this Story's own T7 round already established (`heading-style.ts`/`repair-strategy.ts` parked via
+`git stash` until `TEST_WRITING` recalibrated the two blocked tests, then popped and committed).
+
+**Exact regeneration delta, captured with a throwaway, never-committed diagnostic spec (deleted
+immediately after use, the same pattern used for pipeline_status v3's finding 8):**
+
+- `systemBlocks[0]` (the shared `MASTER_SYSTEM_PROMPT` block, present in every golden case) gains
+  exactly one inserted bullet, immediately after `"...not a place to repeat the keyword.\n"` and
+  before `"- NO <h3> EVER CONTAINS..."`:
+  ```
+  - This exception holds unchanged even when [Product-short] equals the full product name (no
+    configuration code or packaging suffix to drop) — the two blessed positions still permit it
+    there.
+  ```
+- `userContent` (only for cases that reach `buildPromptA()`'s "Full description" tail, e.g.
+  `html/expert3d`) gains exactly one appended clause, changing
+  `'...[HEADING FORM], which forbids the full name outright.'` to
+  `'...[HEADING FORM], which forbids the full name outright except at the two blessed positions it
+  names.'`
+- No other byte in any golden case differs (verified for `html/expert3d` and `c/eu-en`, one
+  representative case with and one without the `userContent` tail; the `translate/*` cases stay green
+  untouched, since they never embed `MASTER_SYSTEM_PROMPT`).
+
+**Fix needed, `TEST_WRITING`'s to make, not `so-builder`'s:** hand-apply exactly this delta to
+`test/fixtures/golden/full-description-prompts.json` (not a fresh capture from the implemented tree,
+per the fixture's own comment) for every affected case, and confirm the resulting JSON diff contains
+only this delta — which then doubles as independent proof of T8's own acceptance check ("no other
+line in either file changed"). The spec file's header comment (`full-description.golden.spec.ts`,
+which currently cites US-2.2's own T9/T13 numbering) is worth a one-line update noting it must also
+stay green across US-3.1's authorized FROZEN-file edits, so the next Story that legitimately edits
+these files isn't caught by the same gap.
+
+**Once `TEST_WRITING` lands that fixture update, the next `so-builder` round only needs to commit** —
+`master-system-prompt.ts`, `task-a.ts` and `.arch-guard-checksums` are already correctly edited and
+rebaselined in the working tree (verified: `git diff .arch-guard-checksums` against `HEAD` shows
+exactly two changed lines, `task-a.ts` and `master-system-prompt.ts`, matching T8's own two-file
+scope) — no frozen-file re-edit, and no fresh §9 stop, should be needed.
+
+## 4. Measured state (real command output)
 
 | Check | Result |
 |---|---|
-| `npx vitest run src/utils/heading-style.spec.ts src/utils/repair-strategy.spec.ts src/utils/heading-style.v4.spec.ts src/services/content-orchestrator.simplified.spec.ts` | **4 files passed, 174 passed (174), 0 failed** — includes both previously-blocking tests, now green. |
-| `npm run test:logic` (`vitest run`, full suite) | 3 files failed, **10 failed** / 3874 passed / 3 skipped (3887). All 10 are T8/T10 (`master-system-prompt.spec.ts` 1, `task-a.spec.ts` 1, `task-b.spec.ts` 8) — pre-existing, out of scope, unchanged from v2's own baseline. Zero failures in `heading-style.spec.ts`, `repair-strategy.spec.ts`, `content-orchestrator.simplified.spec.ts`, or `content-orchestrator.doc-gate.spec.ts` (the one collateral test v2 §2/`TEST_WRITING`'s report expected to self-resolve once T7 landed — confirmed green). |
-| `npm run test:components` (`ng test`) | 2 files, **23 passed**, 0 failed. |
-| `npm run lint` (`tsc --noEmit`) | **clean, 0 errors**. |
-| `bash arch-guard.sh` | **ALL CHECKS PASSED** — all five FROZEN checksums unchanged (T7's two files are not FROZEN; T8/T10 never touched). |
-| `npm run test:coverage` / `npm run build` / `npm run validate:harness` | not run — `QUALITY_GATE`'s concern, per this artifact's own v1/v2 convention (unchanged reasoning). |
-
-3874 passed vs. v2's own recorded 3872 — the delta of 2 is exactly the two previously-red,
-now-recalibrated-and-green tests; every other count (10 failed, 3 skipped, 3887 total) matches v2's
-baseline exactly, confirming zero regression anywhere else.
-
-### 2.4 Committed
-
-`ad4c678` — `src/utils/heading-style.ts` (full rewrite of `checkProductNameStuffing`/
-`checkProductNameStuffingDoc`, plus the new `productNamePatternWithUnitLocale()`/
-`hasProductCore()`/`localizedNameShapeIssue()` helpers) and `src/utils/repair-strategy.ts` (new
-`heading-brand-core-missing` entry only) — staged and committed by exact path, nothing else. No
-test file, fixture, `vitest.config.ts`, or FROZEN file was touched by this commit.
-
-## 3. Why `partial`, not `PASS`
-
-`IMPLEMENTATION`'s own `loop_back` map (`docs/workflow/stage-map.yaml`) defines `partial ->
-IMPLEMENTATION` for exactly this state: this dispatch's named task (T7) is complete and verified,
-but the Story's task breakdown still names two not-yet-attempted tasks (T8, T10) before
-`IMPLEMENTATION` as a whole can hand off to `QUALITY_GATE`. Both remain `track: prompt` and both
-name a FROZEN file (`src/prompt-core/master-system-prompt.ts`, `src/prompts/task-a.ts`,
-`src/prompts/task-b.ts`); AGENTS.md §9's stop-and-report applies to both — see §4 for the precise
-gap (a Story-level authorization already exists for both; the missing piece is the in-session
-stop-and-confirm ritual). `stash@{1}` (v1's own stale, superseded attempt) is unaffected by this
-dispatch and remains parked; it should not be popped.
-
-## 4. T8/T10 — not attempted (frozen-file, wrong track, §9 stop)
-
-Unchanged since v1/v2: both remain `track: prompt`, both name FROZEN files
-(`src/prompt-core/master-system-prompt.ts`, `src/prompts/task-a.ts`, `src/prompts/task-b.ts`), and
-this dispatch was explicitly scoped to `track: angular` with T8/T10 explicitly named out of scope.
-**Correction to how v2 phrased this section: the Story-level §9 authorization for both tasks
-already exists on paper** — T8's edit is pre-authorized by the Story's own D3 decision
-(`docs/stories/US-3.1-qa-gate-brand-core-fixes.md`, "Resolved decisions"), confirmed by Task
-Breakdown v6 §T8 Notes ("§9 stop, already recorded, not newly requested here"); T10's edit is
-pre-authorized by OD-3/OD-7/OD-9 (`docs/decisions/US-3.1-open-decisions.md#4`), confirmed by Task
-Breakdown v6 §T10 Notes ("Authorization is now fully confirmed, not merely proposed"). What is
-still missing, per both Notes sections verbatim, is that **`so-builder` must still perform the full
-§9 stop-and-confirm ritual in-session** (state exactly what changes and why, per AGENTS.md §9 steps
-1-3) **before editing either file** — the paper authorization does not remove that ritual, and no
-fresh, in-session "modify [filename]" instruction triggering it was given this dispatch. Per §9,
-the next dispatch that intends to build T8/T10 must perform that stop and obtain explicit approval
-before editing either file. See v1 §4 / v2 §4 / Task Breakdown v6 (T8 §790-836, T10 §950-1057) for
-the full per-task breakdown of what each still needs; nothing about the underlying task scope has
-changed.
+| `npx vitest run src/prompts/task-a.spec.ts src/prompt-core/master-system-prompt.spec.ts src/prompts/task-a.simplified.spec.ts src/prompt-core/master-system-prompt.v4.spec.ts` (T8 applied) | **4 files passed, 89 passed (89), 0 failed.** |
+| `npx vitest run src/prompts/task-b.spec.ts` (T10 applied, T8 parked) | **1 file failed, 30 passed / 1 failed (31)** — only the destructuring defect (§3.1). |
+| `npm run test:logic` (T10 committed, T8 parked) | **3 files failed → down to `master-system-prompt.spec.ts` (1), `task-a.spec.ts` (1, both T8's own tests, expected since T8 was parked for this specific run), `task-b.spec.ts` (1, the destructuring defect)** — 3881 passed / 3 skipped (3887); golden confirmed green in this state. |
+| `npm run test:logic` (T10 committed, T8 applied/uncommitted — the state this artifact leaves the tree in) | **2 files failed, 11 failed** — the 10 `full-description.golden.spec.ts` cases (§3.2) plus the 1 destructuring defect (§3.1); 3873 passed / 3 skipped (3887). T8's own 4 named test files are NOT in this failure list — confirmed passing. |
+| `npm run test:components` (`ng test`) | **2 files, 23 passed, 0 failed.** |
+| `npm run lint` (`tsc --noEmit`) | **clean, 0 errors.** |
+| `bash arch-guard.sh --rebaseline` (T10 state, task-b.ts alone) | `git diff .arch-guard-checksums` against the prior commit: **exactly one changed line — `task-b.ts`.** |
+| `bash arch-guard.sh --rebaseline` (T8 applied on top, uncommitted) | `git diff .arch-guard-checksums` against `HEAD` (which now has T10 committed): **exactly two changed lines — `task-a.ts`, `master-system-prompt.ts`.** `task-b.ts`'s row is unchanged, correctly matching its committed value. |
+| `npm run test:coverage` / `npm run build` / `npm run validate:harness` | not run — `QUALITY_GATE`'s concern, per this artifact's own v1-v3 convention (unchanged reasoning); would not be meaningful yet in any case while T8 is uncommitted. |
 
 ## 5. Non-blocking findings
 
-Findings 1-6 are unchanged from v1/v2 (T1's `step()` narrowing, the T4/T9/T11/T12 file-contention
-serialization, the FR-6 degenerate-exemption reading, T6's `repairReportExtraFile()` extraction,
-the HTML-path `closing`/blessed-CTA correction, the `fieldInstruction` line-wrap fix) — all already
-landed and committed; not repeated here in full, see v2 §5.
+Findings 1-9 are unchanged from v1-v3 (see v3 §5) — all already landed, committed, or (finding 8, the
+Bambu Lab "Hardened Steel" D5(f) worked-example defect) still open and out of this dispatch's scope.
 
-7. **`TEST_WRITING`'s test-generation report v3 also records one self-correction of its own v2
-   over-claim** (its "Collateral fixture/mock changes" item 3, on
-   `content-orchestrator.simplified.spec.ts`'s exposure to `heading-brand-core-missing` via
-   `runDocGate()` called internally by `ContentOrchestratorService.generate()`, not by direct symbol
-   reference). This is the same file as the second recalibrated test above; recorded here for
-   traceability since it explains why that test's exposure was not caught until this round.
+10. **A first T10 draft, self-corrected before committing, deviated from Implementation Plan v7's D11
+    concrete text.** Working from the Task Breakdown's prose description of D11 alone (without opening
+    Implementation Plan v7 §D11 directly first) produced a plausible-looking but non-conformant
+    rewrite: it kept `[Site Suffix]` inside the degradation cascade itself (rungs 1-2), used a
+    "Center3D" example suffix in a shared system block, and included a false "one/two characters over
+    budget already fails" arithmetic claim. Caught via `advisor()` review before any commit, and
+    corrected against D11's actual verbatim block, anchors and `buildPromptB()` code
+    (`docs/plans/US-3.1-implementation-plan.md:938-1068`) before landing `3d89c86`. Recorded here
+    because it is a process finding for future rounds: when a Task Breakdown says "see D-something",
+    open the cited Implementation Plan section directly rather than working from the Task Breakdown's
+    own paraphrase of it, even when the paraphrase looks complete.
 
-8. **A verified, currently untested conformance gap between Implementation Plan v7's own D5(f)
-   worked-example verification and the actual runtime behaviour of the code it specifies — found
-   this round by acting on `TEST_WRITING`'s F5 finding, not inherited from any prior version.** F5
-   asked `so-builder` to verify Specification v17's "Bambu Lab. Hardened Steel" worked example
-   (spec lines ~1814-1822) against the real implementation. Verified with a throwaway diagnostic
-   script (`npx vitest run` against a temporary, never-committed spec file, deleted immediately
-   after use — not a test addition) exercising `validateHeadingStyleDoc()` directly on a
-   `schemaVersion: '4.0'` doc with `opts.input.name = "Bambu Lab Hardened Steel Nozzle 0.4 mm"`
-   (`productShort` of that name, confirmed by the same script: `"Bambu Lab Hardened Steel"`).
-
-   Implementation Plan v7 §D5(f) (lines 687-698) explicitly claims to have "verified against every
-   one of FR-7's own worked examples, re-derived independently" and states the candidate
-   `"Bambu Lab. Hardened Steel"` (the added period relocated to an interior position) **passes**.
-   **The actual code returns an error** for this exact candidate — but not for the reason the Plan
-   discusses (the occurrence-count/trailing-position shape mechanism, D5(f)'s own subject): it fails
-   one step earlier, at the **presence** check (D5(e)'s `hasProductCore`/
-   `productNamePatternWithUnitLocale`), which requires `productShort(full)` ("Bambu Lab Hardened
-   Steel") to appear as a **contiguous** literal substring of the candidate. The inserted `". "`
-   between "Lab" and "Hardened" breaks that contiguity, so `hasProductCore` returns `false` and the
-   candidate is rejected with `"omits the required brand core"` — the shape check (where the Plan's
-   own worked-example arithmetic lives) is never reached, because D5(f)'s own design gates it on
-   presence passing first ("Shape check only runs once presence has already passed for that leaf").
-
-   This is a defect in the Plan's own verification claim, not in `so-builder`'s implementation of
-   what the Plan specifies: the code was built exactly to D5(e)'s presence mechanism and D5(f)'s
-   presence-gated shape mechanism as both are literally written, and that combination cannot produce
-   the Plan's claimed "passes" outcome for its own cited example. Confirmed for the other three
-   worked examples in the same Plan section (full unframed name passes; both period-count/
-   trailing-position failure cases correctly fail) — only this one, interior-relocation case
-   diverges from the Plan's claim.
-
-   **Not fixed in this dispatch.** No test currently pins either the Plan's claimed behaviour or the
-   code's actual behaviour, so this is not a "red test in T7's scope" the dispatch instructions
-   direct `so-builder` to fix, and closing it requires a design decision beyond this skill's
-   remit (so-builder does not decide architecture) — plausible directions include loosening D5(e)'s
-   presence match to tolerate an interior single-character insertion already accepted by the shape
-   check, or explicitly accepting this interaction as a further, disclosed residual the way several
-   other edge cases in this Specification's own history already were. **Recommend routing to
-   `ARCHITECTURE_PLANNING` (via `changes_required_plan`, once this reaches `IMPLEMENTATION_VERIFICATION`,
-   or directly if a human elects to loop back now) to correct D5(f)'s worked-example verification
-   and decide the presence/shape interaction, followed by a `TEST_WRITING` pass to pin whichever
-   behaviour is chosen** — not a silent `so-builder`-authored fix to the presence-matching mechanism.
-
-9. **`ad4c678` alone, checked out in isolation, reproduces v2's measured red state (2 failing
-   tests), not a green one.** `so-builder` does not own `heading-style.spec.ts` or
-   `content-orchestrator.simplified.spec.ts` and did not stage or commit `TEST_WRITING`'s v3
-   recalibration of either — both remain uncommitted in the working tree, as `TEST_WRITING`'s own
-   artifact (§6). Every measurement in §2.3 was taken against the working tree (popped T7 code +
-   `TEST_WRITING`'s uncommitted spec edits together), which is genuinely green — but `git checkout
-   ad4c678 -- src/utils/heading-style.ts src/utils/repair-strategy.ts` against an otherwise-clean
-   tree at the prior commit would not be, because the two recalibrated spec files it depends on
-   would be missing. This is expected under this pipeline's own division of ownership (`so-builder`
-   commits code, `TEST_WRITING` commits tests, separately), but it means **`ad4c678` and
-   `TEST_WRITING`'s v3 spec edits must land together, in the same Pull Request, with the spec edits
-   committed no later than `ad4c678`**, or AGENTS.md §13 bisectability breaks for this range. Flagged
-   for `PR_PREPARATION`'s own commit-hygiene check.
+11. **Implementation Plan v7 D11(a)'s own `buildPromptB()` excerpt code, implemented here verbatim, is
+    imprecise about its stated 1000-character cap.** In the specs-section branch, `proseExcerpt` (≤500)
+    + `"\n"` + `specsExcerpt` (≤500) can total 1001 characters, one over the Plan's own stated "Total
+    excerpt length stays capped at 1000 characters in both branches." No test checks the combined
+    total in that branch (only that `Weight`/`500 g`-style content is present and that the prose slice
+    does not exceed 500), so nothing is currently red over this. Implemented exactly as the Plan
+    specifies rather than second-guessed, since the Plan is the authorized design and the 1-character
+    imprecision is the Plan's own, not introduced by this implementation. Flagged for
+    `IMPLEMENTATION_VERIFICATION`/a future Plan revision to decide whether it is worth a trivial fix
+    (e.g. capping the joined excerpt at 1000 explicitly).
 
 ## 6. Files changed (summary)
 
-Unchanged since v1/v2 for the committed T1-T6/T9/T11/T12 work (see v2 §6).
+Committed this round:
+- `c48a51c` — 11 `TEST_WRITING` spec files (housekeeping, §2); `so-builder` did not edit any of them.
+- `3d89c86` — `src/prompts/task-b.ts`, `src/prompts/task-b.spec.ts` (staged as `TEST_WRITING` left it,
+  not edited), `.arch-guard-checksums` (task-b.ts row only).
 
-Newly committed this round (`ad4c678`): `src/utils/heading-style.ts`, `src/utils/repair-strategy.ts`
-— exactly the two files T7 names, nothing else.
+Applied, uncommitted (left in the working tree, per §3.2):
+- `src/prompt-core/master-system-prompt.ts` — one new bullet in `[HEADING FORM]`.
+- `src/prompts/task-a.ts` — line-153 restatement reworded.
+- `.arch-guard-checksums` — `task-a.ts`/`master-system-prompt.ts` rows rebaselined to the applied edit.
 
-Not touched: `src/prompt-core/master-system-prompt.ts`, `src/prompts/task-a.ts`,
-`src/prompts/task-b.ts`, `src/prompts/task-c.ts`, `src/utils/output-validator.ts` (all five FROZEN
-files — `bash arch-guard.sh` confirms all five checksums unchanged).
+Not touched, not authorized: `src/prompts/task-c.ts`, `src/utils/output-validator.ts` (both FROZEN,
+untouched, confirmed by `bash arch-guard.sh`).
 
-Not touched, not owned by `so-builder` (verified against, not edited — see §2.2):
-`src/utils/heading-style.spec.ts`, `src/services/content-orchestrator.simplified.spec.ts` (both
-already recalibrated by `TEST_WRITING` before this dispatch began; both remain uncommitted, as
-`TEST_WRITING`'s own artifact, not this skill's to stage or commit).
+Not touched, not owned by `so-builder`: `test/fixtures/golden/full-description-prompts.json`,
+`src/prompts/full-description.golden.spec.ts`, `src/prompts/task-b.spec.ts:70,73` — all three are
+`TEST_WRITING`'s to fix (§3.1, §3.2).
