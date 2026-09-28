@@ -1,13 +1,13 @@
 ---
 artifact: pipeline_status
 story: US-3.1
-version: 6
+version: 7
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-09-27T10:00:00Z
-updated_at: 2026-09-28T12:20:00Z
-supersedes: docs/catalog/US-3.1-pipeline-status.md#5
+updated_at: 2026-09-28T15:45:00Z
+supersedes: docs/catalog/US-3.1-pipeline-status.md#6
 inputs_consumed:
   - key: story
     version: 1
@@ -24,9 +24,9 @@ inputs_consumed:
   - key: plan_review
     version: 6
   - key: test_strategy
-    version: 4
+    version: 5
   - key: ac_test_matrix
-    version: 4
+    version: 5
   - key: reconciliation_report
     version: 1
 open_decisions_blocking: false
@@ -34,143 +34,143 @@ open_decisions_blocking: false
 
 # Pipeline Status — US-3.1: Make the repair gate actually block ungrounded content and stop the brand-core/heading-form rule conflict
 
-**Verdict this round (RECONCILIATION loop-back, attempt 1 of 3): `CHANGES_REQUIRED` →
-`loop_back_stage: changes_required_tests` (routes to `TEST_WRITING`).** No production code was
-written this round. `RECONCILIATION` v1's blocking Finding 0 (AC-6 / FR-11) was independently
-re-verified against source and is real: `slug-name-designator-lost`'s registered field-scoped
-repair strategy (`src/utils/repair-strategy.ts:264-281`, T11's own work) is never reachable in
-production because none of the three Slugs `runRepairGate` call sites in
-`src/services/content-orchestrator.service.ts` (lines 878, 1286, 1459) supply a `repairField`
-executor — `src/utils/repair-gate.ts:219` gates the field-scoped rung on that option's presence,
-and `grep -rn "repairField:" src/**/*.ts` shows exactly one production supplier in the whole
-codebase, wired only to the unrelated Doc gate at `content-orchestrator.service.ts:612`.
+**Verdict this round: implementation complete, all named tests green, full suite clean.** This is
+IMPLEMENTATION retry attempt 2 for the AC-6/FR-11 loop-back (attempt 1, recorded in v6, correctly
+stopped at the TDD gate with no test coverage). `TEST_WRITING` v5 has since added
+`src/services/content-orchestrator.repair-field-wiring.spec.ts` (3 tests, red for the documented
+reason). This round wires the missing `repairField` executor into all six Slugs/SEO
+`runRepairGate` call sites in `src/services/content-orchestrator.service.ts`, re-applies the same
+post-hoc normalization `produce()` already applies to every full generation, and confirms the 3
+new tests pass without weakening them and nothing else in the suite regressed.
 
-**The fix itself is small and well-precedented** (mirror `runDocGate`'s existing `repairField:`
-pattern at line 612 onto the three Slugs call sites, and — per RECONCILIATION's non-blocking
-Finding 5, same root cause — the three SEO call sites at lines 909, 1315, 1419). It was **not**
-implemented this round because, per this dispatch's own instruction and independent verification
-below, **no test in this codebase currently exercises a Slugs- or SEO-shaped `runRepairGate` call
-with a `repairField` executor supplied.** AGENTS.md §5 is unambiguous: "No implementation code, in
-any layer, may be written before a test that fails for the right reason exists." `so-builder` does
-not own test files and may not write one to unblock itself. This round therefore reports the gap
-rather than closing it, and loops back to `TEST_WRITING` for the missing red test(s), per this
-dispatch's own explicit instruction for exactly this situation.
+Branch: `feat/US-3.1-qa-gate-brand-core-fixes`. Commit: `c17ceee` — "fix(US-3.1): wire repairField
+into Slugs/SEO repair gates (AC-6/FR-11)" (includes the new spec file, previously untracked, and
+the production wiring in one commit).
 
-Branch: `feat/US-3.1-qa-gate-brand-core-fixes` (unchanged). No commit made this round — nothing was
-written to `src/` or `test/`.
+## 1. What was built
 
-## 1. Verification performed this round (why this is not merely trusting RECONCILIATION's own claim)
+Six `runRepairGate` call sites in `src/services/content-orchestrator.service.ts`, all now wired:
 
-1. Read `src/services/content-orchestrator.service.ts:612` (the Doc gate's `repairField:` wiring)
-   directly, to understand the established pattern before judging whether it applies cleanly to
-   Slugs/SEO. It does: `repairField` is a one-line `async payload => stripCodeFences(await
-   this.llm.generateText(payload, false, { taskLabel: ..., productName: ..., store: ... }))`, and
-   `runRepairGate` internally builds the minimal, cache-preserving payload via
-   `repairFieldPayload()` before calling it — the executor itself needs no knowledge of the field
-   being repaired.
-2. Read all three Slugs call sites (`content-orchestrator.service.ts:878-889` in `generate()`,
-   `:1286-1297` in `generateUaContent()`, `:1459-1470` in `generateSlugs()`) and all three SEO call
-   sites (`:909-924`, `:1315-1330`, `:1419-1433`) directly. Confirmed: none supplies `repairField`.
-3. Read `src/utils/repair-gate.ts:219` directly: `applyTier()`'s field-scoped branch is gated on
-   `strategy.fieldInstruction && opts.repairField` — confirming the registered strategy is a true
-   no-op (cursor advances, no repair attempted) whenever `repairField` is absent, exactly as
-   RECONCILIATION describes.
-4. Read `src/utils/repair-strategy.ts:264-281` directly: `slug-name-designator-lost` has
-   `ladder: ['field-scoped']` and **no** `deterministic` tier, so a missing `repairField` leaves
-   this rule with zero working repair instrument in production (it falls straight to
-   `full-regen`, which `resolveLadder` appends automatically for an error-severity rule).
-5. **Checked the TDD-gate caveat directly rather than accepting RECONCILIATION's own flag at face
-   value** — searched every spec file for `repairField` usage:
-   `grep -rn "repairField" src/services/*.spec.ts` returns matches **only** in
-   `content-orchestrator.doc-gate.spec.ts` (the Doc gate's own dedicated integration tests, lines
-   762-801, proving `runDocGate`'s field-scoped rung end-to-end: one call to `generateText`, zero
-   full regenerations, and a documented fallback test for when the field-scoped call itself fails).
-   No `content-orchestrator.*.spec.ts` file exercises `repairField` for Slugs or SEO.
-6. Read `src/utils/repair-gate.spec.ts`'s `'validateSlugs feeding a real repair loop'` describe
-   block (lines 1496-1578) in full: all three of its tests call `runRepairGate<SlugResponse>`
-   directly with the real `validateSlugs`, but **none of the three passes a `repairField` option**
-   — every one resolves `slug-name-designator-lost` by asserting `produce` is called a second time
-   (full regeneration), which is the gate-level mechanism test for the no-`repairField` path, not a
-   test of the wiring this round would add.
-7. Read `src/utils/repair-strategy.spec.ts`'s `slug-name-designator-lost` block (line 482 on):
-   confirms only the registry entry's shape (`ladder`, `fieldInstruction` text) — it never calls
-   `runRepairGate` at all, so it cannot stand in for a wiring test either.
-8. Conclusion: adding `repairField:` to the three Slugs (and three SEO) call sites today would be
-   production code with **no failing test to turn green** — a direct AGENTS.md §5 violation. This
-   confirms RECONCILIATION's own caveat rather than merely repeating it.
+| Call site | Method | Line (pre-change) |
+|---|---|---|
+| Slugs | `generate()` | ~878 |
+| SEO metadata | `generate()` | ~909 |
+| Slugs | `generateUaContent()` | ~1286 |
+| SEO metadata | `generateUaContent()` | ~1315 |
+| SEO metadata | `generateSeoMetadata()` | ~1419 |
+| Slugs | `generateSlugs()` | ~1459 |
 
-## 2. What TEST_WRITING needs to add (routed via `loop_back_stage: changes_required_tests`)
+Two changes per call site, mirroring the existing Doc gate's own pattern at line 612:
 
-**Blocking half (AC-6 / FR-11).** A service-level integration test, in a new or extended
-`content-orchestrator.*.spec.ts` file, mirroring `content-orchestrator.doc-gate.spec.ts:762-801`'s
-own pattern (DI + `makeMockLlm`-style stubbing of `LlmService`, not `TestBed`) for the Slugs gate:
+1. **`repairField` executor added** — `async payload => stripCodeFences(await
+   this.llm.generateText(payload, false, { taskLabel: ..., productName: input.name, store:
+   input.website.name[, lang: UA_ISO] }))`, identical in shape to the Doc gate's own executor.
+   This makes `repair-gate.ts:219`'s field-scoped rung reachable for `slug-name-designator-lost`
+   (T11, `ladder: ['field-scoped']`, no deterministic tier) and `meta-title-length`'s field-scoped
+   rung (T12) for the first time in production.
+2. **Post-hoc re-normalization added** — a field-scoped repair writes the target field (`.name`
+   for Slugs, `.meta_title` for SEO) directly via `setAtPath`, bypassing `produce()`'s own
+   normalization entirely (the ladder runs *inside* `runRepairGate`, after `produce()` has already
+   returned). Left alone, this would ship a field-repaired `.name` whose invariant core was just
+   restored sitting next to a `.slug` still derived from the OLD, broken name — the exact
+   corruption shape FR-11 exists to close, merely relocated from `.name` to `.slug`, and
+   undetectable by `validateSlugs` (confirmed by reading `slug-validator.ts` in full: it has no
+   `.slug`/`.name` consistency check). Each Slugs call site now re-applies
+   `this.normalizeSlugResponse()` to the gate's shipped artifact; each SEO call site re-applies
+   `this.canonicalizeSeoData()`. Both are pre-existing, pure, already-tested functions
+   (`content-orchestrator.service.ts:1484-1498` / `:1508-1518`, unchanged by this round) — reused,
+   not reimplemented, exactly as the dispatch required. Idempotent when nothing was field-repaired:
+   `canonicalizeMultiInOne` is a no-op on already-canonical text, and `normalizeSeoNumbers`
+   (`seo-number-format.ts`) touches only `meta_description`, never `meta_title`/`h1`, so re-running
+   `canonicalizeSeoData` cannot perturb a field-repaired `meta_title` beyond the one
+   `canonicalizeMultiInOne` pass the test pins.
 
-- Stub `generateJson` to return a `SlugResponse` whose `name` for one locale lacks the product's
-  invariant core (e.g. `'Ortur F10 Laser Engraver 10 W'` against source name `'Ortur F10 10W'` —
-  the same fixture shape `repair-gate.spec.ts:1497-1520` already uses).
-- Stub `generateText` to return the corrected name (e.g. `'Ortur F10 10W Laser Engraver'`).
-- Drive it through whichever Slugs call site is cheapest to reach directly — `generateSlugs()`
-  (`content-orchestrator.service.ts:1446-1482`) needs no HTML/Doc fixture at all, unlike the other
-  two sites which sit inside `generate()`/`generateUaContent()`'s full pipeline.
-- Assert: `generateJson` called **exactly once** for the Slug produce (no full regeneration);
-  `generateText` called **exactly once**, and — the cache-preservation contract `repair-gate.ts`'s
-  own doc comment states for `repairFieldPayload()` — with `systemBlocks` identical **by
-  reference** to the base Slug payload's `systemBlocks`; `repairsUsed === 0`; the shipped
-  `slugData.slugs[i].name` equals the corrected name; no `slug-name-designator-lost` finding
-  survives in `finalIssues`.
-- A negative-control sibling (mirroring `doc-gate.spec.ts:784-800`) where the field-scoped
-  `generateText` call itself fails to produce a usable value, proving the ladder still escalates to
-  full regeneration rather than silently shipping the broken name.
-- This is the test that is currently red against `HEAD`: today, wiring `repairField` into
-  `generateSlugs()` with no other change would make `generateJson` fire **twice** (full
-  regeneration) and `generateText` **zero** times, failing the assertions above outright — proof
-  the gap is real, not merely a missing option nobody has exercised.
-- Two design questions the new test should pin down explicitly rather than leave implicit (the
-  advisor flagged these; so-builder should not decide them unilaterally): (a) whether
-  `slugs[i].slug` should be re-derived from a field-repaired `name` (today `normalizeSlugResponse`
-  runs only inside `produce`, so a field-scoped rewrite of `name` alone would leave `slug` stale);
-  (b) whether the field-repaired name should still pass through `canonicalizeMultiInOne` the way
-  every `produce()` output already does. Whatever the test asserts here becomes the contract the
-  next `IMPLEMENTATION` round builds to.
+No change to `repair-gate.ts`, `repair-strategy.ts`, `slug-validator.ts`, or any FROZEN file.
+`bash arch-guard.sh` confirms all frozen files unchanged.
 
-**Non-blocking half (F5 / T12, bundled in the same TEST_WRITING pass to avoid a second loop-back
-later, since it is the identical wiring gap at the identical mechanism).** The same test shape for
-the SEO gate's `meta-title-length` rule: `generateJson` returns an over-length `meta_title`,
-`generateText` returns a corrected, still-differentiated title; assert `generateText` is called
-(the field-scoped rung actually ran) and that the shipped title is the model's returned text, not
-`truncateAtWordBoundary`'s deterministic word-boundary cut — proving the field-scoped rung, not
-just its deterministic terminator, is reachable. Same open question as (b) above applies to
-`canonicalizeSeoData`.
+## 2. Test evidence
 
-**Heads-up for TEST_WRITING:** any existing end-to-end spec that queues ordered
-`mockResolvedValueOnce` values for `generateText` across a full `generate()`/`generateUaContent()`
-run may need its call-count expectations re-checked once a Slugs or SEO fixture in that same test
-can now trigger a field-scoped `generateText` call it did not make before.
+**Target spec, `content-orchestrator.repair-field-wiring.spec.ts`:**
 
-## 3. Scope note carried forward from RECONCILIATION (not a finding against this round)
+```
+$ npx vitest run src/services/content-orchestrator.repair-field-wiring.spec.ts --reporter=verbose
 
-Task Breakdown v6's T11 (`docs/plans/US-3.1-task-breakdown.md:1108-1144`) and T12
-(`:1148-` on) both scope their Files table to `src/utils/repair-strategy.ts` only; neither names
-the `content-orchestrator.service.ts` wiring in its Files table or Acceptance check. `so-builder`
-built exactly what T11/T12 asked for in every prior round — this is why the gap survived
-QUALITY_GATE, IMPLEMENTATION_VERIFICATION and SECURITY_REVIEW and was only caught at RECONCILIATION.
-Recorded here for the orchestrator's visibility, not re-litigated as a planning defect by this
-skill (RECONCILIATION already routed this as an IMPLEMENTATION-stage fix, not back to planning).
+ ✓ generateSlugs() — field-scoped repair of slug-name-designator-lost (AC-6, FR-11) >
+   resolves the finding via one field-scoped call, spending zero full regenerations
+ ✓ generateSlugs() — field-scoped repair of slug-name-designator-lost (AC-6, FR-11) >
+   falls through to full regeneration when the field-scoped call itself fails, never
+   shipping the broken name
+ ✓ generateSeoMetadata() — field-scoped repair of meta-title-length (Finding 5) >
+   ships the model-corrected title, not truncateAtWordBoundary's deterministic cut
 
-## 4. Files changed this round
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+```
 
-None. No `src/` or `test/` file was read-and-modified; the file reads in §1 were inspection only.
-`docs/catalog/US-3.1-pipeline-status.md` (this file) is the only artifact this round wrote, and it
-is `so-builder`'s own owned artifact per `artifact-paths.yaml`.
+All 3 pass for the intended reason, not a weakened assertion: none of the three tests, their
+fixtures, or their assertions were edited — only production code changed. Decision (a) (`.slug`
+re-derived from the field-repaired `.name`) and decision (b) (field-repaired value still
+canonicalized) both verified directly by the positive test's assertions, computed from the real
+imported `normalizeSlug`/`stripSlugStopwords`/`enforceSlugLength`/`canonicalizeMultiInOne`, not
+hand-typed literals.
 
-## 5. Conclusion
+**Full suite, both runners:**
 
-The blocking AC-6/FR-11 gap RECONCILIATION found is confirmed, independently, by direct source
-read and by this codebase's own existing tests. The fix (`repairField:` wiring, mirroring the Doc
-gate's established pattern) is straightforward but cannot be written yet: no test in the
-repository currently exercises a Slugs- or SEO-shaped `runRepairGate` call with `repairField`
-supplied, so AGENTS.md §5's TDD gate blocks `so-builder` from writing it. Routed
-`changes_required_tests` → `TEST_WRITING` with the precise test specification in §2. Once that test
-exists and is red for the stated reason, the wiring itself is a same-day IMPLEMENTATION task: one
-`repairField:` line per call site (six total), each an exact mirror of
-`content-orchestrator.service.ts:612`.
+```
+$ npm run test:logic
+ Test Files  148 passed (148)
+      Tests  3887 passed | 3 skipped (3890)
+
+$ npm run test:components
+ Test Files  2 passed (2)
+      Tests  23 passed (23)
+```
+
+3887 passed / 3 skipped / 0 failed — 148/148 files green, including the new spec file counted
+in. The 3 pre-existing skips are unrelated to this round (unchanged from every prior round's
+baseline). No call-count regression found in any other `content-orchestrator.*.spec.ts` file:
+checked directly, per the dispatch's own instruction, by running the full `test:logic` suite and
+confirming zero failures anywhere outside the 3 newly-green target tests — every existing spec
+that queues ordered `generateText`/`generateJson` mocks for a Slugs- or SEO-shaped fixture still
+passes with its original call-count expectations, because none of those fixtures' `name`/`h1`
+values trip `slug-name-designator-lost` or `meta-title-length` (each already contains its
+invariant core / stays under the 55-char budget) — so the newly-reachable field-scoped rung is
+never entered by any of them, matching `test_generation_report` v5's own "Heads-up check" finding
+that traced this exhaustively before this round began.
+
+**Lint:**
+
+```
+$ npm run lint
+ tsc --noEmit   (clean, 0 errors)
+```
+
+**Arch-guard:**
+
+```
+$ bash arch-guard.sh
+ ✅ ALL CHECKS PASSED — frozen files unchanged, no direct SDK calls outside providers/,
+    no hard-coded prompts in services, no API keys in frontend source.
+```
+
+## 3. Files changed this round
+
+- `src/services/content-orchestrator.service.ts` — the six-call-site wiring described in §1.
+- `src/services/content-orchestrator.repair-field-wiring.spec.ts` — committed in the same commit
+  (previously written by `TEST_WRITING` v5 but left uncommitted/untracked; not edited by this
+  round — `git diff` against the version `TEST_WRITING` produced is empty, confirmed before
+  staging).
+- `docs/catalog/US-3.1-pipeline-status.md` (this file) — `so-builder`'s own owned artifact.
+
+No other file touched. No test file, fixture, or `vitest.config.ts` coverage setting was
+modified. No FROZEN file (`src/prompts/task-a.ts`, `src/prompts/task-b.ts`,
+`src/prompts/task-c.ts`, `src/prompt-core/master-system-prompt.ts`,
+`src/utils/output-validator.ts`) was touched — confirmed both by `git diff --stat` (absent from
+the changed-file list) and by `arch-guard.sh`'s own checksum check.
+
+## 4. Conclusion
+
+AC-6/FR-11's field-scoped repair mechanism (T11) and the bundled Finding-5 SEO gap (T12) are now
+wired into production, not merely registered and unit-tested. The 3 tests `TEST_WRITING` v5
+pinned are green for the documented reason; the full suite (both runners), lint and arch-guard are
+all clean. Ready for `QUALITY_GATE` to re-run its own mechanical gate over this commit.
