@@ -2,7 +2,7 @@
 artifact: pr_summary
 story: US-3.1
 version: 2
-status: DRAFT
+status: ARCHIVED
 owner: so-pr-preparer
 created_at: 2026-09-29T23:45:00Z
 updated_at: 2026-09-30T00:30:00Z

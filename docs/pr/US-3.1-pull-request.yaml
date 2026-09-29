@@ -1,0 +1,19 @@
+artifact: pull_request
+story: US-3.1
+version: 1
+status: ARCHIVED
+owner: so-pr-creator
+created_at: 2026-09-29T23:59:00Z
+updated_at: 2026-09-29T23:59:00Z
+supersedes: null
+inputs_consumed:
+  - key: pr_summary
+    version: 2
+number: 129
+url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/129
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+base: main
+head: feat/US-3.1-qa-gate-brand-core-fixes
+tip_commit: f8905db8c012d03242258c6893fefe59c558f2b2
+opened_at: 2026-09-29T23:59:00Z
+draft: false
