@@ -1,12 +1,12 @@
 ---
 artifact: pr_summary
 story: US-3.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-pr-preparer
 created_at: 2026-09-29T23:45:00Z
-updated_at: 2026-09-29T23:45:00Z
-supersedes: null
+updated_at: 2026-09-30T00:30:00Z
+supersedes: docs/pr/US-3.1-pr-summary.md#1
 inputs_consumed:
   - key: implementation_report
     version: 5
@@ -27,11 +27,8 @@ open_decisions_blocking: false
 > separate explicit instruction. Approving `HUMAN_PR_APPROVAL` did not carry that approval
 > (AGENTS.md section 10).
 
-> **BLOCKING FINDING - do not open from this branch as it stands.** The T13-T18 work verified by
-> every upstream report is partly UNCOMMITTED (see "Pre-flight record"). A PR built from HEAD
-> `54e5fa6` would NOT contain the code the gate, verifier, security review and reconciliation
-> actually evaluated. The body below describes the full verified state and is only accurate once
-> that work is committed (AGENTS.md sections 7.8 / 13).
+> Re-run (v2): v1 was CHANGES_REQUIRED only because T13-T18 and the docs artifacts were
+> uncommitted. They are now committed (HEAD `3e76515`); that blocker is cleared.
 
 ## Title
 
@@ -51,7 +48,9 @@ The QA gate now retries grounding through a provider-agnostic backoff helper, tr
 schema-invalid Task-A docs field-by-field instead of full regeneration. Heading and SEO rules are
 tightened (brand-core-missing restructure, `[HEADING FORM]` disambiguation, meta_title/h1 shape
 validation with a deterministic long-h1 fallback), and the repair ladder now retries missing
-fields and spends fresh regeneration attempts (FR-10/FR-11).
+fields and spends fresh regeneration attempts (FR-10/FR-11), rejects a JSON-envelope answer to a
+field-scoped repair (one bounded retry), keeps the last complete word on a word-boundary clip, and
+makes `cta.heading`'s non-empty requirement schemaVersion-conditional.
 
 ## Why
 
@@ -67,13 +66,14 @@ existence, naming and assertion checks; verdict PASS.
 
 ## Test plan
 
-Carried from `docs/verification/US-3.1-quality-gate-report.md` v5 (run against the working tree):
+Carried from `docs/verification/US-3.1-quality-gate-report.md` v5; the orchestrator re-ran the full
+gate on the committed tree (HEAD `3e76515`) with the same results:
 
 - [x] `npm run lint` - exit 0
 - [x] `npm test` - logic: 149 files / 3945 passed / 3 skipped (3948); components: 2 files / 23 passed
 - [x] `npm run test:coverage` - exit 0, 149 files / 3945 passed / 3 skipped
 - [x] `npm run build` - exit 0
-- [x] `bash arch-guard.sh` - exit 0, ALL CHECKS PASSED (re-run during preparation: exit 0)
+- [x] `bash arch-guard.sh` - exit 0, ALL CHECKS PASSED
 - [x] `npm run validate:harness` - exit 0
 
 ## Rules checked that nothing automates
@@ -83,7 +83,9 @@ Carried from `docs/verification/US-3.1-quality-gate-report.md` v5 (run against t
 - **FROZEN files**: changed earlier in the branch by T8 (`task-a.ts`, `master-system-prompt.ts`,
   commit 1c02c89) and T10 (`task-b.ts`, commit 3d89c86), each with `.arch-guard-checksums`
   re-baselined in the same commit. Verification v4 covers only the T16-T18 delta (no frozen
-  file). Reviewer: confirm the recorded section 9 approvals for T8/T10 in the pipeline status.
+  file). Reviewer: the section 9 approval for T8/T10 is cited only in those commit messages
+  (relayed in-session; Task Breakdown v6 T8, Plan v7 D10/D11, OD-3/OD-7/OD-9). No durable approval
+  record was found in `docs/catalog/US-3.1-pipeline-status.md`. UNVERIFIED - please confirm.
 
 ## Security
 
@@ -93,23 +95,31 @@ N3 non-blocking (cost only, this change): one extra LLM call on JSON-shaped fiel
 
 ## Notes for the reviewer
 
-- The branch is ~31 commits ahead of origin/main and includes interleaved `docs(US-3.1)`
-  pipeline-status commits and one test-fix commit (c5e6139).
+- 36 commits ahead of `origin/main`, all in `type(US-3.1 ...)` / `docs(US-3.1)` format, with
+  interleaved `docs(US-3.1)` pipeline-status commits and one test-fix commit (c5e6139).
+- T13-T18 landed as a16ddbd (T13/T14), 4a7f806 (T15), 2ae4236 (their specs), 33e4fc7 (T16),
+  e6d4b05 (T17), 2199752 (T18).
+- Non-blocking: 2ae4236 commits specs after the code they cover (a16ddbd, 4a7f806), so those two
+  production commits are not test-covered at their own SHA.
+- Non-blocking: 3e76515 is one large docs commit (23 files) with a long subject line.
 - `.env.example` / README: no setting added; unchanged.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
-## Pre-flight record
+## Pre-flight record (v2, against committed ref 3e76515)
 
 | Check | Result |
 |---|---|
 | All four upstream reports opened, verdict `PASS` | Yes: quality gate v5, verification v4, security v4, reconciliation v4 all PASS (front-matter APPROVED) |
-| Quality gate has real output for all six commands | Yes |
+| Quality gate has real output for all six commands | Yes; re-run on the committed tree by the orchestrator, all exit 0 |
+| Architecture Rule 2 addressed by verifier | Yes (verification v4, section 1) |
 | No unresolved blocking security finding | Yes (N1, N3 non-blocking; N2 observation) |
 | Every `AC-n` cleared all three reconciliation levels | Yes per reconciliation v4 |
-| Commits contain only what `task_breakdown` named | **FAIL / cannot confirm**: T13-T18 production and spec changes are uncommitted (src/domain/description-doc.schema.ts, src/utils/repair-gate.ts, src/utils/repair-strategy.ts, their specs, plus new untracked src/utils/seo-metadata-shape.long-h1.spec.ts; 8 tracked src files +710/-3) and many docs/ artifacts untracked or modified |
-| No fixup-run, no `--no-verify`, no phase batching | No batching seen; c5e6139 is a test-fix commit (minor, non-blocking); `--no-verify` not determinable from git history |
-| Frozen-file change has same-commit re-baseline | Yes (1c02c89, 3d89c86) |
-| No secret in any commit, including removed ones | No `sk-ant` hit and no `.env` file in branch history |
+| Commits contain only what `task_breakdown` named | Yes: `git diff origin/main..HEAD` outside `docs/` and `src/` is `test/fixtures/**` and `.arch-guard-checksums` only; T16-T18 commits touch exactly the files named for them |
+| No fixup-run, no `--no-verify`, no phase batching | No fixup/wip/typo commits; one Story only; `--no-verify` not determinable from history (non-blocking) |
+| Frozen-file change has same-commit re-baseline | Yes: 1c02c89 (T8), 3d89c86 (T10) each modify `.arch-guard-checksums` |
+| Frozen-file section 9 approval durably recorded | UNVERIFIED (commit-message citation only); reviewer note, non-blocking |
+| No secret in any commit, including removed ones | No `sk-ant` / `API_KEY=` diff hit, no `.env` file in the branch diff |
 | `.env.example` current with placeholders | N/A, no setting added |
+| Working tree | Only `docs/workflow/workflow-state.yaml` modified (orchestrator's); nothing pushed, opened or merged |
