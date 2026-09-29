@@ -15,7 +15,7 @@ import {
 import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
-import { validateSeoMetadataShape } from '../utils/seo-metadata-shape';
+import { validateSeoMetadataShape, normalizeLongH1MetaTitle } from '../utils/seo-metadata-shape';
 import { retryAsync } from '../utils/async-retry';
 import {
   validateSpecsGrounding, validateSpecsGroundingDoc, isAlreadyCyrillic, inspectGroundedTranslation,
@@ -1559,12 +1559,20 @@ export class ContentOrchestratorService {
   private canonicalizeSeoData(seo: SeoResponse, productName = ''): SeoResponse {
     return normalizeSeoNumbers({
       ...seo,
-      seo_data: (seo.seo_data ?? []).map(item => ({
-        ...item,
-        h1: canonicalizeMultiInOne(item.h1, item.language),
-        meta_title: canonicalizeMultiInOne(item.meta_title, item.language),
-        meta_description: canonicalizeMultiInOne(item.meta_description, item.language),
-      })),
+      seo_data: (seo.seo_data ?? []).map(item => {
+        // US-3.1 T15 (FR-8(b), AC-4; plan D15). h1 is canonicalized FIRST, so
+        // normalizeLongH1MetaTitle sees the same, final h1 string the artifact ships — then
+        // unconditionally overwrites meta_title whenever h1 itself is too long for any
+        // verbatim-anchored, dash-tailed shape to ever pass the FROZEN 55-character ceiling. A
+        // no-op otherwise (the model's/repair's own canonicalized value passes through unchanged).
+        const h1 = canonicalizeMultiInOne(item.h1, item.language);
+        return {
+          ...item,
+          h1,
+          meta_title: normalizeLongH1MetaTitle(h1, canonicalizeMultiInOne(item.meta_title, item.language)),
+          meta_description: canonicalizeMultiInOne(item.meta_description, item.language),
+        };
+      }),
     }, productName);
   }
 
