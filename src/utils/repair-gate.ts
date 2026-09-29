@@ -111,7 +111,12 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     return found;
   };
 
-  let artifact = await opts.produce(opts.basePayload);
+  // Explicitly typed `T`, not left to inference: `await`ing a bare-generic `Promise<T>` infers
+  // `Awaited<T>`, which TypeScript does not treat as structurally identical to `T` for an
+  // unconstrained generic — and `runLadderPass` below (explicitly typed `Promise<{ artifact: T; ... }>`)
+  // returns real `T`, not `Awaited<T>`, once awaited. Pinning the declaration keeps every
+  // reassignment below (from `runLadderPass`, `opts.produce`, `applyTier`) uniformly typed `T`.
+  let artifact: T = await opts.produce(opts.basePayload);
   let issues = validate(artifact);
   let repairsUsed = 0;
   const attempts: RepairAttemptRecord[] = [];
@@ -133,38 +138,34 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
    * ladder is ['field-scoped', 'deterministic'] — tier 1 first, because its wording carries SEO
    * value and truncation destroys it. A global "apply all tier-0 fixes, then all tier-1" pass would
    * truncate before the model ever saw the title, making tier 1 unreachable and the ladder
-   * decorative. Cursors persist ACROSS iterations so a failed rung escalates rather than repeating.
+   * decorative. Cursors persist ACROSS iterations, WITHIN one runLadderPass invocation, so a failed
+   * rung escalates rather than repeating.
    *
-   * Keyed by `path`, NOT by issueKey. rule::context separates en-GB from pl-PL but not two findings
-   * inside one artifact, and validation-issues.ts:17-22 says so outright: for sentence-too-long,
-   * h2-nominal-heading and alt-numeric-not-grounded, "keying on rule+context alone would collapse
-   * genuinely distinct findings into one". Collapsed here it does more than merge a report line —
-   * with a shared cursor, one pass over two findings advances the ladder twice, so the next pass
-   * reads a rung neither of them ever attempted and their terminator never runs. `path` is unique
-   * by construction, which is the whole reason it exists.
+   * Keyed by `path` + `rule`, NOT by `path` alone and NOT by issueKey. `rule::context` alone
+   * separates en-GB from pl-PL but not two findings inside one artifact, and
+   * validation-issues.ts:17-22 says so outright: for sentence-too-long, h2-nominal-heading and
+   * alt-numeric-not-grounded, "keying on rule+context alone would collapse genuinely distinct
+   * findings into one". Collapsed here it does more than merge a report line — with a shared
+   * cursor, one pass over two findings advances the ladder twice, so the next pass reads a rung
+   * neither of them ever attempted and their terminator never runs. `path` alone is unique per
+   * FINDING by construction, which is why the original design kept it, but it is NOT unique per
+   * RULE once T13/T14 (US-3.1) make a genuinely-missing field-scoped-repairable: `doc-schema`
+   * (registered for "a required string came back empty/missing") and `heading-brand-core-missing`
+   * (registered for "the CTA heading does not carry the product name") can both legitimately name
+   * the identical leaf (`doc.cta.heading`) in sequence within ONE ladder pass — `doc-schema` fires
+   * first because the key is absent, its field-scoped repair writes SOME text, and if that text
+   * does not carry the product name, `heading-brand-core-missing` fires FRESH on the very same
+   * path the next validate() call. A path-only cursor would hand that second, unrelated rule the
+   * FIRST rule's already-advanced cursor position, silently skipping its own field-scoped rung —
+   * exactly the real 2026-09-28 regeneration's oscillation this Story's `T13`/`T14` exist to close.
+   * Appending `rule` gives each rule its own independent cursor even when two rules coincide on one
+   * path, while still keeping every rule's own ladder scoped `path`-first (not merged across
+   * paths), preserving the original design's own stated property for the one-rule-per-path case.
    *
    * Issues with no `path` resolve to ['full-regen'] and never consult a rung, so the issueKey
    * fallback below only has to be stable, not precise.
    */
-  const cursorKey = (i: ValidationIssue) => i.path ?? issueKey(i);
-  const ladderCursor = new Map<string, number>();
-  let cursorMoves = 0;
-  const activeTier = (issue: ValidationIssue): RepairTier => {
-    const ladder = resolveLadder(issue);
-    // Past the end means exhausted, and 'full-regen' is the sentinel for that. An error ladder ends
-    // with it anyway, so this is identical to clamping there. A WARNING ladder does not end with it
-    // — clamping would pin a one-rung warning on its only rung and re-attempt it every pass.
-    return ladder[ladderCursor.get(cursorKey(issue)) ?? 0] ?? 'full-regen';
-  };
-  const advance = (issue: ValidationIssue) => {
-    ladderCursor.set(cursorKey(issue), (ladderCursor.get(cursorKey(issue)) ?? 0) + 1);
-    cursorMoves++;
-  };
-  /** Burns the rest of an issue's ladder, so activeTier resolves it to 'full-regen' from now on. */
-  const exhaust = (issue: ValidationIssue) => {
-    ladderCursor.set(cursorKey(issue), resolveLadder(issue).length);
-    cursorMoves++;
-  };
+  const cursorKey = (i: ValidationIssue) => (i.path ? `${i.path}::${i.rule}` : issueKey(i));
   /**
    * Second attempt at a MEASURED finding: state the shortfall outright.
    *
@@ -196,80 +197,208 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
   };
 
   /**
-   * Runs every issue currently sitting on `tier`, replacing exactly one addressed field per issue.
-   * Returns the possibly-updated artifact. Issues whose repair did not land advance their cursor so
-   * the next iteration tries the next rung.
+   * US-3.1 T14 (FR-10, FR-11, AC-6, plan D14). Runs the full tiered ladder (deterministic,
+   * field-scoped, block-scoped) against `startArtifact`/`startIssues`, snapshotting and rejecting
+   * the pass wholesale if it did not improve the artifact — exactly the pre-loop pass's own
+   * discipline, now reusable.
+   *
+   * The ladder cursor (`ladderCursor`/`cursorMoves`) is constructed FRESH on every call, local to
+   * this invocation — never shared across calls. This is the critical correctness detail
+   * (Implementation Plan Risk 3): without it, a rung already exhausted against one attempt's output
+   * would resolve straight to 'full-regen' the instant the identical rule fires again on a
+   * DIFFERENT attempt's own output — reproducing gap (b) (the reason a rule with no `deterministic`
+   * rung could only ever be touched once, before this task) one level up, across attempts instead of
+   * within one.
    */
-  const applyTier = async (
-    tier: RepairTier,
-    current: T,
-    plan: ReadonlyArray<{ issue: ValidationIssue; tier: RepairTier }>,
-  ): Promise<T> => {
-    let next = current;
-    for (const { issue, tier: planned } of plan) {
-      if (planned !== tier || !issue.path) continue;
-      try {
-        const strategy = REPAIR_STRATEGIES.get(issue.rule);
-        const value = getAtPath(next, issue.path);
-        if (!strategy || typeof value !== 'string') { advance(issue); continue; }
+  const runLadderPass = async (
+    startArtifact: T,
+    startIssues: ValidationIssue[],
+  ): Promise<{ artifact: T; issues: ValidationIssue[] }> => {
+    const ladderCursor = new Map<string, number>();
+    let cursorMoves = 0;
+    const activeTier = (issue: ValidationIssue): RepairTier => {
+      const ladder = resolveLadder(issue);
+      // Past the end means exhausted, and 'full-regen' is the sentinel for that. An error ladder
+      // ends with it anyway, so this is identical to clamping there. A WARNING ladder does not end
+      // with it — clamping would pin a one-rung warning on its only rung and re-attempt it every
+      // pass.
+      return ladder[ladderCursor.get(cursorKey(issue)) ?? 0] ?? 'full-regen';
+    };
+    const advance = (issue: ValidationIssue) => {
+      ladderCursor.set(cursorKey(issue), (ladderCursor.get(cursorKey(issue)) ?? 0) + 1);
+      cursorMoves++;
+    };
+    /** Burns the rest of an issue's ladder, so activeTier resolves it to 'full-regen' from now on. */
+    const exhaust = (issue: ValidationIssue) => {
+      ladderCursor.set(cursorKey(issue), resolveLadder(issue).length);
+      cursorMoves++;
+    };
 
-        let replacement: string | null = null;
-        if (tier === 'deterministic' && strategy.deterministic) {
-          replacement = strategy.deterministic(value, issue);
-        } else if (tier === 'field-scoped' && strategy.fieldInstruction && opts.repairField) {
-          const instruction = strategy.fieldInstruction(value, issue);
-          replacement = (await opts.repairField(repairFieldPayload(opts.basePayload, instruction)))?.trim() || null;
+    /**
+     * Runs every issue currently sitting on `tier`, replacing exactly one addressed field per
+     * issue. Returns the possibly-updated artifact. Issues whose repair did not land advance their
+     * cursor so the next iteration tries the next rung.
+     *
+     * US-3.1 T13 (FR-10(b), AC-6, plan D13). A genuinely ABSENT key (`getAtPath` returns
+     * `undefined` — Zod's own "Required") is no longer treated identically to "nothing to repair":
+     * it is dispatched to the active tier's strategy with `''` substituted for the missing value,
+     * exactly like a present-but-empty string always was. A value that is present but neither a
+     * `string` nor `undefined` (a structural anomaly no strategy in this codebase addresses) still
+     * advances-and-skips exactly as before this task.
+     */
+    const applyTier = async (
+      tier: RepairTier,
+      current: T,
+      plan: ReadonlyArray<{ issue: ValidationIssue; tier: RepairTier }>,
+    ): Promise<T> => {
+      let next = current;
+      for (const { issue, tier: planned } of plan) {
+        if (planned !== tier || !issue.path) continue;
+        try {
+          const strategy = REPAIR_STRATEGIES.get(issue.rule);
+          const value = getAtPath(next, issue.path);
+          // A raw-string artifact (T = string, the HTML shape) has no real object fields for
+          // getAtPath to address at all — "block[i]" is block-repair.ts's own grammar, consulted
+          // only by applyBlockTier, never by getAtPath/setAtPath. getAtPath degrades to `undefined`
+          // for ANY such path on a string artifact, which would otherwise look identical to a
+          // genuinely missing JSON leaf (US-3.1 T13's real case: `doc.cta.heading` absent from an
+          // existing `cta` object) and wrongly dispatch a field-scoped repair for a path this tier
+          // was never meant to touch — the pre-existing "field-scoped harmlessly no-ops first" HTML
+          // contract this repository already relies on (heading-product-name-stuffing's own two-
+          // artifact-shape ladder). Scoping `missing` to non-string artifacts keeps T13's fix to its
+          // actual case (an absent key on a JSON-shaped artifact) without touching that contract.
+          const missing = value === undefined && typeof next !== 'string';
+          if (!strategy || (typeof value !== 'string' && !missing)) { advance(issue); continue; }
+
+          let replacement: string | null = null;
+          if (tier === 'deterministic' && strategy.deterministic) {
+            replacement = strategy.deterministic(missing ? '' : (value as string), issue);
+          } else if (tier === 'field-scoped' && strategy.fieldInstruction && opts.repairField) {
+            const instruction = strategy.fieldInstruction(missing ? '' : (value as string), issue);
+            replacement = (await opts.repairField(repairFieldPayload(opts.basePayload, instruction)))?.trim() || null;
+          }
+
+          // Always advance: a rung is spent whether or not it worked. Repeating it would loop
+          // forever on a strategy that cannot satisfy the constraint.
+          advance(issue);
+          if (replacement !== null && replacement !== value) next = setAtPath(next, issue.path, replacement);
+        } catch (err) {
+          // getAtPath/setAtPath throw on a path they cannot resolve, and that intent is right: a
+          // malformed path is a bug in a strategy or an emission site, and it stays loud here.
+          //
+          // What was wrong is the price. The exception used to travel out of runRepairGate and out
+          // of generate(), destroying an artifact that had already been generated and paid for.
+          // "Loud" has to mean "this issue is not patchable — use the expensive instrument", not
+          // "lose the work". Exhausting the ladder resolves it to full-regen from here on.
+          //
+          // Worded by severity because the two outcomes genuinely differ: exhausting an ERROR's
+          // ladder lands it on full-regen, but resolveLadder never gives a WARNING a full-regen rung
+          // (see its doc comment), so exhausting one just ends the attempt. The old message claimed
+          // full regeneration for both and described something that cannot happen for a warning.
+          console.error(
+            `[repair-gate] ${opts.label}: cannot address "${issue.path}" for rule "${issue.rule}" — ` +
+            (issue.severity === 'error'
+              ? 'falling back to full regeneration for this issue.'
+              : 'this warning is left reported but unrepaired (warnings never reach full regeneration).'),
+            err,
+          );
+          exhaust(issue);
         }
-
-        // Always advance: a rung is spent whether or not it worked. Repeating it would loop forever
-        // on a strategy that cannot satisfy the constraint.
-        advance(issue);
-        if (replacement !== null && replacement !== value) next = setAtPath(next, issue.path, replacement);
-      } catch (err) {
-        // getAtPath/setAtPath throw on a path they cannot resolve, and that intent is right: a
-        // malformed path is a bug in a strategy or an emission site, and it stays loud here.
-        //
-        // What was wrong is the price. The exception used to travel out of runRepairGate and out of
-        // generate(), destroying an artifact that had already been generated and paid for. "Loud"
-        // has to mean "this issue is not patchable — use the expensive instrument", not "lose the
-        // work". Exhausting the ladder resolves it to full-regen from here on.
-        //
-        // Worded by severity because the two outcomes genuinely differ: exhausting an ERROR's
-        // ladder lands it on full-regen, but resolveLadder never gives a WARNING a full-regen rung
-        // (see its doc comment), so exhausting one just ends the attempt. The old message claimed
-        // full regeneration for both and described something that cannot happen for a warning.
-        console.error(
-          `[repair-gate] ${opts.label}: cannot address "${issue.path}" for rule "${issue.rule}" — ` +
-          (issue.severity === 'error'
-            ? 'falling back to full regeneration for this issue.'
-            : 'this warning is left reported but unrepaired (warnings never reach full regeneration).'),
-          err,
-        );
-        exhaust(issue);
       }
-    }
-    return next;
-  };
+      return next;
+    };
 
-  /**
-   * The block-scoped rung. Unlike the per-issue tiers above, every issue on this rung is handed to
-   * ONE executor call: several findings in the same paragraph must become a single rewrite of that
-   * paragraph, not one patch each — the second patch would splice against offsets the first had
-   * already invalidated.
-   */
-  const applyBlockTier = async (
-    current: T,
-    plan: ReadonlyArray<{ issue: ValidationIssue; tier: RepairTier }>,
-  ): Promise<T> => {
-    const onRung = plan.filter(p => p.tier === 'block-scoped' && p.issue.path).map(p => p.issue);
-    if (onRung.length === 0) return current;
-    // Read the cursor BEFORE advancing: a non-zero rung means this issue has already had one
-    // block attempt, which is exactly what escalateForRetry needs to know.
-    const instructions = onRung.map(issue =>
-      escalateForRetry(issue, (ladderCursor.get(cursorKey(issue)) ?? 0) > 0));
-    // Spent whether or not an executor exists, so the ladder always terminates.
-    for (const issue of onRung) advance(issue);
-    return opts.repairBlocks ? opts.repairBlocks(current, instructions) : current;
+    /**
+     * The block-scoped rung. Unlike the per-issue tiers above, every issue on this rung is handed
+     * to ONE executor call: several findings in the same paragraph must become a single rewrite of
+     * that paragraph, not one patch each — the second patch would splice against offsets the first
+     * had already invalidated.
+     */
+    const applyBlockTier = async (
+      current: T,
+      plan: ReadonlyArray<{ issue: ValidationIssue; tier: RepairTier }>,
+    ): Promise<T> => {
+      const onRung = plan.filter(p => p.tier === 'block-scoped' && p.issue.path).map(p => p.issue);
+      if (onRung.length === 0) return current;
+      // Read the cursor BEFORE advancing: a non-zero rung means this issue has already had one
+      // block attempt, which is exactly what escalateForRetry needs to know.
+      const instructions = onRung.map(issue =>
+        escalateForRetry(issue, (ladderCursor.get(cursorKey(issue)) ?? 0) > 0));
+      // Spent whether or not an executor exists, so the ladder always terminates.
+      for (const issue of onRung) advance(issue);
+      return opts.repairBlocks ? opts.repairBlocks(current, instructions) : current;
+    };
+
+    let localArtifact = startArtifact;
+    let localIssues = startIssues;
+
+    // Tiers 0 and 1 replace a single addressed field and cannot touch anything else, which makes
+    // them MONOTONIC — and monotonicity, not cost, is the point. Full regeneration carries no
+    // preservation property, so it is free to fix en-GB and break pl-PL. Every error resolved here
+    // is one that never reaches the instrument that can regress its neighbours.
+    //
+    // The ladder is monotonic PER FIELD, but that is not the same as monotonic per artifact: a
+    // strategy can resolve the error it was given and, through the value it wrote, create a
+    // different one. So the whole ladder pass is snapshotted and can be rejected wholesale.
+    const preLadder = { artifact: localArtifact, issues: localIssues, errors: errCount(localIssues) };
+
+    const fieldBudget = opts.maxFieldRepairs ?? 3;
+    for (let pass = 0; pass < fieldBudget; pass++) {
+      // Warnings enter here too, narrowly — see isLadderCandidate. They never reach the full-regen
+      // loop below, which still filters on severity === 'error'.
+      const errs = localIssues.filter(isLadderCandidate);
+      if (errs.length === 0) break;
+
+      // Snapshot each issue's active tier ONCE per pass. Reading activeTier() inside applyTier
+      // would let a single pass burn two rungs of the same ladder: the deterministic phase runs
+      // first in code order, so any ladder beginning with 'deterministic' would advance the cursor
+      // and then immediately match the field-scoped phase too. One rung per pass has to be
+      // structural — that is what makes "attempt, fail, escalate next iteration" mean anything.
+      const plan = errs.map(issue => ({ issue, tier: activeTier(issue) }));
+
+      // Nothing left that a cheap tier can address — stop and let the full-regen loop decide.
+      if (!plan.some(p => p.tier === 'deterministic' || p.tier === 'field-scoped' || p.tier === 'block-scoped')) break;
+
+      const before = localArtifact;
+      const movesBefore = cursorMoves;
+      localArtifact = await applyTier('deterministic', localArtifact, plan);
+      localArtifact = await applyTier('field-scoped', localArtifact, plan);
+      localArtifact = await applyBlockTier(localArtifact, plan);
+
+      // Advancing a cursor IS progress even when the artifact did not change — the next pass will
+      // reach a different rung. Breaking on "no change" alone would strand meta-title-length on its
+      // field-scoped rung whenever no repairField executor is supplied, and its deterministic
+      // terminator would never run.
+      if (localArtifact === before && cursorMoves === movesBefore) break;
+      if (localArtifact === before) continue; // cursors moved but nothing changed — no need to re-validate
+
+      localIssues = validate(localArtifact);
+    }
+
+    // ── Reject the ladder's work if it did not improve the artifact ─────────────
+    //
+    // Two ways a pass fails, and the second is invisible to a count:
+    //
+    //   1. More errors than it started with. Straightforward regression.
+    //   2. The same number of errors, but one of the new ones can ONLY be fixed by full
+    //      regeneration. slugify is the concrete path: coercing "Ortur H20!" and "ortur-h20" to the
+    //      same string turns a tier-0-repairable slug-charset into slug-duplicate, which has no
+    //      registered strategy. The count is unchanged and the artifact is strictly worse off — the
+    //      ladder manufactured work for the one instrument it exists to avoid.
+    //
+    // Rejection is wholesale, not per field. A pass is a unit: the fields it wrote are what
+    // produced the new issue set, and unpicking one of them would leave a state that was never
+    // validated.
+    const preLadderKeys = new Set(preLadder.issues.map(issueKey));
+    const manufacturedFullRegenWork = localIssues.some(
+      i => i.severity === 'error' && !preLadderKeys.has(issueKey(i)) && resolveLadder(i)[0] === 'full-regen',
+    );
+    if (errCount(localIssues) > preLadder.errors || manufacturedFullRegenWork) {
+      localArtifact = preLadder.artifact;
+      localIssues = preLadder.issues;
+    }
+
+    return { artifact: localArtifact, issues: localIssues };
   };
 
   // `attempt` tracks which generation `best` currently holds, so the report can state what actually
@@ -277,72 +406,9 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
   let best = { artifact, issues, errors: errCount(issues), attempt: 0 };
 
   // ── Tiered ladder, ahead of any full regeneration ───────────────────────────
-  //
-  // Tiers 0 and 1 replace a single addressed field and cannot touch anything else, which makes them
-  // MONOTONIC — and monotonicity, not cost, is the point. Full regeneration carries no preservation
-  // property, so it is free to fix en-GB and break pl-PL. Every error resolved here is one that
-  // never reaches the instrument that can regress its neighbours.
-  //
-  // The ladder is monotonic PER FIELD, but that is not the same as monotonic per artifact: a
-  // strategy can resolve the error it was given and, through the value it wrote, create a different
-  // one. So the whole ladder pass is snapshotted and can be rejected wholesale — the same discipline
-  // the full-regen loop below has always had, which the ladder was missing.
-  const preLadder = { artifact, issues, errors: errCount(issues) };
-
-  const fieldBudget = opts.maxFieldRepairs ?? 3;
-  for (let pass = 0; pass < fieldBudget; pass++) {
-    // Warnings enter here too, narrowly — see isLadderCandidate. They never reach the full-regen
-    // loop below, which still filters on severity === 'error'.
-    const errs = issues.filter(isLadderCandidate);
-    if (errs.length === 0) break;
-
-    // Snapshot each issue's active tier ONCE per pass. Reading activeTier() inside applyTier would
-    // let a single pass burn two rungs of the same ladder: the deterministic phase runs first in
-    // code order, so any ladder beginning with 'deterministic' would advance the cursor and then
-    // immediately match the field-scoped phase too. One rung per pass has to be structural — that is
-    // what makes "attempt, fail, escalate next iteration" mean anything.
-    const plan = errs.map(issue => ({ issue, tier: activeTier(issue) }));
-
-    // Nothing left that a cheap tier can address — stop and let the full-regen loop decide.
-    if (!plan.some(p => p.tier === 'deterministic' || p.tier === 'field-scoped' || p.tier === 'block-scoped')) break;
-
-    const before = artifact;
-    const movesBefore = cursorMoves;
-    artifact = await applyTier('deterministic', artifact, plan);
-    artifact = await applyTier('field-scoped', artifact, plan);
-    artifact = await applyBlockTier(artifact, plan);
-
-    // Advancing a cursor IS progress even when the artifact did not change — the next pass will
-    // reach a different rung. Breaking on "no change" alone would strand meta-title-length on its
-    // field-scoped rung whenever no repairField executor is supplied, and its deterministic
-    // terminator would never run.
-    if (artifact === before && cursorMoves === movesBefore) break;
-    if (artifact === before) continue; // cursors moved but nothing changed — no need to re-validate
-
-    issues = validate(artifact);
-  }
-
-  // ── Reject the ladder's work if it did not improve the artifact ─────────────
-  //
-  // Two ways a pass fails, and the second is invisible to a count:
-  //
-  //   1. More errors than it started with. Straightforward regression.
-  //   2. The same number of errors, but one of the new ones can ONLY be fixed by full
-  //      regeneration. slugify is the concrete path: coercing "Ortur H20!" and "ortur-h20" to the
-  //      same string turns a tier-0-repairable slug-charset into slug-duplicate, which has no
-  //      registered strategy. The count is unchanged and the artifact is strictly worse off — the
-  //      ladder manufactured work for the one instrument it exists to avoid.
-  //
-  // Rejection is wholesale, not per field. A pass is a unit: the fields it wrote are what produced
-  // the new issue set, and unpicking one of them would leave a state that was never validated.
-  const preLadderKeys = new Set(preLadder.issues.map(issueKey));
-  const manufacturedFullRegenWork = issues.some(
-    i => i.severity === 'error' && !preLadderKeys.has(issueKey(i)) && resolveLadder(i)[0] === 'full-regen',
-  );
-  if (errCount(issues) > preLadder.errors || manufacturedFullRegenWork) {
-    artifact = preLadder.artifact;
-    issues = preLadder.issues;
-  }
+  const preLoopPass = await runLadderPass(artifact, issues);
+  artifact = preLoopPass.artifact;
+  issues = preLoopPass.issues;
 
   // The ladder's work counts as the shipped state, not as a spent repair: `repairsUsed` tracks full
   // regenerations only, so Phase A's "Repairs spent but discarded" stays meaningful.
@@ -358,33 +424,22 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
     issues = validate(artifact);
     repairsUsed++;
 
-    // ── Deterministic cleanup, applied to THIS attempt's output before it is scored ──
+    // ── Ladder pass, applied to THIS fresh full-regeneration attempt's own output ──
     //
-    // Full regeneration carries no preservation property: it is free to fix the issue it was asked
-    // about and introduce an unrelated one in the same breath (the concrete case this closes:
-    // slug-name-designator-lost fixed, slug-charset introduced, in the same rewrite). When the
-    // introduced issue happens to have a registered tier-0 strategy, running it here — once, before
-    // the strictly-better comparison below — recovers a genuinely-improved attempt that comparison
-    // would otherwise discard wholesale on a tied error count.
+    // US-3.1 T14 (FR-10, FR-11, plan D14). Replaces the old deterministic-only cleanup: every
+    // rule's whole ladder (deterministic, field-scoped, block-scoped) gets a genuine, FRESH shot at
+    // this attempt's own newly-surfaced findings — not only the tier-0 terminator a rule with no
+    // `deterministic` rung (doc-schema, slug-name-designator-lost, heading-brand-core-missing)
+    // could never reach here before. `runLadderPass` constructs its own ladder cursor from scratch
+    // on every call, so a rung already exhausted against a PRIOR attempt's output cannot resolve
+    // straight to 'full-regen' here — see runLadderPass's own doc comment.
     //
-    // Safe by construction, not merely convenient: every registered `deterministic` strategy either
-    // returns a value proven to satisfy the rule again (slugify's own contract — see
-    // repair-strategy.ts) or leaves the field untouched, so this can only remove mechanically fixable
-    // noise, never add it. Does NOT spend a repair attempt or its own budget — repairsUsed already
-    // incremented above from the produce() call, and exactly one RepairAttemptRecord is still pushed
-    // below, built from the post-cleanup issue set. Skipped entirely, cleanup and re-validate alike,
-    // when nothing on this attempt is tier-0-fixable — the identity check on `cleaned` mirrors the
-    // pre-loop ladder's own "did anything change" gate (this file, the pre-ladder pass above).
-    const cleanupPlan = issues
-      .filter(i => i.path && REPAIR_STRATEGIES.get(i.rule)?.deterministic)
-      .map(issue => ({ issue, tier: 'deterministic' as RepairTier }));
-    if (cleanupPlan.length > 0) {
-      const cleaned = await applyTier('deterministic', artifact, cleanupPlan);
-      if (cleaned !== artifact) {
-        artifact = cleaned;
-        issues = validate(artifact);
-      }
-    }
+    // Does NOT spend a repair attempt or its own budget — repairsUsed already incremented above
+    // from the produce() call, and exactly one RepairAttemptRecord is still pushed below, built
+    // from the post-ladder-pass issue set.
+    const ladderPass = await runLadderPass(artifact, issues);
+    artifact = ladderPass.artifact;
+    issues = ladderPass.issues;
 
     const afterKeys = new Set(issues.map(issueKey));
     const beforeKeys = new Set(issuesBefore.map(issueKey));
