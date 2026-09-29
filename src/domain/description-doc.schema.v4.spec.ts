@@ -20,6 +20,8 @@ import { describe, it, expect } from 'vitest';
 import type { ZodIssue } from 'zod';
 
 import { ProductDescriptionDocSchema } from './description-doc.schema';
+import type { ProductDescriptionDoc } from './description-doc';
+import { docSchemaIssues } from '../render/doc-schema-issues';
 import {
   V4_PACKAGE_CONTENTS_HEADING_UK,
   v3ArraySpecValue,
@@ -326,5 +328,113 @@ describe('V16 / AC-4, FR-5 — `applications.items` holds 4 to 8 entries', () =>
 
   it.each([4, 8])('accepts %i application items', n => {
     expect(issuesFor(withApplications(n))).toEqual([]);
+  });
+});
+
+// ── FR-14 / AC-7 (US-3.1 T18, plan D18) — `cta.heading` non-empty is `schemaVersion`-conditional ─────
+//
+// The renderer discards `cta.heading` for `'4.0'` (render-description.ts:443-449) and the prompt tells
+// the model so, yet the schema demanded a non-empty value for every version, so a compliant `'4.0'`
+// generation failed `doc-schema` and burned a repair attempt. FR-14: relax ONLY that one constraint,
+// ONLY for `'4.0'`; `'3.0'` keeps requiring it, at the same issue PATH.
+//
+// Assertion discipline: negatives assert on the issue PATH (`cta.heading`), never on the message
+// text, because the Zod wording is not part of the requirement (the repair ladder targets by path).
+// Per implementation_plan section 4c.3 a `'4.0'` MISSING/null key is pinned as PASSING; no test
+// pins a `'4.0'` missing-key rejection.
+
+/** Deep-copy a doc and replace/remove/nullify its `cta.heading` without touching the fixture. */
+function withCtaHeading(
+  doc: ProductDescriptionDoc,
+  mode: { set: string } | { absent: true } | { nullish: true },
+): unknown {
+  const copy = JSON.parse(JSON.stringify(doc)) as { cta: Record<string, unknown> };
+  if ('set' in mode) copy.cta.heading = mode.set;
+  else if ('absent' in mode) delete copy.cta.heading;
+  else copy.cta.heading = null;
+  return copy;
+}
+
+describe('FR-14 / AC-7 — cta.heading is required for "3.0" and not for "4.0"', () => {
+  describe("'4.0': an empty, absent or null cta.heading does not fail", () => {
+    it('empty string parses (the rendered output does not use the value)', () => {
+      expect(issuesFor(withCtaHeading(v4ValidDoc(), { set: '' }))).toEqual([]);
+    });
+
+    it('a missing key parses, and the parsed value is normalised to an empty string', () => {
+      const result = ProductDescriptionDocSchema.safeParse(withCtaHeading(v4ValidDoc(), { absent: true }));
+      expect(pathsFor(withCtaHeading(v4ValidDoc(), { absent: true }))).toEqual([]);
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.cta.heading).toBe('');
+    });
+
+    it('a null value parses, and the parsed value is normalised to an empty string', () => {
+      const result = ProductDescriptionDocSchema.safeParse(withCtaHeading(v4ValidDoc(), { nullish: true }));
+      expect(pathsFor(withCtaHeading(v4ValidDoc(), { nullish: true }))).toEqual([]);
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.cta.heading).toBe('');
+    });
+
+    it('produces no doc.cta.heading finding through docSchemaIssues (no repair attempt is spent on it)', () => {
+      const parsed = ProductDescriptionDocSchema.safeParse(withCtaHeading(v4ValidDoc(), { set: '' }));
+      const findings = parsed.success ? [] : docSchemaIssues(parsed.error, 'Doc');
+      expect(findings.map(f => f.path)).not.toContain('doc.cta.heading');
+      expect(findings).toEqual([]);
+    });
+
+    it('[pin] a non-empty heading still parses and is preserved verbatim', () => {
+      const result = ProductDescriptionDocSchema.safeParse(withCtaHeading(v4ValidDoc(), { set: 'Ignored heading' }));
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.cta.heading).toBe('Ignored heading');
+    });
+
+    it('[pin] a tag-like NON-empty heading still fails at cta.heading (only "non-empty" is relaxed, not the tag rule)', () => {
+      expect(pathsFor(withCtaHeading(v4ValidDoc(), { set: '<b>Buy now</b>' }))).toContain('cta.heading');
+    });
+
+    it('[pin] cta.text stays required non-empty for "4.0"', () => {
+      const doc = JSON.parse(JSON.stringify(v4ValidDoc())) as { cta: { text: string } };
+      doc.cta.text = '';
+      expect(pathsFor(doc)).toContain('cta.text');
+    });
+  });
+
+  describe("'3.0': cta.heading stays required — guard on the issue PATH, not the message text", () => {
+    it.each([
+      ['empty string', { set: '' }],
+      ['missing key', { absent: true }],
+      ['null', { nullish: true }],
+    ] as const)('%s fails at path cta.heading', (_label, mode) => {
+      const doc = withCtaHeading(v3BaseDoc(), mode as never);
+      expect(pathsFor(doc)).toContain('cta.heading');
+    });
+
+    it.each([
+      ['empty string', { set: '' }],
+      ['missing key', { absent: true }],
+      ['null', { nullish: true }],
+    ] as const)('%s is reported as an error-severity doc-schema finding targeting doc.cta.heading', (_label, mode) => {
+      const parsed = ProductDescriptionDocSchema.safeParse(withCtaHeading(v3BaseDoc(), mode as never));
+      expect(parsed.success).toBe(false);
+      const findings = parsed.success ? [] : docSchemaIssues(parsed.error, 'Doc');
+      const hit = findings.find(f => f.path === 'doc.cta.heading');
+      expect(hit).toBeDefined();
+      expect(hit!.severity).toBe('error');
+      expect(hit!.rule).toBe('doc-schema');
+    });
+
+    it('[pin] a tag-like heading still fails at cta.heading', () => {
+      expect(pathsFor(withCtaHeading(v3BaseDoc(), { set: '<b>Buy now</b>' }))).toContain('cta.heading');
+    });
+
+    it('[pin] cta.text stays required non-empty for "3.0"', () => {
+      const doc = JSON.parse(JSON.stringify(v3BaseDoc())) as { cta: { text: string } };
+      doc.cta.text = '';
+      expect(pathsFor(doc)).toContain('cta.text');
+    });
+
+    it('[pin] a valid "3.0" doc with a non-empty heading still parses', () => {
+      expect(issuesFor(v3BaseDoc())).toEqual([]);
+    });
   });
 });

@@ -213,7 +213,9 @@ export const ProductDescriptionDocSchema = z.object({
       })).min(1),
     })).min(1),
   })),
-  cta: z.object({ heading: NonEmpty, text: Prose }),
+  // D18 / FR-14: lenient here (a '4.0' renderer discards the heading); NonEmpty is re-applied for
+  // '3.0' (and for any non-empty value) in the dedicated superRefine below.
+  cta: z.object({ heading: z.string().nullish().transform(v => v ?? ''), text: Prose }),
 
   figures: z.array(z.object({ file: NonEmpty, alt: NonEmpty, caption: Prose })),
   // .nullish().transform(v => v ?? []): unlike `figures`, the source manifest is often empty (most
@@ -264,6 +266,15 @@ export const ProductDescriptionDocSchema = z.object({
 
   checkRefs(figureRefs, doc.figures.length, 'figures');
   checkRefs(videoRefs, doc.videos.length, 'videos');
+})
+// D18 / FR-14: cta.heading must be non-empty (and not tag-like) unless a '4.0' doc leaves it empty.
+.superRefine((doc: ProductDescriptionDoc, ctx) => {
+  if (doc.schemaVersion === '4.0' && doc.cta.heading === '') return;
+  const r = NonEmpty.safeParse(doc.cta.heading);
+  if (r.success) return;
+  for (const issue of r.error.issues) {
+    ctx.addIssue({ ...issue, path: ['cta', 'heading'] } as z.IssueData);
+  }
 })
 /**
  * Every v4-only rule, behind ONE version guard.
