@@ -199,3 +199,51 @@ describe('normalizeLongH1MetaTitle / validateSeoMetadataShape — closed-form co
     }
   });
 });
+
+/**
+ * US-3.1 T17 (D17, FR-8(b)/AC-4): real-artifact regression for the 2026-09-28 pt-PT incident, where
+ * the natural 49-code-point clip of `h1` landed exactly on a word boundary and the shipped
+ * `meta_title` silently lost that complete final word. `expectGenuineH1PrefixShape` cannot catch
+ * this (a needlessly short prefix still satisfies every shape property), so this block asserts the
+ * LENGTH outcome: the core is the longest whole-word prefix of h1 that fits SAFE_CORE_LENGTH (49).
+ */
+describe('normalizeLongH1MetaTitle — D17: a complete word at the clip boundary is retained (T17)', () => {
+  const RAW = 'whatever the model produced';
+
+  it('space after the 49th code point: the full 49-code-point core survives (incident-shaped h1)', () => {
+    const h1 = 'Ultra Premium Microfibre Optical Cleaning Clothes x100 Pack';
+    expect(Array.from(h1)[49]).toBe(' '); // precondition: the clip lands exactly on a boundary
+    const result = normalizeLongH1MetaTitle(h1, RAW);
+    expect(result).toBe('Ultra Premium Microfibre Optical Cleaning Clothes·');
+    expectGenuineH1PrefixShape(h1, result);
+  });
+
+  it('synthetic h1OfLength shape: the last complete "AAAA" word is kept, not dropped', () => {
+    const h1 = h1OfLength(60);
+    expect(h1[49]).toBe(' ');
+    const result = normalizeLongH1MetaTitle(h1, RAW);
+    expect(result).toBe(h1.slice(0, 49) + '·');
+  });
+
+  it('hyphen after the 49th code point: the complete word is kept', () => {
+    const h1 = 'Ultra Premium Microfibre Optical Cleaning Clothes-x100 Pack';
+    expect(Array.from(h1)[49]).toBe('-');
+    const result = normalizeLongH1MetaTitle(h1, RAW);
+    expect(result).toBe('Ultra Premium Microfibre Optical Cleaning Clothes·');
+  });
+
+  it('decimal token complete at the boundary (space right after "2.5"): the token is kept whole', () => {
+    const h1 = 'Ultra Premium Microfibre Optical Cleaning Kit 2.5 Pack';
+    expect(Array.from(h1)[49]).toBe(' ');
+    const result = normalizeLongH1MetaTitle(h1, RAW);
+    expect(result).toBe('Ultra Premium Microfibre Optical Cleaning Kit 2.5·');
+  });
+
+  it('[pin] a clip that lands mid-word still backs up to the previous whole word', () => {
+    const h1 = 'Ultra Premium Microfibre Optical Cleaning Cloths x100 Pack';
+    expect(Array.from(h1)[49]).toBe('x'); // precondition: the clip cuts inside "x100"
+    const result = normalizeLongH1MetaTitle(h1, RAW);
+    expectGenuineH1PrefixShape(h1, result);
+    expect(result).toBe('Ultra Premium Microfibre Optical Cleaning Cloths·');
+  });
+});

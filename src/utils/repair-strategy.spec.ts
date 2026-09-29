@@ -208,6 +208,45 @@ describe('truncateAtWordBoundary', () => {
   it('returns null when it cannot produce a non-empty result', () => {
     expect(truncateAtWordBoundary('abcdefghijk', 0)).toBeNull();
   });
+
+  // US-3.1 T17 (D17, FR-8/AC-4). When the clip already ends exactly on a word boundary in the
+  // ORIGINAL text (the next character is a separator), the clip's last word is complete and must be
+  // kept, not backed up over. Asserted from the requirement (longest whole-word prefix within the
+  // limit), never from what the current code returns.
+  describe('D17 - a clip that lands exactly on a word boundary keeps its last complete word', () => {
+    it('keeps the final word when the next character is a space', () => {
+      const text = 'alpha beta gamma delta';
+      expect(Array.from('alpha beta gamma').length).toBe(16);
+      expect(truncateAtWordBoundary(text, 16)).toBe('alpha beta gamma');
+    });
+
+    it('keeps the final word when the next character is a hyphen', () => {
+      const text = 'alpha beta-gamma delta';
+      expect(text[10]).toBe('-');
+      expect(truncateAtWordBoundary(text, 10)).toBe('alpha beta');
+    });
+
+    it('keeps a complete decimal token when the boundary is the space after it', () => {
+      const text = 'Model 2.5 W kit';
+      expect(text[9]).toBe(' ');
+      expect(truncateAtWordBoundary(text, 9)).toBe('Model 2.5');
+    });
+
+    it('keeps the final word when the next character is an en dash or a pipe', () => {
+      expect(truncateAtWordBoundary('alpha beta–gamma delta', 10)).toBe('alpha beta');
+      expect(truncateAtWordBoundary('alpha beta|gamma delta', 10)).toBe('alpha beta');
+    });
+
+    it('[pin] still backs up to the previous word when the clip lands mid-word', () => {
+      expect(truncateAtWordBoundary('alpha beta gamma delta', 13)).toBe('alpha beta');
+    });
+
+    it('[pin] never exceeds the limit and never leaves a dangling separator', () => {
+      const out = truncateAtWordBoundary('alpha beta gamma delta', 16)!;
+      expect(Array.from(out).length).toBeLessThanOrEqual(16);
+      expect(out).not.toMatch(/[\s\-–—|,:;.]$/);
+    });
+  });
 });
 
 describe('slugify', () => {

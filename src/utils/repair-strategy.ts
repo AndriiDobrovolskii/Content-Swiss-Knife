@@ -200,6 +200,11 @@ function cutOnWordBoundary(text: string, limit: number): string | null {
   const chars = Array.from(text.trim());
   if (chars.length <= limit) return text.trim();
   const clipped = chars.slice(0, limit).join('');
+  // D17: the clip already ends on a word boundary in the original — its last word is complete.
+  if (/^[\s\-–—|,:;.]/.test(chars[limit])) {
+    const whole = clipped.replace(/[\s\-–—|,:;.]+$/, '').trim();
+    return whole.length > 0 ? whole : null;
+  }
   const lastSpace = clipped.lastIndexOf(' ');
   const cut = (lastSpace > 0 ? clipped.slice(0, lastSpace) : clipped).replace(/[\s\-–—|,:;.]+$/, '').trim();
   return cut.length > 0 ? cut : null;
