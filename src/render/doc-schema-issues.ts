@@ -27,10 +27,45 @@ import { appendRepairFeedback } from '../utils/repair-gate';
 /** Stable rule name, so these can be counted and filtered like any other validator finding. */
 export const DOC_SCHEMA_RULE = 'doc-schema';
 
+interface ZodIssueLike {
+  path?: unknown[];
+  message?: string;
+  /** Only present on zod's own too_small/too_big issues — 'array' | 'string' | 'number' | … */
+  type?: string;
+}
+
 /** Shape-checks a zod error without importing zod — this module stays dependency-free. */
-function zodIssues(error: unknown): Array<{ path?: unknown[]; message?: string }> | null {
+function zodIssues(error: unknown): ZodIssueLike[] | null {
   const issues = (error as { issues?: unknown })?.issues;
-  return Array.isArray(issues) ? (issues as Array<{ path?: unknown[]; message?: string }>) : null;
+  return Array.isArray(issues) ? (issues as ZodIssueLike[]) : null;
+}
+
+/**
+ * US-3.1 T1 (FR-10(a)). Converts a zod issue's own `path` array into `repair-strategy.ts`'s
+ * `"doc.<hops>"` addressing grammar — numeric segments attach as `[n]` to the preceding string
+ * segment, and the whole thing is prefixed with `doc.` to match `runDocGate`'s own `{ doc, issues }`
+ * wrapper (the artifact `runRepairGate<DocAttempt>` actually holds — see repair-strategy.ts's own
+ * path-addressing comment).
+ *
+ * DELIBERATELY NO PATH for a root-level array-cardinality failure (`killerSpecs` needs 3-4 but has
+ * 1, `keyBenefits`/`functionality` need ≥1 but have 0): `code: 'too_small'/'too_big'` with
+ * `type: 'array'` at a ONE-segment path means the finding is about the array's own LENGTH, not
+ * about one addressable leaf inside it — no single field-scoped string rewrite can add or remove
+ * array elements, so this must keep falling through to full-regen exactly as before T1. A DEEPER
+ * array-cardinality failure (e.g. `specs.categories[0].rows[0].value` failing its
+ * `z.union([NonEmpty, z.array(NonEmpty).min(1)])` array branch) is different: the addressed leaf
+ * itself may legitimately hold either a string or a short array, so a field-scoped rewrite CAN
+ * satisfy it — hence only the one-segment, root-level case is excluded.
+ */
+function toDocPath(issue: ZodIssueLike): string | undefined {
+  if (!Array.isArray(issue.path) || issue.path.length === 0) return undefined;
+  if (issue.path.length === 1 && issue.type === 'array') return undefined;
+  let hops = '';
+  for (const seg of issue.path) {
+    if (typeof seg === 'number') hops += `[${seg}]`;
+    else hops += hops ? `.${seg}` : String(seg);
+  }
+  return `doc.${hops}`;
 }
 
 /**
@@ -123,6 +158,7 @@ export function docSchemaIssues(error: unknown, context: string): ValidationIssu
         rule: DOC_SCHEMA_RULE,
         detail: `${path}: ${i.message ?? 'invalid value'}`,
         context,
+        path: toDocPath(i),
       };
     });
   }

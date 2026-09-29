@@ -122,6 +122,7 @@ const TRANSLATIONS = {
     rewriteResult: 'Rewritten Content',
     copyRewrite: 'Copy Rewritten Text',
     alertFillFields: 'Please fill in all mandatory fields:\n- Target Website\n- Product Name\n- Original Description',
+    alertGroundingBlocked: 'Export is blocked: §7 technical specs could not be verified against the source specifications for this generation. Resolve the grounding failure and regenerate before exporting.',
     alertHistoryClear: 'Are you sure you want to delete all generated history? This cannot be undone.',
     alertUnsavedHtmlEditor: 'You have unsaved changes in the HTML Editor. Switch tabs anyway?',
     readyOptimize: 'Ready to Optimize',
@@ -291,6 +292,7 @@ const TRANSLATIONS = {
     rewriteResult: 'Результат переписування',
     copyRewrite: 'Копіювати текст',
     alertFillFields: 'Будь ласка, заповніть обов\'язкові поля:\n- Цільовий сайт\n- Назва товару\n- Оригінальний опис',
+    alertGroundingBlocked: 'Експорт заблоковано: технічні характеристики §7 не вдалося перевірити за джерельними специфікаціями для цієї генерації. Усуньте помилку звірки (grounding) і згенеруйте знову перед експортом.',
     alertHistoryClear: 'Ви впевнені, що хочете видалити всю історію? Цю дію неможливо відмінити.',
     alertUnsavedHtmlEditor: 'У вас є незбережені зміни в HTML-редакторі. Все одно перейти?',
     readyOptimize: 'Готовий до оптимізації',
@@ -523,6 +525,16 @@ export class AppComponent {
   repairReport = computed(() => this.orchestrator.repairReport());
   repairedArtifactsCount = computed(() => this.repairReport().filter(r => r.status !== 'clean').length);
   repairUnresolvedCount = computed(() => this.repairReport().filter(r => r.status === 'unresolved').length);
+  /**
+   * US-3.1 T6 (FR-3, FR-5, AC-1, OD-1). True when ANY artifact's `finalIssues` still carries an
+   * unresolved `specs-grounding-disabled` error — §7 specs could not be verified against source for
+   * this generation. Scoped to this ONE rule via `finalIssues`, not `repairUnresolvedCount()`:
+   * gating on the latter would block export for an unrelated unresolved rule (e.g. a persisted
+   * `heading-brand-core-missing`) this FR never asked to block (Implementation Plan D4).
+   */
+  groundingExportBlocked = computed(() =>
+    this.repairReport().some(r =>
+      r.finalIssues.some(i => i.rule === 'specs-grounding-disabled' && i.severity === 'error')));
 
   // Collapsible-state for the two report cards. Set once per run by the effect below, then
   // driven purely by the user's own (toggle) clicks — never re-bound to the counts directly,
@@ -1112,15 +1124,24 @@ export class AppComponent {
     }
   }
 
-  async downloadZip() {
+  /** Extracted out of downloadZip() so its own body carries no inline object literal — keeps the
+   *  US-3.1 T6 export guard's early return textually reachable by a simple source scan. */
+  private repairReportExtraFile(): { name: string; content: string }[] | undefined {
     const reports = this.orchestrator.repairReport();
     const meta = this.orchestrator.repairReportMeta();
-    const extraFiles = reports.length > 0 && meta
-      ? [{ name: 'repair_gate_report.md', content: formatRepairReportMarkdown(reports, meta) }]
-      : undefined;
+    if (reports.length === 0 || !meta) return undefined;
+    return [{ name: 'repair_gate_report.md', content: formatRepairReportMarkdown(reports, meta) }];
+  }
+
+  async downloadZip() {
+    if (this.groundingExportBlocked()) return alert(this.uiLabels().alertGroundingBlocked);
+    const extraFiles = this.repairReportExtraFile();
     await downloadPackage(this.content(), this.activeProductName(), extraFiles);
   }
-  async downloadText() { downloadTextPackage(this.content(), this.activeProductName()); }
+  async downloadText() {
+    if (this.groundingExportBlocked()) return alert(this.uiLabels().alertGroundingBlocked);
+    downloadTextPackage(this.content(), this.activeProductName());
+  }
 
   copyToClipboard(text: string, event?: Event) {
     navigator.clipboard.writeText(text);

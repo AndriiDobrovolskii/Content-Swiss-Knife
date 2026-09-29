@@ -134,6 +134,9 @@ emits FAQPage/HowTo schema from its own native module fields. Therefore the body
   the §9 commercial-closing heading. Every other heading names the product with a generic
   category noun ("пристрій", "лідар-сканер", "the device", "urządzenie") or does not name it
   at all. A heading is a label for its section, not a place to repeat the keyword.
+- This exception holds unchanged even when [Product-short] equals the full product name (no
+  configuration code or packaging suffix to drop) — the two blessed positions still permit it
+  there.
 - NO <h3> EVER CONTAINS THE PRODUCT NAME. Sub-headings are short nominal labels
   («Лазерний модуль», «Безпека»).
 - Keep every <h2> to 8 words or fewer.

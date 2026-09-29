@@ -18,3 +18,10 @@ stories:
     path: docs/stories/US-2.2-simplified-content-template-schemas.md
     state: ARCHIVED
     created_at: 2026-09-21T13:03:00Z
+  - id: US-3.1
+    title: Make the repair gate actually block ungrounded content and stop the brand-core/heading-form rule conflict
+    slug: qa-gate-brand-core-fixes
+    track: angular
+    path: docs/stories/US-3.1-qa-gate-brand-core-fixes.md
+    state: IN_PROGRESS
+    created_at: 2026-09-22T00:00:00Z

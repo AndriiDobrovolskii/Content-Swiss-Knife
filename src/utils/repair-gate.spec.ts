@@ -1,9 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { runRepairGate, appendRepairFeedback, formatRepairReportMarkdown, toArtifactReport, RepairArtifactReport, RepairGateResult } from './repair-gate';
 import { validateSlugs } from './slug-validator';
 import type { SlugResponse } from '../app/types';
 import { PromptPayload } from '../prompt-core/payload';
 import { ValidationIssue } from './output-validator';
+// US-3.1 T13/T14 (FR-10, FR-11, AC-6). Spied on (never mocked-out) to prove the real, registered
+// strategy functions are DISPATCHED — not skipped — for a genuinely missing field and for a
+// fresh full-regeneration attempt's own newly-surfaced findings. See the two new describe blocks
+// at the end of this file.
+import { REPAIR_STRATEGIES } from './repair-strategy';
 
 const BASE_PAYLOAD: PromptPayload = {
   systemBlocks: [{ text: 'sys', cache: true }],
@@ -1574,5 +1579,478 @@ describe('validateSlugs feeding a real repair loop', () => {
 
     expect(result.finalIssues).toEqual([]);
     expect(validate).toHaveBeenCalledTimes(2); // initial + the one post-regen validate, no cleanup re-validate
+  });
+});
+
+/**
+ * US-3.1 T4 (FR-2(b), plan D3) — an unresolved `specs-grounding-disabled` finding must not spend
+ * the run's full-document-regeneration budget on a condition no regeneration can ever fix.
+ *
+ * These fixtures are entirely synthetic — `specs-grounding-disabled` is not yet error-severity
+ * anywhere in the real code path until T5 lands (see Task Breakdown T4's own Notes) — proving the
+ * exclusion mechanism works today against any error-severity issue sharing this rule name.
+ */
+describe('runRepairGate — FR-2(b): specs-grounding-disabled is excluded from the attempt-spending test', () => {
+  const groundingIssue = (): ValidationIssue => ({
+    severity: 'error',
+    rule: 'specs-grounding-disabled',
+    detail: 'Specs grounding was DISABLED for this run.',
+    context: 'HTML (base)',
+  });
+
+  it('(i) a grounding-only error spends ZERO full-document-regeneration attempts', async () => {
+    const artifact = { value: 'ok-but-ungrounded' };
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const validate = vi.fn().mockReturnValue([groundingIssue()]);
+
+    const result = await runRepairGate({
+      label: 'HTML (base)',
+      maxRepairs: 3,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.repairsUsed).toBe(0);
+    expect(produce).toHaveBeenCalledTimes(1); // the initial generation only — no regen attempted
+    expect(result.finalIssues).toEqual([groundingIssue()]);
+  });
+
+  it('(ii) a grounding error alongside another repairable error: the other is repaired normally, grounding persists', async () => {
+    const artifacts = [{ v: 'bad' }, { v: 'good' }];
+    const produce = vi.fn()
+      .mockResolvedValueOnce(artifacts[0])
+      .mockResolvedValue(artifacts[1]);
+    const validate = vi.fn()
+      .mockReturnValueOnce([groundingIssue(), makeIssue('seo-empty')])
+      .mockReturnValue([groundingIssue()]); // seo-empty resolved by the regen; grounding cannot be
+
+    const result = await runRepairGate({
+      label: 'HTML (base)',
+      maxRepairs: 3,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    // The regenerable error drove exactly one repair attempt — undisturbed by the grounding
+    // finding's presence alongside it.
+    expect(result.repairsUsed).toBe(1);
+    expect(result.artifact).toBe(artifacts[1]);
+    expect(result.finalIssues.map(i => i.rule)).toEqual(['specs-grounding-disabled']);
+  });
+
+  it('(iii) a grounding error alone still appears in finalIssues after the loop exits without spending a regen', async () => {
+    const artifact = { value: 'ok' };
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const validate = vi.fn().mockReturnValue([groundingIssue()]);
+
+    const result = await runRepairGate({
+      label: 'HTML (base)',
+      maxRepairs: 2,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.finalIssues).toHaveLength(1);
+    expect(result.finalIssues[0].rule).toBe('specs-grounding-disabled');
+    expect(result.repairsUsed).toBe(0);
+  });
+
+  it('a run with OTHER genuinely repairable error-severity issues keeps repairing them, undisturbed', async () => {
+    // No grounding issue present at all — a plain regression guard that this exclusion did not
+    // widen to swallow ordinary repairable errors.
+    const artifacts = [{ v: 1 }, { v: 2 }];
+    const produce = vi.fn().mockResolvedValueOnce(artifacts[0]).mockResolvedValueOnce(artifacts[1]);
+    const validate = vi.fn().mockReturnValueOnce([makeIssue('seo-empty')]).mockReturnValueOnce([]);
+
+    const result = await runRepairGate({
+      label: 'SEO metadata',
+      maxRepairs: 2,
+      basePayload: BASE_PAYLOAD,
+      produce,
+      validate,
+      withFeedback: appendRepairFeedback,
+    });
+
+    expect(result.repairsUsed).toBe(1);
+    expect(result.finalIssues).toEqual([]);
+  });
+});
+
+/**
+ * T4's load-bearing companion fix: `toArtifactReport`'s `status` derivation currently assumes
+ * `repairsUsed === 0` implies `finalErrors === 0`. Once the exclusion above lands, that stops being
+ * true (a grounding-only run has `repairsUsed === 0` AND `finalErrors > 0`), and the CURRENT
+ * ternary — `result.repairsUsed === 0 ? 'clean' : …` — would misreport that state as `'clean'`.
+ * This is exercised directly against a synthetic `RepairGateResult`, independent of whether
+ * `runRepairGate` itself has been wired to produce `repairsUsed === 0` for a real grounding
+ * failure yet (T5's job), so it fails for its own, standalone reason.
+ */
+describe('toArtifactReport — FR-2(b)(iii): repairsUsed===0 must not imply status "clean" when an error persists', () => {
+  const groundingOnlyResult: RepairGateResult<unknown> = {
+    artifact: { value: 'ungrounded-but-otherwise-fine' },
+    finalIssues: [{
+      severity: 'error',
+      rule: 'specs-grounding-disabled',
+      detail: 'Specs grounding was DISABLED for this run.',
+      context: 'HTML (base)',
+    }],
+    repairsUsed: 0,
+    attempts: [],
+    blockScopedResolved: 0,
+    shippedAttempt: 0,
+  };
+
+  it('reports "unresolved", never "clean", when repairsUsed is 0 but an error-severity issue remains', () => {
+    const report = toArtifactReport('HTML (base)', groundingOnlyResult);
+    expect(report.status).toBe('unresolved');
+  });
+
+  it('still reports "clean" for the ordinary case: repairsUsed 0 AND no errors', () => {
+    const cleanResult: RepairGateResult<unknown> = {
+      ...groundingOnlyResult,
+      finalIssues: [],
+    };
+    expect(toArtifactReport('HTML (base)', cleanResult).status).toBe('clean');
+  });
+
+  it('still reports "repaired" when repairs were used and nothing remains', () => {
+    const repairedResult: RepairGateResult<unknown> = {
+      ...groundingOnlyResult,
+      repairsUsed: 1,
+      finalIssues: [],
+      shippedAttempt: 1,
+    };
+    expect(toArtifactReport('HTML (base)', repairedResult).status).toBe('repaired');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-3.1 T13 (FR-10(b), AC-6, plan D13). `applyTier`'s gate condition
+// (`const value = getAtPath(next, issue.path); if (!strategy || typeof value !== 'string') {
+// advance(issue); continue; }`) treats a genuinely ABSENT key (`getAtPath` returns `undefined`,
+// Zod's own "Required") identically to "nothing to repair" — the strategy function is never
+// called at all, only the cursor advances. This closes that gap on the READ side only: a missing
+// value is dispatched to the active tier's strategy with `''` substituted for the missing value,
+// exactly like a present-but-empty string always was. The WRITE side (`setAtPath`) was already
+// correct — see Implementation Plan §3.3.
+//
+// Real, registered `REPAIR_STRATEGIES` entries are used throughout (never a hand-rolled fake
+// strategy injected via a mock), spied on with `vi.spyOn` so the genuine `fieldInstruction`/
+// `deterministic` implementations still run — this proves DISPATCH happened, not merely that some
+// unrelated side effect occurred.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('runRepairGate — T13 (FR-10(b), AC-6): a genuinely missing field is dispatched to its strategy, not silently skipped', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('a missing (not merely empty) field-scoped value reaches fieldInstruction/repairField with "" as the current value, and the repair lands', async () => {
+    const fieldInstructionSpy = vi.spyOn(REPAIR_STRATEGIES.get('doc-schema')!, 'fieldInstruction');
+    const artifact = { cta: {} }; // 'text' key is genuinely ABSENT — not cta.text === ''
+    const issue: ValidationIssue = {
+      severity: 'error', rule: 'doc-schema', detail: 'cta.text: Required', context: 'ctx', path: 'cta.text',
+    };
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const validate = vi.fn().mockReturnValueOnce([issue]).mockReturnValue([]);
+    const repairField = vi.fn().mockResolvedValue('Buy it today.');
+
+    const result = await runRepairGate({
+      label: 'T13 missing field-scoped', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    // TODAY (pre-T13): typeof undefined !== 'string' is true, so applyTier advances-and-skips
+    // BEFORE ever calling fieldInstruction/repairField — both spies stay at 0 calls, red below.
+    expect(fieldInstructionSpy).toHaveBeenCalledWith('', issue);
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect((result.artifact as { cta: { text: string } }).cta.text).toBe('Buy it today.');
+    expect(result.repairsUsed).toBe(0); // resolved at the field-scoped rung — no full regen spent
+  });
+
+  it('a missing (not merely empty) deterministic-tier value reaches strategy.deterministic with "" as the current value, instead of being silently skipped', async () => {
+    const deterministicSpy = vi.spyOn(REPAIR_STRATEGIES.get('slug-charset')!, 'deterministic');
+    const artifact = { slugs: [{}] }; // 'slug' key is genuinely ABSENT on this entry
+    const issue: ValidationIssue = {
+      severity: 'error', rule: 'slug-charset', detail: 'bad charset', context: 'ctx', path: 'slugs[0].slug',
+    };
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const validate = vi.fn().mockReturnValueOnce([issue]).mockReturnValue([]);
+
+    await runRepairGate({
+      label: 'T13 missing deterministic', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField: vi.fn(),
+    });
+
+    // TODAY (pre-T13): the same typeof check skips this dispatch too — deterministicSpy stays at 0
+    // calls. slugify('') legitimately returns null (an empty value can never satisfy SLUG_PATTERN),
+    // so this test only proves DISPATCH happened, not that a missing slug becomes repairable this
+    // way — that is a separate, unclaimed guarantee this task does not make.
+    expect(deterministicSpy).toHaveBeenCalledWith('', issue);
+  });
+
+  it('[pin] a value that is present but neither a string nor undefined (a structural anomaly) still advances-and-skips, unaffected by this fix', async () => {
+    const fieldInstructionSpy = vi.spyOn(REPAIR_STRATEGIES.get('doc-schema')!, 'fieldInstruction');
+    const artifact = { cta: { text: 42 } }; // present, but the wrong type entirely — not this task's case
+    const issue: ValidationIssue = {
+      severity: 'error', rule: 'doc-schema', detail: 'cta.text: expected string', context: 'ctx', path: 'cta.text',
+    };
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const validate = vi.fn().mockReturnValueOnce([issue]).mockReturnValue([]);
+    const repairField = vi.fn();
+
+    const result = await runRepairGate({
+      label: 'T13 wrong-type regression', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    // Already true before AND after T13 — a regression guard, not red-to-green evidence for T13.
+    expect(fieldInstructionSpy).not.toHaveBeenCalled();
+    expect(repairField).not.toHaveBeenCalled();
+    expect((result.artifact as { cta: { text: number } }).cta.text).toBe(42); // untouched
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-3.1 T14 (FR-10, FR-11, AC-6, plan D14). The main regeneration loop's only per-attempt action
+// today is a `deterministic`-tier-only cleanup: `issues.filter(i => i.path &&
+// REPAIR_STRATEGIES.get(i.rule)?.deterministic)`. A rule with NO `deterministic` rung at all
+// (`doc-schema`, `slug-name-designator-lost`, `heading-brand-core-missing`) is excluded from that
+// filter outright, so once such a finding survives the pre-loop ladder, or surfaces FRESH on a
+// later full-regeneration attempt's own output, only another full regeneration can ever touch it
+// again — the confirmed mechanism behind the real 2026-09-28 regeneration's fix-one-break-the-
+// other oscillation. T14 replaces that narrow cleanup with a full, per-invocation-scoped ladder
+// pass (`runLadderPass`), run again inside the main loop after every `produce()`/`validate()`.
+//
+// The "per-invocation-scoped" detail is the subtle part (Implementation Plan Risk 3): the ladder
+// cursor must be FRESH on each call, not shared across the pre-loop pass and every in-loop retry —
+// otherwise a rung already exhausted against the INITIAL attempt's output would resolve straight
+// to 'full-regen' the moment the identical rule fires again on a FRESH regeneration's own output,
+// reproducing the same defect one level up. The third test below is built specifically so a
+// "half-fixed" implementation (a main-loop ladder pass that shares one cursor across invocations)
+// still fails it, distinguishing that subtler bug from "no in-loop ladder pass at all".
+// ═══════════════════════════════════════════════════════════════════════════
+describe('runRepairGate — T14 (FR-10, FR-11, AC-6): a fresh full-regeneration attempt gets its own field-scoped/block-scoped ladder pass, with a cursor local to that attempt', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const slugsArtifact = (names: string[]) => ({
+    slugs: names.map((name, i) => ({ language: `L${i}`, name, slug: `slug-${i}` })),
+  });
+
+  it('a field-scoped-repairable error surfacing fresh on a full-regeneration attempt is repaired within that same attempt, not left for a further regen', async () => {
+    const fieldInstructionSpy = vi.spyOn(REPAIR_STRATEGIES.get('slug-name-designator-lost')!, 'fieldInstruction');
+    const broken = slugsArtifact(['ok']); // attempt 0's own defect — unaddressable, forces a full-regen
+    const regen = slugsArtifact(['Corrupted Name']); // attempt 1's own, DIFFERENT, field-scoped-repairable defect
+    const unaddressable = makeIssue('spec-count-mismatch'); // no `path` — same shape as the existing
+    // "still spends a full regeneration for an issue with no ladder above full-regen" fixture above.
+    const designatorLost: ValidationIssue = {
+      severity: 'error', rule: 'slug-name-designator-lost', detail: 'lost designator', context: 'Slug (L0)', path: 'slugs[0].name',
+    };
+    const produce = vi.fn().mockResolvedValueOnce(broken).mockResolvedValueOnce(regen);
+    // Content-routed, not call-order-routed: robust to exactly how many times validate() is called
+    // by either the old or the new implementation.
+    const validate = vi.fn((candidate: unknown) => {
+      if (candidate === broken) return [unaddressable];
+      if (candidate === regen) return [designatorLost];
+      return []; // the field-scoped-repaired artifact — a fresh object built by setAtPath
+    });
+    const repairField = vi.fn().mockResolvedValue('Ortur H20 20 W');
+
+    const result = await runRepairGate({
+      label: 'T14 fresh regen field-scoped', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    // TODAY: cleanupPlan excludes slug-name-designator-lost outright (no deterministic rung), so
+    // the fresh finding on `regen`'s own output is never dispatched — fieldInstructionSpy/
+    // repairField stay at 0 calls, and the finding ships unresolved.
+    expect(fieldInstructionSpy).toHaveBeenCalledWith('Corrupted Name', designatorLost);
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect(result.finalIssues.some(i => i.rule === 'slug-name-designator-lost')).toBe(false);
+    expect(result.repairsUsed).toBe(1); // one full-regen attempt — not a second one to fix the fresh finding
+  });
+
+  it('two independent-leaf findings on the SAME fresh regeneration attempt — one a genuinely-missing-key finding (T13), one an ordinary field-scoped finding — converge together in that attempt\'s own ladder pass', async () => {
+    const docSchemaSpy = vi.spyOn(REPAIR_STRATEGIES.get('doc-schema')!, 'fieldInstruction');
+    const slugSpy = vi.spyOn(REPAIR_STRATEGIES.get('slug-name-designator-lost')!, 'fieldInstruction');
+    const broken = { cta: { text: 'ok' }, slugs: [{ name: 'ok' }] };
+    // Both defects on the SAME regen output: cta.text genuinely missing (doc-schema, T13's own
+    // case) and an independent-leaf slug-name-designator-lost.
+    const regen = { cta: {}, slugs: [{ name: 'Corrupted Name' }] };
+    const unaddressable = makeIssue('spec-count-mismatch');
+    const missingKey: ValidationIssue = {
+      severity: 'error', rule: 'doc-schema', detail: 'cta.text: Required', context: 'ctx', path: 'cta.text',
+    };
+    const designatorLost: ValidationIssue = {
+      severity: 'error', rule: 'slug-name-designator-lost', detail: 'lost designator', context: 'Slug (L0)', path: 'slugs[0].name',
+    };
+    const produce = vi.fn().mockResolvedValueOnce(broken).mockResolvedValueOnce(regen);
+    const validate = vi.fn((candidate: unknown) => {
+      if (candidate === broken) return [unaddressable];
+      if (candidate === regen) return [missingKey, designatorLost];
+      return [];
+    });
+    // Routed by instruction content, not call order — robust to which issue applyTier visits first.
+    const repairField = vi.fn().mockImplementation(async (payload: PromptPayload) =>
+      payload.userContent.includes('Required') ? 'Buy it now.' : 'Ortur H20 20 W');
+
+    const result = await runRepairGate({
+      label: 'T14 convergence', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    expect(docSchemaSpy).toHaveBeenCalledWith('', missingKey); // T13's own missing-key dispatch, exercised here too
+    expect(slugSpy).toHaveBeenCalledWith('Corrupted Name', designatorLost);
+    expect(repairField).toHaveBeenCalledTimes(2); // both resolved in ONE ladder pass, not two attempts
+    expect(result.finalIssues).toEqual([]);
+    expect(result.repairsUsed).toBe(1);
+  });
+
+  it('a rule\'s ladder cursor exhausted against the initial attempt\'s own output is fresh again against a later full-regeneration attempt\'s output, not carried over stale', async () => {
+    const initial = slugsArtifact(['Corrupted Name A']); // attempt 0 — field-scoped rung attempted, fails
+    const regen = slugsArtifact(['Corrupted Name B']);   // attempt 1 (fresh full-regen) — SAME rule, SAME
+    // path (cursorKey), must get its OWN fresh shot rather than inherit attempt 0's exhausted cursor.
+    const initialIssue: ValidationIssue = {
+      severity: 'error', rule: 'slug-name-designator-lost', detail: 'lost designator', context: 'Slug (L0)', path: 'slugs[0].name',
+    };
+    const regenIssue: ValidationIssue = { ...initialIssue };
+    const produce = vi.fn().mockResolvedValueOnce(initial).mockResolvedValueOnce(regen);
+    const validate = vi.fn((candidate: unknown) => {
+      if (candidate === initial) return [initialIssue];
+      if (candidate === regen) return [regenIssue];
+      return [];
+    });
+    // First (pre-loop) field-scoped attempt fails to produce a usable value — the ladder exhausts.
+    // Second (the fresh regen's own in-loop pass) succeeds — proving it got a genuinely NEW attempt,
+    // not a cursor already resolved to 'full-regen' by the first attempt's own exhaustion.
+    const repairField = vi.fn()
+      .mockResolvedValueOnce('')                 // pre-loop pass against `initial` — fails (empty)
+      .mockResolvedValueOnce('Ortur H20 20 W');  // in-loop pass against `regen` — succeeds
+
+    const result = await runRepairGate({
+      label: 'T14 stale cursor', maxRepairs: 1, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+
+    // TODAY: the main loop's cleanup excludes this rule entirely (no deterministic rung), so
+    // repairField is called exactly ONCE (only the pre-loop attempt) — red below. A "half-fixed"
+    // implementation that adds an in-loop ladder pass but shares ONE cursor across both invocations
+    // would ALSO fail this: the shared cursor would already read 'full-regen' for this path by the
+    // time the in-loop pass runs, so the second call still never happens.
+    expect(repairField).toHaveBeenCalledTimes(2);
+    expect(result.finalIssues.some(i => i.rule === 'slug-name-designator-lost')).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-3.1 T16 (FR-10, FR-11, AC-6, plan D16 / section 4a). A field-scoped repair result is trusted
+// with no shape check: repairFieldPayload keeps the cached system block (which may describe a full
+// JSON contract, e.g. the Slugs task) while replacing userContent with a one-field instruction, so
+// a model can answer with a whole JSON envelope, which applyTier then writes into a plain-text
+// field (the 2026-09-29 es-ES Slugs incident). Contract under test: an answer that opens with `{`
+// or `[` is never written; one bounded corrective retry follows; a second JSON-shaped answer is
+// discarded (the rung advances with no write). Plain answers are accepted on the first call.
+// The retry instruction's wording is deliberately NOT pinned beyond "preserves the original
+// instruction, mentions JSON, and is a different payload than the first call".
+// ═══════════════════════════════════════════════════════════════════════════
+describe('runRepairGate — T16 (FR-10/FR-11, AC-6, D16): a JSON-envelope field-scoped repair result is never written; one bounded corrective retry', () => {
+  const JSON_ENVELOPE = '{"site_name":"Store","slugs":[{"language":"es-ES","name":"Toallitas","slug":"toallitas"}]}';
+  const JSON_ARRAY = '[{"language":"es-ES","name":"Toallitas"}]';
+
+  const runWith = async (repairField: (payload: PromptPayload) => Promise<string>) => {
+    const artifact = { cta: {} }; // 'text' genuinely absent -> field-scoped rung (T13 shape)
+    const issue: ValidationIssue = {
+      severity: 'error', rule: 'doc-schema', detail: 'cta.text: Required', context: 'ctx', path: 'cta.text',
+    };
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const validate = vi.fn().mockImplementation((a: { cta: { text?: string } }) =>
+      typeof a.cta.text === 'string' && a.cta.text.length > 0 ? [] : [issue]);
+    const result = await runRepairGate({
+      label: 'T16 json envelope', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+    return result.artifact as { cta: { text?: string } };
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('a JSON-object answer is retried once with a corrective payload, and the plain retry answer is what lands', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const repairField = vi.fn()
+      .mockResolvedValueOnce(JSON_ENVELOPE)
+      .mockResolvedValueOnce('Buy it today.');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(2);
+    const first = repairField.mock.calls[0][0] as PromptPayload;
+    const second = repairField.mock.calls[1][0] as PromptPayload;
+    expect(second.userContent).not.toBe(first.userContent);
+    expect(second.userContent.startsWith(first.userContent)).toBe(true); // original instruction preserved
+    expect(second.userContent).toMatch(/json/i); // the correction names the failure
+    expect(second.systemBlocks).toBe(BASE_PAYLOAD.systemBlocks); // cache-stable, same as the first call
+    expect(artifact.cta.text).toBe('Buy it today.');
+  });
+
+  it('a JSON-array answer is treated the same way (first char "[")', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const repairField = vi.fn()
+      .mockResolvedValueOnce(JSON_ARRAY)
+      .mockResolvedValueOnce('Buy it today.');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(2);
+    expect(artifact.cta.text).toBe('Buy it today.');
+  });
+
+  it('leading whitespace before the brace does not evade the guard', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const repairField = vi.fn()
+      .mockResolvedValueOnce('  \n' + JSON_ENVELOPE)
+      .mockResolvedValueOnce('Buy it today.');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(2);
+    expect(artifact.cta.text).toBe('Buy it today.');
+  });
+
+  it('a still-JSON-shaped answer after the one retry is discarded: exactly two calls, and no JSON is ever written into the field', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const repairField = vi.fn().mockResolvedValue(JSON_ENVELOPE);
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(2); // bounded: never a third call for this rung
+    expect(artifact.cta.text ?? '').not.toContain('{');
+    expect(artifact.cta.text ?? '').not.toContain('site_name');
+  });
+
+  it('[pin] an ordinary plain-text answer is accepted on the first call, with no retry', async () => {
+    const repairField = vi.fn().mockResolvedValue('Buy it today.');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect(artifact.cta.text).toBe('Buy it today.');
+  });
+
+  it('[pin] a plain answer that merely contains braces or brackets later in the text is not rejected', async () => {
+    const repairField = vi.fn().mockResolvedValue('Ships in 2 [business] days {EU}');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect(artifact.cta.text).toBe('Ships in 2 [business] days {EU}');
   });
 });

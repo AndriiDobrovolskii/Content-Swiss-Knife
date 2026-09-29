@@ -15,6 +15,8 @@ import {
 import { normalizeSeoNumbers } from '../utils/seo-number-format';
 import { normalizeTerminology, canonicalizeMultiInOne } from '../utils/terminology-normalize';
 import { validateGeneratedHtml, validateSeoMetadata, ValidationIssue } from '../utils/output-validator';
+import { validateSeoMetadataShape, normalizeLongH1MetaTitle } from '../utils/seo-metadata-shape';
+import { retryAsync } from '../utils/async-retry';
 import {
   validateSpecsGrounding, validateSpecsGroundingDoc, isAlreadyCyrillic, inspectGroundedTranslation,
   describeGroundingFailure, type GroundingInspection,
@@ -99,10 +101,14 @@ const NO_CURRENCY_CHECK = '';
 /**
  * Result of one Doc-path Task A generation attempt (produceTaskADoc).
  *
- * `doc: null` means the raw model output failed ProductDescriptionDocSchema.parse() (or never
- * arrived as parseable JSON at all) — `issues` then carries docSchemaIssues() output so the repair
- * gate's validate() has something to report other than "empty-output". `doc` non-null always pairs
- * with `issues: []`: a successfully parsed Doc has nothing to say about the failure it didn't have.
+ * `doc: null` means the model response never became a candidate object at all — a network
+ * failure, or JSON that never parsed. `doc` non-null and `issues: []` is a Doc that fully passed
+ * `ProductDescriptionDocSchema`. US-3.1 T1 (FR-10, AC-6): `doc` may ALSO be non-null while `issues`
+ * is non-empty — a candidate that parsed as JSON but failed schema validation now survives on
+ * `doc` (instead of becoming `null`) so a field-scoped repair can address it by path via
+ * `docSchemaIssues()`'s `doc.<hops>` addressing. Every consumer that reads `doc` must re-`safeParse`
+ * before trusting its shape (see runDocGate's `produce`/`validate` closures and its post-loop
+ * render guard) rather than assume non-null means schema-valid.
  */
 export interface DocAttempt {
   doc: ProductDescriptionDoc | null;
@@ -268,30 +274,42 @@ export class ContentOrchestratorService {
   private async groundingSpecs(input: ProductInput): Promise<GroundingInspection> {
     if (!input.specs?.trim()) return { text: '' };
     if (isAlreadyCyrillic(input.specs)) return { text: input.specs };
-    try {
-      const translated = await this.llm.generateText(
-        // 'internal-matching-only' — NOT a display translation. This output is anchor text for
-        // validateSpecsGrounding, which matches spec rows by stemmed label; the Ukrainian style
-        // guide's anti-calque rules would reword exactly what has to stay matchable.
-        buildTranslatePrompt(input.specs, 'Ukrainian', 'internal-matching-only'),
-        false, // fast model — a cheap lookup call, not master generation
-        { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
-      );
-      const inspection = inspectGroundedTranslation(translated, masterScriptFor(input.website.name));
-      if (inspection.failure) {
-        console.warn(
-          `[groundingSpecs] Specs grounding DISABLED for "${input.name}": ` +
-          describeGroundingFailure(inspection.failure),
+
+    // US-3.1 T3 (FR-1). The try/catch body is unchanged internally — it still never throws out of
+    // the wrapped attempt, and still never substitutes input.specs as a grounded translation (FR-4,
+    // the Ortur H20 no-silent-fallback guarantee) — only now wrapped as retryAsync's `attempt`, so a
+    // single transient failure on any of the three business-semantic triggers (throw, empty/
+    // whitespace-only text, wrong-script) no longer disables grounding by itself.
+    const attempt = async (): Promise<GroundingInspection> => {
+      try {
+        const translated = await this.llm.generateText(
+          // 'internal-matching-only' — NOT a display translation. This output is anchor text for
+          // validateSpecsGrounding, which matches spec rows by stemmed label; the Ukrainian style
+          // guide's anti-calque rules would reword exactly what has to stay matchable.
+          buildTranslatePrompt(input.specs, 'Ukrainian', 'internal-matching-only'),
+          false, // fast model — a cheap lookup call, not master generation
+          { taskLabel: 'Specs translation (grounding)', productName: input.name, store: input.website.name, lang: 'uk-UA' },
         );
+        return inspectGroundedTranslation(translated, masterScriptFor(input.website.name));
+      } catch (err) {
+        // The ERROR OBJECT, not a message: the stack trace is what says whether this was a timeout,
+        // a 4xx, or a bug on our side. It used to be swallowed whole, leaving the run with a warning
+        // that named the wrong cause.
+        console.error(`[groundingSpecs] Specs translation threw for "${input.name}".`, err);
+        return { text: '', failure: { kind: 'provider-error' } };
       }
-      return inspection;
-    } catch (err) {
-      // The ERROR OBJECT, not a message: the stack trace is what says whether this was a timeout,
-      // a 4xx, or a bug on our side. It used to be swallowed whole, leaving the run with a warning
-      // that named the wrong cause.
-      console.error(`[groundingSpecs] Specs translation threw for "${input.name}".`, err);
-      return { text: '', failure: { kind: 'provider-error' } };
+    };
+
+    const result = await retryAsync(attempt, { maxAttempts: 3, isRetryable: r => !!r.failure });
+    // Logged once, after the retry budget is exhausted — never per attempt, and always the LAST
+    // attempt's own cause, matching what groundingSpecs() actually reports to the caller.
+    if (result.failure) {
+      console.warn(
+        `[groundingSpecs] Specs grounding DISABLED for "${input.name}": ` +
+        describeGroundingFailure(result.failure),
+      );
     }
+    return result;
   }
 
   /**
@@ -396,8 +414,13 @@ export class ContentOrchestratorService {
     const { payload, useThinking, isInitialAttempt, input, contextLabel, docTaskLabel } = opts;
 
     // Kept outside the try so a schema failure can still log what the model actually sent —
-    // without this, debugging a hallucinated Doc means reproducing the call by hand.
+    // without this, debugging a hallucinated Doc means reproducing the call by hand. `candidate`
+    // is ALSO hoisted (US-3.1 T1) so the catch block can return it as `doc` — schema-invalid, but
+    // an addressable candidate a field-scoped repair can still work against — instead of `null`,
+    // whenever normalizeRawBulletLeadPunctuation() itself succeeded (i.e. the model did return
+    // parseable, object-shaped JSON; only ProductDescriptionDocSchema rejected it).
     let raw: unknown;
+    let candidate: unknown;
     try {
       raw = await this.llm.generateJson<ProductDescriptionDoc>(payload, useThinking, { taskLabel: docTaskLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
       // Pre-parse fix-up: eliminates any bullets-block lead/text collision (keyBenefits/
@@ -405,7 +428,8 @@ export class ContentOrchestratorService {
       // normalizeRawBulletLeadPunctuation's header comment for why this must run here, not
       // post-parse like normalizeBulletLeadPunctuation. `raw` itself is left untouched: the catch
       // block below still logs the model's true, unmodified output for debugging.
-      const { raw: candidate, fixed } = normalizeRawBulletLeadPunctuation(raw);
+      const normalized = normalizeRawBulletLeadPunctuation(raw);
+      candidate = normalized.raw;
       // parse(), not safeParse(): an invalid Doc must reach the repair gate as a thrown error
       // rather than be treated as valid.
       //
@@ -415,7 +439,7 @@ export class ContentOrchestratorService {
       // description-doc.schema.ts; this is the same workaround, not a new one. parse() still
       // does the validating, so nothing is weakened.
       ProductDescriptionDocSchema.parse(candidate);
-      return { doc: candidate as ProductDescriptionDoc, issues: [], preValidationFixed: fixed };
+      return { doc: candidate as ProductDescriptionDoc, issues: [], preValidationFixed: normalized.fixed };
     } catch (err) {
       // …unless the provider refused to produce anything in the first place, AND this is the
       // initial attempt (no `best` yet exists to fall back to — repair-gate.ts:112). A
@@ -439,7 +463,10 @@ export class ContentOrchestratorService {
       // with what the model actually sent than with "specs.categories.0: expected array". Only
       // logged when generateJson itself succeeded; a network/parse failure never set raw.
       if (raw !== undefined) console.error(`[${contextLabel}] raw model output failed schema validation:`, raw);
-      return { doc: null, issues };
+      // US-3.1 T1 (FR-10, AC-6): a candidate that parsed as JSON but failed schema validation
+      // survives as `doc` (schema-invalid, addressable by path) instead of becoming `null` — a
+      // genuinely unparseable response (candidate never assigned) still returns `doc: null`.
+      return { doc: candidate !== undefined ? (candidate as ProductDescriptionDoc) : null, issues };
     }
   }
 
@@ -490,6 +517,13 @@ export class ContentOrchestratorService {
       // gets here, so this call is effectively applications.items[].scenario-only in practice now,
       // but stays as-is since it's still correct and still the only thing that fixes that field.
       if (!attempt.doc) return attempt;
+      // US-3.1 T1 (FR-10, AC-6): attempt.doc may now hold a schema-invalid candidate
+      // (produceTaskADoc no longer returns null for a parsed-but-rejected response — see
+      // DocAttempt's own doc comment). normalizeBulletLeadPunctuation assumes a schema-valid
+      // ProductDescriptionDoc shape, so only run it once a fresh safeParse confirms the candidate
+      // actually is one; a still-invalid candidate is returned as-is and drives the repair ladder
+      // off its own `issues` instead.
+      if (!ProductDescriptionDocSchema.safeParse(attempt.doc).success) return attempt;
       const { doc, fixed } = normalizeBulletLeadPunctuation(attempt.doc);
       const totalFixed = (attempt.preValidationFixed ?? 0) + fixed;
       if (totalFixed > 0) {
@@ -511,6 +545,14 @@ export class ContentOrchestratorService {
       produce,
       validate: (attempt) => {
         if (!attempt.doc) return attempt.issues;
+        // US-3.1 T1 (FR-10, AC-6): re-safeParse rather than trust attempt.issues, which may be
+        // stale — a field-scoped repair mutates attempt.doc directly (via setAtPath, keyed on the
+        // doc-schema issue's own `doc.<hops>` path) without going through produceTaskADoc again, so
+        // attempt.issues would otherwise still report the ORIGINAL failure after it was fixed. A
+        // still-invalid candidate returns a freshly-derived docSchemaIssues() (not attempt.issues)
+        // so the retry prompt always describes the candidate's CURRENT state.
+        const parsed = ProductDescriptionDocSchema.safeParse(attempt.doc);
+        if (!parsed.success) return docSchemaIssues(parsed.error, opts.contextLabel);
         const doc = attempt.doc;
         return [
           ...validateSpecsGroundingDoc(doc, opts.groundingSpecs, opts.label, opts.allowedSpecParams,
@@ -545,7 +587,7 @@ export class ContentOrchestratorService {
           // severity (see bullet-lead-punctuation.ts for why this is not a renderer fix).
           ...validateBulletLeadPunctuationDoc(doc, opts.label),
           ...(opts.groundingDisabled ? [{
-            severity: 'warning' as const,
+            severity: 'error' as const,
             rule: 'specs-grounding-disabled',
             detail:
               'Specs grounding was DISABLED for this run — §7 rows were NOT verified against the '
@@ -595,7 +637,14 @@ export class ContentOrchestratorService {
     // assertDocRendered(htmlAResult.artifact, ...)` runs AFTER their recordGeneration call, so
     // returning '' here (instead of throwing) restores that original order — assertDocRendered is
     // now called in exactly one place, at the call sites, not inside this method too.
-    if (!result.artifact.doc) return { ...result, artifact: '' };
+    // US-3.1 T1 (FR-10, AC-6): result.artifact.doc may be a non-null but SCHEMA-INVALID candidate
+    // (every attempt exhausted its repair budget without ever reaching a valid Doc) — re-safeParse
+    // rather than trust non-null, or a still-broken candidate would reach renderDescription()/
+    // normalizeDocProse(), neither of which is safe to run against a shape ProductDescriptionDocSchema
+    // rejected.
+    if (!result.artifact.doc || !ProductDescriptionDocSchema.safeParse(result.artifact.doc).success) {
+      return { ...result, artifact: '' };
+    }
 
     // The ONE render call for this Task A generation — see the method doc comment above. Runs
     // AFTER every Tier-1 validator above, which is an ORDER FLIP from the old HTML path (there,
@@ -753,7 +802,7 @@ export class ContentOrchestratorService {
                 context: 'HTML (base)',
               })),
               ...(groundingDisabled ? [{
-                severity: 'warning' as const,
+                severity: 'error' as const,
                 rule: 'specs-grounding-disabled',
                 // The cause is named, not guessed. The old wording asserted the script explanation
                 // even when the call had thrown, which made the one observable signal actively
@@ -835,10 +884,23 @@ export class ContentOrchestratorService {
             ),
             validate: json => validateSlugs(json, input.name),
             withFeedback: appendRepairFeedback,
+            // US-3.1 IMPLEMENTATION retry 2 (AC-6/FR-11, RECONCILIATION v1 Finding 0): wires a
+            // repairField executor so slug-name-designator-lost's field-scoped rung
+            // (repair-strategy.ts) is reachable in production — mirrors runDocGate's own
+            // repairField wiring above (~line 612).
+            repairField: async payload => stripCodeFences(await this.llm.generateText(
+              payload, false, { taskLabel: 'Slugs field repair', productName: input.name, store: input.website.name },
+            )),
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           });
-          const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
+          const { artifact: rawSlugData, repairsUsed: slugRepairs } = slugResult;
+          // A field-scoped repair writes `slugs[i].name` directly via setAtPath, bypassing
+          // produce()'s own normalizeSlugResponse — re-running it here re-derives `.slug` from
+          // the (possibly field-repaired) name and re-canonicalizes `.name`, the same invariant
+          // every full generation already gets (produce() calls it too). Idempotent when nothing
+          // was field-repaired.
+          const slugData = this.normalizeSlugResponse(rawSlugData);
           if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
           this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
           this.content.update(c => ({ ...c, slugData }));
@@ -863,12 +925,27 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }), input.name),
-        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
+        validate: (json) => [
+          ...validateSeoMetadata(json, NO_CURRENCY_CHECK),
+          // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
+          // living outside the FROZEN output-validator.ts (OD-4's resolution).
+          ...validateSeoMetadataShape(json, 'SEO metadata'),
+        ],
         withFeedback: appendRepairFeedback,
+        // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5, bundled with Finding 0's
+        // same root cause): wires a repairField executor so meta-title-length's field-scoped
+        // rung (repair-strategy.ts, T12) is reachable in production.
+        repairField: async payload => stripCodeFences(await this.llm.generateText(
+          payload, false, { taskLabel: 'SEO metadata field repair', productName: input.name, store: input.website.name },
+        )),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
-      const { artifact: seoJson, repairsUsed: bRepairs } = seoResult;
+      const { artifact: rawSeoJson, repairsUsed: bRepairs } = seoResult;
+      // Same reasoning as the Slugs gate above: a field-scoped repair writes meta_title directly
+      // via setAtPath, bypassing produce()'s own canonicalizeSeoData — re-run it here so the
+      // field-repaired value gets the same normalization every full generation already gets.
+      const seoJson = this.canonicalizeSeoData(rawSeoJson, input.name);
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
@@ -1170,7 +1247,7 @@ export class ContentOrchestratorService {
                 context: 'HTML (uk-UA)',
               })),
               ...(groundingDisabled ? [{
-                severity: 'warning' as const,
+                severity: 'error' as const,
                 rule: 'specs-grounding-disabled',
                 // The cause is named, not guessed. The old wording asserted the script explanation
                 // even when the call had thrown, which made the one observable signal actively
@@ -1238,10 +1315,17 @@ export class ContentOrchestratorService {
           ),
           validate: json => validateSlugs(json, input.name),
           withFeedback: appendRepairFeedback,
+          // US-3.1 IMPLEMENTATION retry 2 (AC-6/FR-11) — see generate()'s identical Slugs gate
+          // above for the full rationale.
+          repairField: async payload => stripCodeFences(await this.llm.generateText(
+            payload, false, { taskLabel: 'Slugs field repair', productName: input.name, store: input.website.name, lang: UA_ISO },
+          )),
           onAttempt: (n, c) =>
             this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
         });
-        const { artifact: slugData, repairsUsed: slugRepairs } = slugResult;
+        const { artifact: rawSlugData, repairsUsed: slugRepairs } = slugResult;
+        // See generate()'s identical Slugs gate above for why this re-normalization is required.
+        const slugData = this.normalizeSlugResponse(rawSlugData);
         if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
         this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
         this.content.update(c => ({ ...c, slugData }));
@@ -1264,12 +1348,24 @@ export class ContentOrchestratorService {
         basePayload: promptB,
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name, lang: UA_ISO }), input.name),
-        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
+        validate: (json) => [
+          ...validateSeoMetadata(json, NO_CURRENCY_CHECK),
+          // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
+          // living outside the FROZEN output-validator.ts (OD-4's resolution).
+          ...validateSeoMetadataShape(json, 'SEO metadata'),
+        ],
         withFeedback: appendRepairFeedback,
+        // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5) — see generate()'s
+        // identical SEO gate above for the full rationale.
+        repairField: async payload => stripCodeFences(await this.llm.generateText(
+          payload, false, { taskLabel: 'SEO metadata field repair', productName: input.name, store: input.website.name, lang: UA_ISO },
+        )),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
-      const { artifact: seoJson, repairsUsed: bRepairs } = seoResult;
+      const { artifact: rawSeoJson, repairsUsed: bRepairs } = seoResult;
+      // See generate()'s identical SEO gate above for why this re-normalization is required.
+      const seoJson = this.canonicalizeSeoData(rawSeoJson, input.name);
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
@@ -1362,12 +1458,24 @@ export class ContentOrchestratorService {
         maxRepairs: this.maxRepairs(),
         basePayload: promptB,
         produce: async (payload) => this.canonicalizeSeoData(await this.llm.generateJson(payload, useThinking, { taskLabel: 'SEO metadata', productName: input.name, store: input.website.name }), input.name),
-        validate: (json) => validateSeoMetadata(json, NO_CURRENCY_CHECK),
+        validate: (json) => [
+          ...validateSeoMetadata(json, NO_CURRENCY_CHECK),
+          // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
+          // living outside the FROZEN output-validator.ts (OD-4's resolution).
+          ...validateSeoMetadataShape(json, 'SEO metadata'),
+        ],
         withFeedback: appendRepairFeedback,
+        // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5) — see generate()'s
+        // identical SEO gate for the full rationale.
+        repairField: async payload => stripCodeFences(await this.llm.generateText(
+          payload, false, { taskLabel: 'SEO metadata field repair', productName: input.name, store: input.website.name },
+        )),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing SEO metadata (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
-      const { artifact: seoJson, repairsUsed: bRepairs } = seoResult;
+      const { artifact: rawSeoJson, repairsUsed: bRepairs } = seoResult;
+      // See generate()'s identical SEO gate for why this re-normalization is required.
+      const seoJson = this.canonicalizeSeoData(rawSeoJson, input.name);
       if (bRepairs > 0) console.info(`[repair-gate] SEO metadata: ${bRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
@@ -1401,10 +1509,17 @@ export class ContentOrchestratorService {
         ),
         validate: json => validateSlugs(json, input.name),
         withFeedback: appendRepairFeedback,
+        // US-3.1 IMPLEMENTATION retry 2 (AC-6/FR-11) — see generate()'s identical Slugs gate for
+        // the full rationale.
+        repairField: async payload => stripCodeFences(await this.llm.generateText(
+          payload, false, { taskLabel: 'Slugs field repair', productName: input.name, store: input.website.name },
+        )),
         onAttempt: (n, c) =>
           this.progressMessage.set(`Repairing slugs (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
       });
-      const { artifact: slugData, finalIssues: slugFinalIssues, repairsUsed: slugRepairs } = slugResult;
+      const { artifact: rawSlugData, finalIssues: slugFinalIssues, repairsUsed: slugRepairs } = slugResult;
+      // See generate()'s identical Slugs gate for why this re-normalization is required.
+      const slugData = this.normalizeSlugResponse(rawSlugData);
       if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
       this.content.update(c => ({ ...c, slugData }));
@@ -1444,12 +1559,20 @@ export class ContentOrchestratorService {
   private canonicalizeSeoData(seo: SeoResponse, productName = ''): SeoResponse {
     return normalizeSeoNumbers({
       ...seo,
-      seo_data: (seo.seo_data ?? []).map(item => ({
-        ...item,
-        h1: canonicalizeMultiInOne(item.h1, item.language),
-        meta_title: canonicalizeMultiInOne(item.meta_title, item.language),
-        meta_description: canonicalizeMultiInOne(item.meta_description, item.language),
-      })),
+      seo_data: (seo.seo_data ?? []).map(item => {
+        // US-3.1 T15 (FR-8(b), AC-4; plan D15). h1 is canonicalized FIRST, so
+        // normalizeLongH1MetaTitle sees the same, final h1 string the artifact ships — then
+        // unconditionally overwrites meta_title whenever h1 itself is too long for any
+        // verbatim-anchored, dash-tailed shape to ever pass the FROZEN 55-character ceiling. A
+        // no-op otherwise (the model's/repair's own canonicalized value passes through unchanged).
+        const h1 = canonicalizeMultiInOne(item.h1, item.language);
+        return {
+          ...item,
+          h1,
+          meta_title: normalizeLongH1MetaTitle(h1, canonicalizeMultiInOne(item.meta_title, item.language)),
+          meta_description: canonicalizeMultiInOne(item.meta_description, item.language),
+        };
+      }),
     }, productName);
   }
 
@@ -1645,6 +1768,8 @@ export class ContentOrchestratorService {
       ...validateSentenceLength(c.mainHtmlUa, masterLocale, `HTML (${masterLocale})`),
       ...validateProductNameConsistency(c.mainHtmlUa, localizedNames?.[masterLocale], masterLocale, `HTML (${masterLocale})`),
       ...validateSeoMetadata(c.seoData, NO_CURRENCY_CHECK),
+      // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — see the repair-gate call sites' identical composition.
+      ...validateSeoMetadataShape(c.seoData, 'SEO metadata'),
       ...validateSlugs(c.slugData ?? null, productName),
       ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
     ];

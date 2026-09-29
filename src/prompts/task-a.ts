@@ -150,7 +150,7 @@ ${buildDeliveryRegionBlock(input.website.name, MASTER_LOCALE)}
 [Supplemental Content]: ${input.supplementalContent || 'None provided.'}
 ${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input)}${template}${custom}${simplifiedOverlay}
 
-Generate the description in ${baseLanguage}. Primary keyword "${input.name}" appears ~1× per section in BODY PROSE only — headings are excluded from that count and follow [HEADING FORM], which forbids the full name outright.`;
+Generate the description in ${baseLanguage}. Primary keyword "${input.name}" appears ~1× per section in BODY PROSE only — headings are excluded from that count and follow [HEADING FORM], which forbids the full name outright except at the two blessed positions it names.`;
 
   return {
     systemBlocks: [

@@ -25,6 +25,7 @@ import {
 } from '../prompt-core/constants';
 import { productShort } from '../prompt-core/product-name-core';
 import { extractBlocks } from './block-repair';
+import { LATIN_TO_CYRILLIC_UNITS } from './unit-tables';
 
 /**
  * [ADAPTED from buildProductNamePattern in output-validator.ts:369]
@@ -34,13 +35,126 @@ import { extractBlocks } from './block-repair';
  * with a pointer, keep them in step by hand. The digit/letter flexibility is inherited for the
  * same reason — a name typed "20W" appears as "20 W" after unit-spacing normalization.
  */
+function escapeNamePattern(text: string): string {
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return escaped.replace(/(\d)(?=[A-Za-zµμ])/g, '$1\\s?');
+}
+
 function productNamePattern(name: string): RegExp {
-  const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(escaped.replace(/(\d)(?=[A-Za-zµμ])/g, '$1\\s?'), 'i');
+  return new RegExp(escapeNamePattern(name.trim()), 'i');
 }
 
 /** Same scope as tov-second-person.ts: the heading lexicon exists only for these two. */
 const CYRILLIC_LOCALES = ['uk-ua', 'ru-ua'];
+
+/**
+ * [US-3.1 T7, FR-7, plan D5(e)] — locale-aware sibling of productNamePattern, used ONLY by
+ * heading-brand-core-missing's own presence ("hasCore") test at the CTA-heading position.
+ *
+ * `productNamePattern()`'s digit-flexible escaping has no notion of script: a Latin unit
+ * abbreviation immediately after a digit in the raw product name ("W", "kg", …) is never treated
+ * as interchangeable with the Cyrillic spelling `unit-cyrillize.ts` deterministically produces for
+ * every uk-UA/ru-UA generation ("Вт", "кг", …). This builds the same digit-flexible pattern as
+ * productNamePattern, but for every digit+unit span recognized in LATIN_TO_CYRILLIC_UNITS,
+ * additionally accepts that unit's Cyrillic spelling in the same span.
+ *
+ * GATED ON CYRILLIC_LOCALES: for any other locale this degrades to plain productNamePattern.
+ *
+ * NEVER used by the shared productNamePattern()/shortPattern/fullPattern
+ * heading-product-name-stuffing (FR-6) still uses unmodified — widening the shared matcher would
+ * newly trip FR-6 against the corpus's own already-accepted non-blessed §7 heading that legitimately
+ * carries the cyrillized-unit product name (see heading-style.spec.ts's own "[pin]" test).
+ */
+function productNamePatternWithUnitLocale(name: string, locale: string): RegExp {
+  const trimmed = name.trim();
+  const localeKey = locale.toLowerCase();
+  if (!CYRILLIC_LOCALES.includes(localeKey)) return productNamePattern(trimmed);
+
+  const useRu = localeKey === 'ru-ua';
+  // Longest-first, mirroring unit-cyrillize.ts's UNIT_ALTERNATION — "mm/s" must win over "mm",
+  // "kW" over "W".
+  const unitKeys = Object.keys(LATIN_TO_CYRILLIC_UNITS).sort((a, b) => b.length - a.length);
+  const unitAlternation = unitKeys.map(u => u.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join('|');
+  const unitSpanRe = new RegExp(`(\\d)( ?)(${unitAlternation})(?![\\p{L}\\p{N}²³])`, 'gu');
+
+  let pattern = '';
+  let lastIndex = 0;
+  for (const m of trimmed.matchAll(unitSpanRe)) {
+    const start = m.index ?? 0;
+    pattern += escapeNamePattern(trimmed.slice(lastIndex, start));
+    const digit = m[1];
+    const unit = m[3];
+    const mapping = LATIN_TO_CYRILLIC_UNITS[unit];
+    const cyrillic = (useRu ? mapping.ru ?? mapping.uk : mapping.uk).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const latinUnit = unit.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    pattern += `${digit}\\s?(?:${latinUnit}|${cyrillic})`;
+    lastIndex = start + m[0].length;
+  }
+  pattern += escapeNamePattern(trimmed.slice(lastIndex));
+
+  return new RegExp(pattern, 'i');
+}
+
+/** Does `text` contain productShort(core)'s form (Cyrillic-unit-aware)? Empty core is vacuously present. */
+function hasProductCore(text: string, core: string, locale: string): boolean {
+  if (!core) return true;
+  return productNamePatternWithUnitLocale(core, locale).test(text);
+}
+
+/**
+ * [US-3.1 T7, FR-7, plan D5(f)] — the doc.localizedName leaf's own shape requirement, checked ONLY
+ * after presence (hasProductCore) has already passed for that leaf: a bare name, no leading/trailing
+ * sentence framing, no CTA wording, no sentence-terminal punctuation, quotation marks or line breaks
+ * it did not already carry — each computed against the raw, untranslated source name
+ * (opts.input.name), never against invariantCore()/productShort()-derived text.
+ *
+ * TWO independent tests, either of which alone fails the candidate:
+ *   - occurrence-count: a banned character's count in the candidate may never exceed its count in
+ *     the source name, per character code point (not per class).
+ *   - trailing-position: a banned character that is the candidate's own trailing (non-whitespace)
+ *     character is exempt from THIS check only when it also matches the source name's own trailing
+ *     character. Additional to the occurrence-count check, never in its place — it catches a newly
+ *     added trailing mark that occurrence-count alone would miss whenever that exact character
+ *     already appears elsewhere (e.g. an interior decimal point).
+ *
+ * A line break is banned unconditionally, subject to neither exemption.
+ *
+ * The punctuation-free CTA/sentence-framing component of this shape requirement is deliberately NOT
+ * implemented — Specification v16/v17 checked and rejected both a core-position rule and a
+ * word-count-margin rule for it and accepts the gap as a disclosed residual, not a defect.
+ *
+ * Returns a human-readable reason, or null when the candidate satisfies the shape requirement.
+ */
+const SENTENCE_TERMINAL = new Set(['.', '!', '?', '…']);
+const QUOTE_MARKS = new Set(['"', '“', '”', '„', '«', '»']);
+const LOCALIZED_NAME_BANNED_CHARS = new Set<string>([...SENTENCE_TERMINAL, ...QUOTE_MARKS]);
+
+function localizedNameShapeIssue(candidate: string, sourceName: string): string | null {
+  if (/[\n\r]/.test(candidate)) {
+    return 'must not contain a line break';
+  }
+
+  const trimmedCandidate = candidate.trim();
+  const trimmedSource = sourceName.trim();
+  const candidateTrailing = trimmedCandidate.slice(-1);
+  const sourceTrailing = trimmedSource.slice(-1);
+
+  if (LOCALIZED_NAME_BANNED_CHARS.has(candidateTrailing) && candidateTrailing !== sourceTrailing) {
+    return `must not end in "${candidateTrailing}" unless the source name's own name ends in it too`;
+  }
+
+  const candidateChars = Array.from(candidate);
+  const sourceChars = Array.from(sourceName);
+  for (const ch of LOCALIZED_NAME_BANNED_CHARS) {
+    const candidateCount = candidateChars.filter(c => c === ch).length;
+    const sourceCount = sourceChars.filter(c => c === ch).length;
+    if (candidateCount > sourceCount) {
+      return `carries "${ch}" more times than the source name does`;
+    }
+  }
+
+  return null;
+}
 
 /**
  * FINITE-VERB HEURISTIC — suffix-based, deliberately permissive.
@@ -109,10 +223,14 @@ function checkProductNameStuffing(
   if (!full) return issues;
 
   const short = productShort(full);
+  // The degenerate case (US-3.1 T7, FR-6): productShort(name) === name when there is no
+  // configuration code or packaging suffix to drop. The short(=full) form at a blessed position
+  // must never be flagged by the full-pattern branch below, even though it IS the full name.
+  const degenerate = short === full;
   const fullPattern = productNamePattern(full);
   // Only meaningful when the short form is genuinely shorter; otherwise the "full name"
   // check already covers it and counting twice would double-report the same heading.
-  const shortPattern = short && short !== full ? productNamePattern(short) : null;
+  const shortPattern = short && !degenerate ? productNamePattern(short) : null;
 
   const headings = Array.from(doc.querySelectorAll('h2, h3'));
   // extractBlocks() (block-repair.ts) already indexes h2/h3 among its addressable prose blocks —
@@ -128,6 +246,49 @@ function checkProductNameStuffing(
     const i = headings.indexOf(heading);
     return i >= 0 ? `block[${headingBlocks[i].index}]` : undefined;
   };
+
+  // ── Pass 1 (US-3.1 T7, plan D5): STRUCTURAL blessed-position identification ────────────────────
+  //
+  // Computed BEFORE the per-heading loop, and by STRUCTURE (position/shape), never by whether a
+  // heading happens to already match the short-name pattern. A content-derived "first named
+  // heading" silently reassigns the reserved slot to whichever heading comes next once the true
+  // first heading is generic — see heading-style.spec.ts's "widens the flagged set" test. The
+  // `named.includes(lastH2)` conjunct the old closing-identification carried is dropped: a
+  // structurally-last, question-shaped <h2> is blessed regardless of whether it happens to name the
+  // product.
+  const structuralH2s = headings.filter(h => h.tagName === 'H2' && !h.closest('section.specs'));
+  const blessedFirst = structuralH2s[0];
+  // The LAST structural <h2> — blessed only when IT is question-shaped, never "whichever question-
+  // shaped <h2> sorts last": a mid-document §3 heading that happens to be a question must not be
+  // mistaken for the §9 closing when the true last heading isn't one.
+  const lastStructural = structuralH2s.at(-1);
+  const closing =
+    lastStructural && (lastStructural.textContent ?? '').includes('?') ? lastStructural : undefined;
+  const blessed = new Set([blessedFirst, closing].filter(Boolean));
+
+  // ── FR-7 (US-3.1 T7, plan D5/D5(e)): heading-brand-core-missing — mandatory presence at the ────
+  //     CTA-heading position ONLY, narrowed from two blessed positions as of Specification v16.
+  //     doc.functionality[0].heading / the structural first heading is NEVER checked here — it
+  //     remains a blessed position for the FR-6 stuffing exemption above only. Uses the
+  //     Cyrillic-unit-aware matcher (D5(e)), never the shared productNamePattern the FR-6 loop
+  //     below still uses unmodified.
+  if (closing) {
+    const closingText = (closing.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (!hasProductCore(closingText, short, locale)) {
+      issues.push({
+        severity: 'error',
+        rule: 'heading-brand-core-missing',
+        detail:
+          `The §9 closing heading "${closingText}" omits the required brand core "${short}". Per ` +
+          `[HEADING FORM] the CTA heading must name the product using its short form.`,
+        context: `${locale} — heading form`,
+        path: blockPathFor(closing),
+      });
+    }
+  }
+
+  // ── Pass 2: the existing per-heading loop, unaffected in substance by FR-7's narrowing above ───
+  //     except for the degenerate blessed-position exemption on the full-pattern branch.
   const named: Element[] = [];
 
   for (const heading of headings) {
@@ -135,6 +296,9 @@ function checkProductNameStuffing(
     if (!text) continue;
 
     if (fullPattern.test(text)) {
+      const isBlessed = heading.tagName === 'H2' && blessed.has(heading);
+      // FR-6's degenerate exemption: the short(=full) form at a blessed position is never flagged.
+      if (isBlessed && degenerate) continue;
       issues.push({
         severity: 'warning',
         rule: 'heading-product-name-stuffing',
@@ -172,18 +336,6 @@ function checkProductNameStuffing(
   // passed. Harmless while the finding was unrepairable; not harmless now that repair-strategy.ts
   // can address it, because the ladder would rewrite a correct CTA and leave the real one alone.
   //
-  // IDENTIFYING §9 HERE IS A HEURISTIC, unlike the Doc sibling below, which reads `doc.cta` as a
-  // field. "Last <h2>" alone is not enough — in a document that never emitted a §9 that is
-  // «Технічні характеристики» (§7), and blessing it would license the full product name in exactly
-  // the heading the XGRIDS regression was about. So the candidate must be last AND question-shaped:
-  // the commercial closing is a mandated "why-buy" question in every Task C variant, and this file
-  // already uses the same `?` signal defensively in validateHeadingStyleDoc below.
-  const lastH2 = headings.filter(h => h.tagName === 'H2').at(-1);
-  const closing = lastH2 && named.includes(lastH2) && (lastH2.textContent ?? '').includes('?')
-    ? lastH2
-    : undefined;
-  const blessed = new Set([named[0], closing].filter(Boolean));
-
   // TWO is still a budget, not a pair of assigned seats: at two or fewer product-named <h2>s
   // nothing is flagged, exactly as before. Identity only decides WHO is at fault once a third
   // appears. Flagging a §4–§7 heading while the artifact is still within budget would rewrite
@@ -341,10 +493,70 @@ function checkProductNameStuffingDoc(
   if (!full) return issues;
 
   const short = productShort(full);
+  const degenerate = short === full;
   const fullPattern = productNamePattern(full);
-  const shortPattern = short && short !== full ? productNamePattern(short) : null;
+  const shortPattern = short && !degenerate ? productNamePattern(short) : null;
 
   const headings = collectHeadings(doc);
+
+  // ── Pass 1 (US-3.1 T7, plan D5): STRUCTURAL blessed-position identification, BY PATH — see the ──
+  //     HTML sibling's own note. A doc that omits §3 entirely (test/fixtures/simplified-docs.ts's
+  //     sparePartsDoc()) has NO blessedFirst at all, structurally, rather than falling back to
+  //     whichever heading happens to come first in collectHeadings()'s output.
+  const blessedFirst = headings.find(h => h.path === 'doc.functionality[0].heading');
+  // blessedClosing is doc.cta.heading UNCONDITIONALLY, regardless of schemaVersion — FR-6's own
+  // Doc-path CTA position is NOT retargeted by this task (a documented, non-blocking parallel gap,
+  // separate from FR-7's own schemaVersion-conditional retarget below).
+  const blessedClosing = headings.find(h => h.path === 'doc.cta.heading');
+  const blessed = new Set([blessedFirst, blessedClosing].filter(Boolean));
+
+  // ── FR-7 (US-3.1 T7, plan D5/D5(f)): heading-brand-core-missing — mandatory presence, CTA- ─────
+  //     heading position only, schemaVersion-conditional: doc.cta.heading for '3.0',
+  //     doc.localizedName for '4.0' — a render-description.ts-driven retarget (the v4/simplified-
+  //     template path discards doc.cta.heading unconditionally and assembles the shipped heading
+  //     from doc.localizedName instead). doc.functionality[0].heading is NEVER checked here, under
+  //     any schemaVersion.
+  if (doc.schemaVersion === '4.0') {
+    const candidate = doc.localizedName ?? '';
+    if (!hasProductCore(candidate, short, locale)) {
+      issues.push({
+        severity: 'error',
+        rule: 'heading-brand-core-missing',
+        detail: `The localized name "${candidate}" omits the required brand core "${short}".`,
+        context: `${locale} — heading form`,
+        path: 'doc.localizedName',
+      });
+    } else {
+      // Shape check only runs once presence has already passed — see localizedNameShapeIssue's
+      // own doc comment for why the two checks never double-report the same leaf.
+      const shapeReason = localizedNameShapeIssue(candidate, full);
+      if (shapeReason) {
+        issues.push({
+          severity: 'error',
+          rule: 'heading-brand-core-missing',
+          detail: `The localized name "${candidate}" ${shapeReason}.`,
+          context: `${locale} — heading form`,
+          path: 'doc.localizedName',
+        });
+      }
+    }
+  } else if (blessedClosing) {
+    const closingText = (blessedClosing.text ?? '').replace(/\s+/g, ' ').trim();
+    if (!hasProductCore(closingText, short, locale)) {
+      issues.push({
+        severity: 'error',
+        rule: 'heading-brand-core-missing',
+        detail:
+          `The heading at ${blessedClosing.path} ("${closingText}") omits the required brand ` +
+          `core "${short}".`,
+        context: `${locale} — heading form`,
+        path: blessedClosing.path,
+      });
+    }
+  }
+
+  // ── Pass 2: the existing per-heading loop, unaffected in substance by FR-7's narrowing above ───
+  //     except for the degenerate blessed-position exemption on the full-pattern branch.
   const named: DocHeading[] = [];
 
   for (const heading of headings) {
@@ -352,6 +564,9 @@ function checkProductNameStuffingDoc(
     if (!text) continue;
 
     if (fullPattern.test(text)) {
+      const isBlessed = heading.level === 'h2' && blessed.has(heading);
+      // FR-6's degenerate exemption: the short(=full) form at a blessed position is never flagged.
+      if (isBlessed && degenerate) continue;
       issues.push({
         severity: 'warning',
         rule: 'heading-product-name-stuffing',
@@ -386,9 +601,6 @@ function checkProductNameStuffingDoc(
   // Budget of two: the first §3 heading and the §9 commercial closing — see the HTML sibling's
   // note on why this is not `named.slice(2)`. Exact here rather than heuristic: collectHeadings()
   // stamps the CTA with its own field path, so no question-mark sniffing is needed.
-  const blessed = new Set(
-    [named[0], named.find(h => h.path === 'doc.cta.heading')].filter(Boolean),
-  );
   // At or under budget, nothing is flagged — see the HTML sibling's note.
   const flagged = named.length > 2 ? named.filter(h => !blessed.has(h)) : [];
 

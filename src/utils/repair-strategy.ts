@@ -91,8 +91,19 @@ function parsePath(path: string): Segment[] {
  * Descends one segment. `mutating` selects the contract: reads degrade to undefined on a missing
  * hop, writes throw — a silent no-op would let a failed repair look like a successful one.
  * Returns undefined only in the read case.
+ *
+ * `isLast` narrows the array-without-index check to intermediate hops only (US-3.1 T1, FR-10(a)).
+ * A DROPPED index on an INTERMEDIATE hop ("doc.functionality.heading", "seo_data.meta_title") is
+ * always a caller bug — the walk still has further hops to make and an array cannot supply the
+ * next one. At the FINAL hop, though, `doc-schema-issues.ts`'s Zod-path converter can now legally
+ * address a leaf whose current (invalid) value happens to be an array — e.g. a
+ * `z.union([NonEmpty, z.array(NonEmpty).min(1)])` field that failed its array branch with zero
+ * elements. That leaf IS field-scoped-repairable (the model can return a string or a short array),
+ * so the terminal position must not throw; it simply reads/overwrites the array value like any
+ * other leaf. No rule addresses a bare array leaf without this exception (the case the original,
+ * unconditional check was written to catch is exclusively an intermediate-hop mistake).
  */
-function step(container: unknown, seg: Segment, path: string, mutating: boolean): unknown {
+function step(container: unknown, seg: Segment, path: string, mutating: boolean, isLast: boolean): unknown {
   if (container === null || container === undefined) {
     if (!mutating) return undefined;
     throw new Error(`repair-strategy: cannot resolve "${seg.prop}" in path "${path}" — the containing value is missing`);
@@ -102,7 +113,8 @@ function step(container: unknown, seg: Segment, path: string, mutating: boolean)
   if (seg.index === undefined) {
     // The dropped-index caller bug — see the note above. Loud in BOTH directions: a read that
     // quietly returned undefined here is exactly the silent no-op this check exists to prevent.
-    if (Array.isArray(value)) {
+    // Not for the final hop — see this function's own doc comment.
+    if (Array.isArray(value) && !isLast) {
       throw new Error(`repair-strategy: unsupported path "${path}" ("${seg.prop}" is an array addressed without an index)`);
     }
     return value;
@@ -121,9 +133,10 @@ function step(container: unknown, seg: Segment, path: string, mutating: boolean)
 
 /** Reads the value a `path` addresses, or undefined when any hop is missing. */
 export function getAtPath(artifact: unknown, path: string): unknown {
+  const segments = parsePath(path);
   let current: unknown = artifact;
-  for (const seg of parsePath(path)) {
-    current = step(current, seg, path, false);
+  for (let i = 0; i < segments.length; i++) {
+    current = step(current, segments[i], path, false, i === segments.length - 1);
     if (current === undefined) return undefined;
   }
   return current;
@@ -144,7 +157,7 @@ export function setAtPath<T>(artifact: T, path: string, value: unknown): T {
     const seg = segments[depth];
     const last = depth === segments.length - 1;
     // Validates this hop and surfaces the same errors a read would skip past.
-    const child = step(container, seg, path, true);
+    const child = step(container, seg, path, true, last);
     // Named for the hop that is actually missing, not the one below it: with `doc.cta` absent,
     // "cannot resolve \"cta\"" points at the gap, while descending first would blame "heading".
     if (!last && (child === null || child === undefined)) {
@@ -167,9 +180,10 @@ export function setAtPath<T>(artifact: T, path: string, value: unknown): T {
 /**
  * Cuts `text` to `limit` characters on a word boundary.
  *
- * A trailing " | Suffix" segment is preserved when one exists and still fits — task-b.ts's own
- * meta_title example uses the "Product - spec | StoreName" convention, and blindly cutting the tail
- * would drop the store name, which is the part with the least redundancy.
+ * US-3.1 T9 (FR-8): no longer preserves a trailing " | Suffix" segment. AC-4's approved template
+ * removes the `| {site_name}` suffix entirely — a correctly-shaped `meta_title` never carries one
+ * to preserve, and preserving one here would actively reintroduce the exact suffix FR-8 exists to
+ * remove (see `meta-title-template-shape`, seo-metadata-shape.ts).
  *
  * This is a CORRECTNESS terminator, not a quality path: its output is deliberately worse prose than
  * a tier-1 rewrite, which is exactly why meta-title-length attempts tier 1 first. Returns null when
@@ -179,18 +193,6 @@ export function truncateAtWordBoundary(text: string, limit: number): string | nu
   const chars = Array.from(text.trim());
   if (chars.length <= limit) return text.trim();
 
-  const sepIndex = text.lastIndexOf(' | ');
-  if (sepIndex > 0) {
-    const suffix = text.slice(sepIndex); // includes " | "
-    const head = text.slice(0, sepIndex);
-    const headBudget = limit - Array.from(suffix).length;
-    // Only worth preserving when the suffix leaves room for a non-trivial head.
-    if (headBudget >= 8) {
-      const cutHead = cutOnWordBoundary(head, headBudget);
-      if (cutHead) return `${cutHead}${suffix}`;
-    }
-  }
-
   return cutOnWordBoundary(text, limit);
 }
 
@@ -198,6 +200,11 @@ function cutOnWordBoundary(text: string, limit: number): string | null {
   const chars = Array.from(text.trim());
   if (chars.length <= limit) return text.trim();
   const clipped = chars.slice(0, limit).join('');
+  // D17: the clip already ends on a word boundary in the original — its last word is complete.
+  if (/^[\s\-–—|,:;.]/.test(chars[limit])) {
+    const whole = clipped.replace(/[\s\-–—|,:;.]+$/, '').trim();
+    return whole.length > 0 ? whole : null;
+  }
   const lastSpace = clipped.lastIndexOf(' ');
   const cut = (lastSpace > 0 ? clipped.slice(0, lastSpace) : clipped).replace(/[\s\-–—|,:;.]+$/, '').trim();
   return cut.length > 0 ? cut : null;
@@ -237,6 +244,48 @@ export function slugify(text: string): string | null {
 
 export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<string, RepairStrategy>([
   [
+    'doc-schema',
+    {
+      // US-3.1 T1 (FR-10, AC-6, plan D7). Field-scoped only — a schema-level failure needing more
+      // than one field's value corrected has no addressable single leaf, and never reaches this
+      // ladder at all: doc-schema-issues.ts's toDocPath() only assigns a `path` when the finding is
+      // one addressable leaf (see its own doc comment), so an un-addressable finding already falls
+      // straight through resolveLadder's `!issue.path` branch to `['full-regen']` before this entry
+      // is even consulted. No deterministic tier: there is no mechanical way to invent a missing
+      // required string.
+      ladder: ['field-scoped'],
+      fieldInstruction: (current, issue) => [
+        'Rewrite this field so it satisfies the schema requirement below. Return ONLY the corrected',
+        'value as plain text — no quotes, no HTML tags, no commentary, no JSON.',
+        '',
+        // issue.detail already names the exact Zod validation failure — never re-derived here.
+        issue.detail,
+        '',
+        `Current value: "${current}"`,
+      ].join('\n'),
+    },
+  ],
+  [
+    'slug-name-designator-lost',
+    {
+      // US-3.1 T11 (FR-11, AC-6, plan D8). Field-scoped only — this rule is addressed at a single
+      // localized name field (slugs[i].name, slug-validator.ts:75,88) and a rewrite of that one
+      // field is exactly what resolves it; no deterministic tier exists because reconstructing the
+      // lost invariant core mechanically is not possible from the corrupted string alone.
+      ladder: ['field-scoped'],
+      fieldInstruction: (current, issue) => [
+        'Rewrite this localized product name so it satisfies the constraint below. Return ONLY',
+        'the corrected name as plain text — no quotes, no HTML tags, no commentary.',
+        '',
+        // issue.detail already names the exact invariant core that must survive — never re-derived
+        // here, so the instruction always matches whatever this run's product actually is.
+        issue.detail,
+        '',
+        `Current name: "${current}"`,
+      ].join('\n'),
+    },
+  ],
+  [
     'meta-title-length',
     {
       // Tier 1 FIRST: meta-title wording carries SEO value. Tier 0 is the guaranteed terminator.
@@ -254,7 +303,9 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
         return [
           'Shorten this meta_title so it fits the character limit.',
           `Current length: ${actual} characters. Limit: ${limit}. Remove at least ${surplus}.`,
-          'Keep the product name and the store suffix after " | " if one is present.',
+          'If this title ends in a single mark character not part of the product name (added so ' +
+            "the title is never identical to the page's H1 value), keep that mark while " +
+            'shortening — never drop it, and never let the result become identical to the H1 value.',
           'Return ONLY the corrected title as plain text — no quotes, no commentary, no JSON.',
           '',
           current,
@@ -340,6 +391,42 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
       ].join('\n'),
     },
   ],
+  [
+    'heading-brand-core-missing',
+    {
+      // US-3.1 T7 (FR-7, plan D5). Mirrors heading-product-name-stuffing's own ladder shape above
+      // — the same dual Doc/HTML-shape handling its sibling/inverse rule on these same two
+      // positions already needs (see that entry's own comment for the full field-scoped/
+      // block-scoped no-op mechanism).
+      //
+      // ONE rule identity, its fieldInstruction dispatched by issue.path — not two rule identities.
+      // A `doc.localizedName`-path issue gets bare-name wording mirroring
+      // slug-name-designator-lost's own, since a heading-oriented instruction applied to this leaf
+      // would make the shape requirement (heading-style.ts's localizedNameShapeIssue) fail on that
+      // rung near-systematically. The one remaining genuine heading leaf (`doc.cta.heading`) and
+      // the HTML closing-heading path (`block[n]`) both keep heading-product-name-stuffing's
+      // existing heading-oriented wording, unchanged.
+      ladder: ['field-scoped', 'block-scoped'],
+      fieldInstruction: (current, issue) =>
+        issue.path === 'doc.localizedName'
+          ? [
+              'Rewrite this localized product name so it satisfies the constraint below.',
+              'Return ONLY the corrected name as plain text — no quotes, no HTML tags, no commentary.',
+              '',
+              issue.detail,
+              '',
+              `Current name: "${current}"`,
+            ].join('\n')
+          : [
+              'Rewrite this heading so it satisfies the constraint below. Return ONLY the corrected',
+              'heading text as plain text — no quotes, no HTML tags, no commentary.',
+              '',
+              issue.detail,
+              '',
+              `Current heading: "${current}"`,
+            ].join('\n'),
+    },
+  ],
 ]);
 
 /**
@@ -350,6 +437,20 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
  * behaves exactly as it did before the ladder existed — reported, never repaired — which keeps the
  * un-migrated rules in output-validator.ts unaffected.
  */
+/**
+ * Rules no repair instrument can ever resolve within one run — US-3.1 T4 (FR-2(b), plan D3).
+ *
+ * `specs-grounding-disabled` is exactly that: it fires when the specs-translation call behind §7
+ * grounding could not be completed (even after retry — see `groundingSpecs()`,
+ * content-orchestrator.service.ts), and no rewrite of any FIELD changes whether that call
+ * succeeded. Spending a full-document regeneration on a run whose only error-severity issue is
+ * this one is a disproportionate cost for a condition regeneration cannot fix — `repair-gate.ts`'s
+ * main loop excludes a `NON_REGENERABLE_RULES` member from its "anything left worth another
+ * attempt" check, while still counting it toward `finalIssues`/`toArtifactReport`'s status so the
+ * failure is never silently reported as `'clean'`.
+ */
+export const NON_REGENERABLE_RULES: ReadonlySet<string> = new Set(['specs-grounding-disabled']);
+
 export function isLadderCandidate(issue: ValidationIssue): boolean {
   if (issue.severity === 'error') return true;
   return !!issue.path && REPAIR_STRATEGIES.has(issue.rule);

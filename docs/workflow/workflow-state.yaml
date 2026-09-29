@@ -2,13 +2,17 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: US-2.2
-current_stage: ARCHIVED
-status: ARCHIVED
-started_at: 2026-09-21T13:30:40Z
-updated_at: 2026-09-21T19:13:17Z
+story: US-3.1
+current_stage: PR_CREATION
+status: IN_PROGRESS
 pending_human_gate: null
-stage_attempts: {}
-track: prompt
+started_at: 2026-09-22T12:05:00Z
+updated_at: 2026-09-29T17:22:18Z
+stage_attempts:
+  SPECIFICATION: 0
+  ARCHITECTURE_PLANNING: 0
+  TEST_WRITING: 0
+  IMPLEMENTATION: 0
+track: angular
 blockers: []
-note: "Archived. Delivery summary: docs/knowledge/US-2.2-delivery-summary.md. Open follow-ups: CTA/FAQ numbering, live Spare parts check, F1 golden diff check."
+note: "so-pr-preparer PASS: pr_summary v2 DRAFT (supersedes v1) after T13-T18 and docs were committed (HEAD 3e76515). Reached PR_CREATION: stop condition - needs its own explicit human instruction (AGENTS.md section 10)."

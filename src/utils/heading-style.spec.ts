@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { validateHeadingStyle, validateHeadingStyleDoc } from './heading-style';
 import type { ProductDescriptionDoc } from '../domain/description-doc';
+import { productShort } from '../prompt-core/product-name-core';
 
 const C3D = 'Center 3D Print';
 const h2 = (t: string) => `<h2>${t}</h2>`;
@@ -266,7 +267,16 @@ describe('validateHeadingStyle — product-name stuffing', () => {
 
   it('tolerates the unit-spacing normalization the artifact applies to the name', () => {
     // "20W" in the input renders as "20 W" after fixNumberFormatting; the pattern must still match.
-    const issues = validateHeadingStyle(h2('Поради щодо експлуатації Ortur H20 20 W'), 'uk-UA', C3D, 'Ortur H20 20W');
+    // A generic, non-product-named heading is prepended so the tested heading is structurally NOT the
+    // blessed first §3 heading — FR-6's Pass 1/Pass 2 (heading-style.ts) exempt the degenerate
+    // short(=full) form AT a blessed position (see the dedicated FR-6/FR-7 describe block below), and
+    // this test's own intent is digit/letter-spacing tolerance in the pattern match, not blessed-position
+    // semantics. Without this, the single <h2> would be both structurally first and the only heading,
+    // making it blessed and CORRECTLY exempt under the fixed behaviour — so the flagged-count
+    // assertion below would fail for a reason unrelated to this test's own intent, not because the
+    // pattern match itself stopped tolerating the spacing normalization.
+    const html = h2('Загальний вступ') + h2('Поради щодо експлуатації Ortur H20 20 W');
+    const issues = validateHeadingStyle(html, 'uk-UA', C3D, 'Ortur H20 20W');
     expect(issues.filter(i => i.rule === 'heading-product-name-stuffing')).toHaveLength(1);
   });
 });
@@ -538,5 +548,530 @@ describe('validateHeadingStyleDoc — Doc-reading sibling', () => {
     it('does not throw on a doc with no functionality entries at all', () => {
       expect(() => validateHeadingStyleDoc(baseDoc([]), 'uk-UA', C3D, 'Ortur H20')).not.toThrow();
     });
+  });
+});
+
+/**
+ * US-3.1 T7 (AC-2, AC-3; FR-6, FR-7; plan D5).
+ *
+ * `productShort("Makera Cyclone Dust Collector")` returns the whole string unchanged (no
+ * configuration code or packaging suffix to drop — the QA sample's own case, confirmed against
+ * `product-name-core.ts`), so `short === full` here throughout. Today's `fullPattern` branch fires
+ * on this name unconditionally, with no position check at all — the uk-UA false positive AC-2
+ * exists to fix.
+ */
+describe('validateHeadingStyle — FR-6/FR-7: blessed-position exemption and brand-core presence', () => {
+  const NAME = 'Makera Cyclone Dust Collector';
+  const STORE = 'EXPERT3D';
+  const stuffing = (html: string) =>
+    validateHeadingStyle(html, 'uk-UA', STORE, NAME).filter(i => i.rule === 'heading-product-name-stuffing');
+  const brandCoreMissing = (html: string) =>
+    validateHeadingStyle(html, 'uk-UA', STORE, NAME).filter(i => i.rule === 'heading-brand-core-missing');
+
+  it('fixture premise: productShort(NAME) === NAME for this fixture (the degenerate case)', () => {
+    expect(productShort(NAME)).toBe(NAME);
+  });
+
+  /** FR-6 — the exact uk-UA regression: the short(=full) form at both blessed positions must never
+   *  be flagged by the full-pattern branch, even though it IS the full/invariant name. */
+  it('does not flag the short(=full) form at the first §3 heading or the §9 closing', () => {
+    const html =
+      h2(`Як працює ${NAME}`) +
+      h2('Механізми безпеки та захисту') +
+      h2('Технічні характеристики') +
+      h2(`Чому варто купити ${NAME} у ${STORE}?`);
+    expect(stuffing(html)).toEqual([]);
+  });
+
+  /**
+   * FR-6's own disjointness note: a heading carrying exactly productShort() satisfies both FR-6
+   * and FR-7 and triggers neither. Paired with a positive control in the same test (corrupting the
+   * CTA on the second half) — a rule that has never been registered would pass the first half
+   * vacuously; the second half is what makes this test red until the rule exists.
+   */
+  it('does not flag heading-brand-core-missing either, for the same correct headings — but DOES fire once the CTA is corrupted', () => {
+    const correct =
+      h2(`Як працює ${NAME}`) +
+      h2('Технічні характеристики') +
+      h2(`Чому варто купити ${NAME} у ${STORE}?`);
+    expect(brandCoreMissing(correct)).toEqual([]);
+
+    const corrupted =
+      h2(`Як працює ${NAME}`) +
+      h2('Технічні характеристики') +
+      h2('Чому варто купити Cyclone Dust Collector у EXPERT3D?'); // "Makera" dropped
+    expect(brandCoreMissing(corrupted)).toHaveLength(1);
+  });
+
+  /**
+   * FR-7 — mandatory presence. The actual QA-report evidence
+   * (`expert3d_makera_cyclone_dust_collector_2026-09-21_2147.zip`'s `description_pt-PT.html`) drops
+   * "Makera" from the CTA heading entirely, keeping only "Cyclone" — reachable now that the
+   * `named.includes(lastH2)` conjunct is dropped from blessed-closing identification.
+   */
+  it('flags heading-brand-core-missing when the CTA drops the brand core entirely', () => {
+    const html =
+      h2(`Як працює ${NAME}`) +
+      h2('Технічні характеристики') +
+      h2('Чому варто купити Cyclone Dust Collector у EXPERT3D?'); // "Makera" dropped
+    const issues = brandCoreMissing(html);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('error');
+  });
+
+  it('flags heading-brand-core-missing for a corrupted/partial variant (brand present, rest dropped)', () => {
+    const html =
+      h2(`Як працює ${NAME}`) +
+      h2('Технічні характеристики') +
+      h2('Чому варто купити Makera у EXPERT3D?'); // brand survives, category noun does not
+    expect(brandCoreMissing(html)).toHaveLength(1);
+  });
+
+  /** FR-6's other half: a blessed-position heading carrying MORE than the short form (here, the
+   *  same string plus the packaging/config word "Standard Package") is still flagged — the
+   *  exemption is scoped to the EXACT productShort() form, not "close enough". */
+  it('still flags a blessed-position heading that carries more than the short form', () => {
+    const withSuffix = `${NAME} Standard Package`; // productShort() drops "Standard Package"
+    const html =
+      h2(`Огляд ${withSuffix}`) +
+      h2('Технічні характеристики') +
+      h2(`Чому варто купити ${withSuffix} у ${STORE}?`);
+    expect(validateHeadingStyle(html, 'uk-UA', STORE, withSuffix)
+      .filter(i => i.rule === 'heading-product-name-stuffing')).toHaveLength(2);
+  });
+
+  /**
+   * heading-brand-core-missing is scoped to the CTA-heading position only, as of Specification
+   * v16 — a non-blessed §4/§5 heading is unaffected by this new check regardless of what it names.
+   * Paired with a positive control (the CTA itself omitting the core) in the same test, so the
+   * negative half cannot pass vacuously against a rule that does not exist yet.
+   */
+  it('does not fire heading-brand-core-missing on a non-blessed heading — but DOES fire when the CTA itself is missing the core', () => {
+    const nonBlessedOmitsCore =
+      h2(`Як працює ${NAME}`) +
+      h2('Сфери застосування') + // §4/§5-shaped, non-blessed, names no product at all
+      h2('Технічні характеристики') +
+      h2(`Чому варто купити ${NAME} у ${STORE}?`);
+    expect(brandCoreMissing(nonBlessedOmitsCore)).toEqual([]);
+
+    const ctaOmitsCore =
+      h2(`Як працює ${NAME}`) +
+      h2('Сфери застосування') +
+      h2('Технічні характеристики') +
+      h2('Чому варто купити Cyclone Dust Collector у EXPERT3D?'); // "Makera" dropped
+    expect(brandCoreMissing(ctaOmitsCore)).toHaveLength(1);
+  });
+
+  /**
+   * FR-7, v16 narrowing: the first §3 heading itself is no longer read by this check at all. When
+   * BOTH the first heading and the CTA omit the brand core, exactly one finding is still raised —
+   * proving the first heading is never independently checked (two omissions would otherwise raise
+   * two findings), while the CTA position still is.
+   */
+  it('does not check the first §3 heading for brand-core presence — only the CTA heading is checked (HTML path)', () => {
+    const html =
+      h2('Механізми та компоненти') + // first §3 heading — omits the brand core entirely
+      h2('Технічні характеристики') +
+      h2('Чому варто купити Cyclone Dust Collector у EXPERT3D?'); // CTA omits it too — "Makera" dropped
+    expect(brandCoreMissing(html)).toHaveLength(1);
+  });
+
+  /**
+   * D5's named, INTENTIONAL widening (AGENTS.md §7.7): once blessed-position identification is
+   * structural (the literal first <h2> and a genuinely question-shaped closing), a generic first
+   * heading no longer "steals" the first reserved slot for whichever named heading happens to come
+   * next — so a document with a generic first heading, no §9 closing, and 3 product-named headings
+   * now flags ALL THREE, not two. No existing fixture combined a non-product-named first heading
+   * with 3+ product-named headings (Implementation Plan D5), so this is new coverage, not a flipped
+   * expectation.
+   */
+  /**
+   * Uses a SHORT !== FULL product name deliberately — with the degenerate NAME above, every
+   * fullPattern match is unconditionally flagged today regardless of position (that IS the AC-2
+   * bug), which would make this case pass today for the wrong reason. `XGRIDS L2 Pro 32/300
+   * Standard Package` exercises the `shortPattern`/`named[]` machinery D5 actually restructures.
+   */
+  it('widens the flagged set when the true first heading is generic and there is no §9 closing', () => {
+    const XGRIDS = 'XGRIDS L2 Pro 32/300 Standard Package'; // productShort() -> "XGRIDS L2 Pro"
+    const html =
+      h2('Загальний вступний розділ') +                       // structurally first — NOT product-named
+      h2('Яке ПЗ підтримує XGRIDS L2 Pro') +                   // named #1
+      h2('Сфери застосування XGRIDS L2 Pro') +                 // named #2
+      h2('Технічні характеристики') +
+      h2('Стандартна комплектація XGRIDS L2 Pro');             // named #3 — no "?", so no §9 closing exists
+    const issues = validateHeadingStyle(html, 'uk-UA', STORE, XGRIDS)
+      .filter(i => i.rule === 'heading-product-name-stuffing');
+    // OLD (content-derived) blessedFirst = named[0] ("Яке ПЗ підтримує…", though structurally the
+    // document's SECOND <h2>) — flags only 2. NEW (structural) blessedFirst = the literal first
+    // <h2> ("Загальний вступний розділ"), which is not in `named` at all, so it exempts nothing —
+    // all three named headings are flagged.
+    expect(issues).toHaveLength(3);
+  });
+});
+
+describe('validateHeadingStyleDoc — FR-6/FR-7: blessed-position exemption and brand-core presence', () => {
+  const NAME = 'Makera Cyclone Dust Collector';
+
+  function baseDoc(functionalityHeading: string, ctaHeading: string): ProductDescriptionDoc {
+    return {
+      schemaVersion: '3.0',
+      locale: 'uk-UA',
+      localizedName: NAME,
+      hook: 'Hook.',
+      killerSpecs: [
+        { label: 'A', value: '1', why: 'why a' },
+        { label: 'B', value: '2', why: 'why b' },
+        { label: 'C', value: '3', why: 'why c' },
+      ],
+      keyBenefits: [],
+      functionality: [{ heading: functionalityHeading, blocks: [] }],
+      applications: { heading: 'Застосування', items: [] },
+      specs: { heading: 'Технічні характеристики', categories: [] },
+      cta: { heading: ctaHeading, text: 'Buy.' },
+      figures: [],
+      videos: [],
+    };
+  }
+
+  const brandCoreMissing = (doc: ProductDescriptionDoc) =>
+    validateHeadingStyleDoc(doc, 'uk-UA', 'EXPERT3D', NAME).filter(i => i.rule === 'heading-brand-core-missing');
+  const stuffing = (doc: ProductDescriptionDoc) =>
+    validateHeadingStyleDoc(doc, 'uk-UA', 'EXPERT3D', NAME).filter(i => i.rule === 'heading-product-name-stuffing');
+
+  it('does not flag the degenerate short(=full) form at either blessed position (Doc path)', () => {
+    const doc = baseDoc(`Як працює ${NAME}`, `Чому варто купити ${NAME} у EXPERT3D?`);
+    expect(stuffing(doc)).toEqual([]);
+    expect(brandCoreMissing(doc)).toEqual([]);
+  });
+
+  it('flags heading-brand-core-missing, addressed by JSON path, when the CTA omits the brand core', () => {
+    const doc = baseDoc(`Як працює ${NAME}`, 'Чому варто купити Cyclone Dust Collector у EXPERT3D?');
+    const issues = brandCoreMissing(doc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].path).toBe('doc.cta.heading');
+    expect(issues[0].severity).toBe('error');
+  });
+
+  /**
+   * FR-7, v16 narrowing: `doc.functionality[0].heading` is no longer part of this check's
+   * mandatory-presence test for either `schemaVersion` — only the CTA-heading position
+   * (`doc.cta.heading` for `schemaVersion: '3.0'`) is checked. When BOTH the first heading and the
+   * CTA omit the brand core, exactly one finding is still raised, at `doc.cta.heading` only — never
+   * at `doc.functionality[0].heading` — proving the first heading is never independently checked
+   * (two omissions would otherwise raise two findings).
+   */
+  it('raises exactly one finding, at doc.cta.heading, when BOTH the first heading and the CTA omit the brand core', () => {
+    const doc = baseDoc('Як працює Cyclone Dust Collector', 'Чому варто купити Cyclone Dust Collector у EXPERT3D?');
+    const issues = brandCoreMissing(doc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].path).toBe('doc.cta.heading');
+  });
+
+  /**
+   * Doc-path mirror of the HTML widening test above, and specifically the shape Implementation
+   * Plan's own "Implementation-fidelity note" (D5) flags as unsafe under the reverted T7 attempt:
+   * a document that omits §3 (`functionality`) ENTIRELY — `test/fixtures/simplified-docs.ts`'s
+   * `sparePartsDoc()` is the confirmed real example. The stash's own `blessedFirst = headings.length
+   * > 1 ? headings[0] : undefined` shorthand would incorrectly bless whichever heading happens to
+   * come first in `collectHeadings()`'s output (here, `applications.heading`) — Pass 1's correct,
+   * path-based rule (blessed only at `path === 'doc.functionality[0].heading'`) has NO first-blessed
+   * position at all for such a doc, so every product-named heading below must be flagged, not just
+   * the excess over budget-of-two.
+   */
+  it('flags ALL product-named headings on a doc with no functionality at all (no blessedFirst can exist)', () => {
+    const XGRIDS = 'XGRIDS L2 Pro 32/300 Standard Package'; // productShort() -> "XGRIDS L2 Pro"
+    const doc: ProductDescriptionDoc = {
+      schemaVersion: '3.0',
+      locale: 'uk-UA',
+      localizedName: XGRIDS,
+      hook: 'Hook.',
+      killerSpecs: [
+        { label: 'A', value: '1', why: 'why a' },
+        { label: 'B', value: '2', why: 'why b' },
+        { label: 'C', value: '3', why: 'why c' },
+      ],
+      keyBenefits: [],
+      functionality: [], // §3 omitted entirely — the sparePartsDoc()-shaped case
+      applications: { heading: 'Яке ПЗ підтримує XGRIDS L2 Pro', items: [] },
+      compatibility: { heading: 'Сфери застосування XGRIDS L2 Pro', blocks: [] },
+      packageContents: { heading: 'Стандартна комплектація XGRIDS L2 Pro', items: [] },
+      specs: { heading: 'Технічні характеристики', categories: [] },
+      cta: { heading: 'Дякуємо за увагу', text: 'Buy.' }, // no §9-shaped product mention at all
+      figures: [],
+      videos: [],
+    };
+    const issues = validateHeadingStyleDoc(doc, 'uk-UA', 'EXPERT3D', XGRIDS)
+      .filter(i => i.rule === 'heading-product-name-stuffing');
+    expect(issues.map(i => i.path).sort()).toEqual([
+      'doc.applications.heading', 'doc.compatibility.heading', 'doc.packageContents.heading',
+    ]);
+  });
+});
+
+/**
+ * US-3.1 T7 (AC-3; FR-7, D5(f)) — the `schemaVersion`-conditional CTA-heading leaf.
+ *
+ * `heading-brand-core-missing`'s Doc-path form checks `doc.cta.heading` for `schemaVersion: '3.0'`
+ * and `doc.localizedName` for `'4.0'` — a `render-description.ts`-driven retarget (`isV4` discards
+ * `doc.cta.heading` unconditionally on the v4/simplified-template path and assembles the shipped
+ * heading from `doc.localizedName` instead). Proven symmetrically: swapping which field carries the
+ * correct value flips which field is checked.
+ */
+describe('validateHeadingStyleDoc — FR-7: the doc.localizedName leaf, schemaVersion-conditional retarget', () => {
+  const NAME = 'Makera Cyclone Dust Collector';
+
+  function baseDoc(schemaVersion: '3.0' | '4.0', localizedName: string, ctaHeading: string): ProductDescriptionDoc {
+    return {
+      schemaVersion,
+      locale: 'uk-UA',
+      localizedName,
+      hook: 'Hook.',
+      killerSpecs: [
+        { label: 'A', value: '1', why: 'why a' },
+        { label: 'B', value: '2', why: 'why b' },
+        { label: 'C', value: '3', why: 'why c' },
+      ],
+      keyBenefits: [],
+      functionality: [{ heading: `Як працює ${NAME}`, blocks: [] }],
+      applications: { heading: 'Застосування', items: [] },
+      specs: { heading: 'Технічні характеристики', categories: [] },
+      cta: { heading: ctaHeading, text: 'Buy.' },
+      figures: [],
+      videos: [],
+    };
+  }
+
+  const brandCoreMissing = (doc: ProductDescriptionDoc) =>
+    validateHeadingStyleDoc(doc, 'uk-UA', 'EXPERT3D', NAME).filter(i => i.rule === 'heading-brand-core-missing');
+
+  /**
+   * Both directions asserted in one test: a wrong doc.cta.heading is flagged even when
+   * doc.localizedName happens to be correct (proving doc.localizedName is NOT read on this
+   * schemaVersion), and a correct doc.cta.heading passes even when doc.localizedName is wrong
+   * (proving doc.localizedName is never independently checked either).
+   */
+  it('schemaVersion 3.0: only doc.cta.heading is checked', () => {
+    const wrongCta = baseDoc('3.0', NAME, 'Чому варто купити Cyclone Dust Collector у EXPERT3D?');
+    const wrongCtaIssues = brandCoreMissing(wrongCta);
+    expect(wrongCtaIssues).toHaveLength(1);
+    expect(wrongCtaIssues[0].path).toBe('doc.cta.heading');
+
+    const correctCta = baseDoc('3.0', 'unrelated value — not read for schemaVersion 3.0', `Чому варто купити ${NAME} у EXPERT3D?`);
+    expect(brandCoreMissing(correctCta)).toEqual([]);
+  });
+
+  it('schemaVersion 4.0: only doc.localizedName is checked', () => {
+    const wrongName = baseDoc('4.0', 'Cyclone Dust Collector', `Чому варто купити ${NAME} у EXPERT3D?`);
+    const wrongNameIssues = brandCoreMissing(wrongName);
+    expect(wrongNameIssues).toHaveLength(1);
+    expect(wrongNameIssues[0].path).toBe('doc.localizedName');
+
+    const correctName = baseDoc('4.0', NAME, 'this field is never rendered for schemaVersion 4.0');
+    expect(brandCoreMissing(correctName)).toEqual([]);
+  });
+});
+
+/**
+ * US-3.1 T7 (AC-3; FR-7, D5(e)) — the Cyrillic-unit-aware presence matcher.
+ *
+ * `productNamePattern()`'s own digit-flexible regex has no notion of script: a Latin unit
+ * abbreviation immediately after a digit in the raw product name ("W", "kg", …) is never treated as
+ * interchangeable with the Cyrillic spelling `unit-cyrillize.ts` deterministically produces for
+ * every uk-UA/ru-UA generation ("Вт", "кг", …). `heading-brand-core-missing`'s presence test needs a
+ * SEPARATE, dedicated matcher for this — confirmed table-driven (not "W"-specific) with a second,
+ * independent unit pair. Each "must not fire" case is paired with a positive control using the same
+ * fixture shape, so a rule that simply never fires cannot pass these vacuously.
+ */
+describe('validateHeadingStyleDoc — FR-7: the Cyrillic-unit-aware presence matcher (D5(e))', () => {
+  function baseDoc(localizedName: string, ctaHeading: string): ProductDescriptionDoc {
+    return {
+      schemaVersion: '3.0',
+      locale: 'uk-UA',
+      localizedName,
+      hook: 'Hook.',
+      killerSpecs: [
+        { label: 'A', value: '1', why: 'why a' },
+        { label: 'B', value: '2', why: 'why b' },
+        { label: 'C', value: '3', why: 'why c' },
+      ],
+      keyBenefits: [],
+      functionality: [{ heading: 'Принцип роботи та модульна конструкція', blocks: [] }], // real corpus string — never names the product; out of FR-7's scope entirely
+      applications: { heading: 'Застосування', items: [] },
+      specs: { heading: 'Технічні характеристики Ortur H20 20 Вт', categories: [] }, // real corpus §7 heading — non-blessed
+      cta: { heading: ctaHeading, text: 'Buy.' },
+      figures: [],
+      videos: [],
+    };
+  }
+
+  function v4Doc(localizedName: string): ProductDescriptionDoc {
+    return {
+      schemaVersion: '4.0',
+      locale: 'uk-UA',
+      localizedName,
+      hook: 'Hook.',
+      cta: { heading: 'ignored on this schemaVersion', text: 'Buy.' },
+      figures: [],
+      videos: [],
+    } as unknown as ProductDescriptionDoc;
+  }
+
+  const brandCoreMissing = (doc: ProductDescriptionDoc, name: string) =>
+    validateHeadingStyleDoc(doc, 'uk-UA', 'EXPERT3D', name).filter(i => i.rule === 'heading-brand-core-missing');
+  const stuffing = (doc: ProductDescriptionDoc, name: string) =>
+    validateHeadingStyleDoc(doc, 'uk-UA', 'EXPERT3D', name).filter(i => i.rule === 'heading-product-name-stuffing');
+
+  it('fixture premise: productShort is the degenerate short=full form for all three unit fixtures below', () => {
+    expect(productShort('Ortur H20 20 W')).toBe('Ortur H20 20 W');
+    expect(productShort('EcoLine X5 5kg')).toBe('EcoLine X5 5kg');
+    expect(productShort('xTool D1 Pro 5.5W')).toBe('xTool D1 Pro 5.5W');
+  });
+
+  /**
+   * Both directions in one test: the real corpus CTA heading (W → Вт, unit-cyrillized) must not be
+   * flagged as missing the brand core; the same CTA position, with the brand+model dropped
+   * entirely (unit alone means nothing), must fire.
+   */
+  it('recognizes the Cyrillic-unit form (W → Вт, the real corpus pair)', () => {
+    const passDoc = baseDoc('Ortur H20 20 Вт', 'Чому купити Ortur H20 20 Вт в EXPERT3D?'); // verbatim corpus string
+    expect(brandCoreMissing(passDoc, 'Ortur H20 20 W')).toEqual([]);
+
+    const failDoc = baseDoc('Ortur H20 20 Вт', 'Чому купити в EXPERT3D?'); // brand+model dropped
+    expect(brandCoreMissing(failDoc, 'Ortur H20 20 W')).toHaveLength(1);
+  });
+
+  it('is table-driven, not "W"-specific: a second unit pair (kg → кг) is recognized the same way', () => {
+    const passDoc = baseDoc('EcoLine X5 5 кг', 'Чому купити EcoLine X5 5 кг в EXPERT3D?');
+    expect(brandCoreMissing(passDoc, 'EcoLine X5 5kg')).toEqual([]);
+
+    const failDoc = baseDoc('EcoLine X5 5 кг', 'Чому купити в EXPERT3D?');
+    expect(brandCoreMissing(failDoc, 'EcoLine X5 5kg')).toHaveLength(1);
+  });
+
+  /**
+   * The matcher serves the doc.localizedName leaf too (schemaVersion 4.0), not only doc.cta.heading
+   * — the same underlying exposure (UNIT_LOCALIZATION_RULES applies to "repeated Product Names"
+   * generally, Specification Background v11 point 4). Failing sibling is Specification's own
+   * worked example: three added trailing periods push the occurrence count to 4 against the
+   * source's 1.
+   */
+  it('recognizes the Cyrillic-unit form on the doc.localizedName leaf too (schemaVersion 4.0, xTool D1 Pro 5.5W → 5.5 Вт)', () => {
+    const passDoc = v4Doc('xTool D1 Pro 5.5 Вт');
+    expect(brandCoreMissing(passDoc, 'xTool D1 Pro 5.5W')).toEqual([]);
+
+    const failDoc = v4Doc('xTool D1 Pro 5.5 Вт...'); // occurrence-count: 4 periods > source's 1
+    expect(brandCoreMissing(failDoc, 'xTool D1 Pro 5.5W')).toHaveLength(1);
+  });
+
+  /**
+   * D5(e)'s own explicit design boundary: the Cyrillic-unit-aware matcher serves ONLY
+   * heading-brand-core-missing's presence test — it is never applied to the shared
+   * productNamePattern()/shortPattern/fullPattern heading-product-name-stuffing (FR-6) still uses
+   * unmodified. Widening the shared matcher would newly trip FR-6 against this exact, real,
+   * already-accepted non-blessed §7 heading. **This test is a declared [pin]: it is already green
+   * today (the shared matcher was never touched) and must stay green after T7 — it is not
+   * red-to-green evidence for any AC.**
+   */
+  it('[pin] does NOT newly trip heading-product-name-stuffing on the corpus\'s own cyrillized-unit §7 heading (non-blessed)', () => {
+    const doc = baseDoc('Ortur H20 20 Вт', `Чому купити Ortur H20 20 Вт в EXPERT3D?`);
+    const issues = stuffing(doc, 'Ortur H20 20 W');
+    expect(issues.map(i => i.path)).not.toContain('doc.specs.heading');
+  });
+});
+
+/**
+ * US-3.1 T7 (AC-3; FR-7) — the `doc.localizedName` leaf's own shape requirement: a bare name, no
+ * sentence-terminal punctuation or quotation marks it did not already carry, no line break — subject
+ * to an occurrence-count exemption plus a trailing-position condition, both computed against the raw
+ * `opts.input.name`. Only cases where the candidate's PRESENCE (a contiguous, literal match of the
+ * short form) is unambiguous are used here — see the Story's own test-generation report for why the
+ * interior-relocated-punctuation worked example is not exercised this way.
+ */
+describe('validateHeadingStyleDoc — FR-7: the doc.localizedName shape requirement (banned characters, occurrence-count, trailing-position)', () => {
+  function v4Doc(localizedName: string): ProductDescriptionDoc {
+    return {
+      schemaVersion: '4.0',
+      locale: 'uk-UA',
+      localizedName,
+      hook: 'Hook.',
+      cta: { heading: 'ignored on this schemaVersion', text: 'Buy.' },
+      figures: [],
+      videos: [],
+    } as unknown as ProductDescriptionDoc;
+  }
+
+  const brandCoreMissing = (localizedName: string, inputName: string) =>
+    validateHeadingStyleDoc(v4Doc(localizedName), 'uk-UA', 'EXPERT3D', inputName)
+      .filter(i => i.rule === 'heading-brand-core-missing');
+
+  it('fixture premise: productShort() for both source names used below', () => {
+    expect(productShort('Bambu Lab Hardened Steel Nozzle 0.4 mm')).toBe('Bambu Lab Hardened Steel');
+    expect(productShort('Filament Bambu Lab PETG 1.75 mm')).toBe('Bambu Lab PETG 1.75');
+  });
+
+  it('passes: the bare short form, zero banned characters; fails when an unjustified period is appended (occurrence-count)', () => {
+    expect(brandCoreMissing('Bambu Lab PETG 1.75', 'Filament Bambu Lab PETG 1.75 mm')).toEqual([]);
+    // candidate's period count (2) exceeds the source's (1) — fails on occurrence-count too.
+    expect(brandCoreMissing('Bambu Lab PETG 1.75.', 'Filament Bambu Lab PETG 1.75 mm')).toHaveLength(1);
+  });
+
+  it('passes: the full unframed name (interior period matches the source\'s own count); fails when the bare short form alone gains a trailing period (trailing-position, v15)', () => {
+    const name = 'Bambu Lab Hardened Steel Nozzle 0.4 mm';
+    expect(brandCoreMissing(name, name)).toEqual([]);
+    // Trailing-position check (v15): the source name's own trailing character is "m", not ".";
+    // occurrence-count alone (1 <= 1) would wrongly exempt this candidate.
+    expect(brandCoreMissing('Bambu Lab Hardened Steel.', name)).toHaveLength(1);
+  });
+
+  it('fails: quotation marks the source name never carried', () => {
+    expect(brandCoreMissing('"Bambu Lab Hardened Steel"', 'Bambu Lab Hardened Steel Nozzle 0.4 mm')).toHaveLength(1);
+  });
+
+  it('fails: an embedded line break, unconditionally — never subject to the occurrence-count exemption', () => {
+    expect(brandCoreMissing('Bambu Lab Hardened Steel\nNozzle', 'Bambu Lab Hardened Steel Nozzle 0.4 mm')).toHaveLength(1);
+  });
+
+  it('passes: a bare comma is excluded from both banned classes outright — the disclosed residual; fails once a period is also added to the same candidate', () => {
+    // "Bambu Lab PETG 1.75, matte finish" is CTA/framing-adjacent prose this Story's mechanical
+    // check does NOT reject (Specification's own "Accepted residual, new in v16") — asserted here as
+    // the check's actual, disclosed behaviour, not as endorsement of the framing itself.
+    expect(brandCoreMissing('Bambu Lab PETG 1.75, matte finish', 'Filament Bambu Lab PETG 1.75 mm')).toEqual([]);
+    // Same candidate, one trailing period added: occurrence count (2) exceeds the source's (1),
+    // and the trailing character ('.') does not match the source's own ('m') — fails on both.
+    expect(brandCoreMissing('Bambu Lab PETG 1.75, matte finish.', 'Filament Bambu Lab PETG 1.75 mm')).toHaveLength(1);
+  });
+});
+
+/**
+ * US-3.1 T7 (AC-3; plan Risk 19) — FR-6 and FR-7 stay disjoint at the CTA-heading position: the
+ * virtual doc.localizedName entry FR-7 constructs is never added to FR-6's own `named[]` array and
+ * never counts toward its budget-of-two. This fixture is built to trip BOTH rules at once, not just
+ * one: `doc.cta.heading` carries the FULL name at the blessed CTA position (FR-6 — still flagged,
+ * carries more than the short form; this fires both before and after T7, since the shared
+ * `fullPattern` branch is unaffected by this Story), while `doc.localizedName` drops the brand
+ * entirely (FR-7). Each rule's own findings are asserted independently and exhaustively (`toEqual`,
+ * not `toContain`), so neither rule's path can leak into the other's result.
+ */
+describe('validateHeadingStyleDoc — FR-6/FR-7 disjointness at the CTA-heading position (schemaVersion 4.0)', () => {
+  const FULL = 'XGRIDS L2 Pro 32/300 Standard Package'; // productShort() -> "XGRIDS L2 Pro"
+
+  it('a doc.cta.heading carrying the full name (FR-6) and a doc.localizedName missing the brand (FR-7) are reported independently, with no cross-contamination', () => {
+    const doc: ProductDescriptionDoc = {
+      schemaVersion: '4.0',
+      locale: 'uk-UA',
+      localizedName: 'L2 Pro', // brand "XGRIDS" dropped — trips FR-7
+      hook: 'Hook.',
+      functionality: [{ heading: 'Як працює XGRIDS L2 Pro', blocks: [] }], // blessed, exact short form — FR-6 exempt
+      cta: { heading: `Чому купити ${FULL} в EXPERT3D?`, text: 'Buy.' }, // full form at the blessed CTA position — still flagged by FR-6
+      figures: [],
+      videos: [],
+    } as unknown as ProductDescriptionDoc;
+
+    const issues = validateHeadingStyleDoc(doc, 'uk-UA', 'EXPERT3D', FULL);
+    const stuffingIssues = issues.filter(i => i.rule === 'heading-product-name-stuffing');
+    const brandCoreIssues = issues.filter(i => i.rule === 'heading-brand-core-missing');
+
+    expect(stuffingIssues.map(i => i.path)).toEqual(['doc.cta.heading']);
+    expect(brandCoreIssues.map(i => i.path)).toEqual(['doc.localizedName']);
   });
 });

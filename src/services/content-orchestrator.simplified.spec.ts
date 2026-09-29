@@ -349,12 +349,29 @@ describe('R6 (human resolution) — FAQ artifact: data-driven, all store languag
   });
 
   it('the FAQ request does not depend on the template: same input, same FAQ prompt (simplified vs Full)', async () => {
-    const simp = harness(EXPERT3D, [sparePartsDoc()]);
+    // "Same input" means the same input.name reaches the FAQ prompt for both calls below (its
+    // interpolated text is what the equality assertions actually check) — so both harnesses share one
+    // `name`. EXPERT3D_CORPUS_DOC is the real, hand-verified Ortur H20 corpus fixture (schemaVersion
+    // 3.0): this Story does not regenerate an accepted corpus artifact, so its own cta.heading ("Чому
+    // купити Ortur H20 20 Вт в EXPERT3D?") is what `name` must match, as every other EXPERT3D_CORPUS_DOC
+    // use in this file already does (e.g. the TEMPLATE_RUNS "Full description" case above) — otherwise
+    // heading-brand-core-missing's CTA-heading presence check (FR-7) fires, spends the run's one
+    // field-scoped repair attempt, the harness's default generateText mock has no case for that
+    // repair call and falls through to STUB_HTML (an HTML string), which then fails Zod's plain-text
+    // check on re-validation and exhausts maxRepairs: 0 — the run throws instead of completing, so it
+    // never reaches the FAQ step this test actually exercises. sparePartsDoc() (schemaVersion 4.0) is a synthetic,
+    // hand-authored fixture, not a corpus artifact, so its own localizedName leaf (what FR-7 checks for
+    // a 4.0 Doc) is overridden here to the same shared name, keeping the "same input" premise real
+    // instead of the two harnesses silently diverging on product name.
+    const NAME_FOR_TEST = 'Ortur H20 20 W';
+    const simp = harness(EXPERT3D, [{ ...sparePartsDoc(), localizedName: NAME_FOR_TEST }]);
     simp.orchestrator.maxRepairs.set(0);
-    await simp.orchestrator.generate(input({ templateId: 'spare-parts', supplementalContent: 'Faq material.' }));
+    await simp.orchestrator.generate(input({ templateId: 'spare-parts', name: NAME_FOR_TEST, supplementalContent: 'Faq material.' }));
     const full = harness(EXPERT3D, [EXPERT3D_CORPUS_DOC]);
     full.orchestrator.maxRepairs.set(0);
-    await full.orchestrator.generate(input({ supplementalContent: 'Faq material.' }));
+    await full.orchestrator.generate(input({
+      name: NAME_FOR_TEST, brandFolder: 'ortur', modelFolder: 'h20/h20-20w', supplementalContent: 'Faq material.',
+    }));
     const p = (h: Harness) => h.textCalls(l => l === 'FAQ (uk-UA)')[0].payload;
     expect(p(simp).systemBlocks).toEqual(p(full).systemBlocks);
     expect(p(simp).userContent).toBe(p(full).userContent);
