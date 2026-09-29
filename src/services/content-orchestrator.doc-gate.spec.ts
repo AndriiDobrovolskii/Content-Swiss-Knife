@@ -113,6 +113,20 @@ function emptyRequiredStringDoc() {
   return { ...makeDoc([{ label: 'Вага', value: '500 г' }]), cta: { heading: 'Чому варто купити Test Product у EXPERT3D?', text: '' } };
 }
 
+/**
+ * US-3.1 T13/T14 (FR-10(b), AC-6, plan D13/D14). A Doc rejected on a genuinely MISSING key — the
+ * `cta.heading` property is absent entirely, not merely `''` like `emptyRequiredStringDoc()`'s own
+ * `cta.text`. `docSchemaIssues()` converts Zod's "Required" failure at `['cta','heading']` into
+ * `path: 'doc.cta.heading'` regardless of whether the leaf is missing or merely wrong-typed
+ * (`toDocPath` does not distinguish the two) — this fixture is what actually exercises `getAtPath`
+ * returning `undefined` because the key itself does not exist, the specific gap `applyTier`'s own
+ * `typeof value !== 'string'` gate condition (pre-T13) treats identically to "nothing to repair."
+ */
+function missingCtaHeadingDoc() {
+  const { cta: _cta, ...rest } = makeDoc([{ label: 'Вага', value: '500 г' }]);
+  return { ...rest, cta: { text: 'Buy it.' } } as unknown as ReturnType<typeof makeDoc>;
+}
+
 function bootOrchestrator(mockLlm: {
   generateJson: ReturnType<typeof vi.fn>;
   generateText: ReturnType<typeof vi.fn>;
@@ -797,5 +811,73 @@ describe('runDocGate — FR-10: an addressable doc-schema finding is repaired fi
     expect(result.finalIssues.filter((i: { rule: string }) => i.rule === 'doc-schema')).toEqual([]);
     // It DID need the full-regen this time — the field-scoped rung alone could not resolve it.
     expect(result.repairsUsed).toBeGreaterThanOrEqual(1);
+  });
+});
+
+/**
+ * US-3.1 T13 (FR-10(b), AC-6, plan D13). The real-shaped regression: a genuinely MISSING
+ * `cta.heading` key (not `emptyRequiredStringDoc()`'s present-but-empty `cta.text`) is repaired
+ * field-scoped, without a full-document regeneration.
+ */
+describe('runDocGate — T13 (FR-10(b), AC-6): a genuinely missing cta.heading key is repaired field-scoped, not silently skipped', () => {
+  it('repairs a missing (not merely empty) cta.heading via the field-scoped rung, spending zero full regenerations', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson
+      .mockResolvedValueOnce(missingCtaHeadingDoc())
+      // Fallback for TODAY's pre-T13 behaviour (the missing key is silently skipped, so the ladder
+      // falls through to a real full regeneration) — without this, a second call hits
+      // makeMockLlm()'s own "unstubbed generateJson call" throw and masks the intended red reason.
+      .mockResolvedValueOnce(makeDoc([{ label: 'Вага', value: '500 г' }]));
+    mockLlm.generateText.mockResolvedValueOnce('Чому варто купити Test Product у EXPERT3D?');
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asDocGate(orchestrator).runDocGate(baseGateOpts({ groundingSpecs: GROUNDING_SOURCE, maxRepairs: 2 }));
+
+    // TODAY (pre-T13): getAtPath(next, 'doc.cta.heading') returns undefined, typeof undefined !==
+    // 'string' is true, so applyTier advances-and-skips without ever calling repairField — the
+    // ladder falls through to the second, full-regeneration generateJson call instead. Red below:
+    // repairsUsed would be >= 1, not 0.
+    expect(result.repairsUsed).toBe(0);
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    expect(result.artifact.length).toBeGreaterThan(0);
+    expect(result.finalIssues.filter((i: { rule: string }) => i.rule === 'doc-schema')).toEqual([]);
+  });
+});
+
+/**
+ * US-3.1 T14 (FR-10, FR-11, AC-6, plan D14). The real-shaped oscillation `pipeline_status` v8
+ * diagnosed: a fresh full-regeneration attempt whose own field-scoped repair fixes one addressable
+ * finding (`doc-schema`) but, because the repaired value itself doesn't satisfy a DIFFERENT check
+ * (`heading-brand-core-missing`), appears to introduce the other — and today only a further,
+ * non-monotonic full regeneration could ever attempt the second finding at all. T14 gives the SAME
+ * attempt's own ladder pass a second rung: once `doc-schema` resolves and the artifact is
+ * re-validated, the newly-surfaced `heading-brand-core-missing` finding gets its own field-scoped
+ * shot in the SAME pass, converging both within one attempt rather than requiring two discarded
+ * regenerations.
+ */
+describe('runDocGate — T14 (FR-10, FR-11, AC-6): a fresh regeneration attempt converges doc-schema and heading-brand-core-missing within its own ladder pass', () => {
+  it('a fresh full-regeneration whose field-scoped repair fixes doc-schema but introduces heading-brand-core-missing converges within the same attempt', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson
+      .mockResolvedValueOnce(invalidSchemaDoc())      // attempt 0 — unaddressable, forces a full regen
+      .mockResolvedValueOnce(missingCtaHeadingDoc());  // attempt 1 (the fresh regen) — cta.heading genuinely missing
+    mockLlm.generateText
+      // First field-scoped attempt: fixes doc-schema (a non-empty heading), but does not name the
+      // product — introduces heading-brand-core-missing on the SAME attempt.
+      .mockResolvedValueOnce('Дізнайтеся більше про переваги.')
+      // Second field-scoped attempt, same ladder pass: names the product — resolves it.
+      .mockResolvedValueOnce('Чому варто купити Test Product у EXPERT3D?');
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    const result = await asDocGate(orchestrator).runDocGate(baseGateOpts({ groundingSpecs: GROUNDING_SOURCE, maxRepairs: 1 }));
+
+    // Exactly two generateJson calls (attempt 0's own unaddressable defect, plus the ONE fresh
+    // regen) — the convergence happens inside that one attempt's own ladder pass, not via a
+    // SECOND, discarded regeneration. TODAY (pre-T14): the main loop's cleanup never attempts
+    // either finding (neither has a deterministic rung), so heading-brand-core-missing survives
+    // unresolved and finalIssues is red below.
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(2);
+    expect(result.repairsUsed).toBe(1);
+    expect(result.finalIssues.filter((i: { rule: string }) => i.rule === 'doc-schema' || i.rule === 'heading-brand-core-missing')).toEqual([]);
   });
 });

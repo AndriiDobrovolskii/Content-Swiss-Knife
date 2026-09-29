@@ -299,3 +299,118 @@ describe('generateSeoMetadata() — field-scoped repair of meta-title-length (Fi
     expect(orchestrator.repairReport()[0].finalIssues.some(i => i.rule === 'meta-title-length')).toBe(false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-3.1 T15 (FR-8(b), AC-4; Implementation Plan D15). The real es-ES (66), pt-PT (60) and uk-UA
+// (69) h1 strings from the 2026-09-28 regeneration (docs/catalog/US-3.1-pipeline-status.md v8,
+// lines 74-76) — never invented, never re-derived — run through canonicalizeSeoData() via
+// generateSeoMetadata(), must produce a genuine, word-boundary-safe PREFIX of h1 plus a single "·"
+// mark, never the interior-phrase deletion the real artifact actually shipped
+// (`"Toallitas de limpieza óptica Formlabs x100·"` — 25 characters of h1's own interior,
+// "Optical Cleaning Cloths ", silently missing).
+//
+// generateJson uses `mockResolvedValue` (not `Once`), deliberately: TODAY (pre-T15),
+// `meta-title-template-shape` has no registered REPAIR_STRATEGIES entry, so a fixture whose model
+// output fails it falls straight through to full-document regeneration — an ordered, count-limited
+// mock queue would exhaust and mask the real red reason under an unrelated "unstubbed
+// generateJson call" throw (exactly the trap `content-orchestrator.repair-field-wiring.spec.ts`'s
+// own Slugs test above already documents avoiding). `mockResolvedValue` keeps every regeneration
+// attempt returning the SAME (still-defective, pre-T15) data, so the run degrades to an honest,
+// capped assertion mismatch instead of a crash.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('generateSeoMetadata() — T15 (FR-8(b), AC-4): the h1Len >= 54 regime produces a genuine h1 prefix, never an interior-edited model guess', () => {
+  const REAL_H1 = {
+    'es-ES': 'Toallitas de limpieza óptica Formlabs Optical Cleaning Cloths x100', // 66 code points
+    'pt-PT': 'Panos de limpeza ótica Formlabs Optical Cleaning Cloths x100',       // 60 code points
+    'uk-UA': 'Серветки для очищення оптики Formlabs Optical Cleaning Cloths 100 шт.', // 69 code points
+  } as const;
+
+  // The real, SHIPPED (defective) titles from the 2026-09-28 artifact (pipeline_status v8, lines
+  // 74-76) — each silently deletes an interior phrase of its own h1, then appends a "·" mark.
+  // Used only as fixture DATA (what the model produced), never as an expected value — and, because
+  // none of the three starts with its own h1 verbatim, each correctly trips today's (pre-T15)
+  // meta-title-template-shape check the same way, forcing the same unregistered-strategy full-regen
+  // path rather than accidentally satisfying the OLD shape rule by chance.
+  const SHIPPED_DEFECTIVE_META_TITLE = {
+    'es-ES': 'Toallitas de limpieza óptica Formlabs x100·',
+    'pt-PT': 'Panos de limpeza ótica Formlabs Cleaning Cloths x100·',
+    'uk-UA': 'Серветки Formlabs Optical Cleaning Cloths 100 шт.·',
+  } as const;
+
+  it('fixture premise: every real h1 in the regime is confirmed h1Len >= 54, matching pipeline_status v8\'s own recorded counts', () => {
+    expect(Array.from(REAL_H1['es-ES']).length).toBe(66);
+    expect(Array.from(REAL_H1['pt-PT']).length).toBe(60);
+    expect(Array.from(REAL_H1['uk-UA']).length).toBe(69);
+  });
+
+  function expectGenuineH1PrefixShape(h1: string, metaTitle: string): void {
+    expect(metaTitle.endsWith('·')).toBe(true);
+    expect(Array.from(metaTitle).length).toBeLessThanOrEqual(50);
+    const core = metaTitle.slice(0, -1);
+    expect(core.length).toBeGreaterThan(0);
+    expect(h1.startsWith(core)).toBe(true); // a genuine, unmodified PREFIX of the SHIPPED h1 — never an interior edit or deletion
+    expect(metaTitle).not.toBe(h1); // FR-9 (meta-title-h1-identical) still holds
+  }
+
+  it('es-ES: produces a genuine, word-boundary-safe prefix of h1 — never the interior-phrase deletion the real artifact shipped', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValue({
+      site_name: 'EXPERT3D',
+      seo_data: [{
+        language: 'es-ES', h1: REAL_H1['es-ES'], meta_title: SHIPPED_DEFECTIVE_META_TITLE['es-ES'],
+        meta_description: 'Descubre las toallitas de limpieza Formlabs, información completa ➔',
+      }],
+    });
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    await orchestrator.generateSeoMetadata({ ...INPUT, name: 'Formlabs Optical Cleaning Cloths x100' });
+
+    // TODAY (pre-T15): meta-title-template-shape fires (the shipped title does not start with h1
+    // verbatim) and, having no registered repair strategy, falls straight through to full-document
+    // regeneration on every one of maxRepairs's own attempts — generateJson is called more than
+    // once, and the shipped meta_title never becomes a genuine h1 prefix (it is still, at best, the
+    // same defective model guess `mockResolvedValue` keeps returning).
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    const shipped = orchestrator.content().seoData!.seo_data[0];
+    expect(shipped.meta_title).not.toBe(SHIPPED_DEFECTIVE_META_TITLE['es-ES']); // the shipped defect must not survive
+    expectGenuineH1PrefixShape(shipped.h1, shipped.meta_title);
+  });
+
+  it('pt-PT: produces a genuine, word-boundary-safe prefix of h1 — never the interior-phrase deletion the real artifact shipped', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValue({
+      site_name: 'EXPERT3D',
+      seo_data: [{
+        language: 'pt-PT', h1: REAL_H1['pt-PT'], meta_title: SHIPPED_DEFECTIVE_META_TITLE['pt-PT'],
+        meta_description: 'Descubra os panos de limpeza Formlabs, informação completa ➔',
+      }],
+    });
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    await orchestrator.generateSeoMetadata({ ...INPUT, name: 'Formlabs Optical Cleaning Cloths x100' });
+
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    const shipped = orchestrator.content().seoData!.seo_data[0];
+    expect(shipped.meta_title).not.toBe(SHIPPED_DEFECTIVE_META_TITLE['pt-PT']);
+    expectGenuineH1PrefixShape(shipped.h1, shipped.meta_title);
+  });
+
+  it('uk-UA: produces a genuine, word-boundary-safe prefix of h1 — never the interior-phrase deletion the real artifact shipped', async () => {
+    const mockLlm = makeMockLlm();
+    mockLlm.generateJson.mockResolvedValue({
+      site_name: 'EXPERT3D',
+      seo_data: [{
+        language: 'uk-UA', h1: REAL_H1['uk-UA'], meta_title: SHIPPED_DEFECTIVE_META_TITLE['uk-UA'],
+        meta_description: 'Дізнайтеся більше про серветки Formlabs для оптики ➔',
+      }],
+    });
+    const orchestrator = bootOrchestrator(mockLlm);
+
+    await orchestrator.generateSeoMetadata({ ...INPUT, name: 'Formlabs Optical Cleaning Cloths x100' });
+
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    const shipped = orchestrator.content().seoData!.seo_data[0];
+    expect(shipped.meta_title).not.toBe(SHIPPED_DEFECTIVE_META_TITLE['uk-UA']);
+    expectGenuineH1PrefixShape(shipped.h1, shipped.meta_title);
+  });
+});
