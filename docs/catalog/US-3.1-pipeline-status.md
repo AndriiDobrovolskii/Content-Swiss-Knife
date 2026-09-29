@@ -1,34 +1,48 @@
 ---
 artifact: pipeline_status
 story: US-3.1
-version: 11
+version: 12
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-09-27T10:00:00Z
-updated_at: 2026-09-30T09:15:00Z
-supersedes: docs/catalog/US-3.1-pipeline-status.md#10
+updated_at: 2026-09-29T18:00:00Z
+supersedes: docs/catalog/US-3.1-pipeline-status.md#11
 inputs_consumed:
   - key: story
     version: 1
   - key: specification
-    version: 19
+    version: 20
   - key: open_decisions
     version: 4
   - key: impact_analysis
-    version: 5
+    version: 6
   - key: implementation_plan
-    version: 11
+    version: 13
   - key: task_breakdown
-    version: 10
+    version: 11
   - key: plan_review
-    version: 9
+    version: 10
   - key: test_strategy
-    version: 6
+    version: 7
   - key: ac_test_matrix
-    version: 6
+    version: 7
 open_decisions_blocking: false
 ---
+
+# Pipeline Status — US-3.1 (v12, T16/T17/T18 landed in working tree, uncommitted)
+
+**Verdict: `PASS`.** T16 (D16), T17 (D17), T18 (D18) implemented; no test, fixture or FROZEN file touched; no commit made (per instruction).
+
+| Task | File | Change |
+|---|---|---|
+| T16 | `src/utils/repair-gate.ts` | module-private `looksLikeJsonEnvelope`; field-scoped branch retries once with a corrective suffix on a JSON-shaped result, discards on a second (rung still advances once) |
+| T17 | `src/utils/repair-strategy.ts` | `cutOnWordBoundary` early return when `chars[limit]` is in `[\s\-–—|,:;.]` |
+| T18 | `src/domain/description-doc.schema.ts` | lenient `cta.heading` (`nullish().transform(v => v ?? '')`) + dedicated `.superRefine` re-applying `NonEmpty` at `['cta','heading']` unless `'4.0'` with empty heading |
+
+Evidence: the 16 target tests now pass; `npm run test:logic` 149 files / 3945 passed, 3 skipped, 0 failed (includes the ~20 `cta.heading` specs and T12's pinned boundary block unmodified); `npm run test:components` 23 passed; `npm run lint` (tsc --noEmit) clean. `test:coverage`, build and arch-guard are QUALITY_GATE's. The user's uncommitted T13-T15 spec edits were left untouched.
+
+Historical record (v11) follows.
 
 # Pipeline Status — US-3.1 (v11, post-`HUMAN_PR_APPROVAL`-rejection QA triage, corrected — no code written)
 

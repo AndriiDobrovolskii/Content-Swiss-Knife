@@ -2,13 +2,18 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: US-2.2
-current_stage: ARCHIVED
-status: ARCHIVED
-started_at: 2026-09-21T13:30:40Z
-updated_at: 2026-09-21T19:13:17Z
+story: US-3.1
+current_stage: PR_PREPARATION
+status: BLOCKED
 pending_human_gate: null
-stage_attempts: {}
-track: prompt
-blockers: []
-note: "Archived. Delivery summary: docs/knowledge/US-2.2-delivery-summary.md. Open follow-ups: CTA/FAQ numbering, live Spare parts check, F1 golden diff check."
+started_at: 2026-09-22T12:05:00Z
+updated_at: 2026-09-29T17:14:10Z
+stage_attempts:
+  SPECIFICATION: 0
+  ARCHITECTURE_PLANNING: 0
+  TEST_WRITING: 0
+  IMPLEMENTATION: 0
+track: angular
+blockers:
+  - "PR_PREPARATION: so-pr-preparer CHANGES_REQUIRED (loop_back key changes_required -> IMPLEMENTATION) for commit hygiene only: T13-T18 code/spec changes and US-3.1 docs artifacts are uncommitted (HEAD 54e5fa6). Not an implementation defect - needs a human to commit (or instruct commits), so the loop-back was not applied automatically."
+note: "so-pr-preparer CHANGES_REQUIRED: pr_summary v1 DRAFT drafted; blocked on uncommitted work (AGENTS.md 7.8/13). Held at PR_PREPARATION for a human decision; loop-back to IMPLEMENTATION deliberately not applied."
