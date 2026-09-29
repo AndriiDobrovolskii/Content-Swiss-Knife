@@ -2,7 +2,7 @@
 artifact: specification_review
 story: US-3.1
 version: 19
-status: APPROVED
+status: ARCHIVED
 owner: so-spec-reviewer
 created_at: 2026-09-29T22:00:00Z
 updated_at: 2026-09-29T22:00:00Z

@@ -2,7 +2,7 @@
 artifact: implementation_report
 story: US-3.1
 version: 5
-status: APPROVED
+status: ARCHIVED
 owner: so-gate-enforcer
 stage: QUALITY_GATE
 created_at: 2026-09-29T12:00:00Z

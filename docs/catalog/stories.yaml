@@ -23,5 +23,5 @@ stories:
     slug: qa-gate-brand-core-fixes
     track: angular
     path: docs/stories/US-3.1-qa-gate-brand-core-fixes.md
-    state: IN_PROGRESS
+    state: ARCHIVED
     created_at: 2026-09-22T00:00:00Z

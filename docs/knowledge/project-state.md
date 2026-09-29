@@ -23,3 +23,17 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Delivered by PR #127, merge commit `5749f42`. Summary: `docs/knowledge/US-2.2-delivery-summary.md`.
 - Open items: CTA/FAQ numbering conflict (Story §8/§9 vs frozen master prompt §9/§8); live Spare parts check
   and F1 golden diff check not recorded as done.
+
+## US-3.1 — repair gate blocks ungrounded content; brand-core fixes (archived 2026-09-29T17:33:11Z)
+- Grounding failures retry and then hard-block; there is no silent fail-open fallback.
+- The repair ladder is reachable in production: missing fields are dispatched to their strategy, and each
+  fresh regeneration attempt gets its own field/block ladder pass. Field-scoped repair answers that come
+  back JSON-shaped are rejected with one bounded retry (`src/utils/repair-gate.ts`).
+- `meta_title` follows one template without a site-name suffix; a deterministic long-h1 fallback and a
+  word-boundary-safe clip keep it valid (`repair-strategy.ts`, `seo-metadata-shape`).
+- `cta.heading` non-empty is `schemaVersion`-conditional (required for 3.0, not 4.0) in
+  `description-doc.schema.ts`.
+- Frozen `task-a.ts`, `master-system-prompt.ts`, `task-b.ts` changed (OD-3/OD-7/OD-9), checksums re-baselined.
+- Delivered by PR #129, merge commit `209627b`. Summary: `docs/knowledge/US-3.1-delivery-summary.md`.
+- Open items: OD-10 (de-DE h1-identity band partly closed); §9 approvals for T8/T10 not durably recorded;
+  FR-14(a) missing-key wording unclarified in the Specification.

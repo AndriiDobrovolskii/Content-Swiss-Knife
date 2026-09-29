@@ -2,7 +2,7 @@
 artifact: task_breakdown
 story: US-3.1
 version: 11
-status: APPROVED
+status: ARCHIVED
 owner: so-implementation-planner
 created_at: 2026-09-22T16:00:00Z
 updated_at: 2026-09-30T15:00:00Z

@@ -5,7 +5,7 @@ slug: qa-gate-brand-core-fixes
 title: Make the repair gate actually block ungrounded content and stop the brand-core/heading-form rule conflict
 track: angular
 version: 1
-status: DRAFT
+status: ARCHIVED
 owner: so-story-writer
 created_at: 2026-09-22T00:00:00Z
 updated_at: 2026-09-22T12:00:00Z
