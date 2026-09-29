@@ -153,9 +153,14 @@ Targeted re-run of the four files carrying this round's 25 tests
 `src/services/content-orchestrator.repair-field-wiring.spec.ts`) plus the two adjacent files whose
 existing coverage this round's code changes could plausibly touch
 (`src/utils/seo-metadata-shape.spec.ts`, `src/utils/repair-strategy.spec.ts`): **200/200 passed**,
-including the 21 tests that started red and the 4 pin/fixture-premise tests that were already green.
+including the 21 tests `so-test-writer` reported red for documented reasons and the 4 pin/fixture-
+premise tests already green on write.
 
-No test file, fixture, or coverage setting was modified. No FROZEN file was touched.
+No test file, fixture, or coverage setting was modified. No FROZEN file was touched. The four spec
+files above are `so-test-writer`'s own uncommitted working-tree state at dispatch time — consistent
+with this Story's own precedent (`df9ec36`/T1 and every other `T`-task commit touches production
+files only, never a `.spec.ts`), `so-builder` does not commit test files; they remain for
+`TEST_WRITING`/the orchestrator to commit.
 
 ## 3. What was NOT touched, and why
 
@@ -173,14 +178,45 @@ No test file, fixture, or coverage setting was modified. No FROZEN file was touc
 
 ## 4. Commits this round
 
-1. `feat(US-3.1 T13/T14): repair-gate ladder retries missing fields and fresh regen attempts
-   (FR-10/FR-11, plan D13/D14)` — `src/utils/repair-gate.ts`.
-2. `feat(US-3.1 T15): deterministic long-h1 meta_title fallback (FR-8(b)/AC-4, plan D15)` —
-   `src/utils/seo-metadata-shape.ts`, `src/services/content-orchestrator.service.ts`.
+1. `a16ddbd` — `feat(US-3.1 T13/T14): repair-gate ladder retries missing fields and fresh regen
+   attempts (FR-10/FR-11, plan D13/D14)` — `src/utils/repair-gate.ts`. Carries both `T13` and `T14`
+   in one commit, not two: `T13`'s gate-condition fix lives entirely inside the `applyTier` closure
+   `T14`'s own refactor (`runLadderPass`) relocates, so the two edits are not separable into two
+   independently-working commits without one temporarily breaking the other's own tests.
+2. `4a7f806` — `feat(US-3.1 T15): deterministic long-h1 meta_title fallback (FR-8(b)/AC-4, plan
+   D15)` — `src/utils/seo-metadata-shape.ts`, `src/services/content-orchestrator.service.ts`.
+3. `6b7c71d` — `docs(US-3.1): record IMPLEMENTATION pipeline status v9` (this artifact, its own
+   first revision this round).
 
-(Exact hashes recorded by `git log` on `feat/US-3.1-qa-gate-brand-core-fixes` once both land.)
+## 5. Plan deviations this round — flagged for `IMPLEMENTATION_VERIFICATION`/`so-planner` ratification, not silently absorbed
 
-## 5. Non-blocking findings, carried forward, not this round's to act on
+Two changes to `src/utils/repair-gate.ts` were made beyond what `implementation_plan` v11 §3.3/§3.4
+literally specifies, both found while making the plan's own named tests pass, not invented
+speculatively — see §1.1/§1.2 above for the full derivation:
+
+1. **The `cursorKey` change (`path` alone → `path::rule`).** Plan §3.4 states `T13`/`T14` converge
+   because "`setAtPath` touches only its own leaf and the two cannot regress each other" — true for
+   genuinely independent leaves, but `content-orchestrator.doc-gate.spec.ts`'s own `T14` acceptance
+   fixture (`missingCtaHeadingDoc()`) puts `doc-schema` and `heading-brand-core-missing` on the
+   **identical** leaf (`doc.cta.heading`) in sequence, which a path-only cursor cannot resolve. The
+   plan's own §3.4/§3.5 "independent-leaf" premise did not hold for this real fixture; the fix
+   widens the cursor's key rather than accepting the test as unwinnable.
+2. **The `typeof next !== 'string'` guard on `missing`.** Plan §3.3's own pseudocode (`const missing
+   = value === undefined`) does not distinguish a genuinely absent JSON leaf from a `"block[i]"`
+   path evaluated against a raw HTML string, where `getAtPath` also returns `undefined` but for an
+   unrelated reason (the addressing grammar does not apply to that artifact shape at all). Applied
+   literally, the plan's own pseudocode regresses an existing, already-passing test. The guard keeps
+   `T13`'s dispatch scoped to its actual case.
+
+Both changes are confined to `src/utils/repair-gate.ts` (already `D13`/`D14`'s own authorized
+surface, non-`FROZEN`), require no new authorization, and the full gate (§2) is green with them in
+place — recorded here as `PASS`-with-disclosure per this Story's own convention (Implementation Plan
+`D15`'s own §2.3 disclosure of a similarly-derived deviation from the Owner's literal suggestion),
+not routed as `CHANGES_REQUIRED` back to `ARCHITECTURE_PLANNING`, since neither changes any public
+contract, any FROZEN file, or any decision the plan actually made — only a mechanism the plan
+under-specified for this one real collision case.
+
+## 6. Non-blocking findings, carried forward or newly observed, not this round's to act on
 
 - Implementation Plan §2.6 Residual 2 (wasted first-pass model generation for `h1 ≥ 54` entries) —
   unchanged, accepted, not requested here.
@@ -189,3 +225,22 @@ No test file, fixture, or coverage setting was modified. No FROZEN file was touc
   artifact's own framing, not a defect.
 - `FR-13(b)`/`D11`'s own de-DE 52–53 `h1`-core-length residual (`OD-10`) — unaffected by `D15`,
   outside this Story's closed scope, per Implementation Plan §2.7.
+- **New this round: the unchanged "Final block pass" (repair-gate.ts, gated on `best.attempt > 0`)
+  can now follow an in-loop `runLadderPass` that already spent both of a rule's block-scoped rungs
+  on that same regenerated attempt's output** (e.g. `sentence-too-long`'s two-rung block ladder). A
+  block-scoped finding still open after the in-loop pass reaches the Final block pass for a further
+  attempt — a third block-scoped call for that rule, where the code's own comment states two is the
+  cap ("a pass here would be a third attempt past the two-rung cap"). Implementation Plan §3.4 ("The
+  existing 'Final block pass' ... is left unchanged, Rejected alternative 8") explicitly keeps this
+  section untouched, so this is accepted, plan-faithful behaviour, not a defect this round
+  introduces or fixes — flagged for whoever next revisits the block-scoped rung budget.
+- **New this round: a missing intermediate container (not merely a missing leaf) now costs one
+  wasted `repairField`/`deterministic` call before falling through to full-regen, where it
+  previously cost zero.** `T13`'s `missing` dispatch fires whenever `getAtPath` returns `undefined`
+  on a JSON-shaped artifact — including when an intermediate hop (e.g. `doc.cta` itself, not just
+  `doc.cta.heading`) is absent. The strategy function still gets called with `''`, and only the
+  subsequent `setAtPath` throws (caught, ladder exhausted) — one extra, harmless-but-billed call
+  compared to before, when the same `typeof value !== 'string'` gate skipped it for free. Matches
+  Implementation Plan §3.3's own pseudocode exactly (it makes no container/leaf distinction either),
+  so not a deviation — recorded as a real, small, accepted cost this round did not introduce a
+  cheaper alternative for.
