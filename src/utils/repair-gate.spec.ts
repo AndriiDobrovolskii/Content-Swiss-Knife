@@ -1948,3 +1948,109 @@ describe('runRepairGate — T14 (FR-10, FR-11, AC-6): a fresh full-regeneration 
     expect(result.finalIssues.some(i => i.rule === 'slug-name-designator-lost')).toBe(false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-3.1 T16 (FR-10, FR-11, AC-6, plan D16 / section 4a). A field-scoped repair result is trusted
+// with no shape check: repairFieldPayload keeps the cached system block (which may describe a full
+// JSON contract, e.g. the Slugs task) while replacing userContent with a one-field instruction, so
+// a model can answer with a whole JSON envelope, which applyTier then writes into a plain-text
+// field (the 2026-09-29 es-ES Slugs incident). Contract under test: an answer that opens with `{`
+// or `[` is never written; one bounded corrective retry follows; a second JSON-shaped answer is
+// discarded (the rung advances with no write). Plain answers are accepted on the first call.
+// The retry instruction's wording is deliberately NOT pinned beyond "preserves the original
+// instruction, mentions JSON, and is a different payload than the first call".
+// ═══════════════════════════════════════════════════════════════════════════
+describe('runRepairGate — T16 (FR-10/FR-11, AC-6, D16): a JSON-envelope field-scoped repair result is never written; one bounded corrective retry', () => {
+  const JSON_ENVELOPE = '{"site_name":"Store","slugs":[{"language":"es-ES","name":"Toallitas","slug":"toallitas"}]}';
+  const JSON_ARRAY = '[{"language":"es-ES","name":"Toallitas"}]';
+
+  const runWith = async (repairField: (payload: PromptPayload) => Promise<string>) => {
+    const artifact = { cta: {} }; // 'text' genuinely absent -> field-scoped rung (T13 shape)
+    const issue: ValidationIssue = {
+      severity: 'error', rule: 'doc-schema', detail: 'cta.text: Required', context: 'ctx', path: 'cta.text',
+    };
+    const produce = vi.fn().mockResolvedValue(artifact);
+    const validate = vi.fn().mockImplementation((a: { cta: { text?: string } }) =>
+      typeof a.cta.text === 'string' && a.cta.text.length > 0 ? [] : [issue]);
+    const result = await runRepairGate({
+      label: 'T16 json envelope', maxRepairs: 0, basePayload: BASE_PAYLOAD,
+      produce, validate, withFeedback: appendRepairFeedback, repairField,
+    });
+    return result.artifact as { cta: { text?: string } };
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('a JSON-object answer is retried once with a corrective payload, and the plain retry answer is what lands', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const repairField = vi.fn()
+      .mockResolvedValueOnce(JSON_ENVELOPE)
+      .mockResolvedValueOnce('Buy it today.');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(2);
+    const first = repairField.mock.calls[0][0] as PromptPayload;
+    const second = repairField.mock.calls[1][0] as PromptPayload;
+    expect(second.userContent).not.toBe(first.userContent);
+    expect(second.userContent.startsWith(first.userContent)).toBe(true); // original instruction preserved
+    expect(second.userContent).toMatch(/json/i); // the correction names the failure
+    expect(second.systemBlocks).toBe(BASE_PAYLOAD.systemBlocks); // cache-stable, same as the first call
+    expect(artifact.cta.text).toBe('Buy it today.');
+  });
+
+  it('a JSON-array answer is treated the same way (first char "[")', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const repairField = vi.fn()
+      .mockResolvedValueOnce(JSON_ARRAY)
+      .mockResolvedValueOnce('Buy it today.');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(2);
+    expect(artifact.cta.text).toBe('Buy it today.');
+  });
+
+  it('leading whitespace before the brace does not evade the guard', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const repairField = vi.fn()
+      .mockResolvedValueOnce('  \n' + JSON_ENVELOPE)
+      .mockResolvedValueOnce('Buy it today.');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(2);
+    expect(artifact.cta.text).toBe('Buy it today.');
+  });
+
+  it('a still-JSON-shaped answer after the one retry is discarded: exactly two calls, and no JSON is ever written into the field', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const repairField = vi.fn().mockResolvedValue(JSON_ENVELOPE);
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(2); // bounded: never a third call for this rung
+    expect(artifact.cta.text ?? '').not.toContain('{');
+    expect(artifact.cta.text ?? '').not.toContain('site_name');
+  });
+
+  it('[pin] an ordinary plain-text answer is accepted on the first call, with no retry', async () => {
+    const repairField = vi.fn().mockResolvedValue('Buy it today.');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect(artifact.cta.text).toBe('Buy it today.');
+  });
+
+  it('[pin] a plain answer that merely contains braces or brackets later in the text is not rejected', async () => {
+    const repairField = vi.fn().mockResolvedValue('Ships in 2 [business] days {EU}');
+
+    const artifact = await runWith(repairField);
+
+    expect(repairField).toHaveBeenCalledTimes(1);
+    expect(artifact.cta.text).toBe('Ships in 2 [business] days {EU}');
+  });
+});

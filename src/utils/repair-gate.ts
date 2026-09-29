@@ -47,6 +47,10 @@ export interface RepairGateOptions<T> {
  * product context to correct one string. `systemBlocks` is passed through BY REFERENCE — that is
  * what preserves the Anthropic cache hit, and a test asserts the identity.
  */
+function looksLikeJsonEnvelope(text: string): boolean {
+  return /^[{[]/.test(text.trim());
+}
+
 export function repairFieldPayload(basePayload: PromptPayload, instruction: string): PromptPayload {
   return { systemBlocks: basePayload.systemBlocks, userContent: instruction };
 }
@@ -275,7 +279,18 @@ export async function runRepairGate<T>(opts: RepairGateOptions<T>): Promise<Repa
             replacement = strategy.deterministic(missing ? '' : (value as string), issue);
           } else if (tier === 'field-scoped' && strategy.fieldInstruction && opts.repairField) {
             const instruction = strategy.fieldInstruction(missing ? '' : (value as string), issue);
-            replacement = (await opts.repairField(repairFieldPayload(opts.basePayload, instruction)))?.trim() || null;
+            const attempt = async (instr: string): Promise<string | null> =>
+              (await opts.repairField!(repairFieldPayload(opts.basePayload, instr)))?.trim() || null;
+            // D16: the cached system blocks describe a full JSON contract, so the model may answer
+            // with the whole object. Reject a JSON-shaped result, retry once, then discard.
+            replacement = await attempt(instruction);
+            if (replacement !== null && looksLikeJsonEnvelope(replacement)) {
+              replacement = await attempt(
+                `${instruction}\n\nYour previous answer was rejected because it was JSON. ` +
+                'Return the plain replacement text only — no JSON, no braces, no brackets, no explanation.',
+              );
+              if (replacement !== null && looksLikeJsonEnvelope(replacement)) replacement = null;
+            }
           }
 
           // Always advance: a rung is spent whether or not it worked. Repeating it would loop
