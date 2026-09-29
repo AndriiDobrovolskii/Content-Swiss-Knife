@@ -1,13 +1,13 @@
 ---
 artifact: pipeline_status
 story: US-3.1
-version: 9
+version: 10
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-09-27T10:00:00Z
-updated_at: 2026-09-29T14:45:00Z
-supersedes: docs/catalog/US-3.1-pipeline-status.md#8
+updated_at: 2026-09-30T08:30:00Z
+supersedes: docs/catalog/US-3.1-pipeline-status.md#9
 inputs_consumed:
   - key: story
     version: 1
@@ -30,217 +30,176 @@ inputs_consumed:
 open_decisions_blocking: false
 ---
 
-# Pipeline Status — US-3.1 (v9, T13/T14/T15 implemented)
+# Pipeline Status — US-3.1 (v10, post-`HUMAN_PR_APPROVAL`-rejection QA triage — no code written)
 
-**Verdict this round: `PASS`.** `T13`, `T14` and `T15` — the last three tasks `task_breakdown` v10
-names — are implemented, committed, and independently re-verified green this round. `T1`–`T12` and
-the AC-6/FR-11 `repairField` wiring (`c17ceee`) were already implemented and committed before this
-round started (confirmed via `git log`, unchanged by this round). This closes both defects
-`pipeline_status` v8 diagnosed against the real 2026-09-28 regeneration: the `repair-gate.ts`
-mechanism gaps behind the `doc-schema`/`heading-brand-core-missing` oscillation (`T13`/`T14`, `D13`/
-`D14`), and `meta-title-template-shape`'s architectural unsatisfiability for a long `h1`
-(`T15`, `D15`).
-
-Branch: `feat/US-3.1-qa-gate-brand-core-fixes`. Two commits this round (see §4).
-
----
-
-## 1. What was built
-
-### 1.1 T13 (FR-10(b), AC-6, plan D13) — `applyTier`'s gate condition now dispatches a genuinely missing field
-
-**File:** `src/utils/repair-gate.ts`, `applyTier` (inside the new `runLadderPass`, see T14 below).
-
-`getAtPath(next, issue.path)` returning `undefined` — a genuinely absent key, Zod's own
-`"Required"` — is no longer treated identically to "nothing to repair." A `missing` branch
-dispatches the active tier's strategy (`deterministic`/`fieldInstruction`) with `''` substituted
-for the missing value, exactly like a present-but-empty string always was. A value that is present
-but neither a `string` nor `undefined` (a structural anomaly no strategy in this codebase
-addresses) still advances-and-skips exactly as before this task.
-
-**One narrowing beyond the Plan's own literal pseudocode, found while making the fixture-level
-tests pass, not invented speculatively.** `getAtPath` also returns `undefined` for a `"block[i]"`
-path evaluated against a raw-string artifact (`T = string`, the HTML shape) — not because a real
-JSON leaf is missing, but because a string has no such property to begin with; `"block[i]"` is
-`block-repair.ts`'s own addressing grammar, consulted only by the block-scoped rung, never by
-`getAtPath`/`setAtPath`. Dispatching field-scoped repair for that case is wrong and regressed an
-**existing, already-passing** test — `repair-gate.spec.ts`'s `heading-product-name-stuffing — one
-ladder serving two artifact shapes` describe block, `'resolves an HTML "block[i]" path via the
-block-scoped rung — field-scoped harmlessly no-ops first'` — which explicitly asserts `repairField`
-is never called for that shape. `missing` is therefore scoped to `typeof next !== 'string'`, so
-T13's dispatch fires only for a genuinely absent leaf on a JSON-shaped artifact (`doc-schema`,
-`slug-name-designator-lost`, etc.), never for a block-only path on an HTML string. AGENTS.md §7.7
-forbids weakening that test to go green, so the code was narrowed to keep it green instead.
-
-### 1.2 T14 (FR-10, FR-11, AC-6, plan D14) — the main regeneration loop gives every fresh attempt its own full ladder pass
-
-**File:** `src/utils/repair-gate.ts`.
-
-The pre-loop "Tiered ladder" block is extracted into a reusable async closure,
-`runLadderPass(startArtifact, startIssues) → { artifact, issues }`, with its own `ladderCursor`/
-`cursorMoves` state constructed **fresh on every call** — never shared across invocations. Two call
-sites: once before the main loop (unchanged behaviour), and again inside the main `while` loop,
-immediately after each `produce()`/`validate()` call, **replacing** the old `deterministic`-only
-`cleanupPlan` block. A fresh full-regeneration attempt now gets a genuine field-scoped/block-scoped
-shot at its own newly-surfaced findings — not only the tier-0 terminator a rule with no
-`deterministic` rung (`doc-schema`, `slug-name-designator-lost`, `heading-brand-core-missing`)
-could never reach there before. Does not increment `repairsUsed` or spend its own budget.
-
-**A second, independently-found defect, closed in the same pass, because making `T14`'s own real-
-shaped acceptance test pass exposed it.** `cursorKey` was keyed by `path` alone
-(`i.path ?? issueKey(i)`). That is correct when exactly one rule ever visits a given path, which
-was true before `T13` (a missing key was always silently skipped, so a second rule could never fire
-on the same path within one pass). Once `T13` makes a missing key genuinely repairable, the real
-oscillation `T14` exists to close can put **two different rules** on the identical leaf within one
-`runLadderPass` invocation: `content-orchestrator.doc-gate.spec.ts`'s own `T14` fixture
-(`missingCtaHeadingDoc()`) has `doc-schema` fire first (the key is absent), its field-scoped repair
-write some text, and — when that text does not carry the product name —
-`heading-brand-core-missing` fire fresh on the **same** `doc.cta.heading` path the next
-`validate()` call. A path-only cursor handed `heading-brand-core-missing` `doc-schema`'s
-already-advanced cursor position, skipping its own field-scoped rung and landing directly on its
-block-scoped rung — which is dead code for a `"doc."`-prefixed path (the dormant `getDocBlock`
-prefix defect, Implementation Plan §3.1, deliberately left unfixed), so the finding never actually
-resolved. `cursorKey` now keys by `path::rule` (falling back to `issueKey` when there is no path),
-giving each rule its own independent cursor even when two rules coincide on one leaf, while
-preserving the original design's own stated per-path-per-rule property for the ordinary,
-one-rule-per-path case. Verified this does not regress the "two issues, same rule, same context,
-different paths" test (`repair-gate.spec.ts`, `'gives two issues in the SAME context but different
-paths independent ladders'`) — that case's two paths still key distinctly.
-
-**One TypeScript-only correction, found by `npm run lint`, not by a test.** `let artifact = await
-opts.produce(...)` was left without an explicit type; TypeScript infers `Awaited<T>` for an
-unconstrained generic `T` awaited from a bare `Promise<T>`, and `runLadderPass`'s own explicit
-return type (`Promise<{ artifact: T; ... }>`) resolves to real `T` once awaited — not structurally
-identical to `Awaited<T>` for TypeScript's purposes. `artifact` is now declared `let artifact: T =
-...`, pinning every reassignment (from `runLadderPass`, `opts.produce`) to a single, consistent
-type. No behavioural change; `tsc --noEmit` is clean.
-
-### 1.3 T15 (FR-8(b), AC-4, plan D15) — deterministic, word-boundary-safe `h1` truncation for an unreachable `meta_title`
-
-**Files:** `src/utils/seo-metadata-shape.ts`, `src/services/content-orchestrator.service.ts`.
-
-Two new module-private functions in `seo-metadata-shape.ts` — `isH1Unreachable(h1)` (single source
-of truth for `Array.from(h1).length + MIN_DASH_TAIL > MIRRORED_MAX_META_TITLE`, i.e. `h1Len ≥ 54`)
-and `computeLongH1MetaTitle(h1)` (a genuine, word-boundary-safe prefix of `h1`, via the already-
-exported `truncateAtWordBoundary()` from `repair-strategy.ts` at `SAFE_CORE_LENGTH = 49`, plus one
-appended `"·"` mark) — back a new **exported** `normalizeLongH1MetaTitle(h1, currentMetaTitle)`: a
-no-op below the threshold, else the deterministic fallback regardless of what the model produced.
-Called from `content-orchestrator.service.ts`'s `canonicalizeSeoData()`, the single choke point
-already re-run at every SEO-producing code path (initial `produce()` and after any field-scoped
-repair), so the normalization applies before `validateSeoMetadataShape` ever sees the artifact.
-`validateSeoMetadataShape`'s `meta-title-template-shape` check now branches on `isH1Unreachable(h1)`:
-the existing dash-tail rule is unchanged for `h1Len ≤ 53`; for `h1Len ≥ 54` it requires byte
-equality against `computeLongH1MetaTitle(h1)` — the same shared computation the normalizer calls —
-rather than an independent structural re-derivation, so the two can never drift apart. No edit to
-`src/prompts/task-b.ts` or any other FROZEN file (Implementation Plan §2.5) — implemented exactly
-as designed, with no deviation found necessary.
+**Verdict this round: `CHANGES_REQUIRED`, `loop_back_stage: blocked_by_architecture`.** This
+dispatch is a re-attempt of `IMPLEMENTATION` after a human rejected `HUMAN_PR_APPROVAL`
+(`docs/workflow/workflow-state.yaml`'s `note`, `docs/workflow/history.jsonl`
+`HUMAN_REJECTED`, `ts: 2026-09-30T07:00:00Z`), pointing at real-world QA evidence in
+`Knowledge/Issues/Second Batch/` (three browser-console error dumps, two screenshots, and one
+full unzipped generation-run output for "Formlabs Optical Cleaning Cloths" on EXPERT3D). Three
+leads from that evidence were independently investigated against the live source and the actual
+run artifacts, not taken on faith. **Two are confirmed, real defects that neither `task_breakdown`
+v10 nor any of `T1`–`T15` (all already shipped, per `pipeline_status` v9) names a task for — so no
+code was written this round**, per `so-builder`'s own contract ("do not write the fix untested...
+return the appropriate loop_back key... rather than improvising scope"). **The third is confirmed
+genuinely out of this Story's scope.** No file was modified; no commit was made.
 
 ---
 
-## 2. Gate evidence (commands actually run this round)
+## 1. LEAD 1 — `cta.heading`'s unconditional `NonEmpty` requirement wastes a real repair call on every v4 generation
 
-| Command | Result |
-|---|---|
-| `npx vitest run` (full `test:logic`) | **3912 passed, 3 skipped** (live-probe tests, pre-existing, unrelated), 149 files |
-| `npm run test:components` (`ng test --watch=false`) | **23 passed**, 2 files |
-| `npm run lint` (`tsc --noEmit`) | clean (after the `T14` type-annotation fix, §1.2) |
-| `npm run build` (`ng build`) | succeeds; pre-existing CommonJS bundler warnings only (`file-saver`, `js-beautify`, `jszip`), unrelated to this round |
-| `bash arch-guard.sh` | **all checks passed**; frozen files unchanged |
+**Confirmed real, independently re-derived from the live source, not from the lead's own framing.**
 
-Targeted re-run of the four files carrying this round's 25 tests
-(`src/utils/repair-gate.spec.ts`, `src/services/content-orchestrator.doc-gate.spec.ts`,
-`src/utils/seo-metadata-shape.long-h1.spec.ts`,
-`src/services/content-orchestrator.repair-field-wiring.spec.ts`) plus the two adjacent files whose
-existing coverage this round's code changes could plausibly touch
-(`src/utils/seo-metadata-shape.spec.ts`, `src/utils/repair-strategy.spec.ts`): **200/200 passed**,
-including the 21 tests `so-test-writer` reported red for documented reasons and the 4 pin/fixture-
-premise tests already green on write.
+- `src/domain/description-doc.schema.ts:216` — `cta: z.object({ heading: NonEmpty, text: Prose })`,
+  unconditional across both `schemaVersion` values.
+- `src/render/render-description.ts:443-449` — for `isV4`, `doc.cta.heading` is provably discarded;
+  the rendered `<h2>` comes from `getRenderRules(...).ctaHeading(doc.locale, doc.localizedName)`
+  instead. The comment at that exact line states this explicitly: "`doc.cta.heading` is discarded —
+  which is what makes FR-11's... path unreachable."
+- `src/prompts/task-a-doc.ts:148-150` — the model is explicitly instructed: "Write the `cta.text`
+  only — the heading is assembled in code from a per-locale template, so whatever you put in
+  `cta.heading` is discarded."
+- All three `Error{1,2,3}.txt` dumps (three separate generation attempts for the same product) show
+  `content-orchestrator.service.ts:465`'s `console.error('...raw model output failed schema
+  validation...')` firing with `cta.heading: ''` — the model correctly following its own prompt
+  instruction (emit nothing meaningful there) and being unconditionally rejected for it by the schema.
+- `src/utils/repair-strategy.ts:240-262` (`REPAIR_STRATEGIES.get('doc-schema')`, this Story's own T1)
+  then spends one real `repairField` (`generateText`) call rewriting a value that is thrown away at
+  render time — confirmed structurally (not merely asserted): T1's own design (`content-orchestrator
+  .service.ts`'s `produceTaskADoc` catch block, per `task_breakdown` T1) returns the schema-invalid
+  candidate for exactly this kind of field-scoped repair, and `'doc-schema'` has no `deterministic`
+  rung, so every occurrence costs a real model call.
+- Cross-checked against `repair_gate_report.md` from the actual unzipped run: it does not name
+  `doc-schema`/`cta.heading` in its "Recurring rule failures" table (only `heading-brand-core-missing`
+  and `meta-title-template-shape` appear there) — consistent with the field-scoped repair succeeding
+  silently within the same attempt rather than surfacing as a separate tracked finding, not with the
+  defect being absent. The `heading-brand-core-missing` rule (fixed on attempt 2 of that run) and this
+  `cta.heading` waste are independent — they fire on different paths (`doc.localizedName` vs.
+  `doc.cta.heading`) and there is no evidence in the report of them interacting.
+- The lead's own suggested fix pattern (schema-version-conditional validation, mirroring
+  `packageContents`'s `superRefine`/`resolveV4SectionHeadings` precedent already in the same file) is
+  architecturally plausible on inspection, but deciding the exact conditional shape (a `superRefine`
+  branch vs. a schema-version discriminated union vs. something else, and confirming it cannot weaken
+  v3's behaviour where `render-description.ts`'s non-`isV4` branch uses `doc.cta.heading` verbatim) is
+  a Zod domain-model design decision — `so-planner`'s territory, not `so-builder`'s to improvise.
 
-No test file, fixture, or coverage setting was modified. No FROZEN file was touched. The four spec
-files above are `so-test-writer`'s own uncommitted working-tree state at dispatch time — consistent
-with this Story's own precedent (`df9ec36`/T1 and every other `T`-task commit touches production
-files only, never a `.spec.ts`), `so-builder` does not commit test files; they remain for
-`TEST_WRITING`/the orchestrator to commit.
+**No task in `task_breakdown` v10 names this file/decision.** `T1` (the only task touching
+`description-doc.schema.ts`'s `REPAIR_STRATEGIES` wiring) is about making a schema-invalid candidate
+survive as repairable, not about which fields should be required at all per schema version. No
+failing test exists for a schema-version-conditional `cta.heading`. Per `so-builder`'s own contract,
+this is not built untested and not improvised — routed to `ARCHITECTURE_PLANNING`.
 
-## 3. What was NOT touched, and why
+---
 
-- `src/prompts/task-a.ts`, `task-b.ts`, `task-c.ts`, `src/prompt-core/master-system-prompt.ts`,
-  `src/utils/output-validator.ts` — FROZEN, no task this round names them, `arch-guard.sh` confirms
-  unchanged.
-- The dormant `getDocBlock` `"doc."`-prefix mismatch (Implementation Plan §3.1/§3.5) — explicitly
-  out of `T13`/`T14`'s scope; `T13`+`T14` together make `heading-brand-core-missing` resolvable at
-  its own **field-scoped** rung before the block-scoped rung (where that dormant bug lives) is ever
-  reached for the fixtures this Story's tests exercise. Left unfixed by design, as the Plan states.
-- The `"шт."` `SENTENCE_TERMINAL` false-positive question (Implementation Plan §3.2) — a
-  `heading-style.ts`/`FR-7` question, not this round's to fix.
-- `docs/specifications/US-3.1-spec.md`'s `AC-4`/`FR-8` prose — already resolved by `specification`
-  v18/v19 (`FR-8(b)`), independently confirmed current this round.
+## 2. LEAD 2 — real defects found, but not the ones the lead's own framing suggested
 
-## 4. Commits this round
+**Sub-claim (a), a gating gap scoped to one locale: NOT confirmed — independently disproven by
+reading the actual call sites.** `content-orchestrator.service.ts`'s `canonicalizeSeoData()`
+(the function that applies `normalizeLongH1MetaTitle`) maps over **every** entry in
+`seo.seo_data` — all four locales, not just uk-UA/primary — and `validateSeoMetadataShape()`
+(`src/utils/seo-metadata-shape.ts:132`, `for (const [i, entry] of seo.seo_data.entries())`) iterates
+the same array identically for every locale. There is no single-locale scoping anywhere in this
+path. The lead's inference from `repair_gate_report.md`'s "Per-artifact detail" section having "only
+ONE 'SEO metadata' entry" is a misread of that report's structure: "SEO metadata" is one **artifact
+label** (the whole `seo_data` array, all locales, validated and repaired together via full-document
+regeneration — there is no per-locale repair granularity in this design, by `T9`'s own Notes), not a
+per-locale check. This sub-claim is not a defect.
 
-1. `a16ddbd` — `feat(US-3.1 T13/T14): repair-gate ladder retries missing fields and fresh regen
-   attempts (FR-10/FR-11, plan D13/D14)` — `src/utils/repair-gate.ts`. Carries both `T13` and `T14`
-   in one commit, not two: `T13`'s gate-condition fix lives entirely inside the `applyTier` closure
-   `T14`'s own refactor (`runLadderPass`) relocates, so the two edits are not separable into two
-   independently-working commits without one temporarily breaking the other's own tests.
-2. `4a7f806` — `feat(US-3.1 T15): deterministic long-h1 meta_title fallback (FR-8(b)/AC-4, plan
-   D15)` — `src/utils/seo-metadata-shape.ts`, `src/services/content-orchestrator.service.ts`.
-3. `6b7c71d` — `docs(US-3.1): record IMPLEMENTATION pipeline status v9` (this artifact, its own
-   first revision this round).
+**Sub-claim (b), a real bug in T15's own fallback truncation logic: CONFIRMED, and reproduced
+exactly against the actual shipped artifact.** `src/utils/seo-metadata-shape.ts`'s
+`computeLongH1MetaTitle(h1)` calls `truncateAtWordBoundary(h1, 49)`
+(`SAFE_CORE_LENGTH = 49`) from `src/utils/repair-strategy.ts:192-206`. Traced by hand against the
+real pt-PT `h1` from the unzipped run (`seo_metadata.json`):
 
-## 5. Plan deviations this round — flagged for `IMPLEMENTATION_VERIFICATION`/`so-planner` ratification, not silently absorbed
+```
+h1 = "Panos de limpeza Formlabs Optical Cleaning Cloths x100"   (54 code points, indices 0-53)
+chars.slice(0, 49) = "Panos de limpeza Formlabs Optical Cleaning Cloths"  (ends exactly at the
+                                                                            end of "Cloths" —
+                                                                            index 49 is itself a
+                                                                            space, i.e. the natural
+                                                                            49-char clip ALREADY
+                                                                            lands on a clean word
+                                                                            boundary)
+```
 
-Two changes to `src/utils/repair-gate.ts` were made beyond what `implementation_plan` v11 §3.3/§3.4
-literally specifies, both found while making the plan's own named tests pass, not invented
-speculatively — see §1.1/§1.2 above for the full derivation:
+`cutOnWordBoundary` (`repair-strategy.ts:199-206`) does not check whether the clip already ends at a
+word boundary — it unconditionally calls `clipped.lastIndexOf(' ')` and backs up to it whenever the
+clipped string contains any space at all, even when the character immediately after the clip point
+(`h1[49]`, a space) proves no backup was needed. That unconditionally strips the clip's own trailing
+complete word ("Cloths"), producing `"Panos de limpeza Formlabs Optical Cleaning"` +`"·"` =
+**`"Panos de limpeza Formlabs Optical Cleaning·"`** — byte-for-byte identical to the malformed value
+that actually shipped in the unzipped run's `seo_metadata.json`. This is not a hypothesis; it is a
+reproduction.
 
-1. **The `cursorKey` change (`path` alone → `path::rule`).** Plan §3.4 states `T13`/`T14` converge
-   because "`setAtPath` touches only its own leaf and the two cannot regress each other" — true for
-   genuinely independent leaves, but `content-orchestrator.doc-gate.spec.ts`'s own `T14` acceptance
-   fixture (`missingCtaHeadingDoc()`) puts `doc-schema` and `heading-brand-core-missing` on the
-   **identical** leaf (`doc.cta.heading`) in sequence, which a path-only cursor cannot resolve. The
-   plan's own §3.4/§3.5 "independent-leaf" premise did not hold for this real fixture; the fix
-   widens the cursor's key rather than accepting the test as unwinnable.
-2. **The `typeof next !== 'string'` guard on `missing`.** Plan §3.3's own pseudocode (`const missing
-   = value === undefined`) does not distinguish a genuinely absent JSON leaf from a `"block[i]"`
-   path evaluated against a raw HTML string, where `getAtPath` also returns `undefined` but for an
-   unrelated reason (the addressing grammar does not apply to that artifact shape at all). Applied
-   literally, the plan's own pseudocode regresses an existing, already-passing test. The guard keeps
-   `T13`'s dispatch scoped to its actual case.
+This is a real, previously-undetected defect in `T15`'s own already-committed code (`4a7f806`). It
+was not caught by `seo-metadata-shape.long-h1.spec.ts` (`so-test-writer`'s own, currently uncommitted
+file) because that file's `h1OfLength()` fixture generator repeats a uniform `"AAAA "` 5-character
+chunk — for every sampled length (`54, 55, 56, 60, 66, 70` in the closed-form sweep, and the
+`h1Len = 54` boundary test), the 49-char clip point never happens to coincide with the fixture's own
+word boundaries in the specific "already-clean-cut" way the real pt-PT `h1` does, so the test suite's
+existing coverage cannot see this failure mode.
 
-Both changes are confined to `src/utils/repair-gate.ts` (already `D13`/`D14`'s own authorized
-surface, non-`FROZEN`), require no new authorization, and the full gate (§2) is green with them in
-place — recorded here as `PASS`-with-disclosure per this Story's own convention (Implementation Plan
-`D15`'s own §2.3 disclosure of a similarly-derived deviation from the Owner's literal suggestion),
-not routed as `CHANGES_REQUIRED` back to `ARCHITECTURE_PLANNING`, since neither changes any public
-contract, any FROZEN file, or any decision the plan actually made — only a mechanism the plan
-under-specified for this one real collision case.
+**This is not a fix `so-builder` can make untested, and it is not merely a missing test — it is an
+architecture-level constraint.** `cutOnWordBoundary` is **shared**: it also backs `meta-title-length`'s
+deterministic repair tier, whose behaviour at the H1-core-length-55 boundary is explicitly, deliberately
+pinned as a **characterization test** by this Story's own `T12` ("a passing-on-write characterization
+pin of already-implemented, unmodified `cutOnWordBoundary()` behaviour," per `task_breakdown` v5's `T12`
+Notes). A same-function fix risks silently changing what that pinned test observes — AGENTS.md §7.7
+forbids weakening it, and `so-builder` does not own deciding whether `T12`'s pin is still correct once
+the shared function's behaviour changes. Deciding whether to (i) add a boundary-aware branch to the
+shared `cutOnWordBoundary` (checked to still satisfy `T12`'s existing pin), or (ii) introduce a
+`computeLongH1MetaTitle`-local variant that does not share the defect, is a design decision
+`so-planner` has to make, not one `so-builder` may invent while turning a task green. No task in
+`task_breakdown` v10 names this fix, and no failing test for it exists yet.
 
-## 6. Non-blocking findings, carried forward or newly observed, not this round's to act on
+---
 
-- Implementation Plan §2.6 Residual 2 (wasted first-pass model generation for `h1 ≥ 54` entries) —
-  unchanged, accepted, not requested here.
-- `impact_analysis` v5 Unknown #11 (T15's normalization corrects `meta_title`'s shape but has no
-  visibility into whether `h1` itself is correct) — unchanged, scope-correct behaviour per that
-  artifact's own framing, not a defect.
-- `FR-13(b)`/`D11`'s own de-DE 52–53 `h1`-core-length residual (`OD-10`) — unaffected by `D15`,
-  outside this Story's closed scope, per Implementation Plan §2.7.
-- **New this round: the unchanged "Final block pass" (repair-gate.ts, gated on `best.attempt > 0`)
-  can now follow an in-loop `runLadderPass` that already spent both of a rule's block-scoped rungs
-  on that same regenerated attempt's output** (e.g. `sentence-too-long`'s two-rung block ladder). A
-  block-scoped finding still open after the in-loop pass reaches the Final block pass for a further
-  attempt — a third block-scoped call for that rule, where the code's own comment states two is the
-  cap ("a pass here would be a third attempt past the two-rung cap"). Implementation Plan §3.4 ("The
-  existing 'Final block pass' ... is left unchanged, Rejected alternative 8") explicitly keeps this
-  section untouched, so this is accepted, plan-faithful behaviour, not a defect this round
-  introduces or fixes — flagged for whoever next revisits the block-scoped rung budget.
-- **New this round: a missing intermediate container (not merely a missing leaf) now costs one
-  wasted `repairField`/`deterministic` call before falling through to full-regen, where it
-  previously cost zero.** `T13`'s `missing` dispatch fires whenever `getAtPath` returns `undefined`
-  on a JSON-shaped artifact — including when an intermediate hop (e.g. `doc.cta` itself, not just
-  `doc.cta.heading`) is absent. The strategy function still gets called with `''`, and only the
-  subsequent `setAtPath` throws (caught, ladder exhausted) — one extra, harmless-but-billed call
-  compared to before, when the same `typeof value !== 'string'` gate skipped it for free. Matches
-  Implementation Plan §3.3's own pseudocode exactly (it makes no container/leaf distinction either),
-  so not a deviation — recorded as a real, small, accepted cost this round did not introduce a
-  cheaper alternative for.
+## 3. LEAD 3 — SEO Slug Generator's es-ES double-encoded `name` — confirmed out of scope, not touched
+
+`git diff --stat main...HEAD` was re-run this round. `src/services/content-orchestrator.service.ts`
+is broadly touched by this Story (523 lines changed) and does contain the Slug-generation code paths
+(`buildPromptSlug`, `runRepairGate<SlugResponse>`, `normalizeSlugResponse`, three call sites around
+lines 868-908, 1300-1333 and 1497-1529) — so the *file* is in this Story's diff. But **no task in
+`task_breakdown` v10 touches the Slug JSON-parsing/response-shape path that produced the observed
+defect** (`slugs.json`'s es-ES `name` field holding the entire raw JSON response double-encoded as a
+string). The only Slug-related task, `T11`, is `slug-name-designator-lost` — an existing, unrelated
+check in `slug-validator.ts` about a lost invariant-core token in an otherwise well-formed name — not
+about malformed/garbage JSON reaching the `name` field at all. This is a distinct defect, in a
+different failure mode, than anything `D1`-`D15` designed for.
+
+**Not touched, per this dispatch's explicit instruction and AGENTS.md §7.8 (no drive-by fixes).**
+Recommended: a new Story via `/so:new` for the SEO Slug Generator's response-parsing defect (the
+es-ES `slugs[i].name` field receiving what looks like the full, stringified `SlugResponse` object
+instead of a plain localized name — worth checking whether this is a `generateJson` extraction defect
+for that one locale, e.g. a nested code-fence or double-JSON-encoding from the model, before assuming
+it is prompt-text-driven).
+
+---
+
+## 4. What was NOT done this round, and why
+
+- No file was edited. No commit was made. `git status` is unchanged from this dispatch's start.
+- `LEAD 1`'s and `LEAD 2`'s fixes were not written, per `so-builder`'s own contract: both require a
+  new architecture-level design decision `task_breakdown` v10 does not name a task for, and neither
+  has a failing test yet. Writing either untested would violate AGENTS.md §5 (TDD) and §7.6.
+- `LEAD 3` was verified and reported, not fixed, per this dispatch's explicit instruction.
+- `docs/workflow/workflow-state.yaml` and `docs/workflow/history.jsonl` were not written — that is
+  `so-orchestrator`'s job.
+
+## 5. Recommendation for `ARCHITECTURE_PLANNING`
+
+Two narrowly-scoped design decisions are needed before `IMPLEMENTATION_PLANNING`/`TEST_WRITING`/
+`IMPLEMENTATION` can proceed on this rejection's findings:
+
+1. **`cta.heading`'s `NonEmpty` requirement, made `schemaVersion`-conditional** (LEAD 1) — required
+   non-empty for `'3.0'` (used verbatim by the renderer), relaxed to accept any string (including
+   empty) for `'4.0'` (provably discarded at render time), mirroring the existing
+   `packageContents`/`resolveV4SectionHeadings` conditional-by-version precedent already in
+   `description-doc.schema.ts`. Must not weaken `'3.0'`'s validation.
+2. **`computeLongH1MetaTitle`'s truncation defect at the exact word-boundary-at-49 case** (LEAD 2) —
+   decide whether to fix the shared `cutOnWordBoundary` (verified not to regress `T12`'s existing
+   characterization pin) or give `computeLongH1MetaTitle` its own non-shared truncation path.
+
+`LEAD 3` is out of scope for this Story; recommend a new Story via `/so:new` for the SEO Slug
+Generator's es-ES response-parsing defect.
