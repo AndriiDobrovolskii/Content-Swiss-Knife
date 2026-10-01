@@ -8,7 +8,8 @@ export type ProviderId = 'anthropic' | 'gemini';
  *  Individual models accept only a subset (see ModelSpec.levels) — Gemini 3.1 Pro has no
  *  'minimal' and cannot disable thinking at all; Anthropic has no 'minimal'. Claude Sonnet 5.5
  *  cannot disable thinking either: its lowest rung is 'between_tools' (interleaved thinking
- *  between tool calls only), and it adds the 'xhigh' and 'max' effort levels. */
+ *  between tool calls only), and it adds the 'xhigh' effort level. 'max' is a member of this
+ *  ordering but no catalog model lists it, so it clamps to the nearest level the model offers. */
 export type ThinkingLevel =
   'disabled' | 'between_tools' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 

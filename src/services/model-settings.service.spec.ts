@@ -352,10 +352,26 @@ describe('ModelSettingsService US-4.1 settings restore (FR-9)', () => {
     expect(t.fastLevel()).toBe('minimal');
   });
 
-  it('keeps a stored claude-sonnet-5-5 selection and its level untouched', () => {
+  it('keeps a stored claude-sonnet-5-5 selection and a level it lists untouched', () => {
+    const s = boot(stored('claude-sonnet-5-5', 'xhigh'));
+    expect(s.deepModel()).toBe('claude-sonnet-5-5');
+    expect(s.deepLevel()).toBe('xhigh');
+  });
+
+  // D8' / FR-9: Sonnet 5.5 has no max; a stored max restores as xhigh (nearest listed level).
+  it('restores a stored claude-sonnet-5-5 max level as xhigh', () => {
     const s = boot(stored('claude-sonnet-5-5', 'max'));
     expect(s.deepModel()).toBe('claude-sonnet-5-5');
-    expect(s.deepLevel()).toBe('max');
+    expect(s.deepLevel()).toBe('xhigh');
+  });
+
+  it('migrates a stored claude-sonnet-4-6 at max to claude-sonnet-5-5 at xhigh and persists it', () => {
+    const s = boot(stored('claude-sonnet-4-6', 'max'));
+    expect(s.deepModel()).toBe('claude-sonnet-5-5');
+    expect(s.deepLevel()).toBe('xhigh');
+    const persisted = JSON.parse(localStorage.getItem(KEY)!);
+    expect(persisted.deep.model).toBe('claude-sonnet-5-5');
+    expect(persisted.deep.level).toBe('xhigh');
   });
 
   it('resolves an unknown stored model to a catalog model of the slot tier, never an absent id', () => {
@@ -377,11 +393,18 @@ describe('ModelSettingsService US-4.1 settings restore (FR-9)', () => {
     expect(s.fastLevel()).toBe('low');
   });
 
-  it('exposes the six Sonnet 5.5 levels as selectable deep levels', () => {
+  it('exposes the five Sonnet 5.5 levels as selectable deep levels', () => {
     const s = boot();
-    for (const level of ['between_tools', 'low', 'medium', 'high', 'xhigh', 'max'] as const) {
+    expect(s.deepSpec()!.levels).toEqual(['between_tools', 'low', 'medium', 'high', 'xhigh']);
+    for (const level of ['between_tools', 'low', 'medium', 'high', 'xhigh'] as const) {
       s.setDeepLevel(level as never);
       expect(s.deepLevel(), level).toBe(level);
     }
+  });
+
+  it('clamps setDeepLevel(max) on Sonnet 5.5 to xhigh', () => {
+    const s = boot();
+    s.setDeepLevel('max' as never);
+    expect(s.deepLevel()).toBe('xhigh');
   });
 });

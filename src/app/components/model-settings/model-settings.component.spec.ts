@@ -73,7 +73,7 @@ describe('ModelSettingsComponent', () => {
 
 /**
  * US-4.1 (T4 owns the T2 label assertions) — AC-1 / FR-4: the new Deep default claude-sonnet-5-5 has
- * six thinking levels, three of which (between_tools, xhigh, max) the settings UI has never had to
+ * five thinking levels (v3: no max), two of which (between_tools, xhigh) the settings UI has never had to
  * label. What the user sees must be a readable label, never the raw catalog id, in both languages.
  */
 describe('ModelSettingsComponent with claude-sonnet-5-5 (US-4.1)', () => {
@@ -100,11 +100,11 @@ describe('ModelSettingsComponent with claude-sonnet-5-5 (US-4.1)', () => {
     expect(fastModels).not.toContain('claude-sonnet-4-6');
   });
 
-  it('sizes the Deep slider to the six Sonnet 5.5 levels and starts it on High', async () => {
+  it('sizes the Deep slider to the five Sonnet 5.5 levels (steps 0..4) and starts it on High', async () => {
     await render(ModelSettingsComponent);
 
     expect(deepSlider().min).toBe('0');
-    expect(deepSlider().max).toBe('5');
+    expect(deepSlider().max).toBe('4');
     expect(deepSlider().value).toBe('3');
     expect(levelValueNextTo('Thinking level')).toBe('High');
   });
@@ -117,17 +117,18 @@ describe('ModelSettingsComponent with claude-sonnet-5-5 (US-4.1)', () => {
     expect(screen.queryByText('Minimal')).toBeNull();
   });
 
-  it('labels the Deep scale ends in English: Between tools ... Max, with no raw level id', async () => {
+  it('labels the Deep scale ends in English: Between tools ... Extra high, with no Max label and no raw level id', async () => {
     await render(ModelSettingsComponent);
 
     expect(screen.getAllByText('Between tools').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Max').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Extra high').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Max')).toBeNull();
     expect(screen.queryByText('between_tools')).toBeNull();
     expect(screen.queryByText('xhigh')).toBeNull();
     expect(screen.queryByText('max')).toBeNull();
   });
 
-  it('shows Extra high and drives setDeepLevel when the user slides to the fifth step', async () => {
+  it('shows Extra high and drives setDeepLevel when the user slides to the top (fifth, index 4) step', async () => {
     const { fixture } = await render(ModelSettingsComponent);
 
     fireEvent.input(deepSlider(), { target: { value: '4' } });
@@ -148,19 +149,21 @@ describe('ModelSettingsComponent with claude-sonnet-5-5 (US-4.1)', () => {
     expect(screen.queryByText('between_tools')).toBeNull();
   });
 
-  it('shows Max when the user slides to the last step', async () => {
+  it('has no step beyond Extra high: the top step is index 4 and never reads Max', async () => {
     const { fixture } = await render(ModelSettingsComponent);
 
-    fireEvent.input(deepSlider(), { target: { value: '5' } });
+    expect(deepSlider().max).toBe('4');
+    fireEvent.input(deepSlider(), { target: { value: '4' } });
 
-    expect(fixture.componentInstance.settings.deepLevel()).toBe('max');
-    expect(levelValueNextTo('Thinking level')).toBe('Max');
+    expect(fixture.componentInstance.settings.deepLevel()).toBe('xhigh');
+    expect(levelValueNextTo('Thinking level')).toBe('Extra high');
+    expect(screen.queryByText('Max')).toBeNull();
   });
 
   it('renders Ukrainian text, not English and not the raw id, for the new levels', async () => {
     const { fixture } = await render(ModelSettingsComponent, { inputs: { lang: 'uk' } });
 
-    for (const [index, id] of [['0', 'between_tools'], ['4', 'xhigh'], ['5', 'max']] as const) {
+    for (const [index, id] of [['0', 'between_tools'], ['4', 'xhigh']] as const) {
       fireEvent.input(deepSlider(), { target: { value: index } });
       expect(fixture.componentInstance.settings.deepLevel()).toBe(id);
 

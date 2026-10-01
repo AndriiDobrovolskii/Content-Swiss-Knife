@@ -169,11 +169,12 @@ describe('resolveSlot (server-side request validation)', () => {
  * fail here rather than ship.
  */
 describe('US-4.1 catalog entries (FR-1, FR-2, FR-3)', () => {
-  it('FR-1: lists claude-sonnet-5-5 as the premium first anthropic model with the six Sonnet 5.5 levels', () => {
+  it('FR-1: lists claude-sonnet-5-5 as the premium first anthropic model with exactly the five Sonnet 5.5 levels (no max)', () => {
     const m = findModel('anthropic', 'claude-sonnet-5-5');
     expect(m, 'claude-sonnet-5-5 missing from catalog').toBeDefined();
     expect(m!.tier).toBe('premium');
-    expect(m!.levels).toEqual(['between_tools', 'low', 'medium', 'high', 'xhigh', 'max']);
+    expect(m!.levels).toEqual(['between_tools', 'low', 'medium', 'high', 'xhigh']);
+    expect(m!.levels).not.toContain('max');
     expect(m!.defaultLevel).toBe('high');
     expect(m!.maxOutputTokens).toBe(128000);
     expect(findProvider('anthropic')!.models[0].id).toBe('claude-sonnet-5-5');
@@ -244,11 +245,18 @@ describe('US-4.1 clamp outcomes (FR-4, FR-4a)', () => {
     }
   });
 
-  it('FR-4: returns every claude-sonnet-5-5 level unchanged', () => {
+  it('FR-4: returns every one of the five claude-sonnet-5-5 levels unchanged', () => {
     for (const [name, clamp] of both) {
-      for (const level of ['between_tools', 'low', 'medium', 'high', 'xhigh', 'max']) {
+      for (const level of ['between_tools', 'low', 'medium', 'high', 'xhigh']) {
         expect(clamp('anthropic', 'claude-sonnet-5-5', level), `${name} ${level}`).toBe(level);
       }
+    }
+  });
+
+  // D1'/OQ-2: max is not a Sonnet 5.5 level; it snaps down to the top rung.
+  it('FR-4: snaps max to xhigh on claude-sonnet-5-5 on client and server', () => {
+    for (const [name, clamp] of both) {
+      expect(clamp('anthropic', 'claude-sonnet-5-5', 'max'), name).toBe('xhigh');
     }
   });
 
@@ -302,5 +310,49 @@ describe('US-4.1 clamp outcomes (FR-4, FR-4a)', () => {
           .toBe(serverSupport.clampLevel(provider, id, probe));
       }
     }
+  });
+});
+
+/**
+ * US-4.1 v3 (D2', F-4): explicit `max` rows and the parity invariant. No catalog model lists
+ * `max`, so `max` is an ordering member only and must clamp to each model's top rung.
+ */
+describe('US-4.1 v3 max rows and clamp parity invariant (FR-4, FR-4a)', () => {
+  const MAX_ROWS: Array<[string, string, string]> = [
+    ['anthropic', 'claude-sonnet-5-5', 'xhigh'],
+    ['anthropic', 'claude-sonnet-5', 'high'],
+    ['gemini', 'gemini-3.1-pro-preview', 'high'],
+    ['gemini', 'gemini-3.8-flash', 'high'],
+    ['gemini', 'gemini-3.7-flash', 'high'],
+    ['gemini', 'gemini-3.6-flash', 'high'],
+    ['anthropic', 'claude-haiku-4-5', 'disabled'],
+  ];
+
+  it.each(MAX_ROWS)('FR-4: %s %s clamps max to %s on client and server', (provider, id, expected) => {
+    expect(clampLevel(provider, id, 'max'), 'client').toBe(expected);
+    expect(serverSupport.clampLevel(provider, id, 'max'), 'server').toBe(expected);
+  });
+
+  it('D2: no catalog model lists max as a level', () => {
+    for (const m of ALL_MODELS) expect(m.levels, m.id).not.toContain('max');
+  });
+
+  it('FR-4a: for every model x probe level, result is in the model levels, client == server, and a member level is unchanged', () => {
+    const probes = ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'turbo', undefined];
+    for (const m of ALL_MODELS) {
+      for (const probe of probes) {
+        const client = clampLevel(m.provider, m.id, probe);
+        const server = serverSupport.clampLevel(m.provider, m.id, probe);
+        const tag = `${m.id} / ${String(probe)}`;
+        expect(m.levels, `${tag} in levels`).toContain(client);
+        expect(client, `${tag} parity`).toBe(server);
+        if ((m.levels as string[]).includes(probe as string)) expect(client, `${tag} member unchanged`).toBe(probe);
+      }
+    }
+  });
+
+  it('AC-1: the route-level resolver maps a max slot on claude-sonnet-5-5 to xhigh with the 128000 ceiling', () => {
+    expect(serverSupport.resolveSlot('anthropic', { model: 'claude-sonnet-5-5', level: 'max' }))
+      .toEqual({ model: 'claude-sonnet-5-5', level: 'xhigh', maxOutputTokens: 128000 });
   });
 });

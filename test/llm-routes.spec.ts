@@ -180,6 +180,12 @@ describe('US-4.1 slot resolution for the new models', () => {
     expect(slot).toEqual({ model: 'claude-sonnet-5-5', level: 'xhigh', maxOutputTokens: 128000 });
   });
 
+  // D12 / OQ-2: Sonnet 5.5 has no max; the route path (resolveSlot -> clampLevel) lands on xhigh.
+  it('FR-4: resolves a max level on claude-sonnet-5-5 to xhigh at 128000 output tokens', () => {
+    const { slot } = resolve({ deep: { provider: 'anthropic', model: 'claude-sonnet-5-5', level: 'max' } }, 'deep');
+    expect(slot).toEqual({ model: 'claude-sonnet-5-5', level: 'xhigh', maxOutputTokens: 128000 });
+  });
+
   it('FR-4: clamps a stale disabled level on claude-sonnet-5-5 to between_tools', () => {
     const { slot } = resolve({ deep: { provider: 'anthropic', model: 'claude-sonnet-5-5', level: 'disabled' } }, 'deep');
     expect(slot!.level).toBe('between_tools');
