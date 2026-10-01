@@ -9,7 +9,7 @@ import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, VISION_TIMEOUT_MS, timeoutForMode } f
 // Fallback slot used when a caller doesn't pass one (direct unit-test calls, a request that
 // predates the settings menu). Mirrors the historical env-driven defaults.
 const FALLBACK_DEEP = () => resolveSlot('anthropic', {
-  model: process.env.ANTHROPIC_MODEL_THINKING || 'claude-sonnet-5',
+  model: process.env.ANTHROPIC_MODEL_THINKING || 'claude-sonnet-5-5',
   level: process.env.ANTHROPIC_THINKING_EFFORT || 'medium',
 });
 const FALLBACK_FAST = () => resolveSlot('anthropic', {

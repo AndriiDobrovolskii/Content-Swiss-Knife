@@ -297,3 +297,111 @@ describe('GeminiProvider same-provider fallback', () => {
     expect(message).toContain('gemini-3.1-pro-preview');
   });
 });
+
+/**
+ * US-4.1 — gemini-3.8-flash as the Fast fallback and the `minimal` clamp (FR-5, FR-7, FR-8, NFR-6).
+ * Gemini 3.8 Flash answers with an error to thinking level `minimal`, so no request may carry it.
+ */
+const FLASH_38 = (level: string) => ({ model: 'gemini-3.8-flash', level, maxOutputTokens: 65536 });
+
+describe('GeminiProvider FALLBACK_FAST (FR-7)', () => {
+  beforeEach(() => {
+    calls.length = 0;
+    nextResponse = reply('<p>ok</p>');
+    withRetryMock.mockReset();
+    withRetryMock.mockImplementation((fn: any) => fn());
+  });
+
+  it('runs a slot-less fast call on gemini-3.8-flash at low, never minimal', async () => {
+    await new GeminiProvider('k').generate(PAYLOAD, 'text');
+
+    expect(calls[0].model).toBe('gemini-3.8-flash');
+    expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+    expect(calls[0].config.maxOutputTokens).toBe(65536);
+  });
+
+  it('runs slot-less pdf extraction and vision on gemini-3.8-flash without minimal', async () => {
+    const p = new GeminiProvider('k');
+    await p.extractFromPdf('PDF64');
+    await p.analyzeImage('B64', 'image/jpeg', 'Describe', false);
+
+    for (const call of calls) {
+      expect(call.model).toBe('gemini-3.8-flash');
+      expect(call.config.thinkingConfig.thinkingLevel).not.toBe('minimal');
+    }
+  });
+
+  it('keeps the slot-less deep fallback on gemini-3.1-pro-preview', async () => {
+    await new GeminiProvider('k').generate(PAYLOAD, 'creative');
+    expect(calls[0].model).toBe('gemini-3.1-pro-preview');
+  });
+
+  // NFR-6: a request that carries settings and one that carries none must route identically.
+  it('NFR-6: matches the client Fast-slot default in provider, model and level', async () => {
+    localStorage.clear();
+    const { ModelSettingsService } = await import('../src/services/model-settings.service');
+    const clientFast = new ModelSettingsService().snapshot().fast;
+
+    await new GeminiProvider('k').generate(PAYLOAD, 'text');
+
+    expect(clientFast.provider).toBe('gemini');
+    expect(clientFast.model).toBe('gemini-3.8-flash');
+    expect(calls[0].model).toBe(clientFast.model);
+    expect(calls[0].config.thinkingConfig.thinkingLevel).toBe(clientFast.level);
+  });
+
+  it('builds no fallback when a fast slot already is gemini-3.8-flash', async () => {
+    await new GeminiProvider('k').generate(PAYLOAD, 'text', FLASH_38('low'));
+    expect(withRetryMock.mock.calls[0][3]).toBeUndefined();
+  });
+
+  it('falls back to gemini-3.8-flash at low when a fast call on 3.6 Flash exhausts its retry budget', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    withRetryMock.mockImplementationOnce((fn: any, _m: any, _b: any, fallback: any) => (fallback ? fallback() : fn()));
+
+    await new GeminiProvider('k')
+      .generate(PAYLOAD, 'text', { model: 'gemini-3.6-flash', level: 'medium', maxOutputTokens: 65536 });
+
+    expect(calls[0].model).toBe('gemini-3.8-flash');
+    expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+  });
+});
+
+describe('GeminiProvider snaps minimal to low on gemini-3.8-flash (FR-8)', () => {
+  beforeEach(() => { calls.length = 0; nextResponse = reply('<p>ok</p>'); });
+
+  it('clamps a pdf extraction to low, not minimal', async () => {
+    await new GeminiProvider('k').extractFromPdf('PDF64', FLASH_38('medium'));
+    expect(calls[0].model).toBe('gemini-3.8-flash');
+    expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+  });
+
+  it('clamps a generate slot that carries minimal to low', async () => {
+    await new GeminiProvider('k').generate(PAYLOAD, 'text', FLASH_38('minimal'));
+    expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+  });
+
+  it('clamps a vision slot that carries minimal to low', async () => {
+    await new GeminiProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', false, FLASH_38('minimal'));
+    expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+  });
+
+  it('does not throw and still returns the answer when it clamps', async () => {
+    nextResponse = reply('  A grey 3D printer.  ');
+    await expect(new GeminiProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', false, FLASH_38('minimal')))
+      .resolves.toBe('A grey 3D printer.');
+  });
+
+  it('passes a level the model accepts through unchanged', async () => {
+    await new GeminiProvider('k').generate(PAYLOAD, 'text', FLASH_38('high'));
+    expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'high' });
+  });
+
+  it('leaves minimal untouched on models that support it', async () => {
+    await new GeminiProvider('k').generate(PAYLOAD, 'text', { model: 'gemini-3.7-flash', level: 'minimal', maxOutputTokens: 65536 });
+    await new GeminiProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', false,
+      { model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 65536 });
+    expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'minimal' });
+    expect(calls[1].config.thinkingConfig).toEqual({ thinkingLevel: 'minimal' });
+  });
+});

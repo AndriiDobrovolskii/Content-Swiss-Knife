@@ -125,7 +125,7 @@ describe('request validation', () => {
   // model of the right tier, so an unknown Fast-slot model never lands on a premium one.
   it('falls back to a same-tier catalog model when the requested model is unknown', () => {
     const fast = resolve({ provider: 'gemini', fast: { model: 'gemini-99-ultra', level: 'high' } }, 'fast');
-    expect(fast.slot!.model).toBe('gemini-3.7-flash');
+    expect(fast.slot!.model).toBe('gemini-3.8-flash');
     expect(fast.slot!.level).toBe('high');
 
     const deep = resolve({ provider: 'gemini', deep: { model: 'gemini-99-ultra', level: 'high' } }, 'deep');
@@ -161,5 +161,39 @@ describe('provider instances', () => {
     expect(resolve(GEMINI_BODY, 'deep').instance).toEqual({ name: 'gemini' });
     expect(resolve({}, 'fast').instance).toEqual({ name: 'anthropic' });
     expect(made).toEqual(['gemini', 'anthropic']);
+  });
+});
+
+/**
+ * US-4.1 — the untrusted-input boundary for the new models (FR-8, FR-9 server side, AC-4).
+ * `server/llm-request.js` resolves a slot through the catalog before it reaches an SDK, so a
+ * request that still names a retired model or asks for an unsupported level must degrade.
+ */
+describe('US-4.1 slot resolution for the new models', () => {
+  it('FR-8: clamps minimal to low for gemini-3.8-flash', () => {
+    const { slot } = resolve({ provider: 'gemini', fast: { model: 'gemini-3.8-flash', level: 'minimal' } }, 'fast');
+    expect(slot).toEqual({ model: 'gemini-3.8-flash', level: 'low', maxOutputTokens: 65536 });
+  });
+
+  it('resolves the new Sonnet at 128000 output tokens with an xhigh level unchanged', () => {
+    const { slot } = resolve({ deep: { provider: 'anthropic', model: 'claude-sonnet-5-5', level: 'xhigh' } }, 'deep');
+    expect(slot).toEqual({ model: 'claude-sonnet-5-5', level: 'xhigh', maxOutputTokens: 128000 });
+  });
+
+  it('FR-4: clamps a stale disabled level on claude-sonnet-5-5 to between_tools', () => {
+    const { slot } = resolve({ deep: { provider: 'anthropic', model: 'claude-sonnet-5-5', level: 'disabled' } }, 'deep');
+    expect(slot!.level).toBe('between_tools');
+  });
+
+  // A browser still on an older bundle may send the retired id; it must resolve to a valid
+  // premium catalog model rather than reach the SDK as an unknown model.
+  it('FR-9: resolves a stale claude-sonnet-4-6 deep slot to a premium catalog model, not an absent id', () => {
+    const { slot } = resolve({ deep: { provider: 'anthropic', model: 'claude-sonnet-4-6', level: 'medium' } }, 'deep');
+    expect(slot).toEqual({ model: 'claude-sonnet-5-5', level: 'medium', maxOutputTokens: 128000 });
+  });
+
+  it('FR-5: resolves a request with no settings to the new Fast and Deep catalog defaults per provider', () => {
+    expect(resolve({ provider: 'gemini' }, 'fast').slot!.model).toBe('gemini-3.8-flash');
+    expect(resolve({ provider: 'anthropic' }, 'deep').slot!.model).toBe('claude-sonnet-5-5');
   });
 });
