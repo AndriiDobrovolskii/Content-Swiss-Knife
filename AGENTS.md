@@ -52,7 +52,7 @@ every other artifact — stays in **English**.
 | Reactivity | `signal()` / `computed()` / `effect()` / `input()` / `output()` | RxJS only at the HTTP boundary (`src/services/http-retry.ts`). No `BehaviorSubject` state. |
 | Editor | TipTap `3.x`, CodeMirror `6` | `src/app/components/html-editor/`. |
 | Server | Node ESM + Express `5` (`server/`) | Plain `.js`. Holds every secret; the browser holds none. |
-| LLM providers | OpenAI (`gpt-4o`, dev) → Anthropic (`claude-sonnet-5`, target); Gemini optional fallback | Only inside `server/providers/` (§3 Rule #1). |
+| LLM providers | OpenAI (`gpt-4o`, dev) → Anthropic (`claude-sonnet-5-5`, target); Gemini optional fallback | Only inside `server/providers/` (§3 Rule #1). |
 | Retrieval | Serper.dev (`/search`) + page fetch | **Not** Google Grounding (§3 Rule #2). |
 | Validation | Zod `3.x` | `src/domain/*.schema.ts`. |
 | Persistence | `better-sqlite3`, server-only | `server/usage/store.js`. Usage/telemetry only; **no migration mechanism** — `CREATE TABLE IF NOT EXISTS` will silently no-op a new column on a populated DB. |
