@@ -182,6 +182,11 @@ export class ModelSettingsService {
    * validation, then re-persisted so this only fires once per browser. The stored level is then
    * clamped into the replacement's levels like any other level (`disabled` becomes
    * `between_tools`, `minimal` becomes `low`, `medium` is kept).
+   *
+   * A stored `max` (no catalog model lists it) restores as `xhigh` on Sonnet 5.5 through
+   * validateSlot -> clampLevel. Level-only corrections like this are applied in memory and
+   * written back at the next setter call; the persist condition above is deliberately not
+   * widened to cover them.
    */
   private restore() {
     let raw: string | null = null;
