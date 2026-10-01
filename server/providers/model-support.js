@@ -6,7 +6,7 @@
 // Angular build inlines the JSON into the bundle and never reads it from disk.
 import catalog from '../../src/prompt-core/model-catalog.json' with { type: 'json' };
 
-const LEVEL_ORDER = ['disabled', 'minimal', 'low', 'medium', 'high'];
+const LEVEL_ORDER = ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
 export function findProvider(provider) {
   return catalog.providers.find(p => p.id === provider);

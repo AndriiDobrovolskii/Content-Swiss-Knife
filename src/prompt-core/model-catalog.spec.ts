@@ -33,7 +33,8 @@ describe('model catalog integrity', () => {
 
   // The whole point of the catalog: Gemini 3.1 Pro's API rejects 'minimal', so the settings
   // menu must never render it. Regression guard against someone "unifying" the level lists.
-  it('excludes minimal from Gemini 3.1 Pro but keeps it on 3.6 and 3.7 Flash', () => {
+  it('excludes minimal from Gemini 3.1 Pro and 3.8 Flash but keeps it on 3.6 and 3.7 Flash', () => {
+    expect(findModel('gemini', 'gemini-3.8-flash')!.levels).not.toContain('minimal');
     expect(findModel('gemini', 'gemini-3.1-pro-preview')!.levels).not.toContain('minimal');
     expect(findModel('gemini', 'gemini-3.6-flash')!.levels).toContain('minimal');
     expect(findModel('gemini', 'gemini-3.7-flash')!.levels).toContain('minimal');
@@ -103,7 +104,7 @@ describe('clampLevel', () => {
   });
 
   it('matches the server implementation on every level/model pair', () => {
-    const probes = ['disabled', 'minimal', 'low', 'medium', 'high', 'bogus', undefined];
+    const probes = ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'bogus', undefined];
     for (const m of ALL_MODELS) {
       for (const probe of probes) {
         expect(clampLevel(m.provider, m.id, probe), `${m.id} / ${probe}`)
@@ -132,11 +133,11 @@ describe('resolveSlot (server-side request validation)', () => {
   // the catalog's first entry — a premium model — and quietly translate on Sonnet.
   it('falls back to a fast-tier model for the fast slot', () => {
     expect(serverSupport.resolveSlot('anthropic', undefined, 'fast').model).toBe('claude-haiku-4-5');
-    expect(serverSupport.resolveSlot('gemini', undefined, 'fast').model).toBe('gemini-3.7-flash');
+    expect(serverSupport.resolveSlot('gemini', undefined, 'fast').model).toBe('gemini-3.8-flash');
   });
 
   it('falls back to a premium model for the deep slot', () => {
-    expect(serverSupport.resolveSlot('anthropic', undefined, 'premium').model).toBe('claude-sonnet-5');
+    expect(serverSupport.resolveSlot('anthropic', undefined, 'premium').model).toBe('claude-sonnet-5-5');
     expect(serverSupport.resolveSlot('gemini', undefined, 'premium').model).toBe('gemini-3.1-pro-preview');
   });
 
@@ -158,5 +159,200 @@ describe('resolveSlot (server-side request validation)', () => {
   it('carries the model output ceiling through for the providers to use', () => {
     expect(serverSupport.resolveSlot('anthropic', { model: 'claude-haiku-4-5' }).maxOutputTokens).toBe(16000);
     expect(serverSupport.resolveSlot('anthropic', { model: 'claude-sonnet-5' }).maxOutputTokens).toBe(64000);
+    expect(serverSupport.resolveSlot('anthropic', { model: 'claude-sonnet-5-5' }).maxOutputTokens).toBe(128000);
+  });
+});
+
+/**
+ * US-4.1 — catalog content, written from FR-1..FR-4a, not from the implementation.
+ * Exact-value assertions: the Specification fixes the vendor values, so a typo in the JSON must
+ * fail here rather than ship.
+ */
+describe('US-4.1 catalog entries (FR-1, FR-2, FR-3)', () => {
+  it('FR-1: lists claude-sonnet-5-5 as the premium first anthropic model with exactly the five Sonnet 5.5 levels (no max)', () => {
+    const m = findModel('anthropic', 'claude-sonnet-5-5');
+    expect(m, 'claude-sonnet-5-5 missing from catalog').toBeDefined();
+    expect(m!.tier).toBe('premium');
+    expect(m!.levels).toEqual(['between_tools', 'low', 'medium', 'high', 'xhigh']);
+    expect(m!.levels).not.toContain('max');
+    expect(m!.defaultLevel).toBe('high');
+    expect(m!.maxOutputTokens).toBe(128000);
+    expect(findProvider('anthropic')!.models[0].id).toBe('claude-sonnet-5-5');
+    expect(defaultModel('anthropic')!.id).toBe('claude-sonnet-5-5');
+  });
+
+  it('FR-2: lists gemini-3.8-flash as the first fast gemini model with low/medium/high and no minimal', () => {
+    const m = findModel('gemini', 'gemini-3.8-flash');
+    expect(m, 'gemini-3.8-flash missing from catalog').toBeDefined();
+    expect(m!.tier).toBe('fast');
+    expect(m!.levels).toEqual(['low', 'medium', 'high']);
+    expect(m!.levels).not.toContain('minimal');
+    expect(m!.defaultLevel).toBe('high');
+    expect(m!.maxOutputTokens).toBe(65536);
+
+    const fastIds = findProvider('gemini')!.models.filter(x => x.tier === 'fast').map(x => x.id);
+    expect(fastIds[0]).toBe('gemini-3.8-flash');
+  });
+
+  it('FR-3: no longer contains claude-sonnet-4-6', () => {
+    expect(findModel('anthropic', 'claude-sonnet-4-6')).toBeUndefined();
+    expect(findProvider('anthropic')!.models.map(x => x.id)).not.toContain('claude-sonnet-4-6');
+    expect(serverSupport.findModel('anthropic', 'claude-sonnet-4-6')).toBeUndefined();
+  });
+
+  it('FR-3: keeps the other models selectable with their existing values', () => {
+    expect(findModel('anthropic', 'claude-sonnet-5')).toEqual(expect.objectContaining({
+      tier: 'premium', levels: ['disabled', 'low', 'medium', 'high'], defaultLevel: 'medium', maxOutputTokens: 64000,
+    }));
+    expect(findModel('anthropic', 'claude-haiku-4-5')).toEqual(expect.objectContaining({
+      tier: 'fast', levels: ['disabled'], defaultLevel: 'disabled', maxOutputTokens: 16000,
+    }));
+    expect(findModel('gemini', 'gemini-3.1-pro-preview')).toEqual(expect.objectContaining({
+      tier: 'premium', levels: ['low', 'medium', 'high'], defaultLevel: 'medium', maxOutputTokens: 65536,
+    }));
+    for (const id of ['gemini-3.7-flash', 'gemini-3.6-flash']) {
+      expect(findModel('gemini', id)).toEqual(expect.objectContaining({
+        tier: 'fast', levels: ['minimal', 'low', 'medium', 'high'], defaultLevel: 'medium', maxOutputTokens: 65536,
+      }));
+    }
+  });
+
+  it('FR-5: tier fallbacks land on the new models by catalog position; gemini deep default unchanged', () => {
+    expect(defaultModel('gemini')!.id).toBe('gemini-3.1-pro-preview');
+    expect(serverSupport.resolveSlot('anthropic', undefined, 'premium').model).toBe('claude-sonnet-5-5');
+    expect(serverSupport.resolveSlot('gemini', undefined, 'fast').model).toBe('gemini-3.8-flash');
+  });
+});
+
+describe('US-4.1 clamp outcomes (FR-4, FR-4a)', () => {
+  type Clamp = (p: string, m: string, l: unknown) => string;
+  const both: Array<[string, Clamp]> = [
+    ['client', clampLevel as Clamp],
+    ['server', serverSupport.clampLevel as Clamp],
+  ];
+
+  // Approver-confirmed OQ-1 outcomes.
+  it('FR-4: snaps disabled to between_tools on claude-sonnet-5-5', () => {
+    for (const [name, clamp] of both) {
+      expect(clamp('anthropic', 'claude-sonnet-5-5', 'disabled'), name).toBe('between_tools');
+    }
+  });
+
+  it('FR-4: snaps minimal up to low on claude-sonnet-5-5 (tie resolves upward)', () => {
+    expect(findModel('anthropic', 'claude-sonnet-5-5'), 'claude-sonnet-5-5 missing').toBeDefined();
+    for (const [name, clamp] of both) {
+      expect(clamp('anthropic', 'claude-sonnet-5-5', 'minimal'), name).toBe('low');
+    }
+  });
+
+  it('FR-4: returns every one of the five claude-sonnet-5-5 levels unchanged', () => {
+    for (const [name, clamp] of both) {
+      for (const level of ['between_tools', 'low', 'medium', 'high', 'xhigh']) {
+        expect(clamp('anthropic', 'claude-sonnet-5-5', level), `${name} ${level}`).toBe(level);
+      }
+    }
+  });
+
+  // D1'/OQ-2: max is not a Sonnet 5.5 level; it snaps down to the top rung.
+  it('FR-4: snaps max to xhigh on claude-sonnet-5-5 on client and server', () => {
+    for (const [name, clamp] of both) {
+      expect(clamp('anthropic', 'claude-sonnet-5-5', 'max'), name).toBe('xhigh');
+    }
+  });
+
+  it('FR-4: resolves an unknown level to the model default on claude-sonnet-5-5', () => {
+    for (const [name, clamp] of both) {
+      expect(clamp('anthropic', 'claude-sonnet-5-5', 'turbo'), name).toBe('high');
+      expect(clamp('anthropic', 'claude-sonnet-5-5', undefined), name).toBe('high');
+    }
+  });
+
+  it('FR-4 / FR-8: snaps minimal and disabled to low on gemini-3.8-flash', () => {
+    expect(findModel('gemini', 'gemini-3.8-flash'), 'gemini-3.8-flash missing').toBeDefined();
+    for (const [name, clamp] of both) {
+      expect(clamp('gemini', 'gemini-3.8-flash', 'minimal'), name).toBe('low');
+      expect(clamp('gemini', 'gemini-3.8-flash', 'disabled'), name).toBe('low');
+    }
+  });
+
+  it('FR-4: keeps the existing outcomes on the other catalog models', () => {
+    for (const [name, clamp] of both) {
+      expect(clamp('gemini', 'gemini-3.6-flash', 'disabled'), name).toBe('minimal');
+      expect(clamp('gemini', 'gemini-3.7-flash', 'disabled'), name).toBe('minimal');
+      expect(clamp('gemini', 'gemini-3.1-pro-preview', 'minimal'), name).toBe('low');
+      expect(clamp('anthropic', 'claude-sonnet-5', 'minimal'), name).toBe('low');
+      expect(clamp('anthropic', 'claude-haiku-4-5', 'xhigh'), name).toBe('disabled');
+      expect(clamp('anthropic', 'claude-haiku-4-5', 'max'), name).toBe('disabled');
+      expect(clamp('anthropic', 'claude-haiku-4-5', 'between_tools'), name).toBe('disabled');
+      expect(clamp('anthropic', 'claude-sonnet-5', 'xhigh'), name).toBe('high');
+      expect(clamp('anthropic', 'claude-sonnet-5', 'max'), name).toBe('high');
+      expect(clamp('gemini', 'gemini-3.1-pro-preview', 'max'), name).toBe('high');
+    }
+  });
+
+  it('FR-4: never produces a level outside the target model levels and never throws', () => {
+    const probes = ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'bogus', undefined];
+    for (const m of ALL_MODELS) {
+      for (const [name, clamp] of both) {
+        for (const probe of probes) {
+          expect(m.levels, `${name} ${m.id} / ${probe}`).toContain(clamp(m.provider, m.id, probe));
+        }
+      }
+    }
+  });
+
+  it('FR-4a: client and server agree on the new models for every probe level', () => {
+    const probes = ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'turbo', undefined];
+    for (const [provider, id] of [['anthropic', 'claude-sonnet-5-5'], ['gemini', 'gemini-3.8-flash']] as const) {
+      expect(findModel(provider, id), `${id} missing`).toBeDefined();
+      for (const probe of probes) {
+        expect(clampLevel(provider, id, probe as never), `${id} / ${probe}`)
+          .toBe(serverSupport.clampLevel(provider, id, probe));
+      }
+    }
+  });
+});
+
+/**
+ * US-4.1 v3 (D2', F-4): explicit `max` rows and the parity invariant. No catalog model lists
+ * `max`, so `max` is an ordering member only and must clamp to each model's top rung.
+ */
+describe('US-4.1 v3 max rows and clamp parity invariant (FR-4, FR-4a)', () => {
+  const MAX_ROWS: Array<[string, string, string]> = [
+    ['anthropic', 'claude-sonnet-5-5', 'xhigh'],
+    ['anthropic', 'claude-sonnet-5', 'high'],
+    ['gemini', 'gemini-3.1-pro-preview', 'high'],
+    ['gemini', 'gemini-3.8-flash', 'high'],
+    ['gemini', 'gemini-3.7-flash', 'high'],
+    ['gemini', 'gemini-3.6-flash', 'high'],
+    ['anthropic', 'claude-haiku-4-5', 'disabled'],
+  ];
+
+  it.each(MAX_ROWS)('FR-4: %s %s clamps max to %s on client and server', (provider, id, expected) => {
+    expect(clampLevel(provider, id, 'max'), 'client').toBe(expected);
+    expect(serverSupport.clampLevel(provider, id, 'max'), 'server').toBe(expected);
+  });
+
+  it('D2: no catalog model lists max as a level', () => {
+    for (const m of ALL_MODELS) expect(m.levels, m.id).not.toContain('max');
+  });
+
+  it('FR-4a: for every model x probe level, result is in the model levels, client == server, and a member level is unchanged', () => {
+    const probes = ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'turbo', undefined];
+    for (const m of ALL_MODELS) {
+      for (const probe of probes) {
+        const client = clampLevel(m.provider, m.id, probe);
+        const server = serverSupport.clampLevel(m.provider, m.id, probe);
+        const tag = `${m.id} / ${String(probe)}`;
+        expect(m.levels, `${tag} in levels`).toContain(client);
+        expect(client, `${tag} parity`).toBe(server);
+        if ((m.levels as string[]).includes(probe as string)) expect(client, `${tag} member unchanged`).toBe(probe);
+      }
+    }
+  });
+
+  it('AC-1: the route-level resolver maps a max slot on claude-sonnet-5-5 to xhigh with the 128000 ceiling', () => {
+    expect(serverSupport.resolveSlot('anthropic', { model: 'claude-sonnet-5-5', level: 'max' }))
+      .toEqual({ model: 'claude-sonnet-5-5', level: 'xhigh', maxOutputTokens: 128000 });
   });
 });

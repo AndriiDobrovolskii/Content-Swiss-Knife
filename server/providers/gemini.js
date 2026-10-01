@@ -7,9 +7,10 @@ import { clampLevel, resolveSlot } from './model-support.js';
 import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, VISION_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
 
 // Used when a caller doesn't pass a slot (direct unit-test calls, or a request that
-// predates the settings menu). Gemini 3.1 Pro cannot disable thinking at all.
+// predates the settings menu). Gemini 3.1 Pro cannot disable thinking at all; Gemini 3.8 Flash
+// (the Fast default) has no 'minimal', so the Fast fallback runs at 'low'.
 const FALLBACK_DEEP = () => resolveSlot('gemini', { model: 'gemini-3.1-pro-preview' });
-const FALLBACK_FAST = () => resolveSlot('gemini', { model: 'gemini-3.7-flash', level: 'minimal' });
+const FALLBACK_FAST = () => resolveSlot('gemini', { model: 'gemini-3.8-flash', level: 'low' });
 
 export class GeminiProvider {
   constructor(apiKey) {
@@ -104,7 +105,7 @@ export class GeminiProvider {
           systemInstruction: systemBlocks.filter(b => b?.text).map(b => b.text).join('\n\n') || undefined,
           maxOutputTokens,
           httpOptions: { timeout: timeoutForMode(mode) },
-          thinkingConfig: { thinkingLevel: level },
+          thinkingConfig: { thinkingLevel: clampLevel('gemini', model, level) },
           ...(isJson ? { responseMimeType: 'application/json' } : {}),
         },
       });
@@ -149,7 +150,7 @@ export class GeminiProvider {
           // The caption is <= 20 words, but thinking tokens draw from the same budget.
           maxOutputTokens: Math.min(8000, maxOutputTokens),
           httpOptions: { timeout: useThinking ? VISION_TIMEOUT_MS : FAST_TIMEOUT_MS },
-          thinkingConfig: { thinkingLevel: level },
+          thinkingConfig: { thinkingLevel: clampLevel('gemini', model, level) },
         },
       });
       return this.#readText(response, model, 'vision').trim();

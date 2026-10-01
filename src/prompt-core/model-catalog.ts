@@ -6,11 +6,17 @@ export type ProviderId = 'anthropic' | 'gemini';
 
 /** Every thinking level any provider understands, ordered weakest → strongest.
  *  Individual models accept only a subset (see ModelSpec.levels) — Gemini 3.1 Pro has no
- *  'minimal' and cannot disable thinking at all; Anthropic has no 'minimal'. */
-export type ThinkingLevel = 'disabled' | 'minimal' | 'low' | 'medium' | 'high';
+ *  'minimal' and cannot disable thinking at all; Anthropic has no 'minimal'. Claude Sonnet 5.5
+ *  cannot disable thinking either: its lowest rung is 'between_tools' (interleaved thinking
+ *  between tool calls only), and it adds the 'xhigh' effort level. 'max' is a member of this
+ *  ordering but no catalog model lists it, so it clamps to the nearest level the model offers. */
+export type ThinkingLevel =
+  'disabled' | 'between_tools' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 /** Ordinal scale used to clamp a level onto a model that doesn't accept it. */
-const LEVEL_ORDER: ThinkingLevel[] = ['disabled', 'minimal', 'low', 'medium', 'high'];
+const LEVEL_ORDER: ThinkingLevel[] = [
+  'disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max',
+];
 
 export interface ModelSpec {
   /** Wire id sent to the SDK. */
@@ -25,11 +31,11 @@ export interface ModelSpec {
    * The model's real output ceiling; providers use it for max_tokens / maxOutputTokens.
    *
    * Two premium Claude models sit at different values on purpose, and the JSON cannot say why.
-   * On Anthropic this caps thinking AND response text together, and Sonnet 4.6's effort ladder sits
-   * a rung below Sonnet 5's (4.6 @ high ≈ 5 @ medium), so 4.6 spends appreciably more of the budget
-   * thinking to reach the same artifact — 64000 truncated a `Doc (base)` run mid-JSON. 4.6 therefore
-   * gets its true 128K ceiling while Sonnet 5 stays at 64000, where it works. Only tokens actually
-   * generated are billed, so a higher ceiling costs nothing until it is used.
+   * On Anthropic this caps thinking AND response text together. Sonnet 5.5 gets its true 128K
+   * ceiling because a high-effort run spends a large share of the budget thinking (64000
+   * truncated a `Doc (base)` run mid-JSON on the 4.x line), while Sonnet 5 stays at 64000, where
+   * it works. Only tokens actually generated are billed, so a higher ceiling costs nothing until
+   * it is used.
    */
   maxOutputTokens: number;
 }

@@ -1,6 +1,10 @@
 // $ per 1M tokens, per Claude model. Update here when Anthropic changes prices —
 // past usage_log rows keep the cost computed at insert time, so this only affects new rows.
 const DEFAULT_PRICES = {
+  // Claude Sonnet 5.5. Listed BEFORE claude-sonnet-5 so a dated id such as
+  // claude-sonnet-5-5-<date> hits this entry in the substring loop, not the shorter key.
+  // cw is 2x base input (1h ephemeral caches), cr is 0.1x, as for Sonnet 5.
+  'claude-sonnet-5-5': { in: 2.00, out: 10.00, cw: 4.00, cr: 0.20 },
   // Claude Sonnet 5 — INTRODUCTORY pricing, in effect through 2026-08-31.
   // TODO(2026-09-01): switch to standard rates → { in: 3.00, out: 15.00, cw: 6.00, cr: 0.30 }
   // cw is 2x base input because this codebase writes 1h ephemeral caches (ttl: '1h'),
@@ -35,14 +39,25 @@ const FALLBACK_PRICE = { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 };
 // Gemini 3.7 Flash — introductory rate through 2026-12-31, standard rate after.
 // Evaluated per lookup (not at module load) so a long-running server picks up the
 // switch without a restart.
-function gemini37FlashPrice() {
+function gemini37FlashPrice(now) {
   const standard = { in: 1.50, out: 7.50, cw: 0, cr: 0.15 };
   const promo = { in: 0.75, out: 3.75, cw: 0, cr: 0.075 };
-  return new Date() < new Date('2027-01-01T00:00:00Z') ? promo : standard;
+  return now < new Date('2027-01-01T00:00:00Z') ? promo : standard;
 }
 
-function getPrices(model) {
-  if (model === 'gemini-3.7-flash') return gemini37FlashPrice();
+// Gemini 3.8 Flash — same promo window and rates as 3.7 Flash. A helper of its own, so the
+// model can never fall through to FALLBACK_PRICE (which would overstate it 4x) or to another
+// Gemini entry in the substring loop.
+function gemini38FlashPrice(now) {
+  const standard = { in: 1.50, out: 7.50, cw: 0, cr: 0.15 };
+  const promo = { in: 0.75, out: 3.75, cw: 0, cr: 0.075 };
+  return now < new Date('2027-01-01T00:00:00Z') ? promo : standard;
+}
+
+// `now` is an injectable clock for tests; production callers omit it.
+function getPrices(model, now = new Date()) {
+  if (model === 'gemini-3.7-flash') return gemini37FlashPrice(now);
+  if (model === 'gemini-3.8-flash') return gemini38FlashPrice(now);
   if (DEFAULT_PRICES[model]) return DEFAULT_PRICES[model];
   for (const key of Object.keys(DEFAULT_PRICES)) {
     if (model.includes(key) || key.includes(model)) return DEFAULT_PRICES[key];

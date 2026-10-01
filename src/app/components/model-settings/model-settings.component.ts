@@ -19,7 +19,10 @@ const LABELS = {
     slotHint: '“Deep Thinking Mode” in each tool chooses which slot runs.',
     reset: 'Reset to defaults',
     done: 'Done',
-    levels: { disabled: 'Disabled', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High' },
+    levels: {
+      disabled: 'Disabled', between_tools: 'Between tools', minimal: 'Minimal', low: 'Low',
+      medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max',
+    },
   },
   uk: {
     title: 'Налаштування моделі ШІ',
@@ -36,7 +39,10 @@ const LABELS = {
     slotHint: '«Deep Thinking Mode» у кожному інструменті обирає, який слот запускати.',
     reset: 'Скинути до типових',
     done: 'Готово',
-    levels: { disabled: 'Вимкнено', minimal: 'Мінімальний', low: 'Низький', medium: 'Середній', high: 'Високий' },
+    levels: {
+      disabled: 'Вимкнено', between_tools: 'Між інструментами', minimal: 'Мінімальний', low: 'Низький',
+      medium: 'Середній', high: 'Високий', xhigh: 'Дуже високий', max: 'Максимальний',
+    },
   },
 } as const;
 

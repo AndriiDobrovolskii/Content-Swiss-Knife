@@ -6,6 +6,13 @@ import {
 
 const STORAGE_KEY = 'seo_gen_model_settings';
 
+/** Models removed from the catalog, mapped to the model a stored selection of them moves onto.
+ *  Applied once in restore(). Deliberately the only migration: other stored choices (Sonnet 5,
+ *  Gemini 3.7 / 3.6 Flash) are still in the catalog and stay exactly as the user left them. */
+const RETIRED_MODELS: Record<string, string> = {
+  'claude-sonnet-4-6': 'claude-sonnet-5-5',
+};
+
 /** One slot's resolved configuration, as sent to the server. Each slot names its own
  *  provider: Deep on Claude and Fast on Gemini in the same run is a supported setup. */
 export interface SlotSettings { provider: ProviderId; model: string; level: ThinkingLevel; }
@@ -26,25 +33,24 @@ interface LegacySettings {
 
 /**
  * The mixed configuration the pipeline is shaped for: the judgment work (Task A, the master
- * uk-UA artifact) on Sonnet 5, the mechanical work (translations, PDF extraction) on Gemini
+ * uk-UA artifact) on Sonnet 5.5, the mechanical work (translations, PDF extraction) on Gemini
  * Flash. Deep stays on Anthropic because the whole artifact is written there and the prompt
  * text is calibrated against it; Fast moves to Gemini because per-language translation is the
  * bulk of the token spend and the cheapest place to pay it.
  *
- * `level: 'minimal'` rather than the catalog's `defaultLevel: 'medium'` — the Fast slot's job
- * is transcription, not reasoning, and this matches FALLBACK_FAST in server/providers/gemini.js
- * so a request carrying settings and one carrying none route identically.
+ * Fast runs Gemini 3.8 Flash at `low`. 3.8 Flash has no `minimal`, and the Fast slot's job is
+ * transcription, not reasoning, so `low` is the cheapest level it offers; it matches
+ * FALLBACK_FAST in server/providers/gemini.js so a request carrying settings and one carrying
+ * none route identically. This intentionally differs from the catalog `defaultLevel` (`high`),
+ * which is what a provider switch in the settings UI lands on.
  *
- * Fast runs Gemini 3.7 Flash (superseded 3.6 on 2026-08-13: same thinking levels, half the
- * price during its introductory window — see server/usage/pricing.js). A browser with no
- * stored settings lands here directly; one with a stored 3.6 Flash choice is moved onto 3.7 by
- * the one-time migration in restore() below, since 3.6 was never a deliberate alternative to
- * offer against a strictly cheaper, newer same-tier model — unlike a provider choice (Anthropic
- * vs Gemini), which restore() still never overrides.
+ * A browser with no stored settings lands here directly. A stored Sonnet 4.6 choice (removed
+ * from the catalog) is moved onto Sonnet 5.5 by the one-time migration in restore() below;
+ * every other stored choice is left alone.
  */
 const DEFAULTS: ModelSettings = {
-  deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
-  fast: { provider: 'gemini', model: 'gemini-3.7-flash', level: 'minimal' },
+  deep: { provider: 'anthropic', model: 'claude-sonnet-5-5', level: 'high' },
+  fast: { provider: 'gemini', model: 'gemini-3.8-flash', level: 'low' },
 };
 
 /**
@@ -171,11 +177,16 @@ export class ModelSettingsService {
    * A payload written before providers went per-slot carries one top-level `provider`; it is
    * read as the provider of both slots, which is exactly what that user had configured.
    *
-   * One-time migration: a stored Fast slot still on `gemini-3.6-flash` is moved onto
-   * `gemini-3.7-flash` before validation, then re-persisted so this only fires once per
-   * browser. This can't distinguish "the user deliberately picked 3.6 Flash" from "3.6 Flash
-   * was only ever carried along because persist() writes the whole snapshot on any change" —
-   * both get moved. A user who wants to stay on 3.6 has to reselect it once after this ships.
+   * One-time migration: a stored slot (either one) on a model in RETIRED_MODELS
+   * (`claude-sonnet-4-6`) is moved onto its replacement (`claude-sonnet-5-5`) before
+   * validation, then re-persisted so this only fires once per browser. The stored level is then
+   * clamped into the replacement's levels like any other level (`disabled` becomes
+   * `between_tools`, `minimal` becomes `low`, `medium` is kept).
+   *
+   * A stored `max` (no catalog model lists it) restores as `xhigh` on Sonnet 5.5 through
+   * validateSlot -> clampLevel. Level-only corrections like this are applied in memory and
+   * written back at the next setter call; the persist condition above is deliberately not
+   * widened to cover them.
    */
   private restore() {
     let raw: string | null = null;
@@ -194,16 +205,20 @@ export class ModelSettingsService {
       return;
     }
 
-    const fastRaw = { ...stored.fast };
-    const migratedFromGemini36Flash = fastRaw?.model === 'gemini-3.6-flash';
-    if (migratedFromGemini36Flash) fastRaw.model = 'gemini-3.7-flash';
+    let migrated = false;
+    const migrate = (slot: Partial<SlotSettings> | undefined) => {
+      const next = slot?.model ? RETIRED_MODELS[slot.model] : undefined;
+      if (!next) return slot;
+      migrated = true;
+      return { ...slot, model: next };
+    };
 
     this.apply({
-      deep: this.validateSlot(stored.deep, stored.provider, DEFAULTS.deep, 'premium'),
-      fast: this.validateSlot(fastRaw, stored.provider, DEFAULTS.fast, 'fast'),
+      deep: this.validateSlot(migrate(stored.deep), stored.provider, DEFAULTS.deep, 'premium'),
+      fast: this.validateSlot(migrate(stored.fast), stored.provider, DEFAULTS.fast, 'fast'),
     });
 
-    if (migratedFromGemini36Flash) this.persist();
+    if (migrated) this.persist();
   }
 
   private validateSlot(
