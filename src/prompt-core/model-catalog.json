@@ -5,20 +5,20 @@
       "label": "Anthropic",
       "models": [
         {
+          "id": "claude-sonnet-5-5",
+          "label": "Claude Sonnet 5.5",
+          "tier": "premium",
+          "levels": ["between_tools", "low", "medium", "high", "xhigh", "max"],
+          "defaultLevel": "high",
+          "maxOutputTokens": 128000
+        },
+        {
           "id": "claude-sonnet-5",
           "label": "Claude Sonnet 5",
           "tier": "premium",
           "levels": ["disabled", "low", "medium", "high"],
           "defaultLevel": "medium",
           "maxOutputTokens": 64000
-        },
-        {
-          "id": "claude-sonnet-4-6",
-          "label": "Claude Sonnet 4.6",
-          "tier": "premium",
-          "levels": ["disabled", "low", "medium", "high"],
-          "defaultLevel": "medium",
-          "maxOutputTokens": 128000
         },
         {
           "id": "claude-haiku-4-5",
@@ -40,6 +40,14 @@
           "tier": "premium",
           "levels": ["low", "medium", "high"],
           "defaultLevel": "medium",
+          "maxOutputTokens": 65536
+        },
+        {
+          "id": "gemini-3.8-flash",
+          "label": "Gemini 3.8 Flash",
+          "tier": "fast",
+          "levels": ["low", "medium", "high"],
+          "defaultLevel": "high",
           "maxOutputTokens": 65536
         },
         {
