@@ -17,7 +17,7 @@
  * wiring between template, signals and service.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/angular';
+import { render, screen, fireEvent } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
 import { ModelSettingsComponent } from './model-settings.component';
 
@@ -68,5 +68,107 @@ describe('ModelSettingsComponent', () => {
     await user.click(screen.getAllByRole('button', { name: other!.label })[0]);
 
     expect(settings.deepProvider()).toBe(other!.id);
+  });
+});
+
+/**
+ * US-4.1 (T4 owns the T2 label assertions) — AC-1 / FR-4: the new Deep default claude-sonnet-5-5 has
+ * six thinking levels, three of which (between_tools, xhigh, max) the settings UI has never had to
+ * label. What the user sees must be a readable label, never the raw catalog id, in both languages.
+ */
+describe('ModelSettingsComponent with claude-sonnet-5-5 (US-4.1)', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  const deepSlider = () => screen.getAllByRole('slider')[0] as HTMLInputElement;
+  const fastSlider = () => screen.getAllByRole('slider')[1] as HTMLInputElement;
+  const levelValueNextTo = (labelText: string) =>
+    (screen.getAllByText(labelText)[0].nextElementSibling as HTMLElement).textContent!.trim();
+
+  it('offers claude-sonnet-5-5 in the Deep model list and no longer offers claude-sonnet-4-6', async () => {
+    await render(ModelSettingsComponent);
+
+    const deepModels = Array.from((screen.getAllByRole('combobox')[0] as HTMLSelectElement).options).map(o => o.value);
+    expect(deepModels).toEqual(['claude-sonnet-5-5', 'claude-sonnet-5', 'claude-haiku-4-5']);
+    expect(deepModels).not.toContain('claude-sonnet-4-6');
+  });
+
+  it('offers gemini-3.8-flash in the Fast model list when Fast runs on Gemini', async () => {
+    await render(ModelSettingsComponent);
+
+    const fastModels = Array.from((screen.getAllByRole('combobox')[1] as HTMLSelectElement).options).map(o => o.value);
+    expect(fastModels).toContain('gemini-3.8-flash');
+    expect(fastModels).not.toContain('claude-sonnet-4-6');
+  });
+
+  it('sizes the Deep slider to the six Sonnet 5.5 levels and starts it on High', async () => {
+    await render(ModelSettingsComponent);
+
+    expect(deepSlider().min).toBe('0');
+    expect(deepSlider().max).toBe('5');
+    expect(deepSlider().value).toBe('3');
+    expect(levelValueNextTo('Thinking level')).toBe('High');
+  });
+
+  it('sizes the Fast slider to the three Gemini 3.8 Flash levels (no Minimal) and starts it on Low', async () => {
+    await render(ModelSettingsComponent);
+
+    expect(fastSlider().max).toBe('2');
+    expect(fastSlider().value).toBe('0');
+    expect(screen.queryByText('Minimal')).toBeNull();
+  });
+
+  it('labels the Deep scale ends in English: Between tools ... Max, with no raw level id', async () => {
+    await render(ModelSettingsComponent);
+
+    expect(screen.getAllByText('Between tools').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Max').length).toBeGreaterThan(0);
+    expect(screen.queryByText('between_tools')).toBeNull();
+    expect(screen.queryByText('xhigh')).toBeNull();
+    expect(screen.queryByText('max')).toBeNull();
+  });
+
+  it('shows Extra high and drives setDeepLevel when the user slides to the fifth step', async () => {
+    const { fixture } = await render(ModelSettingsComponent);
+
+    fireEvent.input(deepSlider(), { target: { value: '4' } });
+
+    expect(fixture.componentInstance.settings.deepLevel()).toBe('xhigh');
+    expect((await screen.findAllByText('Extra high')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('xhigh')).toBeNull();
+  });
+
+  it('shows Between tools and drives setDeepLevel when the user slides to the first step', async () => {
+    const { fixture } = await render(ModelSettingsComponent);
+
+    fireEvent.input(deepSlider(), { target: { value: '0' } });
+
+    expect(fixture.componentInstance.settings.deepLevel()).toBe('between_tools');
+    await screen.findAllByText('Between tools');
+    expect(levelValueNextTo('Thinking level')).toBe('Between tools');
+    expect(screen.queryByText('between_tools')).toBeNull();
+  });
+
+  it('shows Max when the user slides to the last step', async () => {
+    const { fixture } = await render(ModelSettingsComponent);
+
+    fireEvent.input(deepSlider(), { target: { value: '5' } });
+
+    expect(fixture.componentInstance.settings.deepLevel()).toBe('max');
+    expect(levelValueNextTo('Thinking level')).toBe('Max');
+  });
+
+  it('renders Ukrainian text, not English and not the raw id, for the new levels', async () => {
+    const { fixture } = await render(ModelSettingsComponent, { inputs: { lang: 'uk' } });
+
+    for (const [index, id] of [['0', 'between_tools'], ['4', 'xhigh'], ['5', 'max']] as const) {
+      fireEvent.input(deepSlider(), { target: { value: index } });
+      expect(fixture.componentInstance.settings.deepLevel()).toBe(id);
+
+      const shown = levelValueNextTo('Рівень мислення');
+      expect(shown, id).toMatch(/[Ѐ-ӿ]/);
+      expect(shown, id).not.toBe(id);
+      expect(['Between tools', 'Extra high', 'Max']).not.toContain(shown);
+      expect(screen.queryByText(id)).toBeNull();
+    }
   });
 });

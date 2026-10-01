@@ -17,16 +17,25 @@ describe('ModelSettingsService defaults', () => {
   // work on Gemini. The mixed pair IS the shipped default, not something you have to assemble.
   it('ships the mixed Anthropic-deep / Gemini-fast configuration', () => {
     expect(boot().snapshot()).toEqual({
-      deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
-      fast: { provider: 'gemini', model: 'gemini-3.7-flash', level: 'minimal' },
+      deep: { provider: 'anthropic', model: 'claude-sonnet-5-5', level: 'high' },
+      fast: { provider: 'gemini', model: 'gemini-3.8-flash', level: 'low' },
     });
   });
 
-  // 'minimal', not the catalog's defaultLevel of 'medium' — the Fast slot transcribes, it does
-  // not reason, and this has to match FALLBACK_FAST in server/providers/gemini.js so a request
-  // with settings and one without route identically.
-  it('runs the fast slot at minimal thinking, not the catalog default', () => {
-    expect(boot().fastLevel()).toBe('minimal');
+  // 'low', not the catalog's defaultLevel of 'high' (accepted as-is by the approver) — gemini-3.8-flash
+  // has no 'minimal', and this has to match FALLBACK_FAST in server/providers/gemini.js so a
+  // request with settings and one without route identically.
+  it('runs the fast slot at low thinking, not the catalog default of high', () => {
+    const s = boot();
+    expect(s.fastLevel()).toBe('low');
+    expect(s.fastSpec()!.defaultLevel).toBe('high');
+    expect(s.fastSpec()!.levels).toContain(s.fastLevel());
+  });
+
+  it('FR-5: starts the deep slot at a level claude-sonnet-5-5 accepts', () => {
+    const s = boot();
+    expect(s.deepSpec()!.levels).toContain(s.deepLevel());
+    expect(s.deepLevel()).toBe('high');
   });
 
   it('reports the default config as default', () => {
@@ -52,11 +61,11 @@ describe('ModelSettingsService mixed providers', () => {
 
   it('leaves the other slot untouched when one slot switches provider', () => {
     const s = boot();
-    s.setDeepModel('claude-sonnet-4-6');
+    s.setDeepModel('claude-sonnet-5');
     s.setFastProvider('gemini');
 
     expect(s.deepProvider()).toBe('anthropic');
-    expect(s.deepModel()).toBe('claude-sonnet-4-6');
+    expect(s.deepModel()).toBe('claude-sonnet-5');
   });
 
   it('lands a provider switch on a model of the slot own tier', () => {
@@ -65,21 +74,21 @@ describe('ModelSettingsService mixed providers', () => {
     s.setFastProvider('gemini');
 
     expect(s.deepModel()).toBe('gemini-3.1-pro-preview');
-    expect(s.fastModel()).toBe('gemini-3.7-flash');
+    expect(s.fastModel()).toBe('gemini-3.8-flash');
   });
 
   it('offers each slot only its own provider models', () => {
     const s = boot();
     s.setFastProvider('gemini');
 
-    expect(s.deepModels().map(m => m.id)).toContain('claude-sonnet-5');
-    expect(s.fastModels().map(m => m.id)).toEqual(['gemini-3.1-pro-preview', 'gemini-3.7-flash', 'gemini-3.6-flash']);
+    expect(s.deepModels().map(m => m.id)).toEqual(['claude-sonnet-5-5', 'claude-sonnet-5', 'claude-haiku-4-5']);
+    expect(s.fastModels().map(m => m.id)).toEqual(['gemini-3.1-pro-preview', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash']);
   });
 
   it('ignores a model that does not belong to that slot provider', () => {
     const s = boot();
     s.setDeepModel('gemini-3.6-flash');
-    expect(s.deepModel()).toBe('claude-sonnet-5');
+    expect(s.deepModel()).toBe('claude-sonnet-5-5');
   });
 
   it('ignores an unknown provider', () => {
@@ -142,9 +151,8 @@ describe('ModelSettingsService legacy storage', () => {
   beforeEach(() => localStorage.clear());
 
   // Written by the version that had one provider for both slots. Silently reverting such a
-  // user to Anthropic would look like the settings menu forgot their choice. The Fast model
-  // itself still migrates 3.6 → 3.7 (see the migration test below) — that is orthogonal to
-  // provider resolution.
+  // user to Anthropic would look like the settings menu forgot their choice. A stored 3.6 Flash
+  // is no longer migrated (US-4.1 OD-3), so it stays as stored.
   it('reads a single top-level provider as the provider of both slots', () => {
     const s = boot({
       provider: 'gemini',
@@ -154,31 +162,28 @@ describe('ModelSettingsService legacy storage', () => {
 
     expect(s.snapshot()).toEqual({
       deep: { provider: 'gemini', model: 'gemini-3.1-pro-preview', level: 'high' },
-      fast: { provider: 'gemini', model: 'gemini-3.7-flash', level: 'minimal' },
+      fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
     });
   });
 
   it('falls back to defaults when the legacy provider is unknown', () => {
     const s = boot({ provider: 'skynet', deep: {}, fast: {} });
     expect(s.deepProvider()).toBe('anthropic');
-    expect(s.deepModel()).toBe('claude-sonnet-5');
-    expect(s.fastModel()).toBe('gemini-3.7-flash');
+    expect(s.deepModel()).toBe('claude-sonnet-5-5');
+    expect(s.fastModel()).toBe('gemini-3.8-flash');
   });
 
-  // One-time migration: a browser that persisted the old Fast default (or an explicit 3.6
-  // Flash pick — restore() cannot tell the two apart, see model-settings.service.ts) is moved
-  // onto 3.7 Flash, and the migration is written back so it only runs once.
-  it('migrates a stored gemini-3.6-flash fast model to gemini-3.7-flash', () => {
+  // US-4.1 OD-3: the 3.6 -> 3.7 migration is gone. The only migration is claude-sonnet-4-6 ->
+  // claude-sonnet-5-5 (see the US-4.1 describe below); every other stored model is left alone.
+  it('no longer migrates a stored gemini-3.6-flash fast model', () => {
     const s = boot({
       deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
       fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'low' },
     });
 
-    expect(s.fastModel()).toBe('gemini-3.7-flash');
+    expect(s.fastModel()).toBe('gemini-3.6-flash');
     expect(s.fastLevel()).toBe('low');
-
-    const persisted = JSON.parse(localStorage.getItem(KEY)!);
-    expect(persisted.fast.model).toBe('gemini-3.7-flash');
+    expect(localStorage.getItem(KEY)).toContain('gemini-3.6-flash');
   });
 
   it('leaves a stored gemini-3.7-flash fast model untouched', () => {
@@ -264,5 +269,119 @@ describe('ModelSettingsService slot changes', () => {
     s.reset();
     expect(s.isDefault()).toBe(true);
     expect(localStorage.getItem(KEY)).toBeNull();
+  });
+});
+
+/**
+ * US-4.1 — FR-9: restore applies exactly one model migration, claude-sonnet-4-6 -> claude-sonnet-5-5,
+ * and clamps the stored level into the target model's levels (FR-4). OD-3: nothing else migrates.
+ */
+describe('ModelSettingsService US-4.1 settings restore (FR-9)', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => vi.restoreAllMocks());
+
+  const stored = (deepModel: string, deepLevel: string, fast?: Record<string, unknown>) => ({
+    deep: { provider: 'anthropic', model: deepModel, level: deepLevel },
+    fast: fast ?? { provider: 'gemini', model: 'gemini-3.8-flash', level: 'low' },
+  });
+
+  it('moves a stored claude-sonnet-4-6 Deep slot onto claude-sonnet-5-5', () => {
+    const s = boot(stored('claude-sonnet-4-6', 'medium'));
+    expect(s.deepProvider()).toBe('anthropic');
+    expect(s.deepModel()).toBe('claude-sonnet-5-5');
+  });
+
+  it('persists the corrected settings', () => {
+    boot(stored('claude-sonnet-4-6', 'medium'));
+    const persisted = JSON.parse(localStorage.getItem(KEY)!);
+    expect(persisted.deep.model).toBe('claude-sonnet-5-5');
+    expect(JSON.stringify(persisted)).not.toContain('claude-sonnet-4-6');
+  });
+
+  it('keeps a stored level the new model accepts (medium stays medium)', () => {
+    const migrated = boot(stored('claude-sonnet-4-6', 'medium'));
+    expect(migrated.deepModel()).toBe('claude-sonnet-5-5');
+    expect(migrated.deepLevel()).toBe('medium');
+    expect(boot(stored('claude-sonnet-4-6', 'high')).deepLevel()).toBe('high');
+    expect(boot(stored('claude-sonnet-4-6', 'low')).deepLevel()).toBe('low');
+  });
+
+  // OQ-1, confirmed by the approver.
+  it('clamps a stored disabled level to between_tools on the migrated model', () => {
+    expect(boot(stored('claude-sonnet-4-6', 'disabled')).deepLevel()).toBe('between_tools');
+  });
+
+  it('clamps a stored minimal level to low on the migrated model', () => {
+    expect(boot(stored('claude-sonnet-4-6', 'minimal')).deepLevel()).toBe('low');
+  });
+
+  it('migrates a claude-sonnet-4-6 selection in any slot, not only Deep', () => {
+    const s = boot(stored('claude-sonnet-5', 'medium', { provider: 'anthropic', model: 'claude-sonnet-4-6', level: 'disabled' }));
+    expect(s.fastProvider()).toBe('anthropic');
+    expect(s.fastModel()).toBe('claude-sonnet-5-5');
+    expect(s.fastLevel()).toBe('between_tools');
+    expect(s.deepModel()).toBe('claude-sonnet-5');
+  });
+
+  it('migrates a claude-sonnet-4-6 selection stored in the legacy single-provider shape', () => {
+    const s = boot({
+      provider: 'anthropic',
+      deep: { model: 'claude-sonnet-4-6', level: 'minimal' },
+      fast: { model: 'claude-haiku-4-5', level: 'disabled' },
+    });
+    expect(s.deepModel()).toBe('claude-sonnet-5-5');
+    expect(s.deepLevel()).toBe('low');
+    expect(s.fastModel()).toBe('claude-haiku-4-5');
+  });
+
+  it('never leaves a model id that is absent from the catalog after migrating', () => {
+    const s = boot(stored('claude-sonnet-4-6', 'xhigh'));
+    expect(s.deepSpec()).toBeDefined();
+    expect(s.deepSpec()!.levels).toContain(s.deepLevel());
+    expect(s.deepLevel()).toBe('xhigh');
+  });
+
+  it('does not migrate a stored claude-sonnet-5, gemini-3.7-flash or gemini-3.6-flash selection', () => {
+    const s = boot(stored('claude-sonnet-5', 'high', { provider: 'gemini', model: 'gemini-3.7-flash', level: 'minimal' }));
+    expect(s.deepModel()).toBe('claude-sonnet-5');
+    expect(s.fastModel()).toBe('gemini-3.7-flash');
+    expect(s.fastLevel()).toBe('minimal');
+
+    const t = boot(stored('claude-sonnet-5', 'medium', { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' }));
+    expect(t.fastModel()).toBe('gemini-3.6-flash');
+    expect(t.fastLevel()).toBe('minimal');
+  });
+
+  it('keeps a stored claude-sonnet-5-5 selection and its level untouched', () => {
+    const s = boot(stored('claude-sonnet-5-5', 'max'));
+    expect(s.deepModel()).toBe('claude-sonnet-5-5');
+    expect(s.deepLevel()).toBe('max');
+  });
+
+  it('resolves an unknown stored model to a catalog model of the slot tier, never an absent id', () => {
+    const s = boot(stored('claude-from-the-future', 'high', { provider: 'gemini', model: 'gemini-99', level: 'high' }));
+    expect(s.deepModel()).toBe('claude-sonnet-5-5');
+    expect(s.fastModel()).toBe('gemini-3.8-flash');
+  });
+
+  it('does not throw when persisting the migration fails', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceeded'); });
+    let s!: ModelSettingsService;
+    expect(() => { s = boot(stored('claude-sonnet-4-6', 'medium')); }).not.toThrow();
+    expect(s.deepModel()).toBe('claude-sonnet-5-5');
+  });
+
+  it('clamps a level change on gemini-3.8-flash: minimal lands on low', () => {
+    const s = boot();
+    s.setFastLevel('minimal');
+    expect(s.fastLevel()).toBe('low');
+  });
+
+  it('exposes the six Sonnet 5.5 levels as selectable deep levels', () => {
+    const s = boot();
+    for (const level of ['between_tools', 'low', 'medium', 'high', 'xhigh', 'max'] as const) {
+      s.setDeepLevel(level as never);
+      expect(s.deepLevel(), level).toBe(level);
+    }
   });
 });
