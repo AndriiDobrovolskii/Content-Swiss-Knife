@@ -62,10 +62,18 @@ export class AnthropicProvider {
   // other. Thinking still happens and still bills the same either way.
   #thinkingConfig(level, model) {
     if (level === 'disabled' || level === 'between_tools') return { thinking: this.#offThinking(model) };
-    // Anthropic has no 'minimal'; the catalog never offers it for a Claude model, but clamp
-    // defensively so a hand-rolled request can't produce a 400.
-    const effort = level === 'minimal' ? 'low' : level;
-    return { thinking: { type: 'adaptive', display: 'omitted' }, output_config: { effort } };
+    return { thinking: { type: 'adaptive', display: 'omitted' }, output_config: { effort: this.#effort(level, model) } };
+  }
+
+  // The effort string sent on the wire. Anthropic has no 'minimal'; the catalog never offers it
+  // for a Claude model, but map it to 'low' defensively so a hand-rolled request can't produce a
+  // 400. 'max' is sent only to a model whose catalog levels list it (none today): for any other
+  // model, including an id absent from the catalog, it becomes 'xhigh', so a request that bypassed
+  // the route clamp (or an ANTHROPIC_THINKING_EFFORT=max fallback) still cannot reach the wire.
+  #effort(level, model) {
+    if (level === 'minimal') return 'low';
+    if (level === 'max' && !(findModel('anthropic', model)?.levels ?? []).includes('max')) return 'xhigh';
+    return level;
   }
 
   /**

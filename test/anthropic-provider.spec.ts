@@ -39,6 +39,14 @@ vi.mock('../server/utils/retry.js', () => ({
     withRetryMock(fn, maxRetries, baseDelayMs, fallback, maxPolicyRetries),
 }));
 
+// Seam for the one #effort branch no catalog model can reach any more (a model that lists `max`):
+// findModel is real unless a test installs an override. The provider under test stays real.
+let findModelOverride: ((provider: string, id: string) => unknown) | undefined;
+vi.mock('../server/providers/model-support.js', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return { ...actual, findModel: (p: string, id: string) => findModelOverride?.(p, id) ?? actual.findModel(p, id) };
+});
+
 const { AnthropicProvider } = await import('../server/providers/anthropic.js');
 
 const CACHED_PAYLOAD = {
@@ -259,7 +267,7 @@ describe('AnthropicProvider same-provider fallback', () => {
  * parameters and to forced tool use, so the guard is on the REQUEST the provider builds. The
  * vendor SDK is mocked at the boundary above; the provider under test is real.
  */
-const SONNET_55_LEVELS = ['between_tools', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+const SONNET_55_LEVELS = ['between_tools', 'low', 'medium', 'high', 'xhigh'] as const;
 const slot55 = (level: string) => ({ model: 'claude-sonnet-5-5', level, maxOutputTokens: 128000 });
 
 describe('AnthropicProvider claude-sonnet-5-5 thinking mapping (FR-10, FR-11)', () => {
@@ -286,7 +294,7 @@ describe('AnthropicProvider claude-sonnet-5-5 thinking mapping (FR-10, FR-11)', 
     expect(config).not.toHaveProperty('output_config');
   });
 
-  it.each(['low', 'medium', 'high', 'xhigh', 'max'])('FR-11: sends adaptive thinking, display omitted and effort %s', async (level) => {
+  it.each(['low', 'medium', 'high', 'xhigh'])('FR-11: sends adaptive thinking, display omitted and exactly effort %s', async (level) => {
     await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'creative', slot55(level));
     const { config } = streamCalls[0];
 
@@ -313,11 +321,12 @@ describe('AnthropicProvider claude-sonnet-5-5 thinking mapping (FR-10, FR-11)', 
     const p = new AnthropicProvider('k');
     for (const mode of ['text', 'json', 'creative', 'creative-json'] as const) {
       nextMessage = message(mode.includes('json') ? '{"a":1}' : '<p>ok</p>');
-      for (const level of [...SONNET_55_LEVELS, 'disabled', 'minimal']) {
+      for (const level of [...SONNET_55_LEVELS, 'max', 'disabled', 'minimal']) {
         await p.generate(CACHED_PAYLOAD, mode, slot55(level));
       }
     }
     expect(streamCalls.length).toBe(4 * 8);
+    for (const { config } of streamCalls) expect(config.output_config?.effort).not.toBe('max');
     for (const { config } of streamCalls) {
       expect(config.thinking.type).not.toBe('disabled');
       if (config.thinking.type === 'between_tools') {
@@ -326,6 +335,59 @@ describe('AnthropicProvider claude-sonnet-5-5 thinking mapping (FR-10, FR-11)', 
       }
       if (config.output_config) expect(config.thinking.type).toBe('adaptive');
     }
+  });
+});
+
+/**
+ * US-4.1 v3 (D3', FR-11): Sonnet 5.5 has no `max` effort, so the provider must never put it on the
+ * wire for a model whose catalog levels lack it, even when a request bypassed the clamp.
+ */
+describe('AnthropicProvider never sends effort max for a model without it (D3)', () => {
+  beforeEach(() => { streamCalls.length = 0; createCalls.length = 0; nextMessage = message('<p>ok</p>'); });
+  afterEach(() => { vi.unstubAllEnvs(); findModelOverride = undefined; });
+
+  it('FR-11: a slot with level max that bypassed the clamp sends xhigh via generate', async () => {
+    await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'creative', slot55('max'));
+    expect(streamCalls[0].config.thinking).toEqual({ type: 'adaptive', display: 'omitted' });
+    expect(streamCalls[0].config.output_config).toEqual({ effort: 'xhigh' });
+  });
+
+  it('FR-11: a slot with level max that bypassed the clamp sends xhigh via analyzeImage', async () => {
+    await new AnthropicProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', true, slot55('max'));
+    expect(createCalls[0].config.output_config).toEqual({ effort: 'xhigh' });
+  });
+
+  it('FR-11: the FALLBACK_DEEP slot with ANTHROPIC_THINKING_EFFORT=max sends xhigh', async () => {
+    vi.stubEnv('ANTHROPIC_MODEL_THINKING', '');
+    vi.stubEnv('ANTHROPIC_THINKING_EFFORT', 'max');
+    await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'creative');
+    expect(streamCalls[0].config.model).toBe('claude-sonnet-5-5');
+    expect(streamCalls[0].config.output_config).toEqual({ effort: 'xhigh' });
+  });
+
+  it('FR-11: an id absent from the catalog with level max sends xhigh', async () => {
+    await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'creative',
+      { model: 'claude-from-the-future', level: 'max', maxOutputTokens: 64000 });
+    expect(streamCalls[0].config.output_config).toEqual({ effort: 'xhigh' });
+  });
+
+  it('FR-11: no claude-sonnet-5-5 request body contains effort max at any input level', async () => {
+    const p = new AnthropicProvider('k');
+    for (const level of ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']) {
+      await p.generate(CACHED_PAYLOAD, 'creative', slot55(level));
+    }
+    expect(streamCalls.length).toBe(8);
+    for (const { config } of streamCalls) expect(JSON.stringify(config)).not.toContain('"effort":"max"');
+  });
+
+  // Pass-through branch: no catalog model lists max after v3, so the only way to reach it is a
+  // findModel override. This documents the contract; it is green before and after the rework.
+  it('FR-11: passes max through unchanged when the model catalog entry lists max (mocked findModel)', async () => {
+    findModelOverride = (_p, id) => (id === 'claude-fake-max'
+      ? { id, levels: ['low', 'high', 'max'], defaultLevel: 'high', maxOutputTokens: 64000 } : undefined);
+    await new AnthropicProvider('k').generate(CACHED_PAYLOAD, 'creative',
+      { model: 'claude-fake-max', level: 'max', maxOutputTokens: 64000 });
+    expect(streamCalls[0].config.output_config).toEqual({ effort: 'max' });
   });
 });
 
