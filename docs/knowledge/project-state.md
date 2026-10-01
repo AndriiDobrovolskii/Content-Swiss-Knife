@@ -37,3 +37,14 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Delivered by PR #129, merge commit `209627b`. Summary: `docs/knowledge/US-3.1-delivery-summary.md`.
 - Open items: OD-10 (de-DE h1-identity band partly closed); §9 approvals for T8/T10 not durably recorded;
   FR-14(a) missing-key wording unclarified in the Specification.
+
+## US-4.1 — Sonnet 5.5 and Gemini 3.8 Flash as defaults; Sonnet 4.6 retired (archived 2026-10-01T13:59:42Z)
+- Deep defaults to `claude-sonnet-5-5` (levels between_tools/low/medium/high/xhigh, default high, 128K output);
+  Fast defaults to `gemini-3.8-flash` (low/medium/high, default low; `minimal` unsupported). `claude-sonnet-4-6`
+  is gone from the catalog; a stored 4.6 setting migrates to 5.5 and stale levels clamp (a stored `max` -> `xhigh`).
+- Pricing has entries for both; Gemini 3.8 Flash steps up on 2027-01-01 (`server/usage/pricing.js`).
+- Anthropic provider sends no sampling params or forced tool use for 5.5 and keeps effort `max` off the wire for
+  models that lack it (`server/providers/anthropic.js`, `model-support.js`).
+- No FROZEN file changed. Delivered by PR #131, merge commit `765b5a0`. Summary: `docs/knowledge/US-4.1-delivery-summary.md`.
+- Open items: beta header `extended-cache-ttl-2025-04-11` and 5.5 timeout exposure at `high` unverified live;
+  AC-9 doc test covers only README, `.env.example`, AGENTS.md.
