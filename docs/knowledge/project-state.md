@@ -48,3 +48,16 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - No FROZEN file changed. Delivered by PR #131, merge commit `765b5a0`. Summary: `docs/knowledge/US-4.1-delivery-summary.md`.
 - Open items: beta header `extended-cache-ttl-2025-04-11` and 5.5 timeout exposure at `high` unverified live;
   AC-9 doc test covers only README, `.env.example`, AGENTS.md.
+
+## US-5.1 — `[file-name.ext]` markers become the matching uploaded image (archived 2026-10-04T19:30:00Z)
+- A marker like `[desk-lamp.jpg]` in the Original Description is replaced, at its position, by the matching
+  uploaded image as a `<figure>` on both the Doc and legacy HTML paths; unmatched markers are removed with a
+  warning; other bracket text is untouched (`src/utils/image-placeholder*.ts`, wired in `content-orchestrator.service.ts`).
+- Vision now returns native-Ukrainian label, description and alt, stored on the manifest entry; marker figures use
+  them instead of the legacy altText. OpenAI vision `max_tokens` is 1000 (`server/providers/openai.js`).
+- All non-video figures share one style (`src/utils/image-figure-style.ts`): `width: max-content`, left figcaption.
+  `AGENTS.md` section 4 now says `max-content`.
+- Frozen `task-a.ts` and `master-system-prompt.ts` changed (section 9 approvals), checksums re-baselined.
+- Delivered by PR #132, merge commit `4d3092c`. Summary: `docs/knowledge/US-5.1-delivery-summary.md`.
+- Open items: N-9 (long `hookExtra` sentence not repaired); live re-run on `expert3d_agibot_d1_ultra_2026-10-03_1217`,
+  Vision output quality and browser check not recorded as done; OD-18, OD-20..OD-24 deferred.

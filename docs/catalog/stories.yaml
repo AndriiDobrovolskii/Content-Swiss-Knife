@@ -32,3 +32,10 @@ stories:
     path: docs/stories/US-4.1-add-sonnet-5-5-and-gemini-3-8-flash.md
     state: ARCHIVED
     created_at: 2026-10-01T00:00:00Z
+  - id: US-5.1
+    title: Replace [file-name.ext] markers in Original Description with the matching uploaded image at the same position in the final description
+    slug: image-placeholder-substitution
+    track: angular
+    path: docs/stories/US-5.1-image-placeholder-substitution.md
+    state: ARCHIVED
+    created_at: 2026-10-02T00:00:00Z
