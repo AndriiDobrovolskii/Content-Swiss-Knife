@@ -17,7 +17,12 @@ import { describe, it, expect } from 'vitest';
 
 import { buildPromptADoc, TASK_A_DOC_INSTRUCTION } from './task-a-doc';
 import { buildPromptA } from './task-a';
-import type { ProductInput } from '../app/types';
+import type { ImageManifestEntry, ProductInput } from '../app/types';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { DOC_PIPELINE_STORES } from '../prompt-core/doc-pipeline-flag';
+import { GOLDEN_CASES } from '../../test/fixtures/full-description-inputs';
+import type { PromptPayload } from '../prompt-core/payload';
 
 function input(overrides: Partial<ProductInput> = {}): ProductInput {
   return {
@@ -177,3 +182,56 @@ describe('TASK_A_DOC_INSTRUCTION — plain-text vs prose fields', () => {
   });
 });
 
+
+/**
+ * US-5.1 T11 — AC-9d (Spec v5 FR-19): buildPromptADoc carries the same [IMAGE MARKERS] block as
+ * buildPromptA. Fails until T15 adds the block to task-a.ts (task-a-doc.ts is not edited).
+ * Only COUNT=N and the verbatim list are asserted; the line format is not fixed.
+ */
+describe('buildPromptADoc — [IMAGE MARKERS] block (US-5.1 AC-9d)', () => {
+  const entry = (originalFilename: string, order: number): ImageManifestEntry => ({
+    id: `img-${order}`, originalFilename, urlFilename: `p-${originalFilename.replace(/\.webp$/, '.jpg')}`,
+    previewUrl: '', visionDescription: 'A part', altText: 'A part', order, status: 'done',
+  });
+  const MANIFEST = [entry('front.jpg', 1), entry('side-view.webp', 2), entry('back.jpg', 3)];
+  const DESCRIPTION = 'Intro. [front.jpg] shows the front. Later [side-view.webp] the side. Unknown [missing.jpg].';
+  const block = (userContent: string): string => {
+    const start = userContent.indexOf('[IMAGE MARKERS]');
+    if (start < 0) return '';
+    const end = userContent.indexOf('\n\nGenerate the description in', start);
+    return userContent.slice(start, end < 0 ? undefined : end);
+  };
+
+  it('is exercised for every Doc-enrolled store (guards against a silently empty list)', () => {
+    expect(DOC_PIPELINE_STORES.length).toBeGreaterThan(0);
+  });
+
+  it.each([...DOC_PIPELINE_STORES])('%s: carries COUNT=2 and the verbatim matched list, the same block as buildPromptA', (store) => {
+    const i = input({ website: { name: store }, description: DESCRIPTION, imageManifest: MANIFEST } as Partial<ProductInput>);
+    const docBlock = block(buildPromptADoc(i).userContent);
+    expect(docBlock, 'userContent has an [IMAGE MARKERS] block').not.toBe('');
+    expect(/COUNT=(\d+)/.exec(docBlock)?.[1]).toBe('2');
+    expect(docBlock).toContain('[front.jpg]');
+    expect(docBlock).toContain('[side-view.webp]');
+    expect(docBlock).not.toContain('[missing.jpg]');
+    expect(docBlock).toBe(block(buildPromptA(i).userContent));
+  });
+
+  it('keeps systemBlocks free of marker data on the Doc path', () => {
+    const i = input({ description: DESCRIPTION, imageManifest: MANIFEST } as Partial<ProductInput>);
+    expect(block(buildPromptADoc(i).userContent), 'the marker case must actually carry a block').not.toBe('');
+    for (const b of buildPromptADoc(i).systemBlocks) {
+      expect(b.text).not.toContain('front.jpg');
+      expect(b.text).not.toContain('COUNT=');
+    }
+  });
+
+  it.each(['doc/expert3d', 'doc/expert3d+hook', 'doc/c3d'])('no-marker golden case %s: userContent byte-equal, no block', (name) => {
+    const GOLDEN: Record<string, PromptPayload> = JSON.parse(
+      readFileSync(join(process.cwd(), 'test', 'fixtures', 'golden', 'full-description-prompts.json'), 'utf8'),
+    );
+    const { userContent } = GOLDEN_CASES[name]();
+    expect(userContent === GOLDEN[name].userContent, 'userContent differs from the golden').toBe(true);
+    expect(userContent).not.toContain('[IMAGE MARKERS]');
+  });
+});

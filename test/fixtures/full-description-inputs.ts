@@ -7,6 +7,16 @@
  * `templateId` — Full description — so the recorded bytes are what the pre-Story builders emit.
  * Do NOT regenerate the JSON after implementation starts: doing so would make the guard assert
  * the implementation back to itself.
+ *
+ * Two approved exceptions (US-5.1), both under human-approved AGENTS.md section 9 edits of the master
+ * system prompt, so `systemBlocks[0]` of the 10 master-embedding cases (doc/*, html/*, c/*) differs
+ * from the pre-Story capture in exactly these two places and nowhere else:
+ *   (1) Spec FR-20 (approval 2026-10-03T09:25:44Z / 09:28:48Z): one inserted static [IMAGE HANDLING]
+ *       sentence, additions only;
+ *   (2) Spec FR-22 / H-8 (approval 2026-10-03T18:20:00Z): the two example `<figure style="...">` lines
+ *       under FIGURE FORMAT move from `width: fit-content` to `width: max-content`, nothing else.
+ * `userContent` of all 12 cases and the 2 translate/* cases stay byte-identical to the pre-Story
+ * capture. No input here carries an image marker.
  */
 import type { ProductInput } from '../../src/app/types';
 import type { HookPattern } from '../../src/prompt-core/hook-pattern';

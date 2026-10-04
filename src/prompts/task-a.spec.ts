@@ -13,9 +13,14 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildPromptA } from './task-a';
+import { buildPromptADoc } from './task-a-doc';
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
 import { EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY, STORE_REGISTRY, NUMERIC_SOURCE_FIDELITY_RULES } from '../prompt-core/constants';
-import type { ProductInput, WebsiteGroup } from '../app/types';
+import type { ImageManifestEntry, ProductInput, WebsiteGroup } from '../app/types';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { GOLDEN_CASES } from '../../test/fixtures/full-description-inputs';
+import type { PromptPayload } from '../prompt-core/payload';
 
 function inputFor(storeName: string): ProductInput {
   return {
@@ -234,5 +239,207 @@ describe('buildPromptA — [VIDEO MANIFEST]', () => {
   it('ignores a non-video iframe such as an embedded map', () => {
     const map = { ...inputFor('3DPrinter'), description: '<iframe src="https://maps.google.com/maps?q=x"></iframe>' };
     expect(buildPromptA(map).userContent).not.toContain('[VIDEO MANIFEST]');
+  });
+});
+
+/**
+ * US-5.1 T11 — AC-9a/9b/9c and the "same section" wording (Spec v5 FR-19, plan v5 section 0 Q-D
+ * correction). Written before the [IMAGE MARKERS] block exists, so they fail until T15.
+ *
+ * Only `COUNT=N` and the verbatim `[file.ext]` list are asserted: the line format of the block is
+ * the planner's (U-9) and is deliberately not pinned here.
+ */
+describe('buildPromptA — [IMAGE MARKERS] block (US-5.1 FR-19, AC-9a-c)', () => {
+  const entry = (originalFilename: string, order: number, status: ImageManifestEntry['status'] = 'done'): ImageManifestEntry => ({
+    id: `img-${order}`, originalFilename, urlFilename: `p-${originalFilename.replace(/\.webp$/, '.jpg')}`,
+    previewUrl: '', visionDescription: 'A part', altText: 'A part', order, status,
+  });
+  const MANIFEST = [entry('front.jpg', 1), entry('side-view.webp', 2), entry('back.jpg', 3), entry('broken.jpg', 4, 'error')];
+
+  const withMarkers = (store: string, description: string, manifest: ImageManifestEntry[] = MANIFEST): ProductInput =>
+    ({ ...inputFor(store), description, imageManifest: manifest });
+
+  /** The slice of userContent from the block header to the closing instruction line. */
+  const markerBlock = (userContent: string): string => {
+    const start = userContent.indexOf('[IMAGE MARKERS]');
+    if (start < 0) return '';
+    const end = userContent.indexOf('\n\nGenerate the description in', start);
+    return userContent.slice(start, end < 0 ? undefined : end);
+  };
+  const countOf = (block: string): number | undefined => {
+    const m = /COUNT=(\d+)/.exec(block);
+    return m ? Number(m[1]) : undefined;
+  };
+
+  const TWO = 'Intro. [front.jpg] shows the front. Later, [side-view.webp] the side.';
+  const THREE = '[front.jpg] first. [side-view.webp] second. Third [back.jpg].';
+
+  it.each([
+    ['one marker', 'Intro text. See [front.jpg] for the front.', ['front.jpg']],
+    ['two markers', TWO, ['front.jpg', 'side-view.webp']],
+    ['three markers', THREE, ['front.jpg', 'side-view.webp', 'back.jpg']],
+  ])('AC-9a: %s gives COUNT=N and every matched file verbatim', (_label, description, files) => {
+    const block = markerBlock(buildPromptA(withMarkers('3DPrinter', description)).userContent);
+    expect(block, 'userContent has an [IMAGE MARKERS] block').not.toBe('');
+    expect(countOf(block)).toBe(files.length);
+    for (const f of files) expect(block).toContain(`[${f}]`);
+  });
+
+  it('AC-9a: a marker repeated in the description is counted once', () => {
+    const block = markerBlock(buildPromptA(withMarkers('3DPrinter', '[front.jpg] here and again [front.jpg], then [back.jpg].')).userContent);
+    expect(block, 'userContent has an [IMAGE MARKERS] block').not.toBe('');
+    expect(countOf(block)).toBe(2);
+    expect(block.split('[front.jpg]')).toHaveLength(2); // listed exactly once
+  });
+
+  it('AC-9a: an unmatched or mangled marker is not listed and not counted', () => {
+    const description = 'Real [front.jpg]. Unknown [missing.jpg]. Errored [broken.jpg]. Mangled [ back.jpg ] and [Back.JPG].';
+    const block = markerBlock(buildPromptA(withMarkers('3DPrinter', description)).userContent);
+    expect(block, 'userContent has an [IMAGE MARKERS] block').not.toBe('');
+    expect(countOf(block)).toBe(1);
+    expect(block).toContain('[front.jpg]');
+    for (const bad of ['[missing.jpg]', '[broken.jpg]', '[ back.jpg ]', '[Back.JPG]', '[back.jpg]']) {
+      expect(block, bad).not.toContain(bad);
+    }
+  });
+
+  it('AC-9a: Expert-3DPrinter, whose [IMAGE MANIFEST] block prints None, still gets the block from the real manifest', () => {
+    const { userContent } = buildPromptA(withMarkers('Expert-3DPrinter', TWO));
+    expect(userContent).toContain('[IMAGE MANIFEST]\nNone');
+    const block = markerBlock(userContent);
+    expect(block, 'userContent has an [IMAGE MARKERS] block').not.toBe('');
+    expect(countOf(block)).toBe(2);
+    expect(block).toContain('[front.jpg]');
+    expect(block).toContain('[side-view.webp]');
+  });
+
+  it('AC-9a: the block depends only on description + imageManifest, identical for every registered store (any group, imageBaseUrl or none)', () => {
+    const stores = Object.keys(STORE_REGISTRY);
+    expect(new Set(stores.map(s => STORE_REGISTRY[s].group)).size, 'stores span several groups').toBeGreaterThan(1);
+    expect(new Set(stores.map(s => STORE_REGISTRY[s].imageBaseUrl)).size, 'stores differ in imageBaseUrl').toBeGreaterThan(1);
+    const blocks = stores.map(s => markerBlock(buildPromptA(withMarkers(s, TWO)).userContent));
+    for (const [i, block] of blocks.entries()) {
+      expect(block, `${stores[i]}: userContent has an [IMAGE MARKERS] block`).not.toBe('');
+      expect(countOf(block), stores[i]).toBe(2);
+      expect(block, stores[i]).toContain('[front.jpg]');
+      expect(block, stores[i]).toContain('[side-view.webp]');
+      expect(block, `${stores[i]}: block equals the first store's block`).toBe(blocks[0]);
+    }
+  });
+
+  /** Pins why an unregistered store is not an AC-9a case: it cannot build a Task A prompt at all (Spec v5 A-3). */
+  it('AC-9a: a store absent from STORE_REGISTRY cannot build a prompt (deliveryRegion error), so it is out of AC-9a scope', () => {
+    const custom: ProductInput = {
+      website: { name: 'Some Custom Shop', group: 'US' as WebsiteGroup, url: '' },
+      name: 'Formlabs Fuse X1', description: TWO, specs: '', imageManifest: MANIFEST,
+    };
+    expect(() => buildPromptA(custom)).toThrow(/STORE_REGISTRY has no deliveryRegion/);
+  });
+
+  /** Wording: plan v5 section 0 (Q-D correction) is the authority: the relocation stays in the SAME section. */
+  it('wording: the relocation instruction keeps the marker in the SAME section and never says it may cross one', () => {
+    const block = markerBlock(buildPromptA(withMarkers('3DPrinter', TWO)).userContent);
+    expect(block, 'userContent has an [IMAGE MARKERS] block').not.toBe('');
+    expect(block).toMatch(/nearest\s+preceding\s+body\s+paragraph\s+in\s+the\s+same\s+section/i);
+    expect(block).not.toMatch(/across\s+a\s+section\s+boundary|cross(?:es|ing)?\s+(?:a|the)\s+section/i);
+  });
+
+  describe('AC-9b: no matched marker leaves userContent byte-identical to the pre-Story output', () => {
+    const GOLDEN: Record<string, PromptPayload> = JSON.parse(
+      readFileSync(join(process.cwd(), 'test', 'fixtures', 'golden', 'full-description-prompts.json'), 'utf8'),
+    );
+    it.each(['html/expert3d', 'html/legacy', 'html/legacy+lang', 'html/c3d+customTemplate'])(
+      'golden case %s: userContent is byte-equal and has no [IMAGE MARKERS]', (name) => {
+        const { userContent } = GOLDEN_CASES[name]();
+        expect(userContent === GOLDEN[name].userContent, 'userContent differs from the golden').toBe(true);
+        expect(userContent).not.toContain('[IMAGE MARKERS]');
+      });
+
+    /** Rebuilds the pre-Story bytes without a baseline file: swap each token for a neutral one, build, swap back. */
+    it.each([
+      ['an unmatched marker', 'Text [missing.jpg] more text.'],
+      ['only an errored-entry marker', 'Text [broken.jpg] more text.'],
+      ['a mangled marker', 'Text [ front.jpg ] and [Front.JPG].'],
+    ])('%s: userContent equals the neutral-token build with the tokens restored, and has no block', (_label, description) => {
+      const TOKEN = 'ZZNEUTRALTOKENZZ';
+      const pieces = description.split(/(\[[^\]]*\])/).filter(Boolean);
+      const neutral = pieces.map(p => (p.startsWith('[') ? TOKEN : p)).join('');
+      const baseline = buildPromptA(withMarkers('3DPrinter', neutral)).userContent;
+      const restored = pieces.filter(p => p.startsWith('[')).reduce((acc, p) => acc.replace(TOKEN, p), baseline);
+      const actual = buildPromptA(withMarkers('3DPrinter', description)).userContent;
+      expect(actual === restored, 'userContent differs from the pre-Story shape').toBe(true);
+      expect(actual).not.toContain('[IMAGE MARKERS]');
+    });
+  });
+
+  describe('AC-9c: systemBlocks stay static', () => {
+    it.each(['3DPrinter', 'EXPERT3D', 'Center 3D Print', 'Expert-3DPrinter'])(
+      '%s: no marker filename or COUNT= in any system block', (store) => {
+        const marked = buildPromptA(withMarkers(store, THREE));
+        expect(markerBlock(marked.userContent), 'the marker case must actually carry a block').not.toBe('');
+        for (const b of marked.systemBlocks) {
+          for (const f of ['front.jpg', 'side-view.webp', 'back.jpg']) expect(b.text).not.toContain(f);
+          expect(b.text).not.toContain('COUNT=');
+        }
+      });
+
+    it.each(['3DPrinter', 'EXPERT3D', 'Center 3D Print', 'Expert-3DPrinter'])(
+      '%s: systemBlocks deep-equal between a marker input and a no-marker input', (store) => {
+        const marked = buildPromptA(withMarkers(store, THREE));
+        const plain = buildPromptA(withMarkers(store, 'Plain description with no marker.'));
+        expect(markerBlock(marked.userContent), 'the marker case must actually carry a block').not.toBe('');
+        expect(marked.systemBlocks).toEqual(plain.systemBlocks);
+      });
+  });
+});
+
+/**
+ * US-5.1 AC-9 (k), spec v9 (OD-25 = A, FR-21, NFR-5, NFR-12): the three Ukrainian Vision texts of a manifest
+ * entry reach NO prompt. The marker step reads them from the manifest after generation; Task A never sees
+ * them, so a text-only prompt cannot be asked to produce them and `systemBlocks` carry no per-image text.
+ * Sentinel strings are planted in the three fields; none may appear in `userContent` or in any system block.
+ *
+ * Written before the manifest type carries the fields (T4): it fails to type-check until then, and at
+ * runtime it is a guard that the FROZEN `buildImageBlock` never starts reading them (green on arrival).
+ */
+describe('buildPromptA / buildPromptADoc - the Ukrainian Vision fields reach no prompt (US-5.1 AC-9 k)', () => {
+  const SENTINELS = ['SENTINEL-LABEL-UK-91', 'SENTINEL-DESC-UK-92', 'SENTINEL-ALT-UK-93'];
+  const withUk = (originalFilename: string, order: number): ImageManifestEntry => ({
+    id: `img-${order}`, originalFilename, urlFilename: `p-${originalFilename}`, previewUrl: '',
+    visionDescription: 'A part', altText: 'A part', order, status: 'done',
+    visionLabelUk: SENTINELS[0], visionDescriptionUk: SENTINELS[1], visionAltUk: SENTINELS[2],
+  });
+  const withoutUk = (e: ImageManifestEntry): ImageManifestEntry => {
+    const { visionLabelUk: _l, visionDescriptionUk: _d, visionAltUk: _a, ...rest } = e;
+    return rest;
+  };
+  const MANIFEST = [withUk('front.jpg', 1), withUk('back.jpg', 2)];
+  const stores = ['3DPrinter', 'EXPERT3D', 'Center 3D Print', 'Expert-3DPrinter'];
+  const marked = (store: string, manifest: ImageManifestEntry[]): ProductInput =>
+    ({ ...inputFor(store), description: 'Intro [front.jpg] text [back.jpg] end.', imageManifest: manifest });
+  const plain = (store: string, manifest: ImageManifestEntry[]): ProductInput =>
+    ({ ...inputFor(store), description: 'Plain description without a marker.', imageManifest: manifest });
+
+  it.each(stores)('%s: no sentinel in userContent or any system block, with and without markers', (store) => {
+    for (const i of [marked(store, MANIFEST), plain(store, MANIFEST)]) {
+      for (const payload of [buildPromptA(i), buildPromptADoc(i)]) {
+        for (const s of SENTINELS) {
+          expect(payload.userContent, s).not.toContain(s);
+          for (const b of payload.systemBlocks) expect(b.text, s).not.toContain(s);
+        }
+      }
+    }
+  });
+
+  it.each(stores)('%s: userContent and systemBlocks are byte-identical whether or not the entries carry the Ukrainian fields', (store) => {
+    const bare = MANIFEST.map(withoutUk);
+    for (const build of [buildPromptA, buildPromptADoc]) {
+      for (const [a, b] of [[marked(store, MANIFEST), marked(store, bare)], [plain(store, MANIFEST), plain(store, bare)]]) {
+        const withFields = build(a);
+        const without = build(b);
+        expect(withFields.userContent === without.userContent, 'userContent differs').toBe(true);
+        expect(withFields.systemBlocks).toEqual(without.systemBlocks);
+      }
+    }
   });
 });
