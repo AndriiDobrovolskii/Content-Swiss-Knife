@@ -140,6 +140,12 @@ export interface ProductDescriptionDoc {
    */
   /** §1 */
   hook: Prose;
+  /**
+   * US-5.1: blocks that follow the §1 hook paragraph (a figure and the text around it). Written only
+   * by the image-placeholder step, never emitted by the model. `hook` keeps the text before the first
+   * figure, so every reader of `doc.hook` stays valid.
+   */
+  hookExtra?: ApplicationsBlock[];
   /** §2a — 3–4 rows. */
   killerSpecs?: KillerSpec[];
   /** §2b */
@@ -165,7 +171,12 @@ export interface ProductDescriptionDoc {
   /** §7 */
   specs?: { heading: string; categories: SpecCategory[] };
   /** §9 */
-  cta: { heading: string; text: Prose };
+  cta: {
+    heading: string;
+    text: Prose;
+    /** US-5.1: blocks that follow the CTA paragraph. Written only by the image-placeholder step. */
+    extra?: ApplicationsBlock[];
+  };
 
   /** Flat manifest. Blocks reference entries by index. Order = manifest order. */
   figures: Figure[];
@@ -195,8 +206,23 @@ export function forEachBlockInOrder(
     s.subsections?.forEach(walkSubsection);
   };
 
+  walkBlocks(doc.hookExtra ?? []);
   walkBlocks(doc.keyBenefits ?? []);
   (doc.functionality ?? []).forEach(walkSubsection);
   walkBlocks(doc.applications?.blocks ?? []);
   if (doc.compatibility) walkSubsection(doc.compatibility);
+  walkBlocks(doc.cta.extra ?? []);
+}
+
+const extraParagraphText = (blocks: ApplicationsBlock[] | undefined): string[] =>
+  (blocks ?? []).flatMap(b => (b.kind === 'paragraph' ? [b.text] : []));
+
+/** The §1 hook plus the paragraph text of `hookExtra`, in order. Figures contribute no text. */
+export function hookText(doc: ProductDescriptionDoc): string {
+  return [doc.hook, ...extraParagraphText(doc.hookExtra)].join(' ');
+}
+
+/** The CTA text plus the paragraph text of `cta.extra`, in order. Figures contribute no text. */
+export function ctaText(doc: ProductDescriptionDoc): string {
+  return [doc.cta.text, ...extraParagraphText(doc.cta.extra)].join(' ');
 }
