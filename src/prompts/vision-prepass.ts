@@ -1,3 +1,5 @@
+import { VISION_UK_FIELD_KEYS } from '../utils/vision-contract';
+
 /**
  * Prompt for the Vision pre-pass (Phase 1 — single image per call).
  *
@@ -16,6 +18,10 @@
  * making the caption longer. (Manual budget_tokens is a 400 error on Sonnet 5.) This prompt stays
  * thinking-agnostic: it never says "think step by step" (the thinking block does that natively) —
  * it only defines WHAT a good caption is.
+ *
+ * Besides the English caption the model returns three native-Ukrainian texts (US-5.1 FR-21) that
+ * name and describe the image on the page; they are written directly in Ukrainian from what is
+ * visible, never translated from the caption. Parsed by src/utils/vision-contract.ts.
  *
  * @param productName  The product the image belongs to (used as grounding, never echoed).
  * @param specsExcerpt Optional short specs excerpt for extra grounding context.
@@ -36,7 +42,10 @@ image should learn what it shows and WHY it is on this page, in one concise phra
 
 OUTPUT CONTRACT — emit exactly one raw JSON object; the first character of your output is "{" and the last is "}":
 {
-  "caption": "string (<= 20 words, English, objective, ends on a letter or digit)"
+  "caption": "string (<= 20 words, English, objective, ends on a letter or digit)",
+  "label": "string (Ukrainian, short label for what THIS image shows, uppercase initial)",
+  "description": "string (Ukrainian, one sentence)",
+  "alt": "string (Ukrainian, one sentence, different from description)"
 }
 
 Describe what is actually visible in the image, grounded by the product above.
@@ -53,6 +62,18 @@ Grounding rules:
   describe the subject qualitatively. This caption is reused downstream as published alt text, so a
   caption with no figure is correct, while a caption carrying a wrong wattage, speed or accuracy
   becomes a factual error on the storefront.
+
+UKRAINIAN FIELDS (${VISION_UK_FIELD_KEYS.join(', ')}):
+Write these three texts directly in Ukrainian, from what is visible in the image. They are NOT
+translated from the English caption and must not follow its wording; do not translate, compose
+each one natively in idiomatic Ukrainian.
+- label: a short, image-specific label that names what THIS image shows, with an uppercase initial
+  letter. Never a generic label such as "Фото" or "Зображення" or "Image".
+- description: one sentence that says what the image shows and why it matters on this page.
+- alt: one sentence for a screen-reader user. It must be different from description, not a copy.
+- The number rules above apply to all three: state a number+unit only if it is legible in THIS
+  image AND consistent with the known specs; otherwise omit it.
+- If you cannot write one of them reliably, leave that key out rather than guessing.
 
 ALT-TEXT RULES for "caption":
 
@@ -91,5 +112,5 @@ Within that limit, apply these in priority order:
   "A photo showing", etc. — screen readers already announce "image". Start with the subject noun.
 - NO KEYWORD-STUFFING: one natural phrase, not a comma-pile of search terms; the product name is
   already known — repeat it only if genuinely clarifying.
-- English only. Main subject first. End the string on a letter or digit (final punctuation omitted).`;
+- The caption is English only. Main subject first. End the string on a letter or digit (final punctuation omitted).`;
 }
