@@ -21,6 +21,7 @@
  */
 import type { ValidationIssue } from './output-validator';
 import type { ProductDescriptionDoc, Block, Subsection } from '../domain/description-doc';
+import { hookText, ctaText } from '../domain/description-doc';
 import { validateSimplifiedSpecsShapeHtml } from './simplified-specs-shape';
 import {
   BLOCK2_MAX_ITEMS, V4_WORD_RANGES, countWords, isSimplifiedTemplateId, type WordRange,
@@ -76,7 +77,7 @@ export function validateSimplifiedRangesDoc(
   const issues: ValidationIssue[] = [];
   const push = (i: ValidationIssue | null) => { if (i) issues.push(i); };
 
-  push(rangeIssue('hook', label, 'Paragraph 1 (hook)', countWords(doc.hook), V4_WORD_RANGES.hook, label));
+  push(rangeIssue('hook', label, 'Paragraph 1 (hook)', countWords(hookText(doc)), V4_WORD_RANGES.hook, label));
 
   if (doc.killerSpecs || doc.keyBenefits) {
     const killer = doc.killerSpecs ?? [];
@@ -111,7 +112,7 @@ export function validateSimplifiedRangesDoc(
     ));
   }
 
-  push(rangeIssue('cta', label, 'Paragraph 8 (CTA)', countWords(doc.cta.text), V4_WORD_RANGES.cta, label));
+  push(rangeIssue('cta', label, 'Paragraph 8 (CTA)', countWords(ctaText(doc)), V4_WORD_RANGES.cta, label));
 
   return issues;
 }

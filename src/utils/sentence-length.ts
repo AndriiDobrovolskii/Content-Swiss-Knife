@@ -21,6 +21,7 @@
 import { parseDocument } from 'htmlparser2';
 import type { ValidationIssue } from './output-validator';
 import type { ProductDescriptionDoc, Subsection, Block } from '../domain/description-doc';
+import { hookText, ctaText } from '../domain/description-doc';
 import { SENTENCE_LENGTH_BANDS } from '../prompt-core/constants';
 import { LATIN_TO_CYRILLIC_UNITS } from './unit-tables';
 import { extractBlocks, type HtmlBlockAncestor } from './block-repair';
@@ -378,7 +379,7 @@ export function validateSentenceLengthDoc(
   const seen = new Set<string>();
   const check = makeSentenceChecker(band, locale, context, issues, seen);
 
-  check(doc.hook, 'hook');
+  check(hookText(doc), 'hook');
   (doc.killerSpecs ?? []).forEach((k, i) => check(k.why, `killerSpecs[${i}].why`));
 
   (doc.keyBenefits ?? []).forEach((b, i) => checkBlock(b, `keyBenefits[${i}]`, check));
@@ -391,7 +392,7 @@ export function validateSentenceLengthDoc(
 
   // specs.categories[].rows[].value is intentionally NOT scanned — see the SCOPE note above.
 
-  check(doc.cta.text, 'cta.text');
+  check(ctaText(doc), 'cta.text');
 
   return issues;
 }
