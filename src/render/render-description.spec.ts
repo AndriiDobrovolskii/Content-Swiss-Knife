@@ -168,14 +168,14 @@ describe('renderDescription', () => {
 
       <h2>Технологія обробки</h2>
       <p>В основі лежить принцип швидкої заміни робочого модуля.</p>
-      <figure style="display: block; width: fit-content; max-width: 100%; margin: 4px auto;">
+      <figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">
       <img src="https://impresora-3d.es/image/catalog/products/xtool/m1-ultra/craft-machine.jpg" alt="Порівняльна таблиця функцій" decoding="async" style="max-width: 100%; height: auto; display: block;">
       <figcaption style="text-align: left;"><b>Порівняння:</b> лазер 20 Вт.</figcaption>
       </figure>
 
       <h3>Діодний лазер до 20 Вт</h3>
       <p>Змінна лазерна голівка фокусується в точку.</p>
-      <figure style="display: block; width: fit-content; max-width: 100%; margin: 4px auto;">
+      <figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">
       <img src="https://impresora-3d.es/image/catalog/products/xtool/m1-ultra/capabilities.jpg" alt="Схема модульного пристрою" loading="lazy" decoding="async" style="max-width: 100%; height: auto; display: block;">
       <figcaption style="text-align: left;"><b>Модульність:</b> один корпус.</figcaption>
       </figure>
@@ -197,7 +197,7 @@ describe('renderDescription', () => {
       <li><b>Платформи</b> стільникова платформа, підставка-подовжувач.</li>
       <li><b>Насадки</b> RA2 Pro, тримач пера.</li>
       </ul>
-      <figure style="display: block; width: fit-content; max-width: 100%; margin: 4px auto;">
+      <figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">
       <img src="https://impresora-3d.es/image/catalog/products/xtool/m1-ultra/combo-pack.jpg" alt="Комплект верстата" loading="lazy" decoding="async" style="max-width: 100%; height: auto; display: block;">
       <figcaption style="text-align: left;"><b>Комплект:</b> насадка та модуль.</figcaption>
       </figure>

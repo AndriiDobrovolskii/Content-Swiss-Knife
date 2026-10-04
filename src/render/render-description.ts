@@ -14,6 +14,7 @@
  * image-figure.ts, and real generator output in src/utils/__fixtures__/.
  */
 import { forEachBlockInOrder } from '../domain/description-doc';
+import { IMAGE_FIGURE_STYLE as FIGURE_STYLE, IMAGE_IMG_STYLE as IMG_STYLE, IMAGE_FIGCAPTION_STYLE as FIGCAPTION_STYLE } from '../utils/image-figure-style';
 import type {
   Block,
   BulletItem,
@@ -46,11 +47,6 @@ export interface RenderContext {
 const SPEC_TABLE_CLASS = 'table table-bordered table-striped';
 const SPEC_TABLE_STYLE = 'table-layout: fixed;';
 const SPEC_PARAM_COL_STYLE = 'width: 45%;';
-
-/** [VERBATIM from image-figure.ts] */
-const FIGURE_STYLE = 'display: block; width: fit-content; max-width: 100%; margin: 4px auto;';
-const IMG_STYLE = 'max-width: 100%; height: auto; display: block;';
-const FIGCAPTION_STYLE = 'text-align: left;';
 
 /** [VERBATIM from video-figure.ts] — corroborated against a real artifact's <iframe> markup. */
 const VIDEO_FIGURE_STYLE = 'width: 100%; max-width: 1140px; margin: 0 auto 20px; aspect-ratio: 16 / 9;';
@@ -382,6 +378,8 @@ export function renderDescription(
 
   const parts: string[] = [
     `<p>${prose(doc.hook)}</p>`,
+    // US-5.1: blocks the image-placeholder step placed right after the hook paragraph.
+    ...(doc.hookExtra ?? []).map(block),
     // §2. The `'3.0'` arm is the §2a table followed by the keyBenefits Blocks, byte-for-byte what
     // it always was — leak L6's detector is test/render-reconciliation.spec.ts on both corpus items.
     ...(hasSection2
@@ -447,7 +445,14 @@ export function renderDescription(
   const ctaHeading = isV4
     ? getRenderRules(ctx.storeName ?? '').ctaHeading(doc.locale, doc.localizedName)
     : doc.cta.heading;
-  parts.push(`<h2>${esc(ctaHeading)}</h2>\n<p class="cta">${prose(doc.cta.text)}</p>`);
+  parts.push(
+    [
+      `<h2>${esc(ctaHeading)}</h2>`,
+      `<p class="cta">${prose(doc.cta.text)}</p>`,
+      // US-5.1: blocks the image-placeholder step placed right after the CTA paragraph.
+      ...(doc.cta.extra ?? []).map(block),
+    ].join('\n'),
+  );
 
   return parts.join('\n\n');
 }
