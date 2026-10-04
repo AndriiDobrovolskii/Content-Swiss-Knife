@@ -30,6 +30,10 @@ export interface ImageManifestEntry {
   previewUrl: string;
   visionDescription: string;
   altText: string;
+  /** Native-Ukrainian Vision label, description and alt (US-5.1 FR-21). Optional; never repurposes altText. */
+  visionLabelUk?: string;
+  visionDescriptionUk?: string;
+  visionAltUk?: string;
   order: number;
   status: 'pending' | 'analyzing' | 'done' | 'error';
 }
