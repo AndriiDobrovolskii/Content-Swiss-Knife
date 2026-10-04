@@ -211,7 +211,7 @@ it's a bug.
   `<p>` lead-in). The lead-in `<p>` must not duplicate the `<figcaption>`; `alt` must not
   duplicate the `<figcaption>`.
 - Images wrapped in `<figure>` (inline style
-  `display: block; width: fit-content; max-width: 100%; margin: 4px auto;`) with a
+  `display: block; width: max-content; max-width: 100%; margin: 4px auto;`) with a
   `<figcaption>` (a `<b>` lead-in label distinct from the alt + description) and
   `decoding="async"`. First image — without `loading="lazy"`; every subsequent one — with
   it. No `<figure>` nested inside `<p>`. No orphan images (each is preceded by a `<p>`
