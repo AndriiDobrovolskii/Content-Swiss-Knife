@@ -7,7 +7,7 @@ import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, Hi
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
-import { parseVisionResult } from '../utils/vision-contract';
+import { parseVisionResult, visionResultToEntryPatch } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
 import { formatRepairReportMarkdown } from '../utils/repair-gate';
 import { getStore, bcp47ToTaskCLang, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
@@ -1277,6 +1277,7 @@ export class AppComponent {
                   status: 'done',
                   visionDescription: result.caption,
                   altText: e.altText || result.caption,
+                  ...visionResultToEntryPatch(result),
                 }
                 : e)
             );

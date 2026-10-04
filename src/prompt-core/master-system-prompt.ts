@@ -394,15 +394,18 @@ IMAGE SOURCE OF TRUTH: build the image set exclusively from the [IMAGE MANIFEST]
 the user message. Treat every <img> inside [Raw Description] as text to delete during
 parsing — the manifest replaces it. When no manifest is present, emit 0 <img> tags.
 Expert-3DPrinter: emit 0 <img> tags in every case, manifest or not.
+A bare marker such as [file.jpg] or [file.webp] in [Raw Description] is text, not an <img>:
+keep it exactly as written and never delete it during parsing. The 0 <img> rules above,
+including the Expert-3DPrinter rule, do not apply to markers.
 
 FIGURE FORMAT — wrap every image in a <figure> with a <figcaption>:
   Image #1 (LCP — eager):
-    <figure style="display: block; width: fit-content; max-width: 100%; margin: 4px auto;">
+    <figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">
       <img src="URL" alt="ALT" decoding="async" style="max-width: 100%; height: auto; display: block;">
       <figcaption style="text-align: left;"><b>LEAD-IN LABEL:</b> short scannable description of what the image shows</figcaption>
     </figure>
   Images #2+ (lazy):
-    <figure style="display: block; width: fit-content; max-width: 100%; margin: 4px auto;">
+    <figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">
       <img src="URL" alt="ALT" loading="lazy" decoding="async" style="max-width: 100%; height: auto; display: block;">
       <figcaption style="text-align: left;"><b>LEAD-IN LABEL:</b> short scannable description of what the image shows</figcaption>
     </figure>

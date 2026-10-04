@@ -15,10 +15,8 @@
  * byte-for-byte. Mirrors the same split used by video-figure.ts.
  */
 
-/** Canonical inline styles every image figure must end up with (from the spec example). */
-const FIGURE_STYLE = 'display: block; width: fit-content; max-width: 100%; margin: 4px auto;';
-const IMG_STYLE = 'max-width: 100%; height: auto; display: block;';
-const FIGCAPTION_STYLE = 'text-align: left;';
+import { IMAGE_FIGURE_STYLE as FIGURE_STYLE, IMAGE_IMG_STYLE as IMG_STYLE, IMAGE_FIGCAPTION_STYLE as FIGCAPTION_STYLE } from './image-figure-style';
+// Canonical inline styles every image figure must end up with: see image-figure-style.ts.
 
 /**
  * Wrap every `<img>` in `html` into the canonical figure structure.

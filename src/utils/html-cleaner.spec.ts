@@ -187,7 +187,7 @@ describe('cleanHtmlStructure — image figure wrapping', () => {
     const figure = doc.querySelector('figure')!;
     expect(figure).not.toBeNull();
     expect(figure.querySelector('figcaption')).toBeNull();
-    expect(figure.getAttribute('style')).toBe('display: block; width: fit-content; max-width: 100%; margin: 4px auto;');
+    expect(figure.getAttribute('style')).toBe('display: block; width: max-content; max-width: 100%; margin: 4px auto;');
     const img = figure.querySelector('img')!;
     expect(img.getAttribute('decoding')).toBe('async');
   });

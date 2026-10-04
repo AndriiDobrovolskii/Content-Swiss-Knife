@@ -6,6 +6,7 @@ import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
 import { buildSimplifiedHtmlOverlay } from './simplified-template-blocks';
 import { productShort } from '../prompt-core/product-name-core';
 import { extractVideoEmbeds } from '../utils/video-manifest';
+import { preExtractPlaceholders } from '../utils/image-placeholder';
 
 // ── Standard full-schema instruction (Schema v3.0 §1–§9) ──────────────────
 
@@ -105,6 +106,21 @@ function buildVideoBlock(input: ProductInput): string {
 ${lines}`;
 }
 
+// ── Image-marker block (US-5.1 FR-19) ──────────────────────────────────────
+
+/**
+ * Lists the `[file.ext]` markers the user typed into [Raw Description] that match a usable upload, so the
+ * model keeps each one in the text for the deterministic placeholder step to replace with its figure.
+ * Built from `input.imageManifest` (not from the [IMAGE MANIFEST] block, which prints None for
+ * Expert-3DPrinter). Returns '' when there is no matched marker, so userContent is byte-identical then.
+ */
+function buildMarkerBlock(input: ProductInput): string {
+  const files = preExtractPlaceholders(input.description, input.imageManifest);
+  if (files.length === 0) return '';
+  const list = files.map((f, i) => `${i + 1}. [${f}]`).join('\n');
+  return `\n[IMAGE MARKERS] — COUNT=${files.length}. HARD RULE: [Raw Description] contains the image marker(s) listed below. Each marker is a text token, not an <img>: the system replaces it with the matching figure after generation. Copy every marker CHARACTER FOR CHARACTER (lowercase, with its square brackets, no spaces), never translated, split, re-cased or wrapped in any markup. Each marker appears EXACTLY ONCE in the output. Place it only inside a prose paragraph in the body language (a <p>, or the text of a paragraph block on the structured path), at the end of the sentence that introduces what the image shows; never in a heading, list item, bullet, table cell, §2, §7, an attribute or a meta field. If a marker's source position is not such a paragraph, move it to the end of the nearest preceding body paragraph IN THE SAME SECTION — never drop it. Expert-3DPrinter still emits 0 <img> tags; the marker is not one.\n${list}`;
+}
+
 // ── Main prompt builder ────────────────────────────────────────────────────
 
 export function buildPromptA(input: ProductInput, baseLanguageOverride?: string): PromptPayload {
@@ -148,7 +164,7 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
 [Official Brand]: ${resolveOfficialBrand(input.name, input.website.name) ?? 'None — do not claim official representation for this product'}
 ${buildDeliveryRegionBlock(input.website.name, MASTER_LOCALE)}
 [Supplemental Content]: ${input.supplementalContent || 'None provided.'}
-${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input)}${template}${custom}${simplifiedOverlay}
+${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input)}${buildMarkerBlock(input)}${template}${custom}${simplifiedOverlay}
 
 Generate the description in ${baseLanguage}. Primary keyword "${input.name}" appears ~1× per section in BODY PROSE only — headings are excluded from that count and follow [HEADING FORM], which forbids the full name outright except at the two blessed positions it names.`;
 

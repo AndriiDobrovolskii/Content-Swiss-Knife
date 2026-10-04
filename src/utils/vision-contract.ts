@@ -14,10 +14,33 @@
 export interface VisionResult {
   /** <= 20 words, English, objective. Used as default alt text / vision description. */
   caption: string;
+  /** Native-Ukrainian figure label (US-5.1 FR-21). Optional; dropped when missing or not a string. */
+  label?: string;
+  /** Native-Ukrainian one-sentence description (US-5.1 FR-21). Optional. */
+  description?: string;
+  /** Native-Ukrainian one-sentence alt text (US-5.1 FR-21). Optional. */
+  alt?: string;
+}
+
+/** Key names of the three optional native-Ukrainian fields, shared with the Vision prompt module. */
+export const VISION_UK_FIELD_KEYS = ['label', 'description', 'alt'] as const;
+
+/** Manifest-entry fields that `visionResultToEntryPatch` fills (a subset of ImageManifestEntry). */
+export interface VisionEntryPatch {
+  visionLabelUk?: string;
+  visionDescriptionUk?: string;
+  visionAltUk?: string;
 }
 
 /** Caption is the constrained field — hard ceiling on word count. */
 const MAX_CAPTION_WORDS = 20;
+
+/** A trimmed non-empty string, or undefined: the new optional fields never throw. */
+function optionalText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
 
 /** Remove a leading ```json / ``` fence and a trailing ``` fence, plus surrounding whitespace. */
 function stripFences(raw: string): string {
@@ -60,6 +83,22 @@ export function parseVisionResult(raw: string): VisionResult {
     throw new Error(`vision-contract: "caption" exceeds ${MAX_CAPTION_WORDS} words`);
   }
 
+  const result: VisionResult = { caption: caption.trim() };
+  const label = optionalText(obj['label']);
+  const description = optionalText(obj['description']);
+  const alt = optionalText(obj['alt']);
+  if (label !== undefined) result.label = label;
+  if (description !== undefined) result.description = description;
+  if (alt !== undefined) result.alt = alt;
   // Any other fields the model emits (e.g. a stray "consistent") are ignored.
-  return { caption: caption.trim() };
+  return result;
+}
+
+/** Map a parsed result onto the three Ukrainian manifest-entry fields; absent fields stay absent. */
+export function visionResultToEntryPatch(result: VisionResult): VisionEntryPatch {
+  const patch: VisionEntryPatch = {};
+  if (result.label !== undefined) patch.visionLabelUk = result.label;
+  if (result.description !== undefined) patch.visionDescriptionUk = result.description;
+  if (result.alt !== undefined) patch.visionAltUk = result.alt;
+  return patch;
 }

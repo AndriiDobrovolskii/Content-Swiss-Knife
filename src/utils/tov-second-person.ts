@@ -20,6 +20,7 @@
 
 import type { ValidationIssue } from './output-validator';
 import type { ProductDescriptionDoc, Subsection, Block } from '../domain/description-doc';
+import { hookText } from '../domain/description-doc';
 import { UK_LEFT_BOUNDARY, UK_RIGHT_BOUNDARY } from './terminology-normalize';
 import { isCenter3dPrintStore } from '../prompt-core/constants';
 
@@ -182,7 +183,7 @@ function subsectionSpans(sub: Subsection, path: string): DocTextSpan[] {
  * prose-and-label-bearing field in the document, in document order.
  */
 function collectScopedSpans(doc: ProductDescriptionDoc): DocTextSpan[] {
-  const spans: DocTextSpan[] = [{ path: 'hook', text: doc.hook }];
+  const spans: DocTextSpan[] = [{ path: 'hook', text: hookText(doc) }];
 
   (doc.killerSpecs ?? []).forEach((k, i) => {
     spans.push({ path: `killerSpecs[${i}].label`, text: k.label });

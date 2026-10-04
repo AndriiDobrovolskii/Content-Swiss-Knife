@@ -102,6 +102,7 @@ export function mapDocText(doc: ProductDescriptionDoc, fn: TextTransform): Produ
     localizedName: fn(doc.localizedName),
 
     hook: fn(doc.hook),
+    ...(doc.hookExtra ? { hookExtra: doc.hookExtra.map(b => mapBlock(b, fn) as typeof b) } : {}),
     // US-2.2: a paragraph a simplified template omitted stays omitted (no key), never an empty shell.
     ...(doc.killerSpecs
       ? { killerSpecs: doc.killerSpecs.map(s => ({ label: fn(s.label), value: fn(s.value), why: fn(s.why) })) }
@@ -131,7 +132,11 @@ export function mapDocText(doc: ProductDescriptionDoc, fn: TextTransform): Produ
           },
         }
       : {}),
-    cta: { heading: fn(doc.cta.heading), text: fn(doc.cta.text) },
+    cta: {
+      heading: fn(doc.cta.heading),
+      text: fn(doc.cta.text),
+      ...(doc.cta.extra ? { extra: doc.cta.extra.map(b => mapBlock(b, fn) as typeof b) } : {}),
+    },
 
     figures: doc.figures.map(f => ({ file: f.file, alt: fn(f.alt), caption: fn(f.caption) })),
     videos: doc.videos.map(v => ({ src: v.src, title: fn(v.title), caption: fn(v.caption) })),

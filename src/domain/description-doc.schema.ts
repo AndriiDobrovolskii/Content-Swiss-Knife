@@ -182,6 +182,8 @@ export const ProductDescriptionDocSchema = z.object({
   localizedName: NonEmpty,
 
   hook: Prose,
+  // US-5.1: written only by the image-placeholder step; optional so cached documents parse unchanged.
+  hookExtra: z.array(ApplicationsBlockSchema).optional(),
   killerSpecs: omittable(z.array(KillerSpecSchema).min(3).max(4)),
   // RelaxedBlockSchema (floor 2), not BlockSchema — see the comment on RelaxedBlockSchema above.
   keyBenefits: omittable(z.array(RelaxedBlockSchema).min(1)),
@@ -215,7 +217,11 @@ export const ProductDescriptionDocSchema = z.object({
   })),
   // D18 / FR-14: lenient here (a '4.0' renderer discards the heading); NonEmpty is re-applied for
   // '3.0' (and for any non-empty value) in the dedicated superRefine below.
-  cta: z.object({ heading: z.string().nullish().transform(v => v ?? ''), text: Prose }),
+  cta: z.object({
+    heading: z.string().nullish().transform(v => v ?? ''),
+    text: Prose,
+    extra: z.array(ApplicationsBlockSchema).optional(),
+  }),
 
   figures: z.array(z.object({ file: NonEmpty, alt: NonEmpty, caption: Prose })),
   // .nullish().transform(v => v ?? []): unlike `figures`, the source manifest is often empty (most

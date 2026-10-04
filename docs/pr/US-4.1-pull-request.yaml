@@ -1,0 +1,20 @@
+artifact: pull_request
+story: US-4.1
+version: 1
+status: ARCHIVED
+owner: so-pr-creator
+created_at: 2026-10-01T00:00:00Z
+supersedes: null
+inputs_consumed:
+  - key: pr_summary
+    version: 1
+pull_request:
+  number: 131
+  url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/131
+  title: "feat(models): add Sonnet 5.5 and Gemini 3.8 Flash as defaults, retire Sonnet 4.6"
+  base: main
+  head: feat/US-4.1-add-sonnet-5-5-and-gemini-3-8-flash
+  draft: false
+  tip_commit_sha: 6664e89c193ea594e5461f7abc3ce2e9a167a062
+  opened_at: 2026-10-01T00:00:00Z
+  merged: false

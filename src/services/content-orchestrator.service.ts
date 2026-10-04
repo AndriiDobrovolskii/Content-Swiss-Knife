@@ -24,6 +24,12 @@ import {
 import { validateSpecCountParity, validateSpecCountParityDoc, expectedSpecParameterLabels } from '../utils/spec-count-parity';
 import { validateAltNumericFidelity, validateAltNumericFidelityDoc } from '../utils/alt-numeric-fidelity';
 import { validateImageManifestCoverageDoc } from '../utils/image-manifest-coverage';
+import type { FigureBuildOptions, FigureParts, PlaceholderReport } from '../utils/image-placeholder';
+import { applyImagePlaceholdersDoc } from '../utils/image-placeholder-doc';
+import { applyImagePlaceholdersHtml } from '../utils/image-placeholder-html';
+import {
+  preExtractPlaceholders, validateDroppedPlaceholders, finalizeDroppedPlaceholdersDoc, finalizeDroppedPlaceholdersHtml,
+} from '../utils/image-placeholder-validate';
 import { validateBulletLeadPunctuationDoc, normalizeBulletLeadPunctuation, normalizeRawBulletLeadPunctuation } from '../utils/bullet-lead-punctuation';
 import { validateSecondPersonScope, validateSecondPersonScopeDoc } from '../utils/tov-second-person';
 import { dedupeIssues } from '../utils/validation-issues';
@@ -51,7 +57,7 @@ import { buildPromptB } from '../prompts/task-b';
 import { buildPromptSlug } from '../prompts/task-slug';
 import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize';
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopwords, enforceSlugLength } from '../prompt-core/slug-utils';
-import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor } from '../prompt-core/constants';
+import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor, MASTER_LOCALE } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
@@ -99,6 +105,19 @@ import { validateLanguageConsistency } from '../utils/language-consistency';
 const NO_CURRENCY_CHECK = '';
 
 /**
+ * US-5.1 (OI-4): the Vision pre-pass always writes label, description and alt in Ukrainian. The Cyrillic
+ * proxy of FR-21 therefore applies only while the master locale is that language; for any other master it
+ * is off (A-15). Derived from the master-locale constant, never from a store or a locale literal list.
+ */
+const VISION_TEXT_LANGUAGE = 'uk';
+const MARKER_STEP_OPTIONS: FigureBuildOptions = {
+  cyrillicCheck: new Intl.Locale(MASTER_LOCALE).language === VISION_TEXT_LANGUAGE,
+};
+
+/** The rules an image-manifest coverage check raises; re-derived after the US-5.1 finalisers append a figure. */
+const IMAGE_COVERAGE_RULES = new Set(['image-manifest-missing', 'image-manifest-duplicate', 'image-unknown-src']);
+
+/**
  * Result of one Doc-path Task A generation attempt (produceTaskADoc).
  *
  * `doc: null` means the model response never became a candidate object at all — a network
@@ -120,6 +139,12 @@ export interface DocAttempt {
    * label needed to update bulletLeadFixTally itself (see runDocGate's produce closure, which does).
    */
   preValidationFixed?: number;
+  /**
+   * US-5.1: what the image-placeholder step did to THIS attempt's document. Undefined when the step
+   * did not run (a schema-invalid candidate), in which case the dropped-marker validator reports
+   * nothing for the attempt. Rides on the attempt so every `{ ...attempt, doc }` spread keeps it.
+   */
+  placeholderReport?: PlaceholderReport;
 }
 
 
@@ -331,7 +356,11 @@ export class ContentOrchestratorService {
       input.specs,
       input.description,
       input.name,
-      ...(manifest ?? []).flatMap(e => [e.visionDescription, e.altText]),
+      // US-5.1 FR-21: the native-Ukrainian Vision texts a marker figure is built from are sanctioned
+      // sources too, so a number legible in the image and recorded there is grounded in the figure text.
+      ...(manifest ?? []).flatMap(e => [
+        e.visionDescription, e.altText, e.visionLabelUk, e.visionDescriptionUk, e.visionAltUk,
+      ]),
     ].filter(Boolean).join('\n');
   }
 
@@ -356,11 +385,21 @@ export class ContentOrchestratorService {
     videoEmbeds: SourceVideoEmbed[];
     // docSchemaIssues context, and the llm meta.taskLabel.
     contextLabel: string;
-  }): Promise<{ html: string; restoredVideos: SourceVideoEmbed[] }> {
+    /** US-5.1: the real upload manifest the marker step places from (plan D5 `markerManifest`). */
+    markerManifest?: ImageManifestEntry[];
+  }): Promise<{ html: string; restoredVideos: SourceVideoEmbed[]; placeholderReport: PlaceholderReport }> {
     const { payload, useThinking, input, videoEmbeds, contextLabel } = opts;
 
     let html = await this.llm.generateText(payload, useThinking, { taskLabel: contextLabel, productName: input.name, store: input.website.name, lang: 'uk-UA' });
     html = stripCodeFences(html);
+    // US-5.1: right after the fence strip and BEFORE restoreMissingVideos and every number or
+    // terminology pass, so no pass can rewrite a file name inside a marker. Relative `src` for a store
+    // with an empty imageBaseUrl (getStore returns '' for it and for an unknown store).
+    const placed = applyImagePlaceholdersHtml(
+      html, opts.markerManifest, getStore(input.website.name).imageBaseUrl,
+      { brandFolder: input.brandFolder, modelFolder: input.modelFolder }, MARKER_STEP_OPTIONS,
+    );
+    html = placed.html;
     // BEFORE wrapVideoFigures, so a restored embed goes through exactly the same figure and
     // attribute contract as one the model emitted itself.
     const restoration = restoreMissingVideos(html, videoEmbeds, input.name, 'uk-UA');
@@ -386,7 +425,53 @@ export class ContentOrchestratorService {
     html = cyrillizeUnits(html, 'uk-UA');
     html = normalizeTerminology(html, 'uk-UA');
     html = canonicalizeMultiInOne(html, 'uk-UA');
-    return { html, restoredVideos };
+    return { html, restoredVideos, placeholderReport: placed.report };
+  }
+
+  /**
+   * US-5.1: the legacy-path dropped-marker issues for one candidate. One helper for both legacy validate
+   * arrays so the two copies cannot drift. `report` is the one produceTaskAArtifact returned for the
+   * candidate being validated (validate runs right after each produce, like `restoredVideos`).
+   */
+  private legacyPlaceholderIssues(
+    input: ProductInput,
+    report: PlaceholderReport | undefined,
+    context: string,
+  ): ValidationIssue[] {
+    return validateDroppedPlaceholders(preExtractPlaceholders(input.description, input.imageManifest), report, context);
+  }
+
+  /**
+   * US-5.1 FR-18, legacy path: after the ladder, move each still-dropped image to the end of the HTML and
+   * downgrade its error to the warning. The finaliser is driven by the remaining issues of the SHIPPED
+   * attempt (`gate.finalIssues`), never by a "last produce" report, so it cannot act on another attempt's
+   * state (N-5). Coverage findings the appended figure now satisfies are re-derived.
+   */
+  private finalizeLegacyPlaceholders(
+    gate: RepairGateResult<string>,
+    o: {
+      input: ProductInput; imgManifest?: ImageManifestEntry[]; label: string; localeIso: string;
+      /** `report.figures` of the shipped attempt, when known, so duplicate labels see the placed figures. */
+      placed?: readonly FigureParts[];
+    },
+  ): RepairGateResult<string> {
+    if (!gate.finalIssues.some(i => i.rule === 'dropped-image-placeholder' && i.severity === 'error')) return gate;
+    const { input } = o;
+    const fin = finalizeDroppedPlaceholdersHtml(
+      gate.artifact, gate.finalIssues, input.imageManifest, getStore(input.website.name).imageBaseUrl,
+      { brandFolder: input.brandFolder, modelFolder: input.modelFolder },
+      { ...MARKER_STEP_OPTIONS, placed: o.placed },
+    );
+    // The appended figure joins images the pipeline already normalised: re-assert first-eager / rest-lazy.
+    const html = wrapImageFigures(fin.html);
+    const coverage = validateGeneratedHtml(html, o.label, input.name, o.localeIso, {
+      templateId: input.templateId, imageManifest: o.imgManifest,
+    }).filter(i => IMAGE_COVERAGE_RULES.has(i.rule));
+    return {
+      ...gate,
+      artifact: html,
+      finalIssues: [...fin.issues.filter(i => !IMAGE_COVERAGE_RULES.has(i.rule)), ...coverage],
+    };
   }
 
   /**
@@ -501,6 +586,11 @@ export class ContentOrchestratorService {
     imgManifest?: ImageManifestEntry[];
     onAttempt: (n: number, c: number) => void;
   }): Promise<RepairGateResult<string>> {
+    // US-5.1: the marker step sees the real upload manifest (plan D5 `markerManifest`); for every
+    // Doc-enrolled store this equals `opts.imgManifest`. The set of markers the user typed is
+    // pre-extracted once per generation, restricted to files that match a usable upload.
+    const markerManifest = opts.input.imageManifest;
+    const expectedMarkers = preExtractPlaceholders(opts.input.description, markerManifest);
     let isFirstAttempt = true;
     const produce = async (payload: PromptPayload): Promise<DocAttempt> => {
       const initial = isFirstAttempt;
@@ -535,7 +625,10 @@ export class ContentOrchestratorService {
         this.bulletLeadFixTally.set(opts.label, (this.bulletLeadFixTally.get(opts.label) ?? 0) + totalFixed);
         console.info(`[bullet-lead-punctuation] ${opts.label}: ${totalFixed} lead(s) normalized before validation`);
       }
-      return { ...attempt, doc };
+      // US-5.1: replace `[file-name.ext]` markers with the uploaded images, once per attempt, after
+      // the schema-validity guard above (a schema-invalid candidate skips the step and keeps no report).
+      const placed = applyImagePlaceholdersDoc(doc, markerManifest, MARKER_STEP_OPTIONS);
+      return { ...attempt, doc: placed.doc, placeholderReport: placed.report };
     };
 
     const result = await runRepairGate<DocAttempt>({
@@ -571,6 +664,8 @@ export class ContentOrchestratorService {
           // spec-category-collapse: Center 3D Print / Ortur H20, 2026-07-26) for every Doc-enrolled
           // store — see image-manifest-coverage.ts and spec-category-shape.ts's *Doc siblings.
           ...validateImageManifestCoverageDoc(doc.figures, opts.imgManifest, opts.label),
+          // US-5.1: a lost marker is an error (full regeneration); unmatched / not-placed markers are warnings.
+          ...validateDroppedPlaceholders(expectedMarkers, attempt.placeholderReport, opts.label),
           ...validateSpecCategoryShapeDoc(doc, opts.label, { templateId: opts.input.templateId, locale: opts.locale }),
           // US-2.2. Which paragraphs the selected template requires or excludes, the flat single-category
           // §7 (FR-8) and the v4 word ranges (FR-14) are all checked on the Doc BEFORE rendering, so a
@@ -653,14 +748,30 @@ export class ContentOrchestratorService {
     // separator-insensitive to normalizeDocProse's number-format fixes — but a future validator
     // that is NOT insensitive to normalizeDocProse's transforms would validate pre-normalization
     // text here. Worth checking when adding one.
+    // US-5.1 FR-18: with the ladder exhausted, a marker the model never kept would fail the generation.
+    // Move each such image to the end of the document and downgrade the error to a warning, then
+    // re-derive the coverage findings the appended figure now satisfies.
+    let finalDoc = result.artifact.doc;
+    let finalIssues = result.finalIssues;
+    if (finalIssues.some(i => i.rule === 'dropped-image-placeholder' && i.severity === 'error')) {
+      const fin = finalizeDroppedPlaceholdersDoc(finalDoc, finalIssues, markerManifest, {
+        ...MARKER_STEP_OPTIONS, placed: result.artifact.placeholderReport?.figures,
+      });
+      finalDoc = fin.doc;
+      finalIssues = [
+        ...fin.issues.filter(i => !IMAGE_COVERAGE_RULES.has(i.rule)),
+        ...validateImageManifestCoverageDoc(finalDoc.figures, opts.imgManifest, opts.label),
+      ];
+    }
+
     const html = renderDescription(
-      normalizeDocProse(result.artifact.doc, opts.locale),
+      normalizeDocProse(finalDoc, opts.locale),
       renderContextFor(opts.input.website.name, opts.input.brandFolder, opts.input.modelFolder),
       // A simplified template renders §7 as one flat table (FR-8); Full description is unchanged.
       { flatSpecs: isSimplifiedTemplateId(opts.input.templateId) },
     );
 
-    return { ...result, artifact: html };
+    return { ...result, artifact: html, finalIssues };
   }
 
   async generate(input: ProductInput, useThinking = false): Promise<void> {
@@ -677,8 +788,12 @@ export class ContentOrchestratorService {
 
     // Manifest handed to the validator for coverage enforcement (image-manifest-missing /
     // image-unknown-src): every uploaded image must ship in every language version.
-    // Expert-3DPrinter is image-free by policy — no manifest, no coverage check.
+    // Expert-3DPrinter is image-free by policy — the model is told to emit no <img>, so no manifest and
+    // no coverage check. US-5.1: the deterministic marker step may still place uploaded images there.
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
+    // US-5.1 (plan D5): the REAL upload manifest for the marker step and the numeric-fidelity sources;
+    // never blanked, so a marker image is placeable for every store and its caption is grounded.
+    const markerManifest = input.imageManifest;
 
     // Video embeds the source supplied — the output is obliged to contain every one of them, for every
     // template (US-2.2 FR-23: a simplified template keeps a source embed too).
@@ -745,14 +860,20 @@ export class ContentOrchestratorService {
       // is a string-splicing mechanism; the Doc path's own validateVideoCoverageDoc, wired inside
       // runDocGate, covers video coverage there without this stash).
       let restoredVideos: SourceVideoEmbed[] = [];
+      // US-5.1: the marker report of the LAST produce() call, read by validate (which runs right after each produce).
+      let placeholderReport: PlaceholderReport | undefined;
+      /** Report per produced HTML, so the finaliser reads the SHIPPED attempt's figures, not the last produce's (N-5). */
+      const reportByHtml = new Map<string, PlaceholderReport>();
       const produceHtmlA = async (payload: PromptPayload): Promise<string> => {
         const result = await this.produceTaskAArtifact({
-          payload, useThinking, input, videoEmbeds, contextLabel: 'HTML (base)',
+          payload, useThinking, input, videoEmbeds, contextLabel: 'HTML (base)', markerManifest,
         });
         restoredVideos = result.restoredVideos;
+        placeholderReport = result.placeholderReport;
+        reportByHtml.set(result.html, result.placeholderReport);
         return result.html;
       };
-      const htmlAResult = useDocPipeline
+      const htmlAGate = useDocPipeline
         ? await this.runDocGate({
             label: 'HTML (base)', contextLabel: 'HTML (base)', docTaskLabel: 'Doc (base)',
             maxRepairs: masterRepairBudget, basePayload: basePayloadA, useThinking,
@@ -776,7 +897,9 @@ export class ContentOrchestratorService {
               ...validateSpecCountParity(html, input.specs, input.name, 'HTML (base)'),
               // Image text may not carry a figure the source never stated — the prompt-side rule
               // (NUMERIC_SOURCE_FIDELITY_RULES) reduces the rate; this is the deterministic gate.
-              ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (base)'),
+              ...validateAltNumericFidelity(html, this.numericFidelitySources(input, markerManifest), 'HTML (base)'),
+              // US-5.1: a lost marker (error) and unmatched / not-placed markers (warnings).
+              ...this.legacyPlaceholderIssues(input, placeholderReport, 'HTML (base)'),
               // Style B second-person scope — warning tier while the block-slicing heuristic is
               // measured on real generations; inert for every store except Center 3D Print.
               ...validateSecondPersonScope(html, 'uk-UA', input.website.name),
@@ -824,6 +947,12 @@ export class ContentOrchestratorService {
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing HTML (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           });
+      // US-5.1 FR-18: the Doc path finalises inside runDocGate (it owns the rendering); the legacy path here.
+      const htmlAResult = useDocPipeline
+        ? htmlAGate
+        : this.finalizeLegacyPlaceholders(htmlAGate, {
+          input, imgManifest, label: 'HTML (base)', localeIso: 'uk-UA', placed: reportByHtml.get(htmlAGate.artifact)?.figures,
+        });
       // Outcome is recorded BEFORE the guard below, so a generation that never validated is
       // counted rather than lost with the exception. Fire-and-forget — telemetry must not be able
       // to fail a generation that otherwise succeeded.
@@ -1149,6 +1278,8 @@ export class ContentOrchestratorService {
     // image-unknown-src): every uploaded image must ship in every language version.
     // Expert-3DPrinter is image-free by policy — no manifest, no coverage check.
     const imgManifest = input.website.name === 'Expert-3DPrinter' ? undefined : input.imageManifest;
+    // US-5.1: see the sibling declaration in generate().
+    const markerManifest = input.imageManifest;
 
     // See the sibling comment in generate().
     const videoEmbeds = extractVideoEmbeds(input.description);
@@ -1200,14 +1331,19 @@ export class ContentOrchestratorService {
         : buildPromptA(uaInput, UA_BASE_LANGUAGE);
       // See the sibling comment in generate() — plain-HTML path only.
       let restoredVideos: SourceVideoEmbed[] = [];
+      // US-5.1: the marker report of the LAST produce() call, read by validate (which runs right after each produce).
+      let placeholderReport: PlaceholderReport | undefined;
+      const reportByHtml = new Map<string, PlaceholderReport>();
       const produceHtmlUa = async (payload: PromptPayload): Promise<string> => {
         const result = await this.produceTaskAArtifact({
-          payload, useThinking, input, videoEmbeds, contextLabel: 'HTML (uk-UA)',
+          payload, useThinking, input, videoEmbeds, contextLabel: 'HTML (uk-UA)', markerManifest,
         });
         restoredVideos = result.restoredVideos;
+        placeholderReport = result.placeholderReport;
+        reportByHtml.set(result.html, result.placeholderReport);
         return result.html;
       };
-      const htmlUaResult = useDocPipelineUa
+      const htmlUaGate = useDocPipelineUa
         ? await this.runDocGate({
             label: 'HTML (uk-UA)', contextLabel: 'HTML (uk-UA)', docTaskLabel: 'Doc (uk-UA)',
             maxRepairs: uaRepairBudget, basePayload: basePayloadA, useThinking,
@@ -1228,7 +1364,9 @@ export class ContentOrchestratorService {
                 { labelAnchorTrusted: !!groundingSpecs }),
               ...validateSpecCountParity(html, input.specs, input.name, 'HTML (uk-UA)'),
               // Image-text numeric gate — see the identical hook in generate() for rationale.
-              ...validateAltNumericFidelity(html, this.numericFidelitySources(input, imgManifest), 'HTML (uk-UA)'),
+              ...validateAltNumericFidelity(html, this.numericFidelitySources(input, markerManifest), 'HTML (uk-UA)'),
+              // US-5.1: see the identical hook in generate().
+              ...this.legacyPlaceholderIssues(input, placeholderReport, 'HTML (uk-UA)'),
               // Style B second-person scope — see the identical hook in generate() for rationale.
               ...validateSecondPersonScope(html, UA_ISO, input.website.name),
               // Style B heading check — see the identical hook in generate() for rationale.
@@ -1269,6 +1407,12 @@ export class ContentOrchestratorService {
             onAttempt: (n, c) =>
               this.progressMessage.set(`Repairing description (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
           });
+      // US-5.1 FR-18: see the identical step in generate().
+      const htmlUaResult = useDocPipelineUa
+        ? htmlUaGate
+        : this.finalizeLegacyPlaceholders(htmlUaGate, {
+          input, imgManifest, label: 'HTML (uk-UA)', localeIso: UA_ISO, placed: reportByHtml.get(htmlUaGate.artifact)?.figures,
+        });
       // Outcome is recorded BEFORE the guard below, so a generation that never validated is
       // counted rather than lost with the exception. Fire-and-forget, same as generate() —
       // telemetry must not be able to fail a generation that otherwise succeeded. UA Description

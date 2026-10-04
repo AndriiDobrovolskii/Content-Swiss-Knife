@@ -97,3 +97,26 @@ describe('OpenAiProvider request bounds', () => {
     expect(calls[0].options.timeout).toBe(120_000);
   });
 });
+
+/**
+ * US-5.1 T7 (NFR-12, plan D5, U-16): the Vision JSON now carries an English caption plus three
+ * native-Ukrainian texts, roughly 400-600 tokens. The old 300-token cap would cut that reply off, the
+ * parser would throw and the entry would become `error`, unmatching its marker. OpenAI is the one
+ * provider with no truncation check on this call, so the cap itself is pinned.
+ */
+describe('OpenAiProvider vision output cap (US-5.1, NFR-12)', () => {
+  beforeEach(() => { calls.length = 0; nextResponse = reply('{"caption":"A lamp"}'); });
+
+  it('allows 1000 output tokens for an image analysis, matching the Anthropic non-thinking cap', async () => {
+    await new OpenAiProvider('k', 'gpt-4o').analyzeImage('B64', 'image/jpeg', 'Describe');
+    expect(calls[0].config.max_tokens).toBe(1000);
+  });
+
+  it('sends the image and the prompt unchanged, and returns the reply text', async () => {
+    const text = await new OpenAiProvider('k', 'gpt-4o').analyzeImage('B64', 'image/jpeg', 'Describe');
+    expect(text).toBe('{"caption":"A lamp"}');
+    const parts = calls[0].config.messages[0].content;
+    expect(parts[0].image_url.url).toBe('data:image/jpeg;base64,B64');
+    expect(parts[1].text).toBe('Describe');
+  });
+});

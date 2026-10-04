@@ -60,10 +60,10 @@ describe('TIPTAP_EXTENSIONS — full-fixture round-trip', () => {
 describe('imageFigure — attribute fidelity', () => {
   it('preserves first-image eager loading (no loading attr) and subsequent lazy loading', () => {
     const html =
-      `<figure style="display: block; width: fit-content; max-width: 100%; margin: 4px auto;">` +
+      `<figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">` +
       `<img src="a.jpg" alt="First" decoding="async" style="max-width: 100%; height: auto; display: block;">` +
       `<figcaption style="text-align: left;"><b>Lead-in:</b> caption text</figcaption></figure>` +
-      `<figure style="display: block; width: fit-content; max-width: 100%; margin: 4px auto;">` +
+      `<figure style="display: block; width: max-content; max-width: 100%; margin: 4px auto;">` +
       `<img src="b.jpg" alt="Second" loading="lazy" decoding="async" style="max-width: 100%; height: auto; display: block;">` +
       `<figcaption style="text-align: left;">Second caption</figcaption></figure>`;
 
