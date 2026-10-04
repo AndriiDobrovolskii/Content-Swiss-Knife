@@ -88,7 +88,7 @@ export class OpenAiProvider {
             { type: 'text', text: prompt }
           ]
         }],
-        max_tokens: 300,
+        max_tokens: 1000,
       }, { timeout: FAST_TIMEOUT_MS });
       return response.choices[0].message.content || '';
     });
