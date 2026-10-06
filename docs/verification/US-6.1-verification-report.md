@@ -2,7 +2,7 @@
 artifact: verification_report
 story: US-6.1
 version: 1
-status: APPROVED
+status: ARCHIVED
 owner: so-implementation-verifier
 stage: IMPLEMENTATION_VERIFICATION
 inputs_consumed:

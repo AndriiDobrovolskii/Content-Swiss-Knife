@@ -44,5 +44,5 @@ stories:
     slug: html-editor-preserve-iframe-embed
     track: angular
     path: docs/stories/US-6.1-html-editor-preserve-iframe-embed.md
-    state: IN_PROGRESS
+    state: ARCHIVED
     created_at: 2026-10-06T00:00:00Z

@@ -5,7 +5,7 @@ slug: html-editor-preserve-iframe-embed
 title: Preserve a pasted YouTube/Vimeo iframe and its wrapper divs in the HTML editor so Copy HTML no longer fails with "Structure changed"
 track: angular
 version: 4
-status: DRAFT
+status: ARCHIVED
 owner: so-story-writer
 created_at: 2026-10-06T00:00:00Z
 updated_at: 2026-10-06T00:00:00Z

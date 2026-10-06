@@ -1,0 +1,19 @@
+artifact: pull_request
+story: US-6.1
+version: 1
+status: ARCHIVED
+owner: so-pr-creator
+created_at: 2026-10-06T00:00:00Z
+updated_at: 2026-10-06T00:00:00Z
+supersedes: null
+inputs_consumed:
+  - key: pr_summary
+    version: 1
+number: 134
+url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/134
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+base: main
+head: feat/US-6.1-html-editor-preserve-iframe-embed
+tip_commit: fd5f31a0d39b10684795fecc1fdcf946dd9f5184
+opened_at: 2026-10-06T00:00:00Z
+draft: false
