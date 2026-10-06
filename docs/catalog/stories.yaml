@@ -39,3 +39,10 @@ stories:
     path: docs/stories/US-5.1-image-placeholder-substitution.md
     state: ARCHIVED
     created_at: 2026-10-02T00:00:00Z
+  - id: US-6.1
+    title: Preserve a pasted YouTube/Vimeo iframe and its wrapper divs in the HTML editor so Copy HTML no longer fails with "Structure changed"
+    slug: html-editor-preserve-iframe-embed
+    track: angular
+    path: docs/stories/US-6.1-html-editor-preserve-iframe-embed.md
+    state: IN_PROGRESS
+    created_at: 2026-10-06T00:00:00Z
