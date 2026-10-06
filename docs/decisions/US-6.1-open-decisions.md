@@ -2,7 +2,7 @@
 artifact: open_decisions
 story: US-6.1
 version: 4
-status: DRAFT
+status: ARCHIVED
 owner: so-clarifier
 supersedes: docs/decisions/US-6.1-open-decisions.md#3
 created_at: 2026-10-06T00:00:00Z

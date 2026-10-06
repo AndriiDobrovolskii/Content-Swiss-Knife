@@ -2,7 +2,7 @@
 artifact: clarification_report
 story: US-6.1
 version: 4
-status: DRAFT
+status: ARCHIVED
 owner: so-clarifier
 supersedes: docs/evidence/US-6.1-clarification-report.md#3
 created_at: 2026-10-06T00:00:00Z

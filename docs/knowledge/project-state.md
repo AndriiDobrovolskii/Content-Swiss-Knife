@@ -61,3 +61,15 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Delivered by PR #132, merge commit `4d3092c`. Summary: `docs/knowledge/US-5.1-delivery-summary.md`.
 - Open items: N-9 (long `hookExtra` sentence not repaired); live re-run on `expert3d_agibot_d1_ultra_2026-10-03_1217`,
   Vision output quality and browser check not recorded as done; OD-18, OD-20..OD-24 deferred.
+
+## US-6.1 — a pasted YouTube/Vimeo iframe and its wrapper divs survive the HTML editor (archived 2026-10-06T14:53:58Z)
+- A bare `<iframe>` inside 1..N wrapper `<div>`s now round-trips through the HTML editor and Copy HTML with its
+  attributes and wrapper `style` unchanged; no "Structure changed" warning (`src/app/components/html-editor/`).
+- New iframe allow-list at both editor gates (`editor-html-pipeline.ts`): strict `URL` parsing, `http(s)` only,
+  hostname equals or is a subdomain of `youtube.com`, `youtu.be`, `vimeo.com`, `player.vimeo.com`; anything else
+  (including look-alikes and empty/unparsable `src`) is removed. `<figure>` iframes are not filtered.
+- New `embedIframe` TipTap node; `genericBlock.renderHTML` writes attributes via `setAttribute` so wrapper `style`
+  stays verbatim. The parity baseline is taken after load-time sanitization.
+- No FROZEN file changed. Delivered by PR #134, merge commit `fd79cf8`. Summary: `docs/knowledge/US-6.1-delivery-summary.md`.
+- Open items: NB-1 (`srcdoc`/`sandbox` on a kept iframe via Source → Copy), NB-2 (unsanitized Source toggle-back),
+  OD-6 (figure iframes unfiltered), no component test for the two `html-editor.component.ts` call-site swaps.
