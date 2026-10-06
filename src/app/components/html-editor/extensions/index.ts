@@ -16,6 +16,7 @@ import { mergeAttributes } from '@tiptap/core';
 
 import { FigureImg, ImageFigcaption, ImageFigure } from './image-figure-node';
 import { VideoEmbedFigure } from './video-embed-figure-node';
+import { EmbedIframe } from './embed-iframe-node';
 import { Table, TableRow, TableCell, TableHeader } from './table-extensions';
 import { GenericBlock } from './generic-block-node';
 import { GenericInlineSpan } from './generic-inline-mark';
@@ -53,6 +54,7 @@ export const TIPTAP_EXTENSIONS = [
   FigureImg,
   ImageFigcaption,
   VideoEmbedFigure,
+  EmbedIframe,
   GenericBlock,
   GenericInlineSpan,
   GlobalAttributes,

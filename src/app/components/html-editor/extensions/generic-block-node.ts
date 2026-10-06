@@ -42,6 +42,15 @@ export const GenericBlock = Node.create({
   },
 
   renderHTML({ HTMLAttributes, node }) {
-    return [node.attrs['tagName'], mergeAttributes(HTMLAttributes), 0];
+    // Built as a real element (not a [tag, attrs, 0] spec) so `style` is written with
+    // setAttribute, byte-for-byte. ProseMirror's spec renderer assigns `style` through
+    // `dom.style.cssText`, which re-serialises the value (`margin: 0 auto` -> `margin: 0px auto`).
+    // Every other attribute is set exactly as the spec renderer would; null values are skipped.
+    const el = document.createElement(node.attrs['tagName'] as string);
+    const attrs = mergeAttributes(HTMLAttributes);
+    for (const [name, value] of Object.entries(attrs)) {
+      if (value !== null && value !== undefined) el.setAttribute(name, String(value));
+    }
+    return { dom: el, contentDOM: el };
   },
 });

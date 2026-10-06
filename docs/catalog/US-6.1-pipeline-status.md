@@ -1,7 +1,7 @@
 ---
 artifact: pipeline_status
 story: US-6.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
@@ -18,20 +18,20 @@ inputs_consumed:
   - key: impact_analysis
     version: 1
   - key: implementation_plan
-    version: 1
+    version: 2
   - key: task_breakdown
-    version: 1
+    version: 2
   - key: plan_review
-    version: 1
+    version: 2
   - key: test_strategy
-    version: 1
+    version: 2
   - key: ac_test_matrix
-    version: 1
+    version: 2
 ---
 
 # Pipeline status: US-6.1
 
-Overall: T1 DONE (commit 58d8335), T2 DONE (commit 770c61a), T3 BLOCKED (not committed).
+Overall: T1 DONE (commit 58d8335), T2 DONE (commit 770c61a; manual Copy HTML QA PENDING), T3 DONE (see git log, commit "feat(US-6.1 T3)").
 
 ## T1 - pure iframe filter and sanitizer pipeline: DONE
 
@@ -55,20 +55,20 @@ Overall: T1 DONE (commit 58d8335), T2 DONE (commit 770c61a), T3 BLOCKED (not com
   swaps have no automated component test and get manual QA: paste an off-list iframe, Load, Copy HTML, confirm no
   structure warning and the iframe absent; also paste an allowed div-wrapped iframe and confirm it survives.
 
-## T3 - embedIframe atomic block node: BLOCKED (plan defect), left uncommitted
+## T3 - embedIframe atomic block node plus genericBlock verbatim style (plan v2 D6): DONE
 
-Working tree (uncommitted): new `extensions/embed-iframe-node.ts`, `EmbedIframe` registered in `extensions/index.ts`.
+- Files: new `extensions/embed-iframe-node.ts`; `EmbedIframe` registered in `extensions/index.ts`;
+  `extensions/generic-block-node.ts` `renderHTML` now builds the wrapper element, writes every attribute with
+  `setAttribute` (so `style` is verbatim), skips null/undefined values, returns `{ dom, contentDOM }`.
+  Attribute schema and `parseHTML` unchanged. No test file, fixture or FROZEN file edited.
+- Previously red (4 round-trip tests, `margin: 0 auto` -> `margin: 0px auto`) now green.
+- `npx vitest run src/app/components/html-editor`: `Test Files 7 passed (7) / Tests 110 passed (110)`.
+- `npx vitest run` (test:logic, full): `Test Files 164 passed (164) / Tests 4569 passed | 3 skipped (4572)`
+  (the 3 skipped are the pre-existing LIVE_DOC_TEST probe).
+- `npm run test:components` (ng test): `Test Files 2 passed (2) / Tests 32 passed (32)`.
+- `npm run lint` (`tsc --noEmit`): exit clean, no diagnostics.
+- Not run by so-builder (owned by so-gate-enforcer): `npm run test:coverage`, `ng build`, `arch-guard.sh`.
 
-- `npx vitest run src/app/components/html-editor` with these two files: `Tests 2 failed | 102 passed (104)`:
-  round-trip.spec.ts "keeps the iframe attributes and the wrapper divs for N = 2 / N = 3 wrappers":
-  `Expected: "max-width: 1200px; width: 100%; margin: 0 auto;"  Received: "max-width: 1200px; width: 100%; margin: 0px auto;"`.
-- Root cause: `genericBlock.renderHTML` returns a `[tag, attrs, 0]` spec; ProseMirror's renderer sets `style` through
-  `dom.style.cssText`, which re-serialises the value (also in real browsers: `0` becomes `0px`). The plan (D6, D2 and
-  T3 Notes) assumed "wrapper `style` already round-trips through genericBlock" and forbade editing genericBlock;
-  AC-2 and the tests require verbatim wrapper style, so that assumption is false.
-- A first failure of the same kind on the iframe `style` (`border: none none`) was fixed inside the new node by
-  building the element with `setAttribute` in `renderHTML` (no plan deviation).
-- Experiment (reverted, genericBlock is not modified): making `genericBlock.renderHTML` create the element and use
-  `setAttribute('style', ...)` made all 104 tests in `src/app/components/html-editor` pass.
-- Not run for T3 (blocked): full `npm test`, `npm run test:coverage`, `ng build`.
-- Needed: plan amendment allowing a minimal `generic-block-node.ts` edit (verbatim `style` rendering) in T3, then re-dispatch.
+## Pending
+
+- Manual Copy HTML QA for T2: PENDING, not performed (see T2 section).

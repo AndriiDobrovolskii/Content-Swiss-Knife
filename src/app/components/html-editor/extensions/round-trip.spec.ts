@@ -16,7 +16,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL as NodeURL } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { getSchema } from '@tiptap/core';
-import { DOMParser as PMDOMParser, DOMSerializer } from '@tiptap/pm/model';
+import { DOMParser as PMDOMParser, DOMSerializer, type Node as PMNode } from '@tiptap/pm/model';
+import { EditorState } from '@tiptap/pm/state';
 import { validateStructuralParity } from '../../../../utils/structural-parity';
 import { stripTiptapArtifacts } from '../../../../utils/html-cleaner';
 import { reconstructTableThead } from './table-thead';
@@ -250,5 +251,216 @@ describe('table rendering — no TipTap-invented noise', () => {
     expect(cells[0].hasAttribute('colspan')).toBe(false);
     expect(cells[0].hasAttribute('rowspan')).toBe(false);
     expect(cells[1].getAttribute('colspan')).toBe('2');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// US-6.1 (T3) - a YouTube/Vimeo iframe inside plain wrapper <div>s survives the round trip.
+// Written before the embedIframe node exists, from Story AC-1/2/4/5/8 and Specification v5
+// FR-1, FR-2, FR-4, FR-5, FR-10, FR-11. Iframe markup is the exact shape from
+// Knowledge/Issues/1/yt-iframe.txt. Equality is DOM-level (Assumption A-4).
+// ---------------------------------------------------------------------------------------------
+
+const EMBED = {
+  src: 'https://www.youtube.com/embed/Y9C9_tiOsbQ?rel=0',
+  title: 'Demostración práctica de las capacidades del robot humanoide',
+  loading: 'lazy',
+  allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
+  referrerpolicy: 'strict-origin-when-cross-origin',
+  style: 'width: 100%; aspect-ratio: 16 / 9; border: none;',
+};
+
+const embedIframeHtml = (src = EMBED.src) =>
+  `<iframe src="${src}" title="${EMBED.title}" loading="${EMBED.loading}" allow="${EMBED.allow}" ` +
+  `referrerpolicy="${EMBED.referrerpolicy}" allowfullscreen="" style="${EMBED.style}"></iframe>`;
+
+const WRAPPER_STYLES = [
+  'width: 100%; max-width: 1000px; aspect-ratio: 16 / 9; margin: 4px auto;',
+  'max-width: 1200px; width: 100%; margin: 0 auto;',
+  'position: relative; padding: 2px;',
+];
+
+/** n nested divs (outermost first, styles from WRAPPER_STYLES) around `inner`. */
+function wrapInDivs(n: number, inner: string): string {
+  let html = inner;
+  for (let i = n - 1; i >= 0; i--) html = `<div style="${WRAPPER_STYLES[i]}">${html}</div>`;
+  return html;
+}
+
+function parsePm(html: string): PMNode {
+  const dom = new DOMParser().parseFromString(html, 'text/html');
+  return PMDOMParser.fromSchema(schema).parse(dom.body);
+}
+
+function serializeDoc(doc: PMNode): string {
+  const fragment = DOMSerializer.fromSchema(schema).serializeFragment(doc.content);
+  const wrapper = document.createElement('div');
+  wrapper.appendChild(fragment);
+  return wrapper.innerHTML;
+}
+
+function bodyOf(html: string): HTMLElement {
+  return new DOMParser().parseFromString(html, 'text/html').body;
+}
+
+describe('div-wrapped YouTube iframe - attributes and wrappers survive (US-6.1 AC-1, AC-2)', () => {
+  it.each([1, 2, 3])('keeps the iframe attributes and the wrapper divs for N = %i wrappers', n => {
+    const body = bodyOf(roundTrip(wrapInDivs(n, embedIframeHtml())));
+
+    // AC-1: iframe present exactly once, attributes equal to the input
+    const iframes = body.querySelectorAll('iframe');
+    expect(iframes).toHaveLength(1);
+    const iframe = iframes[0];
+    expect(iframe.getAttribute('src')).toBe(EMBED.src);
+    expect(iframe.getAttribute('title')).toBe(EMBED.title);
+    expect(iframe.getAttribute('allow')).toBe(EMBED.allow);
+    expect(iframe.getAttribute('referrerpolicy')).toBe(EMBED.referrerpolicy);
+    expect(iframe.getAttribute('loading')).toBe(EMBED.loading);
+    expect(iframe.hasAttribute('allowfullscreen')).toBe(true);
+    expect(iframe.getAttribute('style')).toBe(EMBED.style);
+
+    // AC-2: every wrapper keeps its style, in the original nesting order, iframe innermost
+    let node: Element = body;
+    for (let i = 0; i < n; i++) {
+      const child = node.firstElementChild!;
+      expect(child.tagName).toBe('DIV');
+      expect(child.getAttribute('style')).toBe(WRAPPER_STYLES[i]);
+      node = child;
+    }
+    expect(node.firstElementChild).toBe(iframe);
+    // no substituted element in place of the iframe
+    expect(body.querySelectorAll('p')).toHaveLength(0);
+  });
+});
+
+describe('two div-wrapped iframes keep their order (US-6.1 AC-4)', () => {
+  it('returns both src values in the original order', () => {
+    const first = 'https://www.youtube.com/embed/AAAAAAAAAAA';
+    const second = 'https://player.vimeo.com/video/222';
+    const html = wrapInDivs(2, embedIframeHtml(first)) + wrapInDivs(2, embedIframeHtml(second));
+    const srcs = Array.from(bodyOf(roundTrip(html)).querySelectorAll('iframe')).map(f => f.getAttribute('src'));
+    expect(srcs).toEqual([first, second]);
+  });
+});
+
+describe('editing elsewhere leaves a div-wrapped iframe untouched (US-6.1 AC-5)', () => {
+  it('outputs the embed chain unchanged after typing in a paragraph below it', () => {
+    const embed = wrapInDivs(2, embedIframeHtml());
+    const html = `<p>Intro text</p>${embed}<p>Closing paragraph</p>`;
+    const before = bodyOf(roundTrip(html));
+    expect(before.querySelectorAll('iframe')).toHaveLength(1); // the embed exists to begin with
+
+    const state = EditorState.create({ doc: parsePm(html) });
+    let closingPos = -1;
+    state.doc.descendants((node, pos) => {
+      if (node.isText && node.text === 'Closing paragraph') closingPos = pos;
+      return true;
+    });
+    expect(closingPos).toBeGreaterThanOrEqual(0);
+    const edited = state.apply(state.tr.insertText('EDITED ', closingPos)).doc;
+    const after = bodyOf(serializeDoc(edited));
+
+    expect(after.querySelector('p:last-of-type')?.textContent).toBe('EDITED Closing paragraph');
+    // same embed chain, attribute for attribute, in the same position
+    expect(after.children[1].outerHTML).toBe(before.children[1].outerHTML);
+    expect(after.children[1].querySelector('iframe')?.getAttribute('src')).toBe(EMBED.src);
+  });
+});
+
+describe('text beside a div-wrapped iframe (US-6.1 AC-8)', () => {
+  const html = `<div style="${WRAPPER_STYLES[0]}">${embedIframeHtml()}Watch the full demo</div>`;
+
+  it('keeps the sibling text in the editor document and in the output, after the iframe', () => {
+    const doc = parsePm(html);
+    expect(doc.textContent).toContain('Watch the full demo');
+
+    const wrapper = bodyOf(serializeDoc(doc)).firstElementChild!;
+    expect(wrapper.getAttribute('style')).toBe(WRAPPER_STYLES[0]);
+    const iframe = wrapper.querySelector('iframe');
+    expect(iframe).not.toBeNull();
+    expect(wrapper.textContent).toContain('Watch the full demo');
+    // order relative to the iframe is preserved: the text follows the iframe
+    const walker = document.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT);
+    let marker: Node | null = null;
+    while (walker.nextNode()) {
+      if (walker.currentNode.textContent?.includes('Watch')) marker = walker.currentNode;
+    }
+    expect(marker).not.toBeNull();
+    expect(iframe!.compareDocumentPosition(marker!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it('keeps the sibling text editable: typed characters appear in the output at the edited position', () => {
+    const state = EditorState.create({ doc: parsePm(html) });
+    let textPos = -1;
+    state.doc.descendants((node, pos) => {
+      if (node.isText && node.text?.includes('Watch the full demo')) textPos = pos;
+      return true;
+    });
+    expect(textPos).toBeGreaterThanOrEqual(0);
+
+    const edited = state.apply(state.tr.insertText('XYZ', textPos + 'Watch '.length)).doc;
+    const wrapper = bodyOf(serializeDoc(edited)).firstElementChild!;
+    expect(wrapper.textContent).toContain('Watch XYZthe full demo');
+    expect(wrapper.querySelector('iframe')?.getAttribute('src')).toBe(EMBED.src);
+  });
+});
+
+describe('div-wrapped iframe round trip is deterministic (US-6.1 NFR-2)', () => {
+  it('yields the same output for the same input, and keeps the iframe', () => {
+    const html = wrapInDivs(2, embedIframeHtml());
+    const a = roundTrip(html);
+    expect(roundTrip(html)).toBe(a);
+    expect(bodyOf(a).querySelectorAll('iframe')).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// US-6.1 (T3, plan v2 D6) - genericBlock.renderHTML writes `style` verbatim and leaves every
+// other attribute exactly as before. Additive guards for the narrow serialisation edit.
+// ---------------------------------------------------------------------------------------------
+
+describe('genericBlock - wrapper style is returned verbatim (US-6.1 AC-2, plan v2 D6)', () => {
+  it.each([
+    'margin: 0 auto;',
+    'max-width: 1200px; width: 100%; margin: 0 auto;',
+    'width: 100%; max-width: 1000px; aspect-ratio: 16 / 9; margin: 4px auto;',
+  ])('does not re-serialise the style of a plain wrapper div: %s', style => {
+    const out = bodyOf(roundTrip(`<div style="${style}"><p>text</p></div>`));
+    expect(out.firstElementChild!.getAttribute('style')).toBe(style);
+  });
+
+  it('keeps class, id, itemprop, itemtype and itemscope unchanged on a div and a section', () => {
+    const html =
+      `<section class="specs" id="s1" itemscope itemtype="https://schema.org/FAQPage">` +
+      `<div class="a b" id="d1" itemprop="mainEntity" itemscope itemtype="https://schema.org/Question">` +
+      `<p>x</p></div></section>`;
+    const section = bodyOf(roundTrip(html)).firstElementChild!;
+    expect(section.tagName).toBe('SECTION');
+    expect(section.getAttribute('class')).toBe('specs');
+    expect(section.getAttribute('id')).toBe('s1');
+    expect(section.getAttribute('itemtype')).toBe('https://schema.org/FAQPage');
+    expect(section.hasAttribute('itemscope')).toBe(true);
+    expect(section.hasAttribute('style')).toBe(false);
+    const div = section.firstElementChild!;
+    expect(div.tagName).toBe('DIV');
+    expect(div.getAttribute('class')).toBe('a b');
+    expect(div.getAttribute('id')).toBe('d1');
+    expect(div.getAttribute('itemprop')).toBe('mainEntity');
+    expect(div.getAttribute('itemtype')).toBe('https://schema.org/Question');
+    expect(div.hasAttribute('itemscope')).toBe(true);
+    expect(div.hasAttribute('style')).toBe(false);
+  });
+
+  it('skips null attributes: a bare div gets no empty style, class, id or microdata attribute', () => {
+    const div = bodyOf(roundTrip('<div><p>x</p></div>')).firstElementChild!;
+    expect(div.tagName).toBe('DIV');
+    expect(div.getAttributeNames()).toEqual([]);
+  });
+
+  it('skips only the missing attributes: a div with just a class carries just a class', () => {
+    const div = bodyOf(roundTrip('<div class="only"><p>x</p></div>')).firstElementChild!;
+    expect(div.getAttributeNames()).toEqual(['class']);
   });
 });
