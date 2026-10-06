@@ -2,20 +2,15 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: US-5.1
-current_stage: ARCHIVED
-status: ARCHIVED
+story: US-6.1
+current_stage: PR_CREATION
+status: IN_PROGRESS
 pending_human_gate: null
-started_at: 2026-10-02T12:00:00Z
-updated_at: 2026-10-04T19:30:00Z
+started_at: 2026-10-06T12:54:19Z
+updated_at: 2026-10-06T14:48:27Z
 stage_attempts:
-  SPECIFICATION: 0
-  SPEC_REVIEW: 0
-  IMPACT_ANALYSIS: 0
-  ARCHITECTURE_PLANNING: 0
   IMPLEMENTATION_PLANNING: 0
-  TEST_WRITING: 0
-  IMPLEMENTATION: 0
+  ARCHITECTURE_PLANNING: 0
 track: angular
 blockers: []
 note: null

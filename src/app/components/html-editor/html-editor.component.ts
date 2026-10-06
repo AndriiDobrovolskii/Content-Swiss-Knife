@@ -4,10 +4,8 @@ import { Editor } from '@tiptap/core';
 import { EditorView } from '@codemirror/view';
 import { SearchQuery, setSearchQuery, findNext, findPrevious, replaceNext, replaceAll as cmReplaceAll } from '@codemirror/search';
 import { TIPTAP_EXTENSIONS } from './extensions';
-import { reconstructTableThead } from './extensions/table-thead';
 import { searchReplaceKey } from './extensions/search-replace-extension';
-import { stripTiptapArtifacts, sanitizeUntrustedHtml } from '../../../utils/html-cleaner';
-import { wrapImageFigures } from '../../../utils/image-figure';
+import { sanitizeEditorHtml, finalizeCopyHtml } from './editor-html-pipeline';
 import { ensureRel0 } from '../../../utils/video-url';
 import { validateStructuralParity } from '../../../utils/structural-parity';
 import type { ValidationIssue } from '../../../utils/output-validator';
@@ -392,7 +390,7 @@ export class HtmlEditorComponent {
   load() {
     const html = this.pastedHtml().trim();
     if (!html) return;
-    const sanitized = sanitizeUntrustedHtml(html);
+    const sanitized = sanitizeEditorHtml(html);
     this.originalHtml.set(sanitized);
     this.pendingContent = sanitized;
     this.issues.set([]);
@@ -427,10 +425,7 @@ export class HtmlEditorComponent {
 
   private buildCopyHtml(): string {
     const raw = this.sourceMode() ? this.currentSourceHtml() : (this.editor?.getHTML() ?? '');
-    const stripped = stripTiptapArtifacts(raw);
-    const tableFixed = reconstructTableThead(stripped);
-    const figuresFixed = wrapImageFigures(tableFixed);
-    return sanitizeUntrustedHtml(figuresFixed);
+    return finalizeCopyHtml(raw);
   }
 
   private doCopy(html: string) {
