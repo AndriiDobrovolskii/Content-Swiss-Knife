@@ -73,3 +73,18 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - No FROZEN file changed. Delivered by PR #134, merge commit `fd79cf8`. Summary: `docs/knowledge/US-6.1-delivery-summary.md`.
 - Open items: NB-1 (`srcdoc`/`sandbox` on a kept iframe via Source → Copy), NB-2 (unsanitized Source toggle-back),
   OD-6 (figure iframes unfiltered), no component test for the two `html-editor.component.ts` call-site swaps.
+
+
+## US-6.2 — `<b>` and `<strong>` are no longer rewritten; the master prompt uses `<b>` for all emphasis (archived 2026-10-07T09:20:45Z)
+- `cleanHtmlStructure` (Optimizer and Fast path) keeps `<b>` as `<b>` and `<strong>` as `<strong>`; the old unconditional
+  rewrite in `src/utils/html-cleaner.ts` is deleted. Heading hygiene is unchanged.
+- The FROZEN `src/prompt-core/master-system-prompt.ts` `[FORMAT]` sentence now says "Use <b> for all emphasis (brands,
+  models, specifications)." instead of reserving `<strong>`; the density cap is gone. Edited under the human's explicit
+  section 9 permission; `.arch-guard-checksums` re-baselined (one line); the golden fixture has 10 replaced sentences.
+- No override in `src/prompts/optimizer.ts`. The master prompt reaches Task A (uk-UA master, so every locale), Task C,
+  the Optimizer and the Doc pipeline; already-generated masters keep their `<strong>`.
+- Delivered by PR #136, merge commit `6d4e120`. Summary: `docs/knowledge/US-6.2-delivery-summary.md`.
+- Open items: bold-tag attributes (`onclick`, `style`) now pass the cleaner unsanitised into `safeHtml` (NB-1);
+  `task-a-doc.ts:96`, `simplified-template-blocks.ts:127`, `constants.ts:1189-1190`, `copywriter.ts:53` still say
+  "Reserve <strong>"; `itemprop` on a bold tag is still stripped; no deterministic figcaption `<b>` enforcement; live-model
+  obedience proven only by the human's manual run.
