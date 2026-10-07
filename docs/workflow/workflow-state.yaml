@@ -3,11 +3,11 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-6.2
-current_stage: PR_CREATION
-status: IN_PROGRESS
+current_stage: ARCHIVED
+status: ARCHIVED
 pending_human_gate: null
 started_at: 2026-10-06T14:56:43Z
-updated_at: 2026-10-07T07:43:50Z
+updated_at: 2026-10-07T09:20:45Z
 stage_attempts: {}
 track: angular
 blockers: []

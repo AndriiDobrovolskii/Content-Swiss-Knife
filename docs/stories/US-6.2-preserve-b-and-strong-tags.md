@@ -5,7 +5,7 @@ slug: preserve-b-and-strong-tags
 title: Stop rewriting <b> into <strong>: remove the cleaner conversion and make the master prompt use <b> for all emphasis
 track: angular
 version: 3
-status: DRAFT
+status: ARCHIVED
 owner: so-story-writer
 created_at: 2026-10-06T00:00:00Z
 updated_at: 2026-10-06T00:00:00Z

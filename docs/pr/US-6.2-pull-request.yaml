@@ -1,0 +1,19 @@
+artifact: pull_request
+story: US-6.2
+version: 1
+status: ARCHIVED
+owner: so-pr-creator
+created_at: 2026-10-07T00:00:00Z
+updated_at: 2026-10-07T00:00:00Z
+supersedes: null
+inputs_consumed:
+  - key: pr_summary
+    version: 1
+number: 136
+url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/136
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+base: main
+head: feat/US-6.2-preserve-b-and-strong-tags
+tip_commit: 8d059e13ae970dbe8b7321b9941388d836f02eba
+opened_at: 2026-10-07T00:00:00Z
+draft: false
