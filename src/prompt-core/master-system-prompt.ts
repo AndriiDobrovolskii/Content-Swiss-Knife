@@ -472,6 +472,5 @@ and the rules below then describe only WHAT to express — not how to serialize 
 Emit HTML only; render every structure that Markdown would express (emphasis, lists,
 headings) with its HTML tag. Create vertical spacing with block elements —
 <p>/<h2>/<h3>/<div>/<section> (replaces <br>); place <hr> after each </section>.
-Reserve <strong> for brands / main model / core USPs at a density of 2–3 per 500
-characters maximum; use <b> for inline spec scannability. Emit only tags that wrap
+Use <b> for all emphasis (brands, models, specifications). Emit only tags that wrap
 content. Keep a high text-to-HTML ratio.`;

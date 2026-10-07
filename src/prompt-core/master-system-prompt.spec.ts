@@ -143,3 +143,32 @@ describe('MASTER_SYSTEM_PROMPT — [HEADING FORM]: the two-heading exception hol
     expect(normalized).toMatch(/the FIRST §3 heading and\s*the §9 commercial-closing heading/i);
   });
 });
+
+/**
+ * US-6.2 — emphasis tag wording. Asserted against the RAW exported text (not the
+ * whitespace-normalized copy) so the FR-8 byte-identity of the trailing sentences is real.
+ * Template-literal line breaks are LF at runtime regardless of file line endings.
+ */
+describe('MASTER_SYSTEM_PROMPT — US-6.2 emphasis tag wording', () => {
+  const OLD_SENTENCE =
+    'Reserve <strong> for brands / main model / core USPs at a density of 2\u20133 per 500\n' +
+    'characters maximum; use <b> for inline spec scannability.';
+  const NEW_SENTENCE = 'Use <b> for all emphasis (brands, models, specifications).';
+  const TRAILING = 'Emit only tags that wrap\ncontent. Keep a high text-to-HTML ratio.';
+
+  it('AC-4/FR-4: the old <strong>-reservation sentence is gone', () => {
+    expect(MASTER_SYSTEM_PROMPT).not.toContain(OLD_SENTENCE);
+    expect(normalized).not.toContain('Reserve <strong> for brands');
+  });
+
+  it('AC-4/FR-4: [FORMAT] states <b> is the tag for all emphasis', () => {
+    const formatStart = MASTER_SYSTEM_PROMPT.indexOf('[FORMAT]');
+    expect(formatStart).toBeGreaterThanOrEqual(0);
+    const idx = MASTER_SYSTEM_PROMPT.indexOf(NEW_SENTENCE);
+    expect(idx).toBeGreaterThan(formatStart);
+  });
+
+  it('AC-8/FR-8: the sentence after the replacement is byte-identical, newline included', () => {
+    expect(MASTER_SYSTEM_PROMPT).toContain(NEW_SENTENCE + ' ' + TRAILING);
+  });
+});
