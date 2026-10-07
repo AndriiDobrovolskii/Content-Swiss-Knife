@@ -12,6 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { cleanHtmlStructure, stripTiptapArtifacts, sanitizeUntrustedHtml } from './html-cleaner';
+import { finalizeTablesForDisplay } from './table-finalize';
 
 function parse(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
@@ -257,5 +258,71 @@ describe('sanitizeUntrustedHtml', () => {
   it('leaves safe hrefs/srcs and normal attributes untouched', () => {
     const html = `<a href="https://example.com" class="link">Link</a><img src="/img/a.jpg" alt="A">`;
     expect(sanitizeUntrustedHtml(html)).toBe(html);
+  });
+});
+
+// US-6.2 — bold tags are kept exactly as supplied (no <b> -> <strong> conversion).
+describe('cleanHtmlStructure — US-6.2 bold tag preservation', () => {
+  const countOutsideHeadings = (doc: Document, tag: string): number =>
+    Array.from(doc.querySelectorAll(tag)).filter(el => !el.closest('h2, h3, h4')).length;
+
+  it('AC-1: keeps <b>X</b> as <b> and introduces no <strong>', () => {
+    const doc = parse(cleanHtmlStructure('<p>Buy the <b>AgiBot X2</b> today.</p>'));
+    const bold = doc.querySelectorAll('b');
+    expect(bold).toHaveLength(1);
+    expect(bold[0].outerHTML).toBe('<b>AgiBot X2</b>');
+    expect(doc.querySelectorAll('strong')).toHaveLength(0);
+  });
+
+  it('AC-2: keeps <strong>Y</strong> as <strong> and introduces no <b>', () => {
+    const doc = parse(cleanHtmlStructure('<p>Buy the <strong>AgiBot X2</strong> today.</p>'));
+    const strong = doc.querySelectorAll('strong');
+    expect(strong).toHaveLength(1);
+    expect(strong[0].outerHTML).toBe('<strong>AgiBot X2</strong>');
+    expect(doc.querySelectorAll('b')).toHaveLength(0);
+  });
+
+  it('AC-3: mixed input keeps exactly the input count of each tag outside h2-h4', () => {
+    const html =
+      '<p><b>a</b> and <strong>b</strong> and <b>c</b></p>' +
+      '<ul><li><b>d</b></li><li><strong>e</strong></li><li><strong>f</strong></li></ul>' +
+      '<table><tbody><tr><td><b>g</b></td><td><strong>h</strong></td></tr></tbody></table>' +
+      '<figure><img src="a.jpg" alt="x"><figcaption><strong>Lead:</strong> text</figcaption></figure>';
+    const input = parse(html);
+    const out = parse(cleanHtmlStructure(html));
+    expect(countOutsideHeadings(input, 'b')).toBe(4);
+    expect(countOutsideHeadings(input, 'strong')).toBe(5);
+    expect(countOutsideHeadings(out, 'b')).toBe(countOutsideHeadings(input, 'b'));
+    expect(countOutsideHeadings(out, 'strong')).toBe(countOutsideHeadings(input, 'strong'));
+  });
+
+  it('AC-5: bold elements inside h2/h3/h4 are still unwrapped to plain text (heading hygiene)', () => {
+    const doc = parse(cleanHtmlStructure(
+      '<h2><b>Alpha</b> head</h2><h3><strong>Beta</strong> head</h3><h4><b>Gamma</b></h4>'));
+    expect(doc.querySelector('h2')!.textContent).toBe('Alpha head');
+    expect(doc.querySelector('h3')!.textContent).toBe('Beta head');
+    expect(doc.querySelector('h4')!.textContent).toBe('Gamma');
+    expect(doc.querySelectorAll('h2 b, h2 strong, h3 b, h3 strong, h4 b, h4 strong')).toHaveLength(0);
+  });
+
+  it('AC-6: Fast-path composition finalizeTablesForDisplay(cleanHtmlStructure(input)) preserves both tags', () => {
+    const doc = parse(finalizeTablesForDisplay(cleanHtmlStructure('<p><b>X</b> and <strong>Y</strong></p>')));
+    expect(doc.querySelectorAll('b')).toHaveLength(1);
+    expect(doc.querySelector('b')!.outerHTML).toBe('<b>X</b>');
+    expect(doc.querySelectorAll('strong')).toHaveLength(1);
+    expect(doc.querySelector('strong')!.outerHTML).toBe('<strong>Y</strong>');
+  });
+
+  it('AC-7: <b class> and <strong class> keep class and their own tag name', () => {
+    const doc = parse(cleanHtmlStructure(
+      '<p><b class="highlight">X</b> <strong class="highlight">Y</strong></p>'));
+    const b = doc.querySelector('b')!;
+    const strong = doc.querySelector('strong')!;
+    expect(b.getAttribute('class')).toBe('highlight');
+    expect(b.textContent).toBe('X');
+    expect(strong.getAttribute('class')).toBe('highlight');
+    expect(strong.textContent).toBe('Y');
+    expect(doc.querySelectorAll('b')).toHaveLength(1);
+    expect(doc.querySelectorAll('strong')).toHaveLength(1);
   });
 });

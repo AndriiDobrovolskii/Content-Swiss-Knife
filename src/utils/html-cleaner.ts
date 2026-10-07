@@ -161,13 +161,6 @@ export const cleanHtmlStructure = (html: string): string => {
     }
   });
 
-  // Replace all <b> tags with <strong> tags
-  doc.querySelectorAll('b').forEach(b => {
-    const strong = doc.createElement('strong');
-    strong.innerHTML = b.innerHTML;
-    b.replaceWith(strong);
-  });
-
   // 5b. Table Simplification
   // Strip Bootstrap classes / scope attrs and demote row-label <th> cells to
   // plain <td> — the outer .table-responsive wrapper div is left untouched.
