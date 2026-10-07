@@ -46,3 +46,10 @@ stories:
     path: docs/stories/US-6.1-html-editor-preserve-iframe-embed.md
     state: ARCHIVED
     created_at: 2026-10-06T00:00:00Z
+  - id: US-6.2
+    title: "Stop rewriting <b> into <strong>: remove the cleaner conversion and make the master prompt use <b> for all emphasis"
+    slug: preserve-b-and-strong-tags
+    track: angular
+    path: docs/stories/US-6.2-preserve-b-and-strong-tags.md
+    state: IN_PROGRESS
+    created_at: 2026-10-06T00:00:00Z
