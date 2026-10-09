@@ -60,9 +60,10 @@ import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopw
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor, MASTER_LOCALE } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { withProtectedNameBlock } from '../prompt-core/protected-name-block';
+import { enforceProtectedSlugLength } from '../prompt-core/protected-slug';
 import { classifyProductName } from '../utils/protected-product-name';
 import { seoCoreName } from '../utils/protected-seo-name';
-import { checkNameSurfaces } from '../utils/product-name-preservation';
+import { checkNameSurfaces, checkDescriptionHtml, checkOptimizerText } from '../utils/product-name-preservation';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
 import { validateTranslationIntegrity, withTranslateFeedback } from '../utils/translation-integrity';
@@ -1027,6 +1028,7 @@ export class ContentOrchestratorService {
             basePayload: promptSlug,
             produce: async payload => this.normalizeSlugResponse(
               await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }),
+              input.name,
             ),
             validate: json => validateSlugs(json, input.name),
             withFeedback: appendRepairFeedback,
@@ -1046,7 +1048,7 @@ export class ContentOrchestratorService {
           // the (possibly field-repaired) name and re-canonicalizes `.name`, the same invariant
           // every full generation already gets (produce() calls it too). Idempotent when nothing
           // was field-repaired.
-          const slugData = this.normalizeSlugResponse(rawSlugData);
+          const slugData = this.normalizeSlugResponse(rawSlugData, input.name);
           if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
           this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
           this.content.update(c => ({ ...c, slugData }));
@@ -1476,6 +1478,7 @@ export class ContentOrchestratorService {
           basePayload: promptSlug,
           produce: async payload => this.normalizeSlugResponse(
             await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO }),
+            input.name,
           ),
           validate: json => validateSlugs(json, input.name),
           withFeedback: appendRepairFeedback,
@@ -1489,7 +1492,7 @@ export class ContentOrchestratorService {
         });
         const { artifact: rawSlugData, repairsUsed: slugRepairs } = slugResult;
         // See generate()'s identical Slugs gate above for why this re-normalization is required.
-        const slugData = this.normalizeSlugResponse(rawSlugData);
+        const slugData = this.normalizeSlugResponse(rawSlugData, input.name);
         if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
         this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
         this.content.update(c => ({ ...c, slugData }));
@@ -1681,6 +1684,7 @@ export class ContentOrchestratorService {
         basePayload: promptSlug,
         produce: async payload => this.normalizeSlugResponse(
           await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }),
+          input.name,
         ),
         validate: json => validateSlugs(json, input.name),
         withFeedback: appendRepairFeedback,
@@ -1694,23 +1698,31 @@ export class ContentOrchestratorService {
       });
       const { artifact: rawSlugData, finalIssues: slugFinalIssues, repairsUsed: slugRepairs } = slugResult;
       // See generate()'s identical Slugs gate for why this re-normalization is required.
-      const slugData = this.normalizeSlugResponse(rawSlugData);
+      const slugData = this.normalizeSlugResponse(rawSlugData, input.name);
       if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
       this.content.update(c => ({ ...c, slugData }));
       this.approvedSlugKey.set(this.slugKey(input));
 
-      this.validationIssues.set(slugFinalIssues);
+      // US-7.1 (FR-3, FR-5): report-only. A name or slug missing a typed-name token is reported, not re-requested.
+      this.validationIssues.set([...slugFinalIssues, ...checkNameSurfaces(input.name, { slugs: slugData })]);
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Slug Generation Done!');
     }, 'Error during slug generation.', 'Slug Generation failed.');
   }
 
-  private normalizeSlugResponse(raw: SlugResponse): SlugResponse {
+  private normalizeSlugResponse(raw: SlugResponse, typedName = ''): SlugResponse {
+    // US-7.1 (FR-10): a protected name keeps every typed-name slug token through the 100-character trim.
+    const isProtected = typedName.trim() !== '' && classifyProductName(typedName).protected;
     const slugs = (raw.slugs ?? []).map(s => {
       const base = normalizeSlug(stripSlugStopwords(s.name), s.language);
-      return { ...s, slug: enforceSlugLength(s.name, base, s.language) };
+      return {
+        ...s,
+        slug: isProtected
+          ? enforceProtectedSlugLength(s.name, base, typedName, s.language)
+          : enforceSlugLength(s.name, base, s.language),
+      };
     });
     const unique = ensureUniqueSlugs(slugs);
     return {
@@ -1815,6 +1827,9 @@ export class ContentOrchestratorService {
         withFeedback: (payload, errors) => appendRepairFeedback(payload, errors),
       });
       this.optimizerOutput.set(result.artifact);
+      // US-7.1 (FR-7): report-only, and only when the optional [Product Name] line was supplied.
+      const nameIssues = checkOptimizerText(productName, result.artifact);
+      this.validationIssues.update(prev => dedupeIssues([...prev.filter(i => i.context !== 'Optimizer output'), ...nameIssues]));
       this.progressMessage.set('Optimization Complete!');
     }, 'Error during optimization.', 'Optimization failed.');
   }
@@ -1959,6 +1974,12 @@ export class ContentOrchestratorService {
       ...validateSeoMetadataShape(c.seoData, 'SEO metadata'),
       ...validateSlugs(c.slugData ?? null, productName),
       ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
+      // US-7.1 (FR-3, FR-5, FR-6): report-only protected-name checks. Slugs and SEO name surfaces get
+      // part 1 (and part 2 on SEO); the description of the master and of every Task C locale gets part 2.
+      ...checkNameSurfaces(productName ?? '', { slugs: c.slugData ?? null, seo: c.seoData }),
+      ...checkDescriptionHtml(productName ?? '', c.mainHtmlUa, mainLocale ? `HTML (${mainLocale})` : 'HTML (base)'),
+      ...Object.entries(c.translations).flatMap(([lang, html]) =>
+        checkDescriptionHtml(productName ?? '', html, `HTML (${lang})`)),
     ];
     // MERGE, never set. This runs LAST in the pipeline, after the signal already holds the
     // repair gate's final issues, the per-language final issues and any slug-generation
