@@ -107,3 +107,33 @@ describe('buildOptimizerPrompt — the v4 target shape (recorded human decision,
     expect(a.systemBlocks.every(block => block.cache === true)).toBe(true);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-7.1 T11 (FR-7, AC-5, OD-7; plan-review non-blocking 3, TEST_WRITING condition 3). The Optimizer's
+// own task block (systemBlocks[1]) must carry a verbatim brand/model preservation sentence; the
+// per-product [PROTECTED PRODUCT NAME] block reaches it from the orchestrator (T6/T12, see
+// content-orchestrator.protected-name-wiring.spec.ts), and the master block (systemBlocks[0]) carries
+// the static precedence clause through PRODUCT_NAME_LOCALIZATION (protected-name-precedence.spec.ts).
+// ═══════════════════════════════════════════════════════════════════════════
+describe('buildOptimizerPrompt — brand and model names are preserved verbatim (US-7.1 T11, FR-7, AC-5)', () => {
+  const html = '<p>Some input HTML with Formlabs Form Studio 1 Resin Tank Pro.</p>';
+
+  it('the optimizer-specific task block states that brand and model names stay verbatim', () => {
+    const task = buildOptimizerPrompt(html).systemBlocks[1].text;
+    expect(task).toMatch(
+      /brand[^.\n]{0,40}model[^.\n]{0,80}(verbatim|unchanged|untranslated|not (be )?translat)|(verbatim|unchanged|untranslated|never translat|do not translat)[^.\n]{0,120}brand[^.\n]{0,40}model/i,
+    );
+  });
+
+  it('the sentence is generic: it is present with and without a [Product Name] line, in the cached block', () => {
+    const without = buildOptimizerPrompt(html).systemBlocks[1].text;
+    const withName = buildOptimizerPrompt(html, 'Formlabs Form Studio 1 Resin Tank Pro').systemBlocks[1].text;
+    expect(withName).toBe(without);
+  });
+
+  it('keeps the product name out of the cached blocks (it stays in userContent only)', () => {
+    const payload = buildOptimizerPrompt(html, 'Formlabs Form Studio 1 Resin Tank Pro');
+    expect(payload.systemBlocks.every(b => !b.text.includes('Form Studio 1 Resin Tank Pro'))).toBe(true);
+    expect(payload.userContent).toContain('[Product Name]: Formlabs Form Studio 1 Resin Tank Pro');
+  });
+});

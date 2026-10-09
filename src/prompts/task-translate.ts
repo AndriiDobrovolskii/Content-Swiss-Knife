@@ -129,6 +129,17 @@ function normalizeLabel(label: string): string {
  */
 export type TranslationContext = 'user-facing-content' | 'internal-matching-only';
 
+/**
+ * US-7.1 (FR-7, OD-7). The Translator receives no Product Name, so it cannot tell a brand from a
+ * generic noun on its own; this generic sentence is the whole enforcement. It sits in the task
+ * instruction block (cached, identical for every request in a language).
+ */
+const BRAND_MODEL_VERBATIM = `[BRAND AND MODEL NAMES]
+Brand and model names are kept verbatim: never translate, transliterate, shorten, drop or re-order
+any token of a brand or model name, including a descriptive word that belongs to the name (a name
+that ends in a common noun keeps that noun in the original). Only the locale formatting of its
+numbers and units may change.`;
+
 function buildInstruction(targetLangLabel: string, context: TranslationContext, templateId?: string): string {
   const config = LANG_CONFIG[normalizeLabel(targetLangLabel)];
   const heading = config
@@ -146,7 +157,7 @@ function buildInstruction(targetLangLabel: string, context: TranslationContext, 
   // US-2.2 FR-19: a simplified template's master omits paragraphs on purpose. Full description (no id,
   // or an unknown one) adds nothing, so its bytes are unchanged.
   const simplifiedClause = isSimplifiedTemplateId(templateId) ? `\n\n${SIMPLIFIED_TRANSLATION_CLAUSE}` : '';
-  return `${heading}${notes}\n\n${UNIT_LOCALIZATION_RULES}${styleGuide}${simplifiedClause}`;
+  return `${heading}${notes}\n\n${BRAND_MODEL_VERBATIM}\n\n${UNIT_LOCALIZATION_RULES}${styleGuide}${simplifiedClause}`;
 }
 
 /**
