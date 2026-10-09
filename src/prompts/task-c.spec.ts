@@ -239,3 +239,61 @@ describe('buildPromptC — opts (uk-UA master pipeline: H1 lock + anti-calque)',
     expect(taskBlock).toContain(EXPERT3D_TOV_TRANSLATION_OVERLAY);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-7.1 T15 (F-1, APPROVED at HUMAN_PLAN_APPROVAL; FR-2, FR-6, AC-3). task-c.ts is FROZEN
+// (AGENTS.md §9); the edit is approved per file with .arch-guard-checksums re-baselined in the same
+// commit. The inline per-locale sentences told the model to "TRANSLATE the generic descriptor and
+// reorder it category-first" — in the CACHED system block, contradicting the protected-name rule for
+// every non-uk-UA locale. They are replaced by a reference to [PRODUCT NAME LOCALIZATION].
+//
+// Targeted at the INLINE phrases only, on whitespace-collapsed text (lines wrap mid-phrase in the
+// source): PRODUCT_NAME_LOCALIZATION itself legitimately contains "category-first" for GENERIC names
+// and is interpolated into every branch, so a blanket "no category-first" assertion could never pass.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('buildPromptC — inline descriptor-translation sentences are replaced (US-7.1 T15, F-1)', () => {
+  // [label, store, websiteGroup, hadTheInlineSentence]. Every instruction branch of buildPromptC.
+  const BRANCHES: [string, string, string, boolean][] = [
+    ['European English', 'EXPERT3D', 'ES', false],
+    ['Ukrainian', 'Expert-3DPrinter', 'US', true],
+    ['American English', 'Expert-3DPrinter', 'US', true],
+    ['American Spanish', 'Expert-3DPrinter', 'US', true],
+    ['ES', 'EXPERT3D', 'ES', true],
+    ['PT', 'EXPERT3D', 'ES', true],
+    ['Portuguese (EXPERT3D)', 'EXPERT3D', 'ES', true],
+    ['PL', 'Center 3D Print', 'EU', true],
+    ['DE', 'Center 3D Print', 'EU', true],
+    ['Russian', 'Center 3D Print', 'EU', true],
+    ['EN', 'Center 3D Print', 'EU', true],
+    ['Ukrainian', '3DDevice', 'UA', true],
+  ];
+  const systemText = (lang: string, store: string, group: string) =>
+    buildPromptC(SAMPLE_HTML, lang, store, group).systemBlocks.map(b => b.text).join('\n').replace(/\s+/g, ' ');
+
+  const OLD_SENTENCES: [string, RegExp][] = [
+    ['TRANSLATE the generic descriptor', /TRANSLATE\s+the\s+generic\s+descriptor/i],
+    ['reorder it category-first', /reorder\s+it\s+category-first/i],
+    ['translates descriptor category-first (es-MX variant)', /translates?\s+(the\s+)?descriptor[^.]{0,40}category-first/i],
+  ];
+
+  it.each(BRANCHES)('%s (%s): none of the contradictory inline sentences remain', (lang, store, group) => {
+    const text = systemText(lang, store, group);
+    for (const [label, re] of OLD_SENTENCES) {
+      expect(text, `still contains "${label}"`).not.toMatch(re);
+    }
+  });
+
+  it.each(BRANCHES.filter(b => b[3]))(
+    '%s (%s): the sentence now defers to [PRODUCT NAME LOCALIZATION] and says a protected name is kept verbatim',
+    (lang, store, group) => {
+      expect(systemText(lang, store, group))
+        .toMatch(/apply \[PRODUCT NAME LOCALIZATION\][^.]{0,60}protected name is kept verbatim/i);
+    },
+  );
+
+  it('the six PRODUCT_NAME_LOCALIZATION interpolations stay: the generic-name rule is still delivered (regression guard)', () => {
+    const text = buildPromptC(SAMPLE_HTML, 'PL', 'Center 3D Print', 'EU').systemBlocks.map(b => b.text).join('\n');
+    expect(text).toContain('[PRODUCT NAME LOCALIZATION');
+    expect(text).toContain('GENERIC DESCRIPTIVE CATEGORY');
+  });
+});

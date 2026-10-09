@@ -167,8 +167,8 @@ function genericInstruction(targetLang: string): string {
   return `TASK C — TRANSLATE HTML TO ${targetLang} (pure HTML body only).
 Standalone, complete description. Numeric values IDENTICAL. Preserve structure, classes, inline
 styles, <hr> after </section>. Translate visible text + alt="" / title="". Never translate
-tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script, but TRANSLATE the generic descriptor and reorder it
-category-first, and localize embedded units/quantities — see [PRODUCT NAME LOCALIZATION].
+tags/IDs/classes/URLs/hrefs. Keep brand/model names in Latin script and localize embedded units/quantities: apply
+[PRODUCT NAME LOCALIZATION] (a protected name is kept verbatim).
 Never alter <img src="">.
 ${UNIT_LOCALIZATION_RULES}
 [NUMBERS] Use the locale decimal/thousands separator everywhere — body prose, headings, captions,
@@ -248,7 +248,7 @@ ${PRODUCT_NAME_LOCALIZATION}
   grades).
 
 [CONSTRAINTS]
-- Do NOT translate Brand/Model Names; TRANSLATE the generic descriptor, reorder it category-first, "pcs" → "шт." (see [PRODUCT NAME LOCALIZATION]).
+- Do NOT translate Brand/Model Names; "pcs" → "шт."; apply [PRODUCT NAME LOCALIZATION] (a protected name is kept verbatim).
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add new information.
 - Translate alt="…" and title="…".
@@ -294,7 +294,7 @@ ${PRODUCT_NAME_LOCALIZATION}
 - Focus on verifiable precision, reliability and professional finishes — stated with specifics.
 
 [CONSTRAINTS]
-- Keep brand/model names in original Latin script (Creality, Bambu Lab); TRANSLATE the generic descriptor, reorder it category-first, es-ES uses "uds" (see [PRODUCT NAME LOCALIZATION]).
+- Keep brand/model names in original Latin script (Creality, Bambu Lab); es-ES uses "uds"; apply [PRODUCT NAME LOCALIZATION] (a protected name is kept verbatim).
 - Do NOT alter <img src="…"> URLs or change hrefs to "#".
 - Do NOT add information not in the source.
 - Translate alt="…" and title="…".
@@ -334,8 +334,8 @@ ${PRODUCT_NAME_LOCALIZATION}
 ${EXPERT3D_PT_LOCALE_TOV}
 
 [CONSTRAINTS]
-- Keep brand/model names in original Latin script (Creality, Bambu Lab); TRANSLATE the generic
-  descriptor, reorder it category-first, pt-PT count abbreviation is "un." (see [PRODUCT NAME LOCALIZATION]).
+- Keep brand/model names in original Latin script (Creality, Bambu Lab); pt-PT count abbreviation is "un.";
+  apply [PRODUCT NAME LOCALIZATION] (a protected name is kept verbatim).
 - Do NOT alter <img src="…"> URLs or change hrefs to "#".
 - Do NOT add information not in the source.
 - Translate alt="…" and title="…".
@@ -386,7 +386,7 @@ ${labelsBlock}
 - US tone: Direct, confident, professional. No "It is important to note that…".
 
 [CONSTRAINTS]
-- Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab); English keeps brand-first + "pcs", es-MX translates descriptor category-first + "pzas" (see [PRODUCT NAME LOCALIZATION]).
+- Do NOT translate Brand/Model Names (Creality, Ender, Bambu Lab); English keeps brand-first + "pcs"; es-MX uses "pzas"; apply [PRODUCT NAME LOCALIZATION] (a protected name is kept verbatim).
 - Do NOT alter <img src="…"> URLs.
 - Do NOT add new information.
 - Translate alt="…" and title="…".
