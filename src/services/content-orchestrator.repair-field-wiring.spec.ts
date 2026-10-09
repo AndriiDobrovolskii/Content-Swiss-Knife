@@ -343,6 +343,33 @@ describe('generateSeoMetadata() — T15 (FR-8(b), AC-4): the h1Len >= 54 regime 
     expect(Array.from(REAL_H1['uk-UA']).length).toBe(69);
   });
 
+  /**
+   * US-7.1 T13 (FR-4, FR-5 part 1, FR-8) — REWRITTEN EXPECTATION, not a weakened one.
+   *
+   * 'Formlabs Optical Cleaning Cloths x100' is a PROTECTED name under US-7.1 FR-1 (brand "Formlabs" and
+   * the letters+digits token "x100"), and it is 37 code points. The long-H1 canonicalizer (unchanged,
+   * FR-4 failure path / OD-12) still cuts meta_title to a prefix of the h1 plus "·" whenever the h1 is
+   * 54+ code points, so the whole typed name is no longer inside meta_title. FR-5 part 1 now reports
+   * exactly that inside the SEO gate and the gate spends its repair budget (1 attempt + 1 repair).
+   * `mockResolvedValue` returns the same defective data to the repair, so the finding stays reported.
+   *
+   * Before US-7.1 this block pinned `generateJson` to ONE call, because nothing in the gate could see
+   * the dropped name. That is the very blind spot the Story closes. Every PREFIX-SHAPE assertion below
+   * (the substance of T15 of US-3.1) is kept unchanged.
+   */
+  function expectProtectedNameRepairAttempted(
+    mockLlm: ReturnType<typeof makeMockLlm>,
+    orchestrator: ContentOrchestratorService,
+  ): void {
+    expect(mockLlm.generateJson).toHaveBeenCalledTimes(2);
+    const unresolved = orchestrator.repairReport()[0].finalIssues
+      .filter(i => i.rule === 'product-name-token-missing' && i.path === 'seo_data[0].meta_title');
+    // One finding per value or one per missing token are both valid granularities (the preservation
+    // contract leaves it open), so only presence and severity are pinned here.
+    expect(unresolved.length).toBeGreaterThan(0);
+    expect(unresolved.every(i => i.severity === 'error')).toBe(true);
+  }
+
   function expectGenuineH1PrefixShape(h1: string, metaTitle: string): void {
     expect(metaTitle.endsWith('·')).toBe(true);
     expect(Array.from(metaTitle).length).toBeLessThanOrEqual(50);
@@ -370,7 +397,7 @@ describe('generateSeoMetadata() — T15 (FR-8(b), AC-4): the h1Len >= 54 regime 
     // regeneration on every one of maxRepairs's own attempts — generateJson is called more than
     // once, and the shipped meta_title never becomes a genuine h1 prefix (it is still, at best, the
     // same defective model guess `mockResolvedValue` keeps returning).
-    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    expectProtectedNameRepairAttempted(mockLlm, orchestrator);
     const shipped = orchestrator.content().seoData!.seo_data[0];
     expect(shipped.meta_title).not.toBe(SHIPPED_DEFECTIVE_META_TITLE['es-ES']); // the shipped defect must not survive
     expectGenuineH1PrefixShape(shipped.h1, shipped.meta_title);
@@ -389,7 +416,7 @@ describe('generateSeoMetadata() — T15 (FR-8(b), AC-4): the h1Len >= 54 regime 
 
     await orchestrator.generateSeoMetadata({ ...INPUT, name: 'Formlabs Optical Cleaning Cloths x100' });
 
-    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    expectProtectedNameRepairAttempted(mockLlm, orchestrator);
     const shipped = orchestrator.content().seoData!.seo_data[0];
     expect(shipped.meta_title).not.toBe(SHIPPED_DEFECTIVE_META_TITLE['pt-PT']);
     expectGenuineH1PrefixShape(shipped.h1, shipped.meta_title);
@@ -408,7 +435,7 @@ describe('generateSeoMetadata() — T15 (FR-8(b), AC-4): the h1Len >= 54 regime 
 
     await orchestrator.generateSeoMetadata({ ...INPUT, name: 'Formlabs Optical Cleaning Cloths x100' });
 
-    expect(mockLlm.generateJson).toHaveBeenCalledTimes(1);
+    expectProtectedNameRepairAttempted(mockLlm, orchestrator);
     const shipped = orchestrator.content().seoData!.seo_data[0];
     expect(shipped.meta_title).not.toBe(SHIPPED_DEFECTIVE_META_TITLE['uk-UA']);
     expectGenuineH1PrefixShape(shipped.h1, shipped.meta_title);

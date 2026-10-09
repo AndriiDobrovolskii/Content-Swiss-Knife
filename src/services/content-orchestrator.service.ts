@@ -60,6 +60,9 @@ import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopw
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor, MASTER_LOCALE } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
 import { withProtectedNameBlock } from '../prompt-core/protected-name-block';
+import { classifyProductName } from '../utils/protected-product-name';
+import { seoCoreName } from '../utils/protected-seo-name';
+import { checkNameSurfaces } from '../utils/product-name-preservation';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
 import { validateTranslationIntegrity, withTranslateFeedback } from '../utils/translation-integrity';
@@ -150,6 +153,19 @@ export interface DocAttempt {
 
 
 // ── Orchestrator ────────────────────────────────────────────────────────────
+
+/**
+ * US-7.1 T13 (OD-2). The generic repair feedback, plus a restatement of the priority rule when the
+ * findings are protected-name violations: the full typed name outranks the localized category noun.
+ */
+function withProtectedNameFeedback(payload: PromptPayload, errors: ValidationIssue[]): PromptPayload {
+  const base = appendRepairFeedback(payload, errors);
+  if (!errors.some(e => e.rule === 'product-name-token-missing' || e.rule === 'product-name-shortened-form')) return base;
+  return {
+    ...base,
+    userContent: `${base.userContent}\nPriority: the full typed product name outranks the localized category noun. Keep every token of the typed name, in order, untranslated; if the 55-character meta_title limit does not fit the category noun as well, drop the category noun and keep the whole name.`,
+  };
+}
 
 @Injectable({
   providedIn: 'root'
@@ -1048,7 +1064,7 @@ export class ContentOrchestratorService {
       // Step 3 — Generate SEO Metadata. Localized names (if any) are consumed VERBATIM as
       // h1 + title core; HTML context still feeds meta_description's hard spec.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
-      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, mergedHtmlEn, localizedNames), input.name);
+      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, mergedHtmlEn, this.seoCoreNames(localizedNames, input.name)), input.name);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -1060,8 +1076,11 @@ export class ContentOrchestratorService {
           // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
           // living outside the FROZEN output-validator.ts (OD-4's resolution).
           ...validateSeoMetadataShape(json, 'SEO metadata'),
+          // US-7.1 T13 (FR-4, FR-5, FR-8): a shortened H1 / meta_title passes every check above, so the
+          // protected-name check sits in the same list and a violation earns a repair attempt.
+          ...checkNameSurfaces(input.name, { seo: json }),
         ],
-        withFeedback: appendRepairFeedback,
+        withFeedback: withProtectedNameFeedback,
         // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5, bundled with Finding 0's
         // same root cause): wires a repairField executor so meta-title-length's field-scoped
         // rung (repair-strategy.ts, T12) is reachable in production.
@@ -1486,7 +1505,7 @@ export class ContentOrchestratorService {
 
       // Step 3 — SEO metadata for ALL site languages, grounded in the uk-UA description.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
-      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, finalHtmlUa, localizedNames), input.name);
+      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, finalHtmlUa, this.seoCoreNames(localizedNames, input.name)), input.name);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -1498,8 +1517,11 @@ export class ContentOrchestratorService {
           // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
           // living outside the FROZEN output-validator.ts (OD-4's resolution).
           ...validateSeoMetadataShape(json, 'SEO metadata'),
+          // US-7.1 T13 (FR-4, FR-5, FR-8): a shortened H1 / meta_title passes every check above, so the
+          // protected-name check sits in the same list and a violation earns a repair attempt.
+          ...checkNameSurfaces(input.name, { seo: json }),
         ],
-        withFeedback: appendRepairFeedback,
+        withFeedback: withProtectedNameFeedback,
         // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5) — see generate()'s
         // identical SEO gate above for the full rationale.
         repairField: async payload => stripCodeFences(await this.llm.generateText(
@@ -1597,7 +1619,7 @@ export class ContentOrchestratorService {
       const localizedNames = existingSlug?.slugs?.length
         ? slugsToLocalizedNames(existingSlug.slugs)
         : undefined;
-      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, input.description, localizedNames), input.name);
+      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, input.description, this.seoCoreNames(localizedNames, input.name)), input.name);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -1608,8 +1630,11 @@ export class ContentOrchestratorService {
           // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
           // living outside the FROZEN output-validator.ts (OD-4's resolution).
           ...validateSeoMetadataShape(json, 'SEO metadata'),
+          // US-7.1 T13 (FR-4, FR-5, FR-8): a shortened H1 / meta_title passes every check above, so the
+          // protected-name check sits in the same list and a violation earns a repair attempt.
+          ...checkNameSurfaces(input.name, { seo: json }),
         ],
-        withFeedback: appendRepairFeedback,
+        withFeedback: withProtectedNameFeedback,
         // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5) — see generate()'s
         // identical SEO gate for the full rationale.
         repairField: async payload => stripCodeFences(await this.llm.generateText(
@@ -1625,7 +1650,12 @@ export class ContentOrchestratorService {
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      this.validationIssues.set(validateSeoMetadata(this.content().seoData, NO_CURRENCY_CHECK));
+      this.validationIssues.set([
+        ...validateSeoMetadata(this.content().seoData, NO_CURRENCY_CHECK),
+        // US-7.1 (FR-5, FR-8): this signal is overwritten here, so an unresolved protected-name
+        // finding must be merged in or the shortened name would look clean.
+        ...checkNameSurfaces(input.name, { seo: this.content().seoData }),
+      ]);
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('SEO Generation Done!');
@@ -1701,6 +1731,18 @@ export class ContentOrchestratorService {
    * gate's `produce`, `validate` measures the post-formatting string — a description that crosses
    * 155 chars only after formatting is caught rather than shipped under a stale measurement.
    */
+  /**
+   * US-7.1 T13 (FR-4, OD-2, OD-12 default). The localized names handed to Task B: for a protected name
+   * the category noun is dropped when category + typed name would reach 54 code points, so the H1 and
+   * meta_title keep the whole typed name. Generic names pass through unchanged.
+   */
+  private seoCoreNames(names: Record<string, string> | undefined, typedName: string): Record<string, string> | undefined {
+    if (!names) return names;
+    const isProtected = typedName.trim() !== '' && classifyProductName(typedName).protected;
+    if (!isProtected) return names;
+    return Object.fromEntries(Object.entries(names).map(([lang, name]) => [lang, seoCoreName(name, typedName, true)]));
+  }
+
   private canonicalizeSeoData(seo: SeoResponse, productName = ''): SeoResponse {
     return normalizeSeoNumbers({
       ...seo,
