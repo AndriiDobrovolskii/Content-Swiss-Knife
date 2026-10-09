@@ -796,6 +796,13 @@ Normalize spacing even if the source omits it ("10W" → "10 W").`;
  * brand-first order. Count abbreviation split: es-ES "uds" vs es-MX "pzas".
  */
 export const PRODUCT_NAME_LOCALIZATION = `[PRODUCT NAME LOCALIZATION — localize the Product Name in EVERY place it appears]
+PROTECTED NAME PRECEDENCE — read this first. When the request carries a [PROTECTED PRODUCT NAME]
+block, that name is NOT localized: keep every token of it, in the typed order, untranslated and
+verbatim, and render it once. This overrides the descriptor-translation rule and the category-first
+word-order rule below, and any inline instruction elsewhere in this prompt to translate or reorder
+the descriptive words of the name. The only change allowed inside the name is the locale formatting
+of numbers and units. Everything below applies only when no such block is present.
+
 The Product Name recurs in the hook <p>, body prose, figure captions, and the closing CTA
 paragraph — render it in ONE consistent localized form across all of them.
 HEADINGS ARE THE EXCEPTION, and [HEADING FORM] governs them: the §7 header is a bare
