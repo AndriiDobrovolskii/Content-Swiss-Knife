@@ -59,6 +59,7 @@ import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopwords, enforceSlugLength } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor, MASTER_LOCALE } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
+import { withProtectedNameBlock } from '../prompt-core/protected-name-block';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
 import { validateTranslationIntegrity, withTranslateFeedback } from '../utils/translation-integrity';
@@ -851,11 +852,11 @@ export class ContentOrchestratorService {
       // Opt-in and narrow on purpose: the live probe passed 4/4, but on ONE product, ONE store,
       // ONE locale. That settles feasibility, not reliability. See doc-pipeline-flag.ts.
       const useDocPipeline = usesDocPipeline(input.website.name, input.templateId);
-      const basePayloadA = useDocPipeline
+      const basePayloadA = withProtectedNameBlock(useDocPipeline
         // The pattern is selected from the PRODUCT's own name + website pair, not from masterInput,
         // so the same product draws the same hook however this path assembled its input (NFR-5).
         ? buildPromptADoc(masterInput, 'Ukrainian (uk-UA)', selectHookPattern(input.name, input.website.name))
-        : buildPromptA(masterInput, 'Ukrainian (uk-UA)');
+        : buildPromptA(masterInput, 'Ukrainian (uk-UA)'), input.name);
       // What the LAST produce call had to splice back — plain-HTML path only (restoreMissingVideos
       // is a string-splicing mechanism; the Doc path's own validateVideoCoverageDoc, wired inside
       // runDocGate, covers video coverage there without this stash).
@@ -999,7 +1000,7 @@ export class ContentOrchestratorService {
       } else {
         try {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
-          const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn);
+          const promptSlug = withProtectedNameBlock(buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn), input.name);
           // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
           // Gated the same way as SEO metadata below: validateSlugs feeds this loop directly now,
           // so slug-name-designator-lost / slug-charset / slug-duplicate get a real repair attempt
@@ -1047,7 +1048,7 @@ export class ContentOrchestratorService {
       // Step 3 — Generate SEO Metadata. Localized names (if any) are consumed VERBATIM as
       // h1 + title core; HTML context still feeds meta_description's hard spec.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
-      const promptB = buildPromptB(input.website.name, input.name, seoLangs, mergedHtmlEn, localizedNames);
+      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, mergedHtmlEn, localizedNames), input.name);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -1093,14 +1094,14 @@ export class ContentOrchestratorService {
 
         this.progressMessage.set(`Translating to ${lang}…`);
 
-        const basePayloadC = buildPromptC(
+        const basePayloadC = withProtectedNameBlock(buildPromptC(
           finalMasterHtml,
           lang,
           input.website.name,
           getStore(input.website.name).group,
           input.templateId,
           { localizedName: localizedNames?.[locale], sourceLocale: 'uk-UA' },
-        );
+        ), input.name);
 
         // How many media srcs the LAST produce call had to put back — read by validate below, the
         // same closure-stash pattern restoredVideos uses on the master path.
@@ -1324,11 +1325,11 @@ export class ContentOrchestratorService {
       // doc-pipeline-flag.ts. UA Description targets the same locale ('uk-UA') the Doc pipeline
       // already renders in generate(), so a store's enrollment applies here identically.
       const useDocPipelineUa = usesDocPipeline(input.website.name, input.templateId);
-      const basePayloadA = useDocPipelineUa
+      const basePayloadA = withProtectedNameBlock(useDocPipelineUa
         // BOTH call sites, not one. A pattern selected at generate() and not here would make the
         // rotation depend on which code path a run took — see the sibling comment there.
         ? buildPromptADoc(uaInput, UA_BASE_LANGUAGE, selectHookPattern(input.name, input.website.name))
-        : buildPromptA(uaInput, UA_BASE_LANGUAGE);
+        : buildPromptA(uaInput, UA_BASE_LANGUAGE), input.name);
       // See the sibling comment in generate() — plain-HTML path only.
       let restoredVideos: SourceVideoEmbed[] = [];
       // US-5.1: the marker report of the LAST produce() call, read by validate (which runs right after each produce).
@@ -1446,7 +1447,7 @@ export class ContentOrchestratorService {
       let localizedNames: Record<string, string> | undefined;
       try {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
-        const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
+        const promptSlug = withProtectedNameBlock(buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa), input.name);
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
         // See generate()'s Step 2 for why this is a runRepairGate call now instead of a bare
         // generateJson: validateSlugs must feed a real repair loop, not just runOutputValidation.
@@ -1485,7 +1486,7 @@ export class ContentOrchestratorService {
 
       // Step 3 — SEO metadata for ALL site languages, grounded in the uk-UA description.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
-      const promptB = buildPromptB(input.website.name, input.name, seoLangs, finalHtmlUa, localizedNames);
+      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, finalHtmlUa, localizedNames), input.name);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -1596,7 +1597,7 @@ export class ContentOrchestratorService {
       const localizedNames = existingSlug?.slugs?.length
         ? slugsToLocalizedNames(existingSlug.slugs)
         : undefined;
-      const promptB = buildPromptB(input.website.name, input.name, seoLangs, input.description, localizedNames);
+      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, input.description, localizedNames), input.name);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -1643,7 +1644,7 @@ export class ContentOrchestratorService {
       const { seoLangs } = getLangsForStore(input.website.name);
       this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
 
-      const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, input.description);
+      const promptSlug = withProtectedNameBlock(buildPromptSlug(input.website.name, input.name, seoLangs, input.description), input.name);
       const slugResult = await runRepairGate<SlugResponse>({
         label: 'Slugs',
         maxRepairs: this.maxRepairs(),
@@ -1753,7 +1754,7 @@ export class ContentOrchestratorService {
       const result = await runRepairGate<string>({
         label: 'Optimizer',
         maxRepairs: 1,
-        basePayload: buildOptimizerPrompt(htmlInput, productName),
+        basePayload: withProtectedNameBlock(buildOptimizerPrompt(htmlInput, productName), productName),
         produce: async payload => {
           let out = await this.llm.generateText(payload, useThinking, { taskLabel: 'Optimizer', productName });
           out = stripCodeFences(out);
