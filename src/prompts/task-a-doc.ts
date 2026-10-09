@@ -52,7 +52,7 @@ SHAPE — emit exactly these keys:
 {
   "schemaVersion": "4.0",
   "locale": "<BCP47 of the base language, e.g. uk-UA>",
-  "localizedName": "<product name as it should read in this language>",
+  "localizedName": "<product name as it should read in this language; for a PROTECTED name (see the [PROTECTED PRODUCT NAME] block) the typed name verbatim: every token, in order, untranslated>",
   "hook": "<§1, one paragraph>",
   "killerSpecs": [ { "label": "", "value": "", "why": "" } ],        // §2 — 3–4 entries
   "keyBenefits": [ <"bullets" Block ONLY> ],  // §2 — at least 1; each "bullets" Block 3–8 items
