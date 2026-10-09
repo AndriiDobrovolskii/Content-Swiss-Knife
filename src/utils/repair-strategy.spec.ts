@@ -598,3 +598,69 @@ describe('registry strategies — meta-title-length deterministic tier at the H1
     expect(value.startsWith(h1)).toBe(false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-7.1 T7 (FR-8, AC-8; plan D7). The two FR-5 rule ids must be REGISTERED, not left to the
+// unregistered-rule default. `resolveLadder` already returns ['full-regen'] for an unregistered
+// rule, so asserting the ladder alone would pass today and prove nothing — the registry membership
+// is the observable that fails until so-builder adds the entries. Whatever spelling the entry uses
+// (`ladder: []` or `ladder: ['full-regen']`), every rung of the resolved ladder must be 'full-regen':
+// a name that dropped a token cannot be repaired by truncating a title or rewriting one field blind.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('US-7.1 T7 — product-name rule ids are registered with a full-regen-only ladder (FR-8)', () => {
+  const productNameIssue = (rule: string, overrides: Partial<ValidationIssue> = {}): ValidationIssue => ({
+    severity: 'error',
+    rule,
+    detail: 'The typed product name "Formlabs Form Studio 1 Resin Tank Pro" lost the token "Resin".',
+    context: 'SEO metadata (es-ES)',
+    path: 'seo_data[1].h1',
+    ...overrides,
+  });
+
+  it.each(['product-name-token-missing', 'product-name-shortened-form'])(
+    '%s has an explicit REPAIR_STRATEGIES entry',
+    (rule) => {
+      expect(REPAIR_STRATEGIES.has(rule)).toBe(true);
+    },
+  );
+
+  it.each(['product-name-token-missing', 'product-name-shortened-form'])(
+    '%s resolves, for an addressed error, to full regeneration only',
+    (rule) => {
+      const ladder = resolveLadder(productNameIssue(rule));
+      expect(ladder.length).toBeGreaterThan(0);
+      expect(ladder.every(tier => tier === 'full-regen')).toBe(true);
+    },
+  );
+
+  it.each(['product-name-token-missing', 'product-name-shortened-form'])(
+    '%s offers no deterministic or field-scoped repair that could re-write the name blind',
+    (rule) => {
+      const strategy = REPAIR_STRATEGIES.get(rule);
+      expect(strategy).toBeDefined();
+      expect(strategy!.deterministic).toBeUndefined();
+      expect(strategy!.fieldInstruction).toBeUndefined();
+      expect(strategy!.ladder).not.toContain('deterministic');
+      expect(strategy!.ladder).not.toContain('field-scoped');
+      expect(strategy!.ladder).not.toContain('block-scoped');
+    },
+  );
+
+  it.each(['product-name-token-missing', 'product-name-shortened-form'])(
+    '%s is a ladder candidate and is regenerable (a regeneration can fix it)',
+    (rule) => {
+      expect(isLadderCandidate(productNameIssue(rule))).toBe(true);
+      expect(NON_REGENERABLE_RULES.has(rule)).toBe(false);
+    },
+  );
+
+  it('registers the same shape as the sibling shape rule it is modelled on: full regeneration is the only instrument', () => {
+    // meta-title-template-shape is deliberately unregistered today and resolves to full-regen; the
+    // two new rules must resolve identically so FR-8's repair attempt behaves the same way.
+    const shape = resolveLadder({
+      severity: 'error', rule: 'meta-title-template-shape', detail: 'd', context: 'c', path: 'seo_data[0].meta_title',
+    });
+    const mine = resolveLadder(productNameIssue('product-name-token-missing', { path: 'seo_data[0].meta_title' }));
+    expect(new Set(mine)).toEqual(new Set(shape));
+  });
+});
