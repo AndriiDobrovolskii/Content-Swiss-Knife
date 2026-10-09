@@ -326,7 +326,8 @@ describe('registry strategies', () => {
    * RECALIBRATED for US-3.1 (T1, T7, T11 each add a registered strategy — `doc-schema`,
    * `heading-brand-core-missing`, `slug-name-designator-lost`). The "nothing by analogy" principle
    * this test guards is unchanged; only the intended set has grown, by three separate, individually
-   * argued Story requirements (AC-6, AC-3, AC-6 again).
+   * argued Story requirements (AC-6, AC-3, AC-6 again). US-7.1 T7 adds `product-name-token-missing`
+   * and `product-name-shortened-form` (FR-8, full-regeneration-only), pinned in sorted position.
    */
   it('registers exactly the intended rules and nothing by analogy', () => {
     expect([...REPAIR_STRATEGIES.keys()].sort()).toEqual([
@@ -334,6 +335,8 @@ describe('registry strategies', () => {
       'heading-brand-core-missing',
       'heading-product-name-stuffing',
       'meta-title-length',
+      'product-name-shortened-form',
+      'product-name-token-missing',
       'sentence-too-long',
       'slug-charset',
       'slug-name-designator-lost',

@@ -19,6 +19,7 @@ import { LlmService } from '../../src/services/llm.service';
 import { RetrievalService } from '../../src/services/retrieval.service';
 import { HistoryService } from '../../src/services/history.service';
 import { STORE_REGISTRY, getLangsForStore } from '../../src/prompt-core/constants';
+import { slugify } from '../../src/utils/repair-strategy';
 import type { ProductInput, SeoResponse, SlugResponse } from '../../src/app/types';
 import type { PromptPayload, UsageMeta } from '../../src/prompt-core/payload';
 
@@ -62,7 +63,8 @@ export function compliantSlugs(storeName: string, typed: string, category = LONG
     slugs: getLangsForStore(storeName).seoLangs.map(language => ({
       language,
       name: isEnglish(language) ? typed : `${category} ${typed}`,
-      slug: 'ignored-recomputed-by-the-pipeline',
+      // FR-5 part 1 applies to the slug too: a compliant slug carries the typed name's slugified form.
+      slug: slugify(typed) ?? typed.toLowerCase().replace(/\s+/g, '-'),
     })),
   };
 }
