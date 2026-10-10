@@ -1,0 +1,19 @@
+artifact: pull_request
+story: US-7.1
+version: 1
+status: DRAFT
+owner: so-pr-creator
+created_at: 2026-10-10T00:00:00Z
+updated_at: 2026-10-10T00:00:00Z
+supersedes: null
+inputs_consumed:
+  - key: pr_summary
+    version: 1
+number: 138
+url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/138
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+base: main
+head: feat/US-7.1-preserve-proper-product-names
+tip_commit: b50569edaecc1d9cda26c4c45d51ec80ec9f85a1
+opened_at: 2026-10-10T00:00:00Z
+draft: false

@@ -3,11 +3,21 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-7.1
-current_stage: PR_CREATION
-status: IN_PROGRESS
-pending_human_gate: null
+current_stage: READY_FOR_PR
+status: WAITING_FOR_HUMAN
+pending_human_gate:
+  stage: READY_FOR_PR
+  status: PENDING
+  required_artifacts:
+    - key: pr_summary
+      version: 1
+    - key: pull_request
+      version: 1
+  decided_at: null
+  decided_by: null
+  comment: null
 started_at: 2026-10-09T12:50:24Z
-updated_at: 2026-10-09T16:21:51Z
+updated_at: 2026-10-10T00:00:00Z
 stage_attempts: {}
 track: prompt
 blockers: []
