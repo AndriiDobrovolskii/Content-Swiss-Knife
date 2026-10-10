@@ -53,3 +53,10 @@ stories:
     path: docs/stories/US-6.2-preserve-b-and-strong-tags.md
     state: ARCHIVED
     created_at: 2026-10-06T00:00:00Z
+  - id: US-7.1
+    title: Keep the product name the operator typed intact in every mode and store profile (stop dropping "Resin Tank" from "Formlabs Form Studio 1 Resin Tank Pro")
+    slug: preserve-proper-product-names
+    track: prompt
+    path: docs/stories/US-7.1-preserve-proper-product-names.md
+    state: IN_PROGRESS
+    created_at: 2026-10-09T00:00:00Z
