@@ -88,3 +88,15 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
   `task-a-doc.ts:96`, `simplified-template-blocks.ts:127`, `constants.ts:1189-1190`, `copywriter.ts:53` still say
   "Reserve <strong>"; `itemprop` on a bold tag is still stripped; no deterministic figcaption `<b>` enforcement; live-model
   obedience proven only by the human's manual run.
+
+## US-7.1 — the product name the operator typed stays intact in every mode and store profile (archived 2026-10-10T16:29:10Z)
+- A classifier (`src/utils/protected-product-name.ts`) marks a typed name with a brand, model identifier or number+unit as
+  protected; no token of it may be removed, reordered or translated by Slugs, SEO Meta, UA Description / Generator,
+  Translator or Optimizer. Generic names keep the old localization rules. The brand set comes from `STORE_REGISTRY`.
+- Prompts carry the verbatim rule; a dynamic `[PROTECTED PRODUCT NAME]` block is added to `userContent` only (cached
+  `systemBlocks` untouched). The SEO Meta step has a repair gate (`seoCoreName`: category dropped at 54+ code points);
+  Slugs and description surfaces are validated report-only; slugs use a protected trim that never drops name tokens.
+- FROZEN `src/prompts/task-c.ts` edited under the recorded section 9 approval; `.arch-guard-checksums` re-baselined.
+- Delivered by PR #138, merge commit `bd564ba`. Summary: `docs/knowledge/US-7.1-delivery-summary.md`.
+- Open items: NFR-7 live-model run on the real fixture not done; Slugs and description enforcement is report-only; FR-5
+  part 2 blind spots; security F-1 (block delimiter neutralisation) and F-2 (retry-feedback length cap) not applied.

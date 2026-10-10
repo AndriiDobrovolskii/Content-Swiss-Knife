@@ -2,7 +2,7 @@
 artifact: test_generation_report
 story: US-7.1
 version: 2
-status: DRAFT
+status: ARCHIVED
 owner: so-test-writer
 created_at: 2026-10-09T19:30:00Z
 updated_at: 2026-10-09T20:00:00Z

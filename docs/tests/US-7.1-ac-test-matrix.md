@@ -2,7 +2,7 @@
 artifact: ac_test_matrix
 story: US-7.1
 version: 1
-status: DRAFT
+status: ARCHIVED
 owner: so-test-writer
 created_at: 2026-10-09T19:30:00Z
 updated_at: 2026-10-09T19:30:00Z

@@ -2,7 +2,7 @@
 artifact: pipeline_status
 story: US-7.1
 version: 2
-status: DRAFT
+status: ARCHIVED
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-09T20:00:00Z
