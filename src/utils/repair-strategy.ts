@@ -427,6 +427,13 @@ export const REPAIR_STRATEGIES: ReadonlyMap<string, RepairStrategy> = new Map<st
             ].join('\n'),
     },
   ],
+  // US-7.1 T7 (FR-8). A protected product name that lost, re-ordered or translated a token cannot be
+  // fixed by truncating a title or by rewriting one field blind, so full regeneration is the ONLY
+  // rung ('full-regen' is implicit after the ladder, so the list is empty). Registered explicitly,
+  // same effective ladder as the deliberately-unregistered meta-title-template-shape, so the rule
+  // ids do not depend on the unregistered-rule default.
+  ['product-name-token-missing', { ladder: [] }],
+  ['product-name-shortened-form', { ladder: [] }],
 ]);
 
 /**

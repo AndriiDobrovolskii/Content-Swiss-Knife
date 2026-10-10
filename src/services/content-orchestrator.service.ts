@@ -59,6 +59,11 @@ import { buildSpecsCanonicalizePrompt } from '../prompts/task-specs-canonicalize
 import { normalizeSlug, ensureUniqueSlugs, slugsToLocalizedNames, stripSlugStopwords, enforceSlugLength } from '../prompt-core/slug-utils';
 import { getStore, getLangsForStore, isoToHumanLang, taskLangToIso, isExpert3dStore, buildNativeLangOverlay, buildMasterUaOverlay, bcp47ToTaskCLang, masterScriptFor, MASTER_LOCALE } from '../prompt-core/constants';
 import { buildPromptC } from '../prompts/task-c';
+import { withProtectedNameBlock } from '../prompt-core/protected-name-block';
+import { enforceProtectedSlugLength } from '../prompt-core/protected-slug';
+import { classifyProductName } from '../utils/protected-product-name';
+import { seoCoreName } from '../utils/protected-seo-name';
+import { checkNameSurfaces, checkDescriptionHtml, checkOptimizerText } from '../utils/product-name-preservation';
 import { validateStructuralParity, restoreMediaSrcs } from '../utils/structural-parity';
 import { buildTranslatePrompt } from '../prompts/task-translate';
 import { validateTranslationIntegrity, withTranslateFeedback } from '../utils/translation-integrity';
@@ -149,6 +154,19 @@ export interface DocAttempt {
 
 
 // ── Orchestrator ────────────────────────────────────────────────────────────
+
+/**
+ * US-7.1 T13 (OD-2). The generic repair feedback, plus a restatement of the priority rule when the
+ * findings are protected-name violations: the full typed name outranks the localized category noun.
+ */
+function withProtectedNameFeedback(payload: PromptPayload, errors: ValidationIssue[]): PromptPayload {
+  const base = appendRepairFeedback(payload, errors);
+  if (!errors.some(e => e.rule === 'product-name-token-missing' || e.rule === 'product-name-shortened-form')) return base;
+  return {
+    ...base,
+    userContent: `${base.userContent}\nPriority: the full typed product name outranks the localized category noun. Keep every token of the typed name, in order, untranslated; if the 55-character meta_title limit does not fit the category noun as well, drop the category noun and keep the whole name.`,
+  };
+}
 
 @Injectable({
   providedIn: 'root'
@@ -851,11 +869,11 @@ export class ContentOrchestratorService {
       // Opt-in and narrow on purpose: the live probe passed 4/4, but on ONE product, ONE store,
       // ONE locale. That settles feasibility, not reliability. See doc-pipeline-flag.ts.
       const useDocPipeline = usesDocPipeline(input.website.name, input.templateId);
-      const basePayloadA = useDocPipeline
+      const basePayloadA = withProtectedNameBlock(useDocPipeline
         // The pattern is selected from the PRODUCT's own name + website pair, not from masterInput,
         // so the same product draws the same hook however this path assembled its input (NFR-5).
         ? buildPromptADoc(masterInput, 'Ukrainian (uk-UA)', selectHookPattern(input.name, input.website.name))
-        : buildPromptA(masterInput, 'Ukrainian (uk-UA)');
+        : buildPromptA(masterInput, 'Ukrainian (uk-UA)'), input.name);
       // What the LAST produce call had to splice back — plain-HTML path only (restoreMissingVideos
       // is a string-splicing mechanism; the Doc path's own validateVideoCoverageDoc, wired inside
       // runDocGate, covers video coverage there without this stash).
@@ -999,7 +1017,7 @@ export class ContentOrchestratorService {
       } else {
         try {
           this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
-          const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn);
+          const promptSlug = withProtectedNameBlock(buildPromptSlug(input.website.name, input.name, seoLangs, mergedHtmlEn), input.name);
           // Deep Thinking Mode now governs Slug/SEO/Task C too, not just the uk-UA master.
           // Gated the same way as SEO metadata below: validateSlugs feeds this loop directly now,
           // so slug-name-designator-lost / slug-charset / slug-duplicate get a real repair attempt
@@ -1010,6 +1028,7 @@ export class ContentOrchestratorService {
             basePayload: promptSlug,
             produce: async payload => this.normalizeSlugResponse(
               await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }),
+              input.name,
             ),
             validate: json => validateSlugs(json, input.name),
             withFeedback: appendRepairFeedback,
@@ -1029,7 +1048,7 @@ export class ContentOrchestratorService {
           // the (possibly field-repaired) name and re-canonicalizes `.name`, the same invariant
           // every full generation already gets (produce() calls it too). Idempotent when nothing
           // was field-repaired.
-          const slugData = this.normalizeSlugResponse(rawSlugData);
+          const slugData = this.normalizeSlugResponse(rawSlugData, input.name);
           if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
           this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
           this.content.update(c => ({ ...c, slugData }));
@@ -1047,7 +1066,7 @@ export class ContentOrchestratorService {
       // Step 3 — Generate SEO Metadata. Localized names (if any) are consumed VERBATIM as
       // h1 + title core; HTML context still feeds meta_description's hard spec.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
-      const promptB = buildPromptB(input.website.name, input.name, seoLangs, mergedHtmlEn, localizedNames);
+      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, mergedHtmlEn, this.seoCoreNames(localizedNames, input.name)), input.name);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -1059,8 +1078,11 @@ export class ContentOrchestratorService {
           // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
           // living outside the FROZEN output-validator.ts (OD-4's resolution).
           ...validateSeoMetadataShape(json, 'SEO metadata'),
+          // US-7.1 T13 (FR-4, FR-5, FR-8): a shortened H1 / meta_title passes every check above, so the
+          // protected-name check sits in the same list and a violation earns a repair attempt.
+          ...checkNameSurfaces(input.name, { seo: json }),
         ],
-        withFeedback: appendRepairFeedback,
+        withFeedback: withProtectedNameFeedback,
         // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5, bundled with Finding 0's
         // same root cause): wires a repairField executor so meta-title-length's field-scoped
         // rung (repair-strategy.ts, T12) is reachable in production.
@@ -1093,14 +1115,14 @@ export class ContentOrchestratorService {
 
         this.progressMessage.set(`Translating to ${lang}…`);
 
-        const basePayloadC = buildPromptC(
+        const basePayloadC = withProtectedNameBlock(buildPromptC(
           finalMasterHtml,
           lang,
           input.website.name,
           getStore(input.website.name).group,
           input.templateId,
           { localizedName: localizedNames?.[locale], sourceLocale: 'uk-UA' },
-        );
+        ), input.name);
 
         // How many media srcs the LAST produce call had to put back — read by validate below, the
         // same closure-stash pattern restoredVideos uses on the master path.
@@ -1324,11 +1346,11 @@ export class ContentOrchestratorService {
       // doc-pipeline-flag.ts. UA Description targets the same locale ('uk-UA') the Doc pipeline
       // already renders in generate(), so a store's enrollment applies here identically.
       const useDocPipelineUa = usesDocPipeline(input.website.name, input.templateId);
-      const basePayloadA = useDocPipelineUa
+      const basePayloadA = withProtectedNameBlock(useDocPipelineUa
         // BOTH call sites, not one. A pattern selected at generate() and not here would make the
         // rotation depend on which code path a run took — see the sibling comment there.
         ? buildPromptADoc(uaInput, UA_BASE_LANGUAGE, selectHookPattern(input.name, input.website.name))
-        : buildPromptA(uaInput, UA_BASE_LANGUAGE);
+        : buildPromptA(uaInput, UA_BASE_LANGUAGE), input.name);
       // See the sibling comment in generate() — plain-HTML path only.
       let restoredVideos: SourceVideoEmbed[] = [];
       // US-5.1: the marker report of the LAST produce() call, read by validate (which runs right after each produce).
@@ -1446,7 +1468,7 @@ export class ContentOrchestratorService {
       let localizedNames: Record<string, string> | undefined;
       try {
         this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
-        const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa);
+        const promptSlug = withProtectedNameBlock(buildPromptSlug(input.website.name, input.name, seoLangs, finalHtmlUa), input.name);
         // Deep Thinking Mode now governs Slug/SEO too, not just the uk-UA master.
         // See generate()'s Step 2 for why this is a runRepairGate call now instead of a bare
         // generateJson: validateSlugs must feed a real repair loop, not just runOutputValidation.
@@ -1456,6 +1478,7 @@ export class ContentOrchestratorService {
           basePayload: promptSlug,
           produce: async payload => this.normalizeSlugResponse(
             await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name, lang: UA_ISO }),
+            input.name,
           ),
           validate: json => validateSlugs(json, input.name),
           withFeedback: appendRepairFeedback,
@@ -1469,7 +1492,7 @@ export class ContentOrchestratorService {
         });
         const { artifact: rawSlugData, repairsUsed: slugRepairs } = slugResult;
         // See generate()'s identical Slugs gate above for why this re-normalization is required.
-        const slugData = this.normalizeSlugResponse(rawSlugData);
+        const slugData = this.normalizeSlugResponse(rawSlugData, input.name);
         if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
         this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
         this.content.update(c => ({ ...c, slugData }));
@@ -1485,7 +1508,7 @@ export class ContentOrchestratorService {
 
       // Step 3 — SEO metadata for ALL site languages, grounded in the uk-UA description.
       this.progressMessage.set(`Generating SEO Metadata for ${seoLangs.join(', ')}…`);
-      const promptB = buildPromptB(input.website.name, input.name, seoLangs, finalHtmlUa, localizedNames);
+      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, finalHtmlUa, this.seoCoreNames(localizedNames, input.name)), input.name);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -1497,8 +1520,11 @@ export class ContentOrchestratorService {
           // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
           // living outside the FROZEN output-validator.ts (OD-4's resolution).
           ...validateSeoMetadataShape(json, 'SEO metadata'),
+          // US-7.1 T13 (FR-4, FR-5, FR-8): a shortened H1 / meta_title passes every check above, so the
+          // protected-name check sits in the same list and a violation earns a repair attempt.
+          ...checkNameSurfaces(input.name, { seo: json }),
         ],
-        withFeedback: appendRepairFeedback,
+        withFeedback: withProtectedNameFeedback,
         // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5) — see generate()'s
         // identical SEO gate above for the full rationale.
         repairField: async payload => stripCodeFences(await this.llm.generateText(
@@ -1596,7 +1622,7 @@ export class ContentOrchestratorService {
       const localizedNames = existingSlug?.slugs?.length
         ? slugsToLocalizedNames(existingSlug.slugs)
         : undefined;
-      const promptB = buildPromptB(input.website.name, input.name, seoLangs, input.description, localizedNames);
+      const promptB = withProtectedNameBlock(buildPromptB(input.website.name, input.name, seoLangs, input.description, this.seoCoreNames(localizedNames, input.name)), input.name);
       const seoResult = await runRepairGate({
         label: 'SEO metadata',
         maxRepairs: this.maxRepairs(),
@@ -1607,8 +1633,11 @@ export class ContentOrchestratorService {
           // US-3.1 T9 (FR-8, FR-9, AC-4, AC-5) — meta_title/h1 template-shape and identity checks,
           // living outside the FROZEN output-validator.ts (OD-4's resolution).
           ...validateSeoMetadataShape(json, 'SEO metadata'),
+          // US-7.1 T13 (FR-4, FR-5, FR-8): a shortened H1 / meta_title passes every check above, so the
+          // protected-name check sits in the same list and a violation earns a repair attempt.
+          ...checkNameSurfaces(input.name, { seo: json }),
         ],
-        withFeedback: appendRepairFeedback,
+        withFeedback: withProtectedNameFeedback,
         // US-3.1 IMPLEMENTATION retry 2 (RECONCILIATION v1 Finding 5) — see generate()'s
         // identical SEO gate for the full rationale.
         repairField: async payload => stripCodeFences(await this.llm.generateText(
@@ -1624,7 +1653,12 @@ export class ContentOrchestratorService {
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      this.validationIssues.set(validateSeoMetadata(this.content().seoData, NO_CURRENCY_CHECK));
+      this.validationIssues.set([
+        ...validateSeoMetadata(this.content().seoData, NO_CURRENCY_CHECK),
+        // US-7.1 (FR-5, FR-8): this signal is overwritten here, so an unresolved protected-name
+        // finding must be merged in or the shortened name would look clean.
+        ...checkNameSurfaces(input.name, { seo: this.content().seoData }),
+      ]);
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('SEO Generation Done!');
@@ -1643,13 +1677,14 @@ export class ContentOrchestratorService {
       const { seoLangs } = getLangsForStore(input.website.name);
       this.progressMessage.set(`Generating SEO slugs for ${seoLangs.join(', ')}…`);
 
-      const promptSlug = buildPromptSlug(input.website.name, input.name, seoLangs, input.description);
+      const promptSlug = withProtectedNameBlock(buildPromptSlug(input.website.name, input.name, seoLangs, input.description), input.name);
       const slugResult = await runRepairGate<SlugResponse>({
         label: 'Slugs',
         maxRepairs: this.maxRepairs(),
         basePayload: promptSlug,
         produce: async payload => this.normalizeSlugResponse(
           await this.llm.generateJson<SlugResponse>(payload, useThinking, { taskLabel: 'Slug', productName: input.name, store: input.website.name }),
+          input.name,
         ),
         validate: json => validateSlugs(json, input.name),
         withFeedback: appendRepairFeedback,
@@ -1663,23 +1698,31 @@ export class ContentOrchestratorService {
       });
       const { artifact: rawSlugData, finalIssues: slugFinalIssues, repairsUsed: slugRepairs } = slugResult;
       // See generate()'s identical Slugs gate for why this re-normalization is required.
-      const slugData = this.normalizeSlugResponse(rawSlugData);
+      const slugData = this.normalizeSlugResponse(rawSlugData, input.name);
       if (slugRepairs > 0) console.info(`[repair-gate] Slugs: ${slugRepairs} repair(s) applied`);
       this.repairReport.update(r => [...r, toArtifactReport('Slugs', slugResult)]);
       this.content.update(c => ({ ...c, slugData }));
       this.approvedSlugKey.set(this.slugKey(input));
 
-      this.validationIssues.set(slugFinalIssues);
+      // US-7.1 (FR-3, FR-5): report-only. A name or slug missing a typed-name token is reported, not re-requested.
+      this.validationIssues.set([...slugFinalIssues, ...checkNameSurfaces(input.name, { slugs: slugData })]);
 
       this.historyService.add(input, this.content());
       this.progressMessage.set('Slug Generation Done!');
     }, 'Error during slug generation.', 'Slug Generation failed.');
   }
 
-  private normalizeSlugResponse(raw: SlugResponse): SlugResponse {
+  private normalizeSlugResponse(raw: SlugResponse, typedName = ''): SlugResponse {
+    // US-7.1 (FR-10): a protected name keeps every typed-name slug token through the 100-character trim.
+    const isProtected = typedName.trim() !== '' && classifyProductName(typedName).protected;
     const slugs = (raw.slugs ?? []).map(s => {
       const base = normalizeSlug(stripSlugStopwords(s.name), s.language);
-      return { ...s, slug: enforceSlugLength(s.name, base, s.language) };
+      return {
+        ...s,
+        slug: isProtected
+          ? enforceProtectedSlugLength(s.name, base, typedName, s.language)
+          : enforceSlugLength(s.name, base, s.language),
+      };
     });
     const unique = ensureUniqueSlugs(slugs);
     return {
@@ -1700,6 +1743,18 @@ export class ContentOrchestratorService {
    * gate's `produce`, `validate` measures the post-formatting string — a description that crosses
    * 155 chars only after formatting is caught rather than shipped under a stale measurement.
    */
+  /**
+   * US-7.1 T13 (FR-4, OD-2, OD-12 default). The localized names handed to Task B: for a protected name
+   * the category noun is dropped when category + typed name would reach 54 code points, so the H1 and
+   * meta_title keep the whole typed name. Generic names pass through unchanged.
+   */
+  private seoCoreNames(names: Record<string, string> | undefined, typedName: string): Record<string, string> | undefined {
+    if (!names) return names;
+    const isProtected = typedName.trim() !== '' && classifyProductName(typedName).protected;
+    if (!isProtected) return names;
+    return Object.fromEntries(Object.entries(names).map(([lang, name]) => [lang, seoCoreName(name, typedName, true)]));
+  }
+
   private canonicalizeSeoData(seo: SeoResponse, productName = ''): SeoResponse {
     return normalizeSeoNumbers({
       ...seo,
@@ -1753,7 +1808,7 @@ export class ContentOrchestratorService {
       const result = await runRepairGate<string>({
         label: 'Optimizer',
         maxRepairs: 1,
-        basePayload: buildOptimizerPrompt(htmlInput, productName),
+        basePayload: withProtectedNameBlock(buildOptimizerPrompt(htmlInput, productName), productName),
         produce: async payload => {
           let out = await this.llm.generateText(payload, useThinking, { taskLabel: 'Optimizer', productName });
           out = stripCodeFences(out);
@@ -1772,6 +1827,9 @@ export class ContentOrchestratorService {
         withFeedback: (payload, errors) => appendRepairFeedback(payload, errors),
       });
       this.optimizerOutput.set(result.artifact);
+      // US-7.1 (FR-7): report-only, and only when the optional [Product Name] line was supplied.
+      const nameIssues = checkOptimizerText(productName, result.artifact);
+      this.validationIssues.update(prev => dedupeIssues([...prev.filter(i => i.context !== 'Optimizer output'), ...nameIssues]));
       this.progressMessage.set('Optimization Complete!');
     }, 'Error during optimization.', 'Optimization failed.');
   }
@@ -1916,6 +1974,12 @@ export class ContentOrchestratorService {
       ...validateSeoMetadataShape(c.seoData, 'SEO metadata'),
       ...validateSlugs(c.slugData ?? null, productName),
       ...validateProductNameH1SlugAgreement(c.seoData, c.slugData ?? null),
+      // US-7.1 (FR-3, FR-5, FR-6): report-only protected-name checks. Slugs and SEO name surfaces get
+      // part 1 (and part 2 on SEO); the description of the master and of every Task C locale gets part 2.
+      ...checkNameSurfaces(productName ?? '', { slugs: c.slugData ?? null, seo: c.seoData }),
+      ...checkDescriptionHtml(productName ?? '', c.mainHtmlUa, mainLocale ? `HTML (${mainLocale})` : 'HTML (base)'),
+      ...Object.entries(c.translations).flatMap(([lang, html]) =>
+        checkDescriptionHtml(productName ?? '', html, `HTML (${lang})`)),
     ];
     // MERGE, never set. This runs LAST in the pipeline, after the signal already holds the
     // repair gate's final issues, the per-language final issues and any slug-generation

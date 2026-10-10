@@ -67,6 +67,13 @@ supplies kit contents at all.
 inside a value cell, comma-join those values into ONE row with a single plain-text value
 ("PA 12, PA 11, PA 12 GB"). One parameter, one row, no nested list.
 
+BRAND AND MODEL NAMES (HARD CONSTRAINT): brand and model names stay verbatim — never translate,
+transliterate, shorten, drop or re-order any token of one, including descriptive words that belong
+to the name (a name that ends in a common noun keeps that noun in the original). When a
+[Product Name] line is supplied, that exact name is the name to preserve. Only the locale
+formatting of numbers and units inside the name may change. This takes precedence over
+[PRODUCT NAME LOCALIZATION]'s descriptor-translation and category-first rules.
+
 FACT SOURCE (HARD CONSTRAINT): build every fact, spec, number, claim, and image exclusively from
 [INPUT HTML]. Where a gap invites a plausible-sounding addition, keep the gap and write only
 source-confirmed content. §7 COMPLETENESS applies here too — count every spec row in the input

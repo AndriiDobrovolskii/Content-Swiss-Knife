@@ -54,13 +54,26 @@ drives word order, number format and transliteration.
       e.g. "Bambu Lab P1P 3D Printer"  /  "Bambu Lab PETG Translucent Filament 1.75 mm 1 kg Orange"
 
 ══════════ NAME — COMPOSITION RULES ══════════
+0. PROTECTED NAME CARVE-OUT (CRITICAL — read before rules 1-8). When the request carries a
+   [PROTECTED PRODUCT NAME] block, the typed Product Name is a brand/model name and is NOT
+   localized: every token of it, in the typed order, untranslated and verbatim, appears once as
+   one unbroken span in EVERY locale's "name", and its slugified form appears in every "slug".
+   This OVERRIDES rules 2, 3, 5 and 8 below for that span (no descriptive word of the typed name is
+   translated, dropped, shortened, re-ordered or split to make room, and the 60-character aim never
+   removes one). A localized category noun MAY be added in front of the span in non-English
+   locales (never inside it, never in place of one of its tokens, and not at all when the typed
+   name already starts with a category word); English locales use the typed name as is. Only
+   rule 7 applies inside the span: locale number and unit formatting. Without a
+   [PROTECTED PRODUCT NAME] block, rules 1-8 apply exactly as written.
 1. Keep brand + exact model designator VERBATIM and in Latin (e.g. "Bambu Lab PLA Basic",
    "xTool F2 Ultra") in every locale: where a translation or transliteration of the brand/model
    would appear ("Бамбу Лаб"), write the Latin original ("Bambu Lab").
-2. Localize the ENTIRE descriptive part, INCLUDING the head noun, into the target language:
+2. Localize the ENTIRE descriptive part, INCLUDING the head noun, into the target language (a
+   PROTECTED name is the exception — rule 0):
    Filament → es "Filamento", uk "Філамент", ru "Филамент"; Scanner → uk "Сканер";
    Smoothing Machine → es "Máquina de alisado"; Nozzle → de "Düse".
-3. SINGLE-RENDER (CRITICAL): render the head noun exactly once, in the target language only —
+3. SINGLE-RENDER (CRITICAL; does not apply inside a PROTECTED name — rule 0): render the head
+   noun exactly once, in the target language only —
    where the localized noun and its English source would both appear ("Zestaw Wkładek Formlabs
    Basket Liner Kit"), keep the localized form and the Latin brand/model ("Zestaw wkładek
    Formlabs Basket").
@@ -82,7 +95,8 @@ drives word order, number format and transliteration.
 5. VOCABULARY: compose the name only from category, brand, model, spec, variant, and colour
    tokens. Marketing words in the source (buy, best price, new, premium, innovative, "купити",
    "найкраща ціна", "супер") → dropped. Secondary phrases ("Lithophane Bundle", "Special
-   Edition") → dropped when decorative, kept when they are the actual SKU identifier.
+   Edition") → dropped when decorative, kept when they are the actual SKU identifier. Nothing is
+   dropped from inside a PROTECTED name (rule 0).
 6. CASE: normal title/sentence case for the language; UPPERCASE for genuine abbreviations only
    (SLA, FDM, FFF, UV, CMYK, PLA, PETG). German common nouns stay capitalized.
 7. NUMBERS — decimal separator follows the locale:
@@ -95,7 +109,9 @@ drives word order, number format and transliteration.
    SLUGS are always Latin ASCII — transliterate back (мм→mm) per the slug rules below.
 8. LENGTH: keep the name concise and Title-friendly — aim ≤ 60 characters. Brand, model, and the
    product type appear in every name regardless of length; when over 60, drop in this order:
-   colour code → secondary variant → least-critical spec.
+   colour code → secondary variant → least-critical spec. For a PROTECTED name the whole typed
+   name outranks the 60-character aim: the name may be longer, and only the optional localized
+   category noun and tokens outside the typed name may be dropped (rule 0).
 
 ══════════ NAME — BUNDLES / SETS ══════════
 - Begin the bundle name with the EXACT base-product name (same word order rules as above), so
@@ -124,42 +140,48 @@ The slug MIRRORS the localized name (same word order) and INCLUDES dimensions.
    be appended, rely on those localized descriptors instead. Two locales' slugs may share only the
    brand-model prefix — every full slug in the set is a distinct string.
 6. LENGTH: aim ≤ 60 characters; hard max 100. When over, trim the same way as the name (rule 8).
+   For a PROTECTED name the slugified typed name is never trimmed (it may exceed 100 if the typed
+   name alone does); trim only tokens outside it.
 
 ══════════ WORKED EXAMPLE 1 (store "Center 3D Print" → pl-PL, en-GB, de-DE, uk-UA, ru-UA) ══════════
-Input product: "Bambu Lab Hardened Steel Nozzle 0.4 mm"
+Input product: "Bambu Lab Hardened Steel Nozzle 0.4 mm"   (a PROTECTED name: brand "Bambu Lab")
 {"site_name":"Center 3D Print","slugs":[
- {"language":"pl-PL","name":"Dysza Bambu Lab hartowana stal 0,4 mm","slug":"dysza-bambu-lab-hartowana-stal-0.4-mm"},
+ {"language":"pl-PL","name":"Dysza Bambu Lab Hardened Steel Nozzle 0,4 mm","slug":"dysza-bambu-lab-hardened-steel-nozzle-0.4-mm"},
  {"language":"en-GB","name":"Bambu Lab Hardened Steel Nozzle 0.4 mm","slug":"bambu-lab-hardened-steel-nozzle-0.4-mm"},
- {"language":"de-DE","name":"Düse Bambu Lab gehärteter Stahl 0,4 mm","slug":"duese-bambu-lab-gehaerteter-stahl-0.4-mm"},
- {"language":"uk-UA","name":"Сопло Bambu Lab загартована сталь 0,4 мм","slug":"soplo-bambu-lab-zahartovana-stal-0.4-mm"},
- {"language":"ru-UA","name":"Сопло Bambu Lab закалённая сталь 0,4 мм","slug":"soplo-bambu-lab-zakalennaya-stal-0.4-mm"}
+ {"language":"de-DE","name":"Düse Bambu Lab Hardened Steel Nozzle 0,4 mm","slug":"duese-bambu-lab-hardened-steel-nozzle-0.4-mm"},
+ {"language":"uk-UA","name":"Сопло Bambu Lab Hardened Steel Nozzle 0,4 мм","slug":"soplo-bambu-lab-hardened-steel-nozzle-0.4-mm"},
+ {"language":"ru-UA","name":"Сопло Bambu Lab Hardened Steel Nozzle 0,4 мм","slug":"soplo-bambu-lab-hardened-steel-nozzle-0.4-mm"}
 ]}
-Note: non-English = category-first, English = brand-first; German umlauts EXPANDED in the slug
-(Düse→duese, gehärteter→gehaerteter); dimension kept with a dot decimal; мм→mm in the slug.
+Note: the typed name is kept whole and untranslated in every locale — only the localized category
+noun is added IN FRONT of it (non-English); English = the typed name as is. German umlauts are
+EXPANDED in the slug (Düse→duese); the dimension keeps a dot decimal in the slug; мм→mm in the slug.
 
 ══════════ WORKED EXAMPLE 2 (store "EXPERT3D" → en-ES, es-ES, pt-PT, uk-UA) ══════════
-Input product: "Bambu Lab PLA Basic Filament 1.75 mm 1 kg x4 With Spool CMYK"
+Input product: "Bambu Lab PLA Basic Filament 1.75 mm 1 kg x4 With Spool CMYK"   (a PROTECTED name: brand "Bambu Lab")
 {"site_name":"EXPERT3D","slugs":[
- {"language":"en-ES","name":"Bambu Lab PLA Basic Filament 1.75 mm 1 kg x4 With Spool CMYK","slug":"bambu-lab-pla-basic-filament-1.75-mm-1-kg-x4-spool-cmyk"},
- {"language":"es-ES","name":"Filamento Bambu Lab PLA Basic 1,75 mm 1 kg x4 Con Bobina CMYK","slug":"filamento-bambu-lab-pla-basic-1.75-mm-1-kg-x4-bobina-cmyk"},
- {"language":"pt-PT","name":"Filamento Bambu Lab PLA Basic 1,75 mm 1 kg x4 Com Bobina CMYK","slug":"filamento-bambu-lab-pla-basic-1.75-mm-1-kg-x4-bobina-cmyk"},
- {"language":"uk-UA","name":"Філамент Bambu Lab PLA Basic 1,75 мм 1 кг x4 з котушкою CMYK","slug":"filament-bambu-lab-pla-basic-1.75-mm-1-kg-x4-kotushkoyu-cmyk"}
+ {"language":"en-ES","name":"Bambu Lab PLA Basic Filament 1.75 mm 1 kg x4 With Spool CMYK","slug":"bambu-lab-pla-basic-filament-1.75-mm-1-kg-x4-with-spool-cmyk"},
+ {"language":"es-ES","name":"Filamento Bambu Lab PLA Basic Filament 1,75 mm 1 kg x4 With Spool CMYK","slug":"filamento-bambu-lab-pla-basic-filament-1.75-mm-1-kg-x4-with-spool-cmyk"},
+ {"language":"pt-PT","name":"Filamento Bambu Lab PLA Basic Filament 1,75 mm 1 kg x4 With Spool CMYK","slug":"filamento-bambu-lab-pla-basic-filament-1.75-mm-1-kg-x4-with-spool-cmyk"},
+ {"language":"uk-UA","name":"Філамент Bambu Lab PLA Basic Filament 1,75 мм 1 кг x4 With Spool CMYK","slug":"filament-bambu-lab-pla-basic-filament-1.75-mm-1-kg-x4-with-spool-cmyk"}
 ]}
-Note: head noun rendered once, fully localized (Filament→Filamento→Філамент); linking preposition
-dropped from the slug (With/Con/з); dimensions retained; name uses plain space-separated tokens;
-slug decimal is a dot.
+Note: the typed name (descriptive words "Filament", "With Spool" included) is kept whole and
+untranslated; the localized category noun is only added in front of it (non-English); the number
+and unit are the only parts that take locale formatting (1.75→1,75, mm→мм, kg→кг); name uses plain
+space-separated tokens; slug decimal is a dot. Every locale's slug still contains the full slugified
+typed name.
 
 ══════════ WORKED EXAMPLE 3 — A MODEL DESIGNATOR CONTAINING A SLASH (rule 4) ══════════
 Both examples above have punctuation-free models, which is exactly why rule 4's character set
 used to read as absolute. It is not.
 Input product: "XGRIDS L2 Pro 32/300 Standard Package"
 {"site_name":"Center 3D Print","slugs":[
- {"language":"en-GB","name":"XGRIDS L2 Pro 32/300 3D Scanner Standard Package","slug":"xgrids-l2-pro-32-300-3d-scanner-standard-package"},
- {"language":"pl-PL","name":"Skaner 3D XGRIDS L2 Pro 32/300 Zestaw Standardowy","slug":"skaner-3d-xgrids-l2-pro-32-300-zestaw-standardowy"},
- {"language":"uk-UA","name":"3D сканер XGRIDS L2 Pro 32/300 Стандартний комплект","slug":"3d-skaner-xgrids-l2-pro-32-300-standartnyi-komplekt"}
+ {"language":"en-GB","name":"XGRIDS L2 Pro 32/300 Standard Package","slug":"xgrids-l2-pro-32-300-standard-package"},
+ {"language":"pl-PL","name":"Skaner 3D XGRIDS L2 Pro 32/300 Standard Package","slug":"skaner-3d-xgrids-l2-pro-32-300-standard-package"},
+ {"language":"uk-UA","name":"3D сканер XGRIDS L2 Pro 32/300 Standard Package","slug":"3d-skaner-xgrids-l2-pro-32-300-standard-package"}
 ]}
 Note: the slash SURVIVES in every "name" and becomes a hyphen ONLY in the "slug", where the
-lowercase-Latin-and-hyphens charset genuinely requires it. "32 300" and "32300" are both WRONG.`;
+lowercase-Latin-and-hyphens charset genuinely requires it. "32 300" and "32300" are both WRONG.
+The packaging words "Standard Package" are part of the typed name, so they stay untranslated too.`;
 
 // Appended as its own system block — only for stores on SLUG_CONTEXT_ENRICHMENT_STORES — so
 // TASK_SLUG_INSTRUCTION above stays byte-identical for every other store's prompt (and its cache).

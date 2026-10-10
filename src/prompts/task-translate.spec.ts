@@ -161,3 +161,39 @@ describe('buildTranslatePrompt — Ukrainian style guide gating', () => {
     expect(block).toContain('[UNIT LOCALIZATION]');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-7.1 T11 (FR-7, AC-5, OD-7). The Translator receives NO Product Name, so it cannot tell a brand
+// from a generic noun by itself: its prompt states, generically, that brand and model names are
+// preserved verbatim. No deterministic check exists here (stated limitation) — prompt text is the
+// whole enforcement, so it is asserted on every supported target language.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('buildTranslatePrompt — brand and model names are preserved verbatim (US-7.1 T11, FR-7, AC-5)', () => {
+  const VERBATIM_BRAND_MODEL =
+    /brand[^.\n]{0,40}model[^.\n]{0,80}(verbatim|unchanged|untranslated|not (be )?translat)|(verbatim|unchanged|untranslated|never translat|do not translat)[^.\n]{0,120}brand[^.\n]{0,40}model/i;
+
+  it.each(TRANSLATOR_LANGUAGES.map(l => [l] as [string]))(
+    'the %s instruction carries the verbatim brand/model sentence',
+    (label) => {
+      const instruction = buildTranslatePrompt('Text', label, UF).systemBlocks[1].text;
+      expect(instruction).toMatch(VERBATIM_BRAND_MODEL);
+    },
+  );
+
+  it('an unknown target label (generic fallback) carries it too', () => {
+    const instruction = buildTranslatePrompt('Text', 'Klingon', UF).systemBlocks[1].text;
+    expect(instruction).toMatch(VERBATIM_BRAND_MODEL);
+  });
+
+  it('is generic: it does not depend on a Product Name the Translator never receives (OD-7)', () => {
+    const instruction = buildTranslatePrompt('Text', 'Spanish', UF).systemBlocks[1].text;
+    expect(instruction).not.toContain('[PROTECTED PRODUCT NAME]');
+    expect(instruction).not.toContain('[Product Name]');
+  });
+
+  it('keeps the dynamic text out of the cached blocks: userContent is still the raw input', () => {
+    const payload = buildTranslatePrompt('Formlabs Form Studio 1 Resin Tank Pro', 'Spanish', UF);
+    expect(payload.userContent).toBe('Formlabs Form Studio 1 Resin Tank Pro');
+    expect(payload.systemBlocks.every(b => !b.text.includes('Form Studio 1'))).toBe(true);
+  });
+});

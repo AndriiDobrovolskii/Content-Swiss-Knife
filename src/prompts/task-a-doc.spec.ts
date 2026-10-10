@@ -235,3 +235,37 @@ describe('buildPromptADoc — [IMAGE MARKERS] block (US-5.1 AC-9d)', () => {
     expect(userContent).not.toContain('[IMAGE MARKERS]');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-7.1 T10 (FR-2, FR-6, AC-3, OD-8). The Doc prompt's `localizedName` instruction used to read
+// "product name as it should read in this language" — an invitation to translate and re-order.
+// For a protected name it must now state the rule. OD-8: NO positive "the name must appear" clause.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('TASK_A_DOC_INSTRUCTION — localizedName states the protected-name rule (US-7.1 T10, FR-6)', () => {
+  const at = TASK_A_DOC_INSTRUCTION.indexOf('"localizedName"');
+  const localizedNameWindow = TASK_A_DOC_INSTRUCTION.slice(at, at + 900);
+
+  it('premise: the SHAPE block names the localizedName field', () => {
+    expect(at).toBeGreaterThanOrEqual(0);
+  });
+
+  it('says a protected name is kept whole: every token, in order, untranslated', () => {
+    expect(localizedNameWindow).toMatch(/protected/i);
+    expect(localizedNameWindow).toMatch(/every token|whole|verbatim|untranslated|unchanged/i);
+  });
+
+  it('points at the same [PROTECTED PRODUCT NAME] block the orchestrator appends to userContent', () => {
+    expect(TASK_A_DOC_INSTRUCTION).toContain('[PROTECTED PRODUCT NAME]');
+  });
+
+  it('reaches the model: the built Doc payload carries the rule in its cached task block', () => {
+    const payload = buildPromptADoc(input());
+    expect(payload.systemBlocks[1].text).toContain('[PROTECTED PRODUCT NAME]');
+  });
+
+  it('OD-8 guard: adds no positive clause demanding the name appear (regression guard, passes today)', () => {
+    expect(TASK_A_DOC_INSTRUCTION).not.toMatch(
+      /(product )?name\s+(must|has to|should|shall)\s+(always\s+)?(appear|be (present|mentioned|included)|occur)/i,
+    );
+  });
+});
