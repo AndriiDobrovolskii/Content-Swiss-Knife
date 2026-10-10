@@ -5,7 +5,7 @@ slug: preserve-proper-product-names
 title: Keep the product name the operator typed intact in every mode and store profile (stop dropping "Resin Tank" from "Formlabs Form Studio 1 Resin Tank Pro")
 track: prompt
 version: 2
-status: DRAFT
+status: ARCHIVED
 owner: so-story-writer
 created_at: 2026-10-09T00:00:00Z
 updated_at: 2026-10-09T12:59:42Z

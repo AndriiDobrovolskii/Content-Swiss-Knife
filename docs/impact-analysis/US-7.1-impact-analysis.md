@@ -2,7 +2,7 @@
 artifact: impact_analysis
 story: US-7.1
 version: 1
-status: DRAFT
+status: ARCHIVED
 owner: so-impact-analyzer
 created_at: 2026-10-09T17:00:00Z
 updated_at: 2026-10-09T17:00:00Z
