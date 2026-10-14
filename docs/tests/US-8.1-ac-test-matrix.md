@@ -1,12 +1,12 @@
 ---
 artifact: ac_test_matrix
 story: US-8.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-14T19:45:00Z
-updated_at: 2026-10-14T19:45:00Z
-supersedes: null
+updated_at: 2026-10-14T23:30:00Z
+supersedes: docs/tests/US-8.1-ac-test-matrix.md#1
 inputs_consumed:
   - key: story
     version: 2
@@ -17,6 +17,8 @@ inputs_consumed:
   - key: task_breakdown
     version: 3
   - key: test_strategy
+    version: 1
+  - key: security_review
     version: 1
 open_decisions_blocking: false
 ---
@@ -100,3 +102,17 @@ Every `AC-1` to `AC-19` has at least one named, existing test that is red now (o
 - AC-10, AC-11 and AC-12 UI rows are **source-text pins** (`wiring`), not rendered-DOM assertions; they prove the wiring is present, not that the page behaves. The behaviour half is covered by `faq-form` (the predicate) and `standalone` (the guard on the service).
 - AC-13 "afterwards `website` is recorded" and AC-15's history content / progress line come from the approved task breakdown (T8), not from the AC text.
 - AC-4 "the UI shows a FAQ tab for each" is covered as data (`tabs`), not as rendered tabs.
+
+## Loop-back addendum (v2): security finding B-1 (TEST_WRITING loop-back 1 of 3)
+
+Source: `docs/reviews/security/US-8.1-security-review.md` v1, finding B-1 (blocking): `validateFaqShape` accepts a tag whose quote is unpaired or whose closing `>` is missing, and `isFaqStorable` then stores it for `bypassSecurityTrustHtml`. This adds **no new AC**: it tightens the existing enforcement of **FR-9 / AC-9** (well-formed, only `h3 p b ul li`, no attributes) and the security non-functional requirement. Rows below are the new tests; all rows of v1 are unchanged. `R` = reject case (must be red before the fix), `G` = guard (green now, must stay green).
+
+| Req | Test file | Test (describe > it) | State now | Green by |
+|---|---|---|---|---|
+| FR-9 / AC-9 | faq-html | "validateFaqShape - B-1: markup the tokenizer cannot see fails closed" > R1 (unpaired `'` in a tag head), R2 (unpaired `"`), R3 (unterminated trailing `<img ...`), R4 (comment), R5 (bare trailing `<`), R6 (`<i`), R7 (`<?php ... ?>`), R8 (`<![CDATA[x]]>`): >= 1 issue, every issue severity error, rule in `FAQ_SHAPE_RULES`, context = caller, no `path`; no single rule id pinned | R1-R8: RED (assertion, 0 issues). R9 (mid-document unpaired `'` swallowing the `>`): guard, already rejected today | builder fix in `src/utils/faq-html.ts` |
+| FR-9 / AC-9 | faq-html | same describe > G1-G6 (allowed elements; `"` and apostrophes in text incl. Ukrainian; `&lt; &amp; &gt; &quot;`; literal `>` in text; upper-case tags; whitespace before `>`) accepted with no issue | guard (6) | none (must stay green) |
+| FR-9 / AC-9 | faq-html | same describe > G7 (`onclick="x()"` -> faq-attribute-present), G8 (`<script>` -> faq-element-not-allowed), G9 (`<p/onclick=...>` -> faq-attribute-present), G10 (well-formed `<img onerror=...>` -> faq-element-not-allowed) | guard (4) | none (must stay green) |
+| FR-9 / AC-9 | faq-gate | "buildFaqValidator -> isFaqStorable - B-1" > R1, R2, R3 through the master validator: >= 1 contract error and `isFaqStorable` false; R1, R2, R3 through the translation validator: `isFaqStorable` false | RED (6): 0 contract errors, storable true | builder fix |
+| FR-9 / AC-16 | pipeline | G and UA > "AC-16: the uk-UA master" > "B-1: a master with <unpaired single quote / unpaired double quote / unterminated trailing tag> is never stored: 3 attempts, no translation call" (EXPERT3D, master = valid FAQ plus the payload) | RED (6): 1 master attempt, payload stored, translations called | builder fix |
+
+Rows RECONCILIATION should read critically: the REJECT cases pin the contract (rejected as a contract error, never storable), deliberately not one rule id, because the Specification does not name which of the three shape rules reports an untokenizable tag.

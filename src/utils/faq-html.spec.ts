@@ -197,3 +197,58 @@ describe('validateFaqShape — AC-9 / FR-9: a well-formed FAQ of h3, p, b, ul, l
     expect(validateFaqShape(html, CTX)).toEqual(validateFaqShape(html, CTX));
   });
 });
+
+/**
+ * Security finding B-1 (US-8.1 loop-back, FR-9 / NFR security): the shape gate is the only control between
+ * the model output and `bypassSecurityTrustHtml`, so it must FAIL CLOSED. A tag a browser would build but a
+ * naive tokenizer cannot see (an unpaired quote in the tag head, a missing closing `>`, a comment, a bare
+ * `<`, a processing instruction, CDATA) must never come back as "no issue".
+ *
+ * The REJECT cases do not pin ONE rule id on purpose: the fix may report the same input as
+ * faq-not-well-formed, faq-element-not-allowed or faq-attribute-present. They pin the contract that
+ * matters: at least one issue, every issue a contract error, and no `path` (full regeneration).
+ */
+describe('validateFaqShape — B-1: markup the tokenizer cannot see fails closed (FR-9, security)', () => {
+  const shapeRuleIds = new Set<string>(FAQ_SHAPE_RULES);
+
+  it.each([
+    ['R1: an element with an unpaired single quote in the tag head', `<h3>Q</h3><p>A</p><img src=x onerror=alert(1) a'>`],
+    ['R2: an element with an unpaired double quote in the tag head', '<h3>Q</h3><p>A</p><img src=x onerror=alert(1) a">'],
+    ['R3: an unterminated trailing tag (no closing ">")', '<h3>Q</h3><p>A</p><img src=x onerror=alert(1)'],
+    ['R4: an HTML comment', '<h3>Q</h3><p>A</p><!-- hidden -->'],
+    ['R5: a bare trailing "<"', '<h3>Q</h3><p>A</p><'],
+    ['R6: an unterminated trailing tag name', '<h3>Q</h3><p>A</p><i'],
+    ['R7: a processing instruction', '<h3>Q</h3><p>A</p><?php echo 1 ?>'],
+    ['R8: a CDATA section', '<h3>Q</h3><p>A</p><![CDATA[x]]>'],
+    ['R9: a mid-document unpaired quote that swallows the closing ">"', `<h3>Q</h3><p onclick='x()>A</p>`],
+  ])('%s is rejected with at least one contract error', (_name, html) => {
+    const issues = validateFaqShape(html, CTX);
+    expect(issues.length, `expected at least one issue for ${JSON.stringify(html)}, got ${issues.length}`).toBeGreaterThanOrEqual(1);
+    for (const i of issues) {
+      expect(i.severity).toBe('error');
+      expect(shapeRuleIds.has(i.rule), i.rule).toBe(true);
+      expect(i.context).toBe(CTX);
+      expect(i.path).toBeUndefined();
+    }
+  });
+
+  it.each([
+    ['G1: the allowed elements, a bold lead and a list', '<h3>Q?</h3><p>Answer with <b>bold</b> lead.</p><ul><li>one</li><li>two</li></ul>'],
+    ['G2: straight double quote, English apostrophe and Ukrainian apostrophes in text', `<h3>Q?</h3><p>He said "hi" and it's fine; Ukrainian apostrophe: м'яч, п'ять</p>`],
+    ['G3: escaped entities for < > & " in text', '<h3>Q?</h3><p>5 &lt; 6 &amp; 7 &gt; 3 &quot;x&quot;</p>'],
+    ['G4: a literal ">" in text', '<h3>Q?</h3><p>5 > 3</p>'],
+    ['G5: upper-case tag names', '<H3>Q?</H3><P>A</P>'],
+    ['G6: whitespace before the closing ">" of a tag', '<h3 >Q?</h3 ><p >A</p >'],
+  ])('%s is still accepted with no issue (must stay green after the B-1 fix)', (_name, html) => {
+    expect(validateFaqShape(html, CTX)).toEqual([]);
+  });
+
+  it.each([
+    ['G7: a quoted event-handler attribute', '<h3>Q</h3><p onclick="x()">A</p>', 'faq-attribute-present'],
+    ['G8: a <script> element', '<h3>Q</h3><script>alert(1)</script>', 'faq-element-not-allowed'],
+    ['G9: a slash-separated attribute', '<h3>Q</h3><p/onclick=alert(1)>A</p>', 'faq-attribute-present'],
+    ['G10: a well-formed <img> with an unquoted handler', '<h3>Q?</h3><p>A</p><img src=x onerror=alert(1)>', 'faq-element-not-allowed'],
+  ])('%s keeps its specific rule id (must stay green after the B-1 fix)', (_name, html, rule) => {
+    expect(rules(html)).toContain(rule);
+  });
+});

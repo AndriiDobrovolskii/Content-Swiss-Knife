@@ -272,6 +272,20 @@ for (const mode of MODES) {
         expect(r.orchestrator.content().faqArtifacts ?? {}).toEqual({});
       });
 
+      // Security finding B-1 (FR-9): a master carrying markup the shape tokenizer cannot see (an unpaired
+      // quote in a tag head, an unterminated trailing tag) is not a valid FAQ. It is never stored, because the
+      // stored FAQ reaches `bypassSecurityTrustHtml`; it exhausts the 3 attempts like any other invalid master.
+      it.each([
+        ['an unpaired single quote in a tag head', `${FAQ_MASTER_HTML}<img src=x onerror=alert(1) a'>`],
+        ['an unpaired double quote in a tag head', `${FAQ_MASTER_HTML}<img src=x onerror=alert(1) a">`],
+        ['an unterminated trailing tag', `${FAQ_MASTER_HTML}<img src=x onerror=alert(1)`],
+      ])('B-1: a master with %s is never stored: 3 attempts, no translation call', async (_name, poisoned) => {
+        const r = await mode.run('EXPERT3D', { master: poisoned });
+        expectMasterAttempts(r, 3);
+        expect(translationCalls(r.mock)).toEqual([]);
+        expect(r.orchestrator.content().faqArtifacts ?? {}).toEqual({});
+      });
+
       it('a valid master after two invalid ones is stored; no further master call is made after it', async () => {
         const r = await mode.run('EXPERT3D', { master: (n) => (n <= 2 ? FAQ_INVALID_HTML : FAQ_MASTER_HTML) });
         expectMasterAttempts(r, 3);

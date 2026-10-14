@@ -92,6 +92,31 @@ describe('buildFaqValidator — the master (no `master` option)', () => {
   });
 });
 
+describe('buildFaqValidator -> isFaqStorable — B-1: markup the tag tokenizer cannot see is never storable (FR-9, security)', () => {
+  // Same path the pipeline uses: buildFaqValidator(...)(html) -> isFaqStorable(issues). These inputs reach
+  // `bypassSecurityTrustHtml` if stored, so the store decision must be false for each.
+  it.each([
+    ['R1: an unpaired single quote in the tag head', `<h3>Q</h3><p>A</p><img src=x onerror=alert(1) a'>`],
+    ['R2: an unpaired double quote in the tag head', '<h3>Q</h3><p>A</p><img src=x onerror=alert(1) a">'],
+    ['R3: an unterminated trailing tag', '<h3>Q</h3><p>A</p><img src=x onerror=alert(1)'],
+  ])('%s: the master is not storable and carries a contract error', (_name, html) => {
+    const found = errors(masterValidator()(html));
+    expect(found.length, `expected at least one contract error for ${JSON.stringify(html)}, got ${found.length}`).toBeGreaterThanOrEqual(1);
+    for (const i of found) expect(FAQ_CONTRACT_RULES.has(i.rule), i.rule).toBe(true);
+    expect(isFaqStorable(found)).toBe(false);
+  });
+
+  it.each([
+    ['R1', `<h3>Q</h3><p>A</p><img src=x onerror=alert(1) a'>`],
+    ['R2', '<h3>Q</h3><p>A</p><img src=x onerror=alert(1) a">'],
+    ['R3', '<h3>Q</h3><p>A</p><img src=x onerror=alert(1)'],
+  ])('%s: the full validator output is not storable even through the translation validator', (_name, html) => {
+    expect(isFaqStorable(buildFaqValidator({
+      context: 'FAQ (pl-PL)', productName: 'Bambu Lab P1S', locale: 'pl-PL', master: '<h3>Q</h3><p>A</p>',
+    })(html))).toBe(false);
+  });
+});
+
 describe('buildFaqValidator — a translation (`master` supplied): FR-3 / AC-3 / AC-17', () => {
   it('a translation with the master\'s structure has no error issue', () => {
     expect(errors(translationValidator()(TRANSLATED))).toEqual([]);

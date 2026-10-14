@@ -1,12 +1,12 @@
 ---
 artifact: test_generation_report
 story: US-8.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-14T19:45:00Z
-updated_at: 2026-10-14T19:45:00Z
-supersedes: null
+updated_at: 2026-10-14T23:30:00Z
+supersedes: docs/tests/US-8.1-test-generation-report.md#1
 inputs_consumed:
   - key: story
     version: 2
@@ -23,6 +23,8 @@ inputs_consumed:
   - key: test_strategy
     version: 1
   - key: ac_test_matrix
+    version: 2
+  - key: security_review
     version: 1
 open_decisions_blocking: false
 ---
@@ -151,3 +153,28 @@ Run as one file, the R6 block therefore still shows 1 red test after T6 (the UA-
 - [x] Tests were run and the failing output recorded above; failures are assertion failures or the four named module-absent loads, plus the `is not a function` pair named in the table.
 - [x] Pre-existing tests still pass **on the logic runner** (5171 of the 5176 baseline passes are unchanged and green; the other 5 are the rewritten R6 tests, which are the intended red). **Not verified for the component runner**: `npm run test:components` exits 1 at compile on this branch (finding 1) and no baseline run of it was taken on the clean tree, so the two existing component specs were not executed either before or after.
 - [x] FROZEN files untouched: `git diff -- src/prompts/task-c.ts .arch-guard-checksums` empty; `bash arch-guard.sh` exit 0 after all edits.
+
+## Loop-back addendum (v2): security finding B-1, red regression tests written BEFORE the fix
+
+Trigger: IMPLEMENTATION returned CHANGES_REQUIRED (`changes_required_tests`) for security finding B-1 (`docs/reviews/security/US-8.1-security-review.md` v1), with a test brief (TW-1) recorded in the pipeline status. No implementation, FROZEN file or `.arch-guard-checksums` was touched; no existing test was edited, weakened or skipped.
+
+Files changed: `src/utils/faq-html.spec.ts` (+19 tests: one new describe), `src/utils/faq-gate.spec.ts` (+6 tests: one new describe), `src/services/content-orchestrator.faq-pipeline.spec.ts` (+3 cases, run for both entry points = +6 tests, inside "AC-16: the uk-UA master"; the orchestrator-level test was cheap with the existing `mode.run` and `FAQ_MASTER_HTML` fixtures and imports only symbols that already exist).
+
+Baseline before this loop-back: 184 files, 6254 passed, 3 skipped (6257).
+
+Observed run (real output, `npx vitest run`, whole logic suite): `Test Files  3 failed | 181 passed (184)`, `Tests  20 failed | 6265 passed | 3 skipped (6288)`. 31 tests were added (6257 + 31 = 6288); 11 of them are green guards (6254 + 11 = 6265 passed, so every previously passing test still passes) and **20 are red, the only failures**:
+
+| File | Red | Failure message (right reason) |
+|---|---|---|
+| `faq-html.spec.ts` R1-R8 | 8 | `expected at least one issue for "<h3>Q</h3><p>A</p><img src=x onerror=alert(1) a'>", got 0: expected 0 to be greater than or equal to 1` (same shape for R2-R8) |
+| `faq-gate.spec.ts` R1-R3 master | 3 | `expected at least one contract error for "...", got 0: expected 0 to be greater than or equal to 1` |
+| `faq-gate.spec.ts` R1-R3 translation validator | 3 | `expected true to be false` (`isFaqStorable` returned true) |
+| `faq-pipeline.spec.ts` B-1 (3 cases x Generator and UA) | 6 | `AssertionError: expected [ 'FAQ (uk-UA)' ] to deeply equal [ 'FAQ (uk-UA)', 'FAQ (uk-UA)', ... ]` (the poisoned master was accepted on attempt 1) |
+
+Guards, green now by design (11): `faq-html` R9 (see finding below), G1-G6 (accepted with no issue), G7-G10 (still rejected with `faq-attribute-present` / `faq-element-not-allowed`).
+
+Finding: **R9 is not red.** The brief expected `<h3>Q</h3><p onclick='x()>A</p>` to be accepted today; the real function already rejects it, because the unmatched `<p` leaves a `</p>` that was never opened (`faq-not-well-formed`). The case is kept as a guard (it must stay rejected after the fix), not as a red test; it is rejected for an incidental reason, which the fix must preserve either way.
+
+`npx tsc --noEmit`: exit 0, 0 diagnostics. The new tests import only existing modules and symbols, so no import-level red exists in this loop-back.
+
+Builder acceptance check: `npx vitest run src/utils/faq-html.spec.ts src/utils/faq-gate.spec.ts` plus `npx vitest run src/services/content-orchestrator.faq-pipeline.spec.ts -t "B-1"`; all must be green after the fix, then the full `npm run test:logic` must return to 184 files, 6288 passed, 3 skipped.
