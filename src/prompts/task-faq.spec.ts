@@ -45,3 +45,45 @@ describe('buildPromptFaq', () => {
     expect(overlayIdx).toBeLessThan(rulesIdx);
   });
 });
+
+// ── US-8.1 AC-6 / FR-6 (T2) ──────────────────────────────────────────────────────────────────────────
+// "The FAQ prompt text lists <b> and does not list <strong> among the permitted answer tags."
+// TABLE B spec: it imports only `buildPromptFaq`, which exists today, so it is red at RUNTIME (the
+// contract still lists <strong>) and never carries a compile diagnostic. Written from the criterion,
+// not from the planned edit: only the tag list may change (the cache-stability and overlay tests above
+// stay as they are).
+describe('buildPromptFaq — AC-6: <b> is a permitted answer tag, <strong> is not', () => {
+  const build = (overlay?: string) =>
+    buildPromptFaq('Formlabs Fuse X1', '<p>SLS industrial printer.</p>', 'Build volume: 330 mm', 'FAQ source notes.', 'Ukrainian', '€', overlay);
+  const contractOf = (userContent: string) => {
+    const start = userContent.indexOf('[OUTPUT CONTRACT');
+    const end = userContent.indexOf('[CONTENT RULES]');
+    return userContent.slice(start, end);
+  };
+
+  it('premise: the output-contract section is found and non-empty', () => {
+    const c = contractOf(build().userContent);
+    expect(c.length).toBeGreaterThan(50);
+  });
+
+  it('the output contract lists <b> among the permitted tags, with <p>, <ul> and <li>', () => {
+    const c = contractOf(build().userContent);
+    for (const tag of ['<p>', '<b>', '<ul>', '<li>']) expect(c, tag).toContain(tag);
+  });
+
+  it('the output contract does not list <strong>', () => {
+    expect(contractOf(build().userContent)).not.toMatch(/<\/?strong\b/i);
+  });
+
+  it('no <strong> appears anywhere in the built prompt, system block or user content', () => {
+    const p = build();
+    const everything = `${p.systemBlocks.map(b => b.text).join('\n')}\n${p.userContent}`;
+    expect(everything).not.toMatch(/<\/?strong\b/i);
+  });
+
+  it('still absent when a locale overlay is supplied', () => {
+    const p = build('[EXPERT3D ToV — EUROPEAN PORTUGUESE (pt-PT)] use "azoto" not "nitrogénio".');
+    expect(p.userContent).not.toMatch(/<\/?strong\b/i);
+    expect(contractOf(p.userContent)).toContain('<b>');
+  });
+});

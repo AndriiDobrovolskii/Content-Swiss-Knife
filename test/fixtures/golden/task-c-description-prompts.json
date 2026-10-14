@@ -1,0 +1,1730 @@
+{
+ "3DDevice | European English | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2c8cebb7d637c1dfed9ec0d8c16cea0036707922b9ab16efd590a21106ed1933",
+    "length": 6322,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "2e987ecf3f5042d28e103842eefb2bca8900f9eb57a7bc2a38b56e885b4a713b",
+   "length": 22615
+  }
+ },
+ "3DDevice | European English | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "6d0c566d62abebc6055dec82d660c3dda4c9abad486a6af010c6aa9b938432ad",
+    "length": 7012,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "2e987ecf3f5042d28e103842eefb2bca8900f9eb57a7bc2a38b56e885b4a713b",
+   "length": 22615
+  }
+ },
+ "3DDevice | European English | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "6d0c566d62abebc6055dec82d660c3dda4c9abad486a6af010c6aa9b938432ad",
+    "length": 7012,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "a21c3b6aa0f13fbfc0bb7e9c5ae53dc00b0bcd01edb2e46225c3e2306d19dc83",
+   "length": 22905
+  }
+ },
+ "3DDevice | European English | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ea21c2367b88660bf2dac0ef2f504b0e9080cab2fb8486a26769ddb5486cf3d2",
+    "length": 7469,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "2e987ecf3f5042d28e103842eefb2bca8900f9eb57a7bc2a38b56e885b4a713b",
+   "length": 22615
+  }
+ },
+ "3DDevice | European English | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2c8cebb7d637c1dfed9ec0d8c16cea0036707922b9ab16efd590a21106ed1933",
+    "length": 6322,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "5d83830acb555a7450c9e91876e0ff91b9c87b2e27c042a5e976a14e5f49f53d",
+   "length": 733
+  }
+ },
+ "3DDevice | European English | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "6d0c566d62abebc6055dec82d660c3dda4c9abad486a6af010c6aa9b938432ad",
+    "length": 7012,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "5d83830acb555a7450c9e91876e0ff91b9c87b2e27c042a5e976a14e5f49f53d",
+   "length": 733
+  }
+ },
+ "3DDevice | RU | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "7d99f1466ab5dc900968e4f930ac73bb05ad559f2006ca78237da3d614f9a75b",
+    "length": 8455,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "999ea2abedff95d5bc00ebf2deb5fc3db1181a6c4fb78c98a72a202f486caed2",
+   "length": 22611
+  }
+ },
+ "3DDevice | RU | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "a3f346517a024698099de791774c2024deef94e520fb573435e890dbc21f8634",
+    "length": 8754,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "999ea2abedff95d5bc00ebf2deb5fc3db1181a6c4fb78c98a72a202f486caed2",
+   "length": 22611
+  }
+ },
+ "3DDevice | RU | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "a3f346517a024698099de791774c2024deef94e520fb573435e890dbc21f8634",
+    "length": 8754,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "d00c380d8864897db6b5f86f9380046fbeed0aebac652c7d53e3cf55bca01045",
+   "length": 22901
+  }
+ },
+ "3DDevice | RU | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2f177fca9eda0153d364e248a8dfcadc03d266a87040d9a1a582ba4d707d4f25",
+    "length": 9211,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "999ea2abedff95d5bc00ebf2deb5fc3db1181a6c4fb78c98a72a202f486caed2",
+   "length": 22611
+  }
+ },
+ "3DDevice | RU | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "7d99f1466ab5dc900968e4f930ac73bb05ad559f2006ca78237da3d614f9a75b",
+    "length": 8455,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "4316cc8b71365d5bb62ac0ae7213f5c9b6dadd2995eba7483b245458e3192ef9",
+   "length": 729
+  }
+ },
+ "3DDevice | RU | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "a3f346517a024698099de791774c2024deef94e520fb573435e890dbc21f8634",
+    "length": 8754,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "4316cc8b71365d5bb62ac0ae7213f5c9b6dadd2995eba7483b245458e3192ef9",
+   "length": 729
+  }
+ },
+ "3DPrinter | European English | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2c8cebb7d637c1dfed9ec0d8c16cea0036707922b9ab16efd590a21106ed1933",
+    "length": 6322,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "04190cfbbd348e1f832253e40f91799e78ddd39b014ab819aafcb693f92164a6",
+   "length": 22616
+  }
+ },
+ "3DPrinter | European English | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "6d0c566d62abebc6055dec82d660c3dda4c9abad486a6af010c6aa9b938432ad",
+    "length": 7012,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "04190cfbbd348e1f832253e40f91799e78ddd39b014ab819aafcb693f92164a6",
+   "length": 22616
+  }
+ },
+ "3DPrinter | European English | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "6d0c566d62abebc6055dec82d660c3dda4c9abad486a6af010c6aa9b938432ad",
+    "length": 7012,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "9e26020348734c78a27f6fc5968d497406c4e2f4655095802b6abee75e06d757",
+   "length": 22906
+  }
+ },
+ "3DPrinter | European English | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ea21c2367b88660bf2dac0ef2f504b0e9080cab2fb8486a26769ddb5486cf3d2",
+    "length": 7469,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "04190cfbbd348e1f832253e40f91799e78ddd39b014ab819aafcb693f92164a6",
+   "length": 22616
+  }
+ },
+ "3DPrinter | European English | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2c8cebb7d637c1dfed9ec0d8c16cea0036707922b9ab16efd590a21106ed1933",
+    "length": 6322,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "cd9ad8c49cae599c065d55f1698bbcdb7ae58541ff388b488f7c935f7c851603",
+   "length": 734
+  }
+ },
+ "3DPrinter | European English | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "6d0c566d62abebc6055dec82d660c3dda4c9abad486a6af010c6aa9b938432ad",
+    "length": 7012,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "cd9ad8c49cae599c065d55f1698bbcdb7ae58541ff388b488f7c935f7c851603",
+   "length": 734
+  }
+ },
+ "3DPrinter | RU | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "7d99f1466ab5dc900968e4f930ac73bb05ad559f2006ca78237da3d614f9a75b",
+    "length": 8455,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "71a57a5a60bb4bcceb01f5d9242ab7028e70d95f6f8724e6d2861157e8828666",
+   "length": 22612
+  }
+ },
+ "3DPrinter | RU | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "a3f346517a024698099de791774c2024deef94e520fb573435e890dbc21f8634",
+    "length": 8754,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "71a57a5a60bb4bcceb01f5d9242ab7028e70d95f6f8724e6d2861157e8828666",
+   "length": 22612
+  }
+ },
+ "3DPrinter | RU | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "a3f346517a024698099de791774c2024deef94e520fb573435e890dbc21f8634",
+    "length": 8754,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "d3a223b3c00d1633a99c3b336ad30b46b4b4026340097f4e2c602ccfa9ead2ef",
+   "length": 22902
+  }
+ },
+ "3DPrinter | RU | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2f177fca9eda0153d364e248a8dfcadc03d266a87040d9a1a582ba4d707d4f25",
+    "length": 9211,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "71a57a5a60bb4bcceb01f5d9242ab7028e70d95f6f8724e6d2861157e8828666",
+   "length": 22612
+  }
+ },
+ "3DPrinter | RU | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "7d99f1466ab5dc900968e4f930ac73bb05ad559f2006ca78237da3d614f9a75b",
+    "length": 8455,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "66f07c88162e6cd824e700abc6d6ccdad3a9310c9f61cbf685697893053dc2e1",
+   "length": 730
+  }
+ },
+ "3DPrinter | RU | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "a3f346517a024698099de791774c2024deef94e520fb573435e890dbc21f8634",
+    "length": 8754,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "66f07c88162e6cd824e700abc6d6ccdad3a9310c9f61cbf685697893053dc2e1",
+   "length": 730
+  }
+ },
+ "3DScanner | European English | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2c8cebb7d637c1dfed9ec0d8c16cea0036707922b9ab16efd590a21106ed1933",
+    "length": 6322,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "40fdaca4c06e88fbb6f7e456187382dd72239db512e1fab672f83521e9ea252c",
+   "length": 22616
+  }
+ },
+ "3DScanner | European English | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "6d0c566d62abebc6055dec82d660c3dda4c9abad486a6af010c6aa9b938432ad",
+    "length": 7012,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "40fdaca4c06e88fbb6f7e456187382dd72239db512e1fab672f83521e9ea252c",
+   "length": 22616
+  }
+ },
+ "3DScanner | European English | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "6d0c566d62abebc6055dec82d660c3dda4c9abad486a6af010c6aa9b938432ad",
+    "length": 7012,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "d5e90de1cf74588c5f3a9bb6ed5220d252bf0765d66cae6e4d09c46069a2a2d6",
+   "length": 22906
+  }
+ },
+ "3DScanner | European English | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ea21c2367b88660bf2dac0ef2f504b0e9080cab2fb8486a26769ddb5486cf3d2",
+    "length": 7469,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "40fdaca4c06e88fbb6f7e456187382dd72239db512e1fab672f83521e9ea252c",
+   "length": 22616
+  }
+ },
+ "3DScanner | European English | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2c8cebb7d637c1dfed9ec0d8c16cea0036707922b9ab16efd590a21106ed1933",
+    "length": 6322,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "30969e27cf61ac14791f37ce76b5a36339527636cf9c7539968d457fffb3bf12",
+   "length": 734
+  }
+ },
+ "3DScanner | European English | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "6d0c566d62abebc6055dec82d660c3dda4c9abad486a6af010c6aa9b938432ad",
+    "length": 7012,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "30969e27cf61ac14791f37ce76b5a36339527636cf9c7539968d457fffb3bf12",
+   "length": 734
+  }
+ },
+ "3DScanner | RU | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "7d99f1466ab5dc900968e4f930ac73bb05ad559f2006ca78237da3d614f9a75b",
+    "length": 8455,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "57b193cd5a41064f4d3f7352000057555610922f9fe068df2ee8da3be10f8ca4",
+   "length": 22612
+  }
+ },
+ "3DScanner | RU | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "a3f346517a024698099de791774c2024deef94e520fb573435e890dbc21f8634",
+    "length": 8754,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "57b193cd5a41064f4d3f7352000057555610922f9fe068df2ee8da3be10f8ca4",
+   "length": 22612
+  }
+ },
+ "3DScanner | RU | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "a3f346517a024698099de791774c2024deef94e520fb573435e890dbc21f8634",
+    "length": 8754,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "6ee41ea9a2560e34cd2d26bdb389dc1d136437dd68c81fdd00fd17384bb026e7",
+   "length": 22902
+  }
+ },
+ "3DScanner | RU | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2f177fca9eda0153d364e248a8dfcadc03d266a87040d9a1a582ba4d707d4f25",
+    "length": 9211,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "57b193cd5a41064f4d3f7352000057555610922f9fe068df2ee8da3be10f8ca4",
+   "length": 22612
+  }
+ },
+ "3DScanner | RU | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "7d99f1466ab5dc900968e4f930ac73bb05ad559f2006ca78237da3d614f9a75b",
+    "length": 8455,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "0002259731df03660717713cd24e8f646f29a2d72b53b6b25f8bdff9ce656dde",
+   "length": 730
+  }
+ },
+ "3DScanner | RU | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "a3f346517a024698099de791774c2024deef94e520fb573435e890dbc21f8634",
+    "length": 8754,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "0002259731df03660717713cd24e8f646f29a2d72b53b6b25f8bdff9ce656dde",
+   "length": 730
+  }
+ },
+ "Center 3D Print | PL | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "3d5583b0a070659dc24ad08c03bc8d26f00aae178621dbb693df8d475688f072",
+    "length": 13347,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "a9182ac3d9770051706db88d52457d6d369fbf531ebb0169fa755fff4e03f66c",
+   "length": 22640
+  }
+ },
+ "Center 3D Print | PL | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2bbabcab3820a962c4b60fe9d59eda3e0e848c769485e2d14a7219c0f5fa7561",
+    "length": 14267,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "a9182ac3d9770051706db88d52457d6d369fbf531ebb0169fa755fff4e03f66c",
+   "length": 22640
+  }
+ },
+ "Center 3D Print | PL | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2bbabcab3820a962c4b60fe9d59eda3e0e848c769485e2d14a7219c0f5fa7561",
+    "length": 14267,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "86db7380120f24bae452e0b3ceaac09e9b39d0e0b7b618d5199399ac67e1e168",
+   "length": 22930
+  }
+ },
+ "Center 3D Print | PL | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "043112ab3bb64c768fb4faf457dd271bcf6d310ae12192086815eff7ba3dacad",
+    "length": 14724,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "a9182ac3d9770051706db88d52457d6d369fbf531ebb0169fa755fff4e03f66c",
+   "length": 22640
+  }
+ },
+ "Center 3D Print | PL | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "3d5583b0a070659dc24ad08c03bc8d26f00aae178621dbb693df8d475688f072",
+    "length": 13347,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "36630bea1c0766b0bb63971e90f5534e0529040c3509eb30eccc1d1b4286812e",
+   "length": 758
+  }
+ },
+ "Center 3D Print | PL | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2bbabcab3820a962c4b60fe9d59eda3e0e848c769485e2d14a7219c0f5fa7561",
+    "length": 14267,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "36630bea1c0766b0bb63971e90f5534e0529040c3509eb30eccc1d1b4286812e",
+   "length": 758
+  }
+ },
+ "Center 3D Print | European English | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "9a69e00db94864c965e7bc640e1ed2297a1799f96cf192ef797789e30298bdf7",
+    "length": 11214,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "9e4cc8584d5b179174a3b3370e29c92b65596931643e86c437369fa950639d85",
+   "length": 22642
+  }
+ },
+ "Center 3D Print | European English | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "5e81f317a7279cb2aa6cbe0fe273539985aeb2bf11f893dd6c2155c7098dffc0",
+    "length": 11904,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "9e4cc8584d5b179174a3b3370e29c92b65596931643e86c437369fa950639d85",
+   "length": 22642
+  }
+ },
+ "Center 3D Print | European English | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "5e81f317a7279cb2aa6cbe0fe273539985aeb2bf11f893dd6c2155c7098dffc0",
+    "length": 11904,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "0f27a45e9a45eb9736b94582eeb182d48d36e0e2ebb6d315797f72b320084ed8",
+   "length": 22932
+  }
+ },
+ "Center 3D Print | European English | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "0a5e9dedf1d022bf3b2d0ee77ca7a3894f23872dd5622a2f09794d1829fce4c6",
+    "length": 12361,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "9e4cc8584d5b179174a3b3370e29c92b65596931643e86c437369fa950639d85",
+   "length": 22642
+  }
+ },
+ "Center 3D Print | European English | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "9a69e00db94864c965e7bc640e1ed2297a1799f96cf192ef797789e30298bdf7",
+    "length": 11214,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "39c3d96a9f1ab7b3de88abba432582eedd989de4b5807cfb01138b949dbb274c",
+   "length": 760
+  }
+ },
+ "Center 3D Print | European English | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "5e81f317a7279cb2aa6cbe0fe273539985aeb2bf11f893dd6c2155c7098dffc0",
+    "length": 11904,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "39c3d96a9f1ab7b3de88abba432582eedd989de4b5807cfb01138b949dbb274c",
+   "length": 760
+  }
+ },
+ "Center 3D Print | DE | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "e7c6f8bde500dfe3b2accf1b63a8e50d8185e3b853c896fb851dcaf8ccfb5599",
+    "length": 13347,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "549aca921dff0773d0cbd93e0395eb48977cba91fc3961cb6217a671d8fe820f",
+   "length": 22637
+  }
+ },
+ "Center 3D Print | DE | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "bd894c46c334d808b5bc648aafc4e2953d801fdceb1bd4923857233c369d5b46",
+    "length": 13658,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "549aca921dff0773d0cbd93e0395eb48977cba91fc3961cb6217a671d8fe820f",
+   "length": 22637
+  }
+ },
+ "Center 3D Print | DE | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "bd894c46c334d808b5bc648aafc4e2953d801fdceb1bd4923857233c369d5b46",
+    "length": 13658,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "8dd88867df4d907ba60525de00e295f5b4c0a3688a67591e2f2a5632a12bc3ab",
+   "length": 22927
+  }
+ },
+ "Center 3D Print | DE | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "85725dfa8bcbd6c1b3dec1ef07847458e278925fbcb1853fa0db7a633068c6d1",
+    "length": 14115,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "549aca921dff0773d0cbd93e0395eb48977cba91fc3961cb6217a671d8fe820f",
+   "length": 22637
+  }
+ },
+ "Center 3D Print | DE | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "e7c6f8bde500dfe3b2accf1b63a8e50d8185e3b853c896fb851dcaf8ccfb5599",
+    "length": 13347,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "bd8bad80eec91383440b42b54fb064c4da05b70026316084080b1cb18382141c",
+   "length": 755
+  }
+ },
+ "Center 3D Print | DE | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "bd894c46c334d808b5bc648aafc4e2953d801fdceb1bd4923857233c369d5b46",
+    "length": 13658,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "bd8bad80eec91383440b42b54fb064c4da05b70026316084080b1cb18382141c",
+   "length": 755
+  }
+ },
+ "Center 3D Print | RU | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ec389e1af6d7a76d394eca9d4bc14d605a4c5599bf8873c1b84240ecea82793f",
+    "length": 13347,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "f23145b481a6f36e76d4866500b38d8e5a1192282c2ae575fa66791da50c7353",
+   "length": 22640
+  }
+ },
+ "Center 3D Print | RU | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "f6ffd5a398491bf2ffc933972d824cd2529678160238fdbc6b817e17faaef469",
+    "length": 13646,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "f23145b481a6f36e76d4866500b38d8e5a1192282c2ae575fa66791da50c7353",
+   "length": 22640
+  }
+ },
+ "Center 3D Print | RU | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "f6ffd5a398491bf2ffc933972d824cd2529678160238fdbc6b817e17faaef469",
+    "length": 13646,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "b0734539c179d54efa1c8441eb63c74f71506484ab1ad7da369f6fc518ad466d",
+   "length": 22930
+  }
+ },
+ "Center 3D Print | RU | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "75b3cc96331c5a9594ead49e57253b2f78db5a74a179a36ee765e9a203de2fdb",
+    "length": 14103,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "f23145b481a6f36e76d4866500b38d8e5a1192282c2ae575fa66791da50c7353",
+   "length": 22640
+  }
+ },
+ "Center 3D Print | RU | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ec389e1af6d7a76d394eca9d4bc14d605a4c5599bf8873c1b84240ecea82793f",
+    "length": 13347,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "7115a44b63ad1b4c25c546b30cfd6cb8c44613f0d10510a1b59529477f2db19d",
+   "length": 758
+  }
+ },
+ "Center 3D Print | RU | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "f6ffd5a398491bf2ffc933972d824cd2529678160238fdbc6b817e17faaef469",
+    "length": 13646,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "7115a44b63ad1b4c25c546b30cfd6cb8c44613f0d10510a1b59529477f2db19d",
+   "length": 758
+  }
+ },
+ "Drukarka 3D | PL | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "0b816968c2225ba4fd918e1f7881b7e16432370d53f97f6cac5623f9f9a2f206",
+    "length": 8455,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "081d847d9ff04c27e059ca14f4351315d57cc2b7c537e0f69f3d913106788cb0",
+   "length": 22620
+  }
+ },
+ "Drukarka 3D | PL | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "d406d9d09614324da676faa32ec7b951812d94c0bc83e897d739d8f34cbea684",
+    "length": 9375,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "081d847d9ff04c27e059ca14f4351315d57cc2b7c537e0f69f3d913106788cb0",
+   "length": 22620
+  }
+ },
+ "Drukarka 3D | PL | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "d406d9d09614324da676faa32ec7b951812d94c0bc83e897d739d8f34cbea684",
+    "length": 9375,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "50dd5d9f14e40dd28259ca857bff0b6acedbcc547e9c12026075ac5dc72c5dd8",
+   "length": 22910
+  }
+ },
+ "Drukarka 3D | PL | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "0047869510d1535f5a9650b22d71722973604feb07d0c79bc9c1d6bd59307161",
+    "length": 9832,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "081d847d9ff04c27e059ca14f4351315d57cc2b7c537e0f69f3d913106788cb0",
+   "length": 22620
+  }
+ },
+ "Drukarka 3D | PL | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "0b816968c2225ba4fd918e1f7881b7e16432370d53f97f6cac5623f9f9a2f206",
+    "length": 8455,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "4f99311e2704e6e9e2845ba503b4ccb3ade84b6471957c7c7ed5af8a63680107",
+   "length": 738
+  }
+ },
+ "Drukarka 3D | PL | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "d406d9d09614324da676faa32ec7b951812d94c0bc83e897d739d8f34cbea684",
+    "length": 9375,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "4f99311e2704e6e9e2845ba503b4ccb3ade84b6471957c7c7ed5af8a63680107",
+   "length": 738
+  }
+ },
+ "EXPERT3D | European English | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "fcaa68d64c09146aeecf02d209903328131fa74220e12df61782f32723d1d1ee",
+    "length": 8353,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "13f31ccf21d6a7c9068cf80c1cea831993dc6f5fc95ae57460b94b622d3fe744",
+   "length": 22633
+  }
+ },
+ "EXPERT3D | European English | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "3e1bb93ce4dedee5af6a69d7d8357b22813d1f5d24938a3a12b4f6cdeeb3fbe5",
+    "length": 9043,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "13f31ccf21d6a7c9068cf80c1cea831993dc6f5fc95ae57460b94b622d3fe744",
+   "length": 22633
+  }
+ },
+ "EXPERT3D | European English | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "3e1bb93ce4dedee5af6a69d7d8357b22813d1f5d24938a3a12b4f6cdeeb3fbe5",
+    "length": 9043,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "d4680f257c3e16244c36b982858c2d011e79cc16ac2621728c9b4292cc208ecf",
+   "length": 22923
+  }
+ },
+ "EXPERT3D | European English | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "184e5bdceb9601e71ebe87ddd18d8ac80da5f51260d1c50ecaeb9dac2c2ecf02",
+    "length": 9500,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "13f31ccf21d6a7c9068cf80c1cea831993dc6f5fc95ae57460b94b622d3fe744",
+   "length": 22633
+  }
+ },
+ "EXPERT3D | European English | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "fcaa68d64c09146aeecf02d209903328131fa74220e12df61782f32723d1d1ee",
+    "length": 8353,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "e328febdaf8630d7f6666056f0a1fc2abcd080ff5848198e96a1e7de9bc31eeb",
+   "length": 751
+  }
+ },
+ "EXPERT3D | European English | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "3e1bb93ce4dedee5af6a69d7d8357b22813d1f5d24938a3a12b4f6cdeeb3fbe5",
+    "length": 9043,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "e328febdaf8630d7f6666056f0a1fc2abcd080ff5848198e96a1e7de9bc31eeb",
+   "length": 751
+  }
+ },
+ "EXPERT3D | ES | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "891e151ea51208918488e19bc1c88c8e7df6b78b0ca719aaf383ff4a6e2479cc",
+    "length": 7848,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "a9f6c1c840570f53408bbedd71adedcf3f786f2a08a61d398c1cc333ce507fc3",
+   "length": 22631
+  }
+ },
+ "EXPERT3D | ES | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "70b6c20da2197b1a5602c859fef4080f3cecc28aedc8bc5fd4cac88c55aa64a6",
+    "length": 8401,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "a9f6c1c840570f53408bbedd71adedcf3f786f2a08a61d398c1cc333ce507fc3",
+   "length": 22631
+  }
+ },
+ "EXPERT3D | ES | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "70b6c20da2197b1a5602c859fef4080f3cecc28aedc8bc5fd4cac88c55aa64a6",
+    "length": 8401,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "67cb11b46086bd8ef71023ab58d7a30bc19d230f7b752fe61497f143aca2f108",
+   "length": 22921
+  }
+ },
+ "EXPERT3D | ES | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "c85ab066195e130edfff867490329ee936830c4dfbad356e097e0feb98418f69",
+    "length": 8858,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "a9f6c1c840570f53408bbedd71adedcf3f786f2a08a61d398c1cc333ce507fc3",
+   "length": 22631
+  }
+ },
+ "EXPERT3D | ES | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "891e151ea51208918488e19bc1c88c8e7df6b78b0ca719aaf383ff4a6e2479cc",
+    "length": 7848,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "bf4f1356841f35b16845620cd9d6da78a9c0dbdb0722871e7c829049033f1719",
+   "length": 749
+  }
+ },
+ "EXPERT3D | ES | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "70b6c20da2197b1a5602c859fef4080f3cecc28aedc8bc5fd4cac88c55aa64a6",
+    "length": 8401,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "bf4f1356841f35b16845620cd9d6da78a9c0dbdb0722871e7c829049033f1719",
+   "length": 749
+  }
+ },
+ "EXPERT3D | PT | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "fd20b2eec5c654d3429ffbf53536fcbedabcc31b8b5abf58e84ae7961f1996be",
+    "length": 13211,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "cacff62e9b331634846424afd7ffd8003e092a5abefbe6a6972ea67b5561be84",
+   "length": 22630
+  }
+ },
+ "EXPERT3D | PT | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "fc1cd02d02b4b68eaae756049a5322945209dd7a166b872d4e5427ee367d92e2",
+    "length": 13536,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "cacff62e9b331634846424afd7ffd8003e092a5abefbe6a6972ea67b5561be84",
+   "length": 22630
+  }
+ },
+ "EXPERT3D | PT | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "fc1cd02d02b4b68eaae756049a5322945209dd7a166b872d4e5427ee367d92e2",
+    "length": 13536,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "1cb0922df393c9cc59f2db2bdbe4983fbb5d31b9a577ac4bf0dba9c03ced6b4b",
+   "length": 22920
+  }
+ },
+ "EXPERT3D | PT | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2fcaf25fc5082613d88a71c823e9f834e4e675d0917337ae238b397e70ffacdd",
+    "length": 13993,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "cacff62e9b331634846424afd7ffd8003e092a5abefbe6a6972ea67b5561be84",
+   "length": 22630
+  }
+ },
+ "EXPERT3D | PT | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "fd20b2eec5c654d3429ffbf53536fcbedabcc31b8b5abf58e84ae7961f1996be",
+    "length": 13211,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "a07a56c35609795539d363ea8fc0bde0f98a482d191d47ec38dd26abc4d33b76",
+   "length": 748
+  }
+ },
+ "EXPERT3D | PT | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "fc1cd02d02b4b68eaae756049a5322945209dd7a166b872d4e5427ee367d92e2",
+    "length": 13536,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "a07a56c35609795539d363ea8fc0bde0f98a482d191d47ec38dd26abc4d33b76",
+   "length": 748
+  }
+ },
+ "Expert-3DPrinter | American English | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "8bc040d2f1fd5ed338c8e8f6acccdbfdaa1ecd375be7d48cf22cc3f28f916f46",
+    "length": 7314,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "2077015c417e47f9e48441cfab6518b7a5d3e2962b9e7c8b366d80b421e71efe",
+   "length": 22623
+  }
+ },
+ "Expert-3DPrinter | American English | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2f193c2ba9e1a744200ec3bbfaa3bd8f6a737e7c7047d475f33a3422e28e90e7",
+    "length": 7485,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "2077015c417e47f9e48441cfab6518b7a5d3e2962b9e7c8b366d80b421e71efe",
+   "length": 22623
+  }
+ },
+ "Expert-3DPrinter | American English | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2f193c2ba9e1a744200ec3bbfaa3bd8f6a737e7c7047d475f33a3422e28e90e7",
+    "length": 7485,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "f351a860eb177c78ee9cd2bae1d5971382e33086a0e2c30eca089763533302db",
+   "length": 22913
+  }
+ },
+ "Expert-3DPrinter | American English | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "f907a8b51fc584a22bc5a6dbdac5d466edb741b66921ed06b3f747233cd650f9",
+    "length": 7942,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "2077015c417e47f9e48441cfab6518b7a5d3e2962b9e7c8b366d80b421e71efe",
+   "length": 22623
+  }
+ },
+ "Expert-3DPrinter | American English | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "8bc040d2f1fd5ed338c8e8f6acccdbfdaa1ecd375be7d48cf22cc3f28f916f46",
+    "length": 7314,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "f1297081dd76e481b4773a8204bf089f5ddf2de8c23f044719fdb0e79adeccdf",
+   "length": 741
+  }
+ },
+ "Expert-3DPrinter | American English | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "2f193c2ba9e1a744200ec3bbfaa3bd8f6a737e7c7047d475f33a3422e28e90e7",
+    "length": 7485,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "f1297081dd76e481b4773a8204bf089f5ddf2de8c23f044719fdb0e79adeccdf",
+   "length": 741
+  }
+ },
+ "Expert-3DPrinter | American Spanish | corpus/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ca113200c2fc3cef0165085a867686ce75dd07ec146596075c07f3b55ec32e71",
+    "length": 7387,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "b87a3109476e89d3301a98c4a4bec9540c20719d8137b67fc75d555adba7e878",
+   "length": 22630
+  }
+ },
+ "Expert-3DPrinter | American Spanish | corpus/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ca113200c2fc3cef0165085a867686ce75dd07ec146596075c07f3b55ec32e71",
+    "length": 7387,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "b87a3109476e89d3301a98c4a4bec9540c20719d8137b67fc75d555adba7e878",
+   "length": 22630
+  }
+ },
+ "Expert-3DPrinter | American Spanish | corpus/source-locale+localized-name": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ca113200c2fc3cef0165085a867686ce75dd07ec146596075c07f3b55ec32e71",
+    "length": 7387,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "f0b642562e0b5a267b02b891454885039b381b13d2bc8c3bb6601784725c18a5",
+   "length": 22920
+  }
+ },
+ "Expert-3DPrinter | American Spanish | corpus/simplified-template+source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "c26311fe2abf2c52b2e9d39a83a1e4a0bd1e53e05588fa2c6a9d8c6ab011c7ac",
+    "length": 7844,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "b87a3109476e89d3301a98c4a4bec9540c20719d8137b67fc75d555adba7e878",
+   "length": 22630
+  }
+ },
+ "Expert-3DPrinter | American Spanish | snippet/no-opts": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ca113200c2fc3cef0165085a867686ce75dd07ec146596075c07f3b55ec32e71",
+    "length": 7387,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "78152f24fdf43a4dd9cccb9023f8d28a1570d56331fb5f0246d41c2052b6a0d2",
+   "length": 748
+  }
+ },
+ "Expert-3DPrinter | American Spanish | snippet/source-locale": {
+  "systemBlocks": [
+   {
+    "sha256": "b01074fa9f4e345da920f208f2391183c026a1d4290dc5281eb4d78c8bcb5433",
+    "length": 45387,
+    "cache": true
+   },
+   {
+    "sha256": "ca113200c2fc3cef0165085a867686ce75dd07ec146596075c07f3b55ec32e71",
+    "length": 7387,
+    "cache": true
+   }
+  ],
+  "userContent": {
+   "sha256": "78152f24fdf43a4dd9cccb9023f8d28a1570d56331fb5f0246d41c2052b6a0d2",
+   "length": 748
+  }
+ }
+}

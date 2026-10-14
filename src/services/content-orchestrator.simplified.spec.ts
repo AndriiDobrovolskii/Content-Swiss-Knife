@@ -8,6 +8,13 @@
  * or Full, if and only if FAQ source materials (supplemental content) were provided, for every store
  * language (and for uk-UA in UA-only mode); otherwise it is skipped.
  *
+ * US-8.1 REWRITE OF THE R6 BLOCK (task breakdown T6/T7, "R6 block rewritten by TEST_WRITING"; spec FR-1,
+ * FR-2, FR-4). The data-driven TRIGGER is unchanged (the NO-FAQ-materials and whitespace tests below are
+ * untouched). What changed is the FAQ's SHAPE: it is now ONE uk-UA generation call plus one translation
+ * per other store language, in Generator AND in UA-only mode, instead of one independent generation per
+ * language (Generator) or uk-UA only (UA-only). See the before/after list in the test generation report.
+ * This file stays a TABLE B spec: it imports nothing a task of this Story creates.
+ *
  * DI, NOT TestBed — see content-orchestrator.ua-doc-pipeline.spec.ts. The LLM is stubbed at the
  * boundary; the orchestrator, gate, renderer and validators are real.
  */
@@ -41,6 +48,7 @@ const NAME = 'eSUN PLA+';
 const SPECS_UA = '| Параметр | Значення |\n|---|---|\n| Діаметр 1 | 1,75 мм |\n| Вага 1 | 1 кг |\n| Температура 1 | 200 °C |';
 const FAQ_HTML = '<h3>Чи потрібен підігрів столу?</h3><p>Так, рекомендовано.</p>';
 const STUB_HTML = '<p>Опис продукту для тесту.</p>';
+const isFaqTranslationLabel = (label: string) => label.startsWith('FAQ') && !label.startsWith('FAQ (');
 const EXPERT3D_CORPUS_DOC = JSON.parse(
   readFileSync(join(process.cwd(), 'test', 'fixtures', 'corpus', 'expert3d-ortur-h20-20w.doc.json'), 'utf8'),
 );
@@ -88,6 +96,9 @@ function harness(site: ProductInput['website'], docs: unknown[] = [], htmls: str
   });
   const text = vi.fn(async (_p: PromptPayload, _t?: boolean, meta?: UsageMeta): Promise<string> => {
     if (meta?.taskLabel?.startsWith('FAQ (')) return FAQ_HTML;
+    // US-8.1: a FAQ TRANSLATION call (label starts with "FAQ" but is not a generation call) must come back with
+    // the master's structure (1 question, 1 paragraph), or structural parity rejects it and the language is skipped.
+    if (isFaqTranslationLabel(meta?.taskLabel ?? '')) return FAQ_HTML;
     if (meta?.taskLabel === 'HTML (base)') return htmls[Math.min(htmlN++, htmls.length - 1)];
     return STUB_HTML;
   });
@@ -308,10 +319,14 @@ describe('FR-19 wiring — every translation call carries the preserve-omissions
 
 // ── R6: the FAQ artifact is data-driven, not template-driven ────────────────────────────────────
 
-describe('R6 (human resolution) — FAQ artifact: data-driven, all store languages, any template', () => {
+describe('R6 (human resolution) — FAQ artifact: data-driven, one uk-UA master translated into all store languages, any template', () => {
   const langs = STORE_REGISTRY.EXPERT3D.languages;
+  const translationLangs = langs.filter(l => l !== 'uk-UA');
+  /** FAQ GENERATION calls (US-8.1: exactly the uk-UA master). */
   const faqLabels = (h: Harness) => h.textCalls(l => l.startsWith('FAQ (')).map(c => c.meta.taskLabel).sort();
-  const expectedLabels = langs.map(l => `FAQ (${l})`).sort();
+  /** FAQ TRANSLATION calls: the language of each, from the ISO code in its label. */
+  const faqTranslationIsos = (h: Harness) => h.textCalls(isFaqTranslationLabel)
+    .map(c => c.meta.taskLabel!.match(/\(([^)]+)\)\s*$/)?.[1] ?? c.meta.taskLabel!).sort();
 
   const TEMPLATE_RUNS: Array<[string, Partial<ProductInput>, unknown]> = [
     ['Filaments/resins/powders', { templateId: 'filaments-resins-powders' }, without(filamentsDoc(), 'specs')],
@@ -321,11 +336,12 @@ describe('R6 (human resolution) — FAQ artifact: data-driven, all store languag
   ];
 
   for (const [label, extra, doc] of TEMPLATE_RUNS) {
-    it(`${label} + FAQ source materials: an FAQ artifact is generated for EVERY store language`, async () => {
+    it(`${label} + FAQ source materials: ONE uk-UA FAQ is generated and translated into every other store language`, async () => {
       const h = harness(EXPERT3D, [doc]);
       h.orchestrator.maxRepairs.set(0);
       await h.orchestrator.generate(input({ ...extra, supplementalContent: 'Q: does it need a heated bed? A: yes, 60 °C.' }));
-      expect(faqLabels(h)).toEqual(expectedLabels);
+      expect(faqLabels(h)).toEqual(['FAQ (uk-UA)']);
+      expect(faqTranslationIsos(h)).toEqual([...translationLangs].sort());
       expect(Object.keys(h.orchestrator.content().faqArtifacts ?? {}).sort()).toEqual([...langs].sort());
       for (const html of Object.values(h.orchestrator.content().faqArtifacts ?? {})) expect(html.startsWith('<')).toBe(true);
     });
@@ -389,12 +405,13 @@ describe('R6 (human resolution) — FAQ artifact: data-driven, all store languag
   });
 
   describe('UA-only mode (generateUaContent)', () => {
-    it('with FAQ source materials: exactly one uk-UA FAQ artifact, for a simplified template', async () => {
+    it('with FAQ source materials: ONE uk-UA FAQ generation, translated into every other store language, for a simplified template', async () => {
       const h = harness(EXPERT3D, [sparePartsDoc()]);
       h.orchestrator.maxRepairs.set(0);
       await h.orchestrator.generateUaContent(input({ templateId: 'spare-parts', supplementalContent: 'Faq material.' }));
       expect(faqLabels(h)).toEqual(['FAQ (uk-UA)']);
-      expect(Object.keys(h.orchestrator.content().faqArtifacts ?? {})).toEqual(['uk-UA']);
+      expect(faqTranslationIsos(h)).toEqual([...translationLangs].sort());
+      expect(Object.keys(h.orchestrator.content().faqArtifacts ?? {}).sort()).toEqual([...langs].sort());
     });
     it('without FAQ source materials: skipped, for a simplified template', async () => {
       const h = harness(EXPERT3D, [sparePartsDoc()]);
