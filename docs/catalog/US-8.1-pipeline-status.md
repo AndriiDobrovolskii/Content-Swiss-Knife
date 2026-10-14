@@ -39,7 +39,8 @@ open_decisions_blocking: false
 | T3 `faq-html.ts`: `convertStrongToB`, `validateFaqShape` | angular | DONE | c7197f0 |
 | T4 `validateFaqStructuralParity` in `structural-parity.ts` | angular | DONE | d09f092 |
 | T5 `faq-gate.ts`: `buildFaqValidator`, `isFaqStorable`, `FAQ_MAX_ATTEMPTS` | angular | DONE | 54ee224 |
-| T6 to T13 | - | NOT STARTED | - |
+| T6 `runFaqPipeline` / `storeFaq` in the orchestrator, used by `generate()` | angular | IMPLEMENTED, 6 owned tests RED (test defect, loop-back `changes_required_tests`) | f3343e1 |
+| T7 to T13 | - | NOT STARTED | - |
 
 ## T1 - section 9 stop and approval record
 
@@ -94,6 +95,18 @@ open_decisions_blocking: false
 - Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 12 diagnostics remain (13 post-T4 minus the 1 TS2307 formerly in `faq-gate.spec.ts`), all in table A specs owned by T8, T9, T10; `faq-gate.spec.ts` carries none. `npm run lint` / `npm run build` are judged by this gate until T10.
 - `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
 - `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
+
+## T6 - results (real runs)
+
+- File: `src/services/content-orchestrator.service.ts` only (not FROZEN). `git show --stat f3343e1`: 1 file, 167 insertions, 67 deletions. Added `runFaqPipeline` (trigger FR-5, SP-3 skip with `console.warn`, master, store-or-skip, sequential translations, outer try/catch so it never throws), `runFaqGate` (one artifact through `runRepairGate`, `maxRepairs = FAQ_MAX_ATTEMPTS - 1`, `threw` reset at the start of every `produce`, `convertStrongToB` after `stripCodeFences` and around `repairBlocks`, own try/catch), `faqTranslationPayload` (the single OD-6 seam) and `storeFaq` (re-applies `convertStrongToB`). `generate()` Step 5 (the inline per-language FAQ loop) is replaced by `await this.runFaqPipeline(input, useThinking)`, before `runOutputValidation`. `generateUaContent()` Step 4 is untouched (T7). Translation targets come from `getLangsForStore(...).transLangs` (Task C keys) mapped back with `taskLangToIso` for labels and `faqArtifacts` keys. No literal language list or currency symbol, no retrieval call, no prompt text in the service.
+- `npx vitest run src/services/content-orchestrator.faq-pipeline.spec.ts -t "Generator \(generate\)"`: 249 passed, 6 failed, 285 skipped (by the filter). The 6 failures are exactly `Generator (generate) > AGENTS.md section 4 at normaliser level (FR-21, FR-23) > FR-21: <store> - the English translation of a number adjoined to a unit is stored as "1.75 mm"`, one per store with an `en-*` language (3DDevice, 3DPrinter, 3DScanner, Center 3D Print, EXPERT3D, Expert-3DPrinter), at `faq-pipeline.spec.ts:404`.
+- `npx vitest run src/services/content-orchestrator.simplified.spec.ts -t "R6"`: 13 passed, 1 failed; the failure is the UA-only test owned by T7 ("UA-only mode ... ONE uk-UA FAQ generation, translated into every other store language"). The 4 Generator R6 tests pass. Whole file: 28 passed, 1 failed.
+- **Test defect (not fixed in code, test files are not owned by the builder).** Expected `'1.75 mm'` (spec line 404, bytes `31 2e 37 35 20 6d 6d`, an ASCII space `20`); received `"<h3>Which filament?</h3><p>Use 1.75 mm filament.</p>"` where the space is U+00A0 (`a0`, confirmed by a probe of the stored text). The NBSP is inserted by `src/utils/number-format-fixer.ts` (`NBSP` between a digit and its unit, lines 154-166) for every locale, on purpose, and it is the same chain the description translation loop runs (spec FR-21: "the deterministic number/unit-spacing normalisation that the FAQ path applies today"). The master FR-21 guard of the same spec accepts it (`/1[.,]75\s(?:mm|мм)/`); only the English translation assertion uses a literal ASCII space. Stripping the NBSP in the FAQ path would diverge from the description path and is not in the plan. The UA-mode twin of this test fails the same way and will do so at T7.
+- Whole `test:logic` (`vitest run`, JSON reporter, compared test by test against a stash of the post-T5 tree): failed 486 -> 320, passed 5696 -> 5862 (+166), 3 skipped; 0 tests that passed post-T5 now fail. The 320 remaining failures: `content-orchestrator.faq-pipeline.spec.ts` 187 (6 this defect in Generator mode, 154 UA groups and 6 UA FR-21 twins for T7, 21 FR-19 parity tests for T7), `content-orchestrator.faq-standalone.spec.ts` 112 (T8), `app.component.template-wiring.spec.ts` 20 (T9/T11/T12), `content-orchestrator.simplified.spec.ts` 1 (T7).
+- Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 12 diagnostics remain, all in those three table A specs owned by T8, T9, T10 (unchanged from post-T5); `faq-pipeline.spec.ts` and `simplified.spec.ts` carry none. `npm run lint` / `npm run build` are judged by this gate until T10.
+- `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
+- `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
+- Outcome: the implementation is complete and committed; the 6 Generator FR-21 English-translation tests cannot pass without changing a test, so the task is reported as CHANGES_REQUIRED with loop-back `changes_required_tests`. After the test fix T6 needs a re-run, not a rebuild.
 
 ## Notes
 
