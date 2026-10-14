@@ -50,7 +50,10 @@ const STRONG_TAG = /<(\/?)strong(?=[\s/>])/gi;
 /** One tag: `<name attrs>`, `</name>`; quoted attribute values may contain `>`. */
 const TAG = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
 
-const MARKDOWN_BOLD = /\*\*[^*\n]+\*\*/;
+/** One exact permitted tag: no attributes, optional whitespace before ">" (the fail-closed check, B-1). */
+const PERMITTED_TAG = /<\/?(?:h3|p|b|ul|li)\s*>/gi;
+
+const MARKDOWN_BOLD =/\*\*[^*\n]+\*\*/;
 const MARKDOWN_HEADING = /^[ \t]*#{1,6}[ \t]+\S/m;
 const MARKDOWN_FENCE = /```/;
 
@@ -118,6 +121,14 @@ export function validateFaqShape(html: string, context: string): ValidationIssue
   }
   if (stack.length > 0) {
     note(RULE_NOT_WELL_FORMED, `unclosed element(s): ${stack.map(n => `<${n}>`).join(', ')}`);
+  }
+
+  // Fail closed (security finding B-1): the pass above only sees tags it can tokenize. A tag with an
+  // unpaired quote, a missing ">", a comment, a processing instruction or CDATA is invisible to it but a
+  // browser would still build it. Once the exact permitted tags are gone no "<" may remain: a literal "<"
+  // in text must be written as &lt;.
+  if (html.replace(PERMITTED_TAG, '').includes('<')) {
+    note(RULE_NOT_WELL_FORMED, 'markup that is not a plain <h3>, <p>, <b>, <ul> or <li> tag (use &lt; for a literal "<")');
   }
 
   if (MARKDOWN_BOLD.test(html)) note(RULE_MARKDOWN_SYNTAX, 'Markdown bold (**...**) must not appear in the FAQ');
