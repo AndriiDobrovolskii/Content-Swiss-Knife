@@ -10,7 +10,8 @@ import { buildImageAltPrompt } from '../prompts/image-alt';
 import { parseVisionResult, visionResultToEntryPatch } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
 import { formatRepairReportMarkdown } from '../utils/repair-gate';
-import { getStore, bcp47ToTaskCLang, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
+import { TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
+import { deriveTabDescriptors } from './tab-descriptors';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
@@ -583,50 +584,20 @@ export class AppComponent {
   // SEO is rendered separately, always last.
   tabDescriptors = computed<TabDescriptor[]>(() => {
     const c = this.content();
-    const storeName = c.website?.name ?? this.selectedWebsite()?.name ?? '';
-    if (!storeName) return [];
-
-    // ua-generator: single uk-UA description tab + optional uk-UA FAQ tab. The 'seo' tab is
-    // added separately by _autoSelectTab (same mechanism as every other mode).
-    if (this.appMode() === 'ua-generator') {
-      const tabs: TabDescriptor[] = [
-        { id: 'html', label: this.uiLabels().uaGenerator, type: 'english', color: 'purple', iso: 'uk-UA', isFaq: false },
-      ];
-      if (c.faqArtifacts?.['uk-UA']) {
-        tabs.push({ id: 'faq-html', label: 'FAQ', type: 'faq-english', color: 'green', iso: 'uk-UA', isFaq: true });
-      }
-      return tabs;
-    }
-
-    const store = getStore(storeName);
     const labels = this.uiLabels();
-
-    // The master locale for THIS generated content. Falls back to the store's first en-*
-    // language (historical default) for content generated before mainHtmlLocale was tracked,
-    // e.g. SEO-only/Slug-only runs where mainHtmlUa is empty anyway.
-    const masterIso = c.mainHtmlLocale ?? store.languages.find(iso => iso.startsWith('en-')) ?? store.languages[0];
-
-    const tabs: TabDescriptor[] = [];
-
-    for (const iso of store.languages) {
-      if (iso === masterIso) {
-        tabs.push({ id: 'html', label: this.baseOutputLabel(), type: 'english', color: 'blue', iso, isFaq: false });
-        if (c.faqArtifacts?.[iso]) {
-          tabs.push({ id: 'faq-html', label: this.baseFaqTabLabel(), type: 'faq-english', color: 'green', iso, isFaq: true });
-        }
-        continue;
-      }
-
-      const taskKey = bcp47ToTaskCLang(iso, store.group);
-      if (!c.translations[taskKey]) continue;
-
-      tabs.push({ id: `trans-${taskKey}`, label: `${taskKey} ${labels.translation}`, type: 'translation', color: 'purple', iso, taskKey, isFaq: false });
-      if (c.faqArtifacts?.[iso]) {
-        tabs.push({ id: `faq-trans-${iso}`, label: `${taskKey} FAQ`, type: 'faq-translation', color: 'green', iso, taskKey, isFaq: true });
-      }
-    }
-
-    return tabs;
+    return deriveTabDescriptors({
+      appMode: this.appMode(),
+      storeName: c.website?.name ?? this.selectedWebsite()?.name ?? '',
+      mainHtmlLocale: c.mainHtmlLocale,
+      translations: c.translations,
+      faqArtifacts: c.faqArtifacts,
+      labels: {
+        uaGenerator: labels.uaGenerator,
+        translation: labels.translation,
+        baseOutput: this.baseOutputLabel(),
+        baseFaqTab: this.baseFaqTabLabel(),
+      },
+    });
   });
 
   // If the active tab disappears (e.g. a FAQ artifact wasn't generated), fall back to the
@@ -636,7 +607,7 @@ export class AppComponent {
     const mode = this.appMode();
     if (tabs.length === 0) return;
     const ids = new Set(tabs.map(t => t.id));
-    if (mode !== 'slug-generator') ids.add('seo');
+    if (mode !== 'slug-generator' && mode !== 'faq-generator') ids.add('seo');
     if (mode === 'slug-generator') ids.add('slugs');
     if (!ids.has(this.activeTab())) {
       this.activeTab.set(mode === 'seo-generator' ? 'seo' : mode === 'slug-generator' ? 'slugs' : tabs[0].id);
