@@ -141,9 +141,20 @@ open_decisions_blocking: false
 - `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
 - Outcome: T9 complete, one commit (e8dcf56), no test file touched.
 
+## T10 - results (real runs)
+
+- Files (`git show --stat 3e9db41`: 2 files, 105 insertions, 45 deletions; none FROZEN): `src/app/tab-descriptors.ts` (new: `TabDescriptorLabels`, `TabDescriptorContext`, `deriveTabDescriptors`; resolves the store with `getStore` and the task key with `bcp47ToTaskCLang`, no literal language list) and `src/app/app.component.ts` (the `tabDescriptors` computed now only gathers the context and delegates; `_autoSelectTab` skips `'seo'` for `faq-generator`; the two now-unused `getStore` / `bcp47ToTaskCLang` imports were dropped, `deriveTabDescriptors` imported). `ua-generator` returns the description tab plus a FAQ tab per language with a `faqArtifacts` entry (uk-UA first, `faq-html`, then `faq-trans-${iso}` in `store.languages` order); `faq-generator` returns FAQ tabs only (`faq-html` labelled `labels.baseFaqTab`).
+- Move-only check (plan R10), run before and after. Before: `sed -n 583,629p src/app/app.component.ts` saved (47 lines, identical sha1 to `git show HEAD:...`). After: the non-`ua-generator` body of the old computed (HEAD lines 604-629, from the "master locale" comment to `return tabs;`) was compared with the matching block of `tab-descriptors.ts` after whitespace stripping and only the substitutions `this.baseOutputLabel()` -> `labels.baseOutput`, `this.baseFaqTabLabel()` -> `labels.baseFaqTab`, `c.faqArtifacts` -> `faqArtifacts`, `c.translations` -> `ctx.translations`, `c.mainHtmlLocale` -> `ctx.mainHtmlLocale`: `diff` printed nothing (MOVE_ONLY_IDENTICAL). Loop order, ids, labels, colors and the `continue` condition are unchanged. `git diff -w --color-moved=zebra` cannot show the relocation (the code moved to a new file) so it shows the deletion in `app.component.ts` only. The Generator-mode literals in `tab-descriptors.spec.ts` were not touched.
+- `npx vitest run src/app/tab-descriptors.spec.ts`: `Tests  51 passed (51)`.
+- Whole `test:logic` (`vitest run`), post-T9 vs post-T10: failed 18 -> 17, passed 6185 -> 6237 (+52 = 51 `tab-descriptors` tests + the pin "_autoSelectTab does not add the SEO tab id for faq-generator"), 3 skipped; `Test Files  1 failed | 183 passed (184)`. Verified by diffing the failing-test names against a stashed run of the T9 state: the only difference is that one pin; nothing that passed before now fails. The 17 remaining failures are all in `app.component.template-wiring.spec.ts` (T11/T12).
+- Compile gate with the EMPTY allowlist: `npm run lint` (`tsc --noEmit`) exit 0, zero diagnostics; `npm run build` (`ng build`) exit 0 (only the existing js-beautify / jszip "not ESM" warnings).
+- `npm run test:components` (`ng test --watch=false`, first attempt now that the program compiles): exit 0, `Test Files  2 passed (2)`, `Tests  32 passed (32)`. It ran for real; no fix was needed or made.
+- `bash arch-guard.sh`: exit 0, all checks passed. No FROZEN file touched, no `--rebaseline`.
+- Outcome: T10 complete, one commit (3e9db41), no test file touched.
+
 ## Notes
 
-- Test components are accepted as unevaluated until T10/QUALITY_GATE (user decision); no stub was added.
+- Test components were accepted as unevaluated until T10 (user decision, no stub added); first real run at T10: 2 files, 32 tests passed.
 - No test file, fixture, golden or coverage setting was modified.
 - Not edited: `master-system-prompt.ts`, `constants.ts`, `task-a.ts`, `task-b.ts`, `output-validator.ts`, any `.spec.ts`.
 - `.arch-guard-checksums` is hashed from the working-copy bytes (the file `task-c.ts` is CRLF in this checkout); the edit preserved the existing CRLF line endings.
