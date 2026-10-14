@@ -1640,56 +1640,11 @@ export class ContentOrchestratorService {
       this.repairReport.update(r => [...r, toArtifactReport('SEO metadata', seoResult)]);
       this.content.update(c => ({ ...c, seoData: seoJson }));
 
-      // Step 4 — FAQ artifact (uk-UA only). Runs ONLY when Supplemental Content is supplied.
-      if (input.supplementalContent?.trim()) {
-        const store = getStore(input.website.name);
-        this.progressMessage.set('Generating FAQ artifact (uk-UA)…');
-        const basePayloadFaq = buildPromptFaq(
-          input.name, input.description, input.specs,
-          input.supplementalContent ?? '', isoToHumanLang(UA_ISO), store.currencySymbol,
-        );
-        const validateFaqHtml = (html: string): ValidationIssue[] => {
-          const issues = validateGeneratedHtml(html, 'FAQ (uk-UA)', input.name, UA_ISO);
-          if (html && !html.trim().startsWith('<')) {
-            issues.push({
-              severity: 'error', rule: 'non-html-output',
-              detail: 'Output is not HTML (does not start with "<").',
-              context: 'FAQ (uk-UA)',
-            });
-          }
-          return issues;
-        };
-        const faqResult = await runRepairGate<string>({
-          label: 'FAQ (uk-UA)',
-          maxRepairs: this.maxRepairs(),
-          basePayload: basePayloadFaq,
-          produce: async (payload) => {
-            let html = await this.llm.generateText(payload, useThinking, { taskLabel: 'FAQ (uk-UA)', productName: input.name, store: input.website.name, lang: UA_ISO });
-            html = stripCodeFences(html);
-            // Same normalizer chain as the sibling FAQ produce in generate() — see the rationale there.
-            html = fixNumberFormatting(html, input.name, UA_ISO);
-            html = fixDecimalSeparator(html, UA_ISO);
-            html = restoreIdentifierDots(html, UA_ISO);
-            html = cyrillizeUnits(html, UA_ISO);
-            html = normalizeTerminology(html, UA_ISO);
-            return canonicalizeMultiInOne(html, UA_ISO);
-          },
-          validate: validateFaqHtml,
-          withFeedback: appendRepairFeedback,
-          // Same rung as the sibling FAQ gate in generate() — see the rationale there.
-          repairBlocks: this.blockRepairer(UA_ISO, 'FAQ (uk-UA)', input),
-          onAttempt: (n, c) =>
-            this.progressMessage.set(`Repairing FAQ (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
-        });
-        const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
-        if (faqRepairs > 0) console.info(`[repair-gate] FAQ (uk-UA): ${faqRepairs} repair(s) applied`);
-        this.repairReport.update(r => [...r, toArtifactReport('FAQ (uk-UA)', faqResult, this.blockPatchTally.get('FAQ (uk-UA)'))]);
-        if (faqHtml.startsWith('<')) {
-          this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [UA_ISO]: faqHtml } }));
-        } else {
-          console.warn('[FAQ] No usable uk-UA artifact: model returned non-HTML after repair. Skipped.');
-        }
-      }
+      // Step 4 — FAQ artifacts. US-8.1: the same single-master pipeline as generate() Step 5 (one uk-UA
+      // master, translated into every other store language), so Generator and UA Description cannot
+      // diverge. Runs ONLY when Supplemental Content is supplied; the pipeline never throws, so output
+      // validation, table finalisation and the history entry below always run.
+      await this.runFaqPipeline(input, useThinking);
 
       // Post-generation acceptance-criteria check (non-blocking — reports only).
       this.runOutputValidation(input.website.name, input.name, input.templateId, UA_ISO);
