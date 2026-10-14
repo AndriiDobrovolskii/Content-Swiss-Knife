@@ -388,6 +388,7 @@ const TOOL_LABEL: Record<AppMode, string> = {
   'slug-generator': 'Slug Generator',
   'html-editor': 'HTML-редактор',
   'dashboard': 'Dashboard',
+  'faq-generator': 'FAQ Generator',
 };
 
 @Component({
