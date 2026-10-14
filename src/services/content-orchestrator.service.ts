@@ -1767,6 +1767,34 @@ export class ContentOrchestratorService {
     }, 'Error during slug generation.', 'Slug Generation failed.');
   }
 
+  /**
+   * US-8.1 — standalone FAQ generation (the FAQ Generator tool). Runs ONLY the single-master FAQ
+   * pipeline: no description, SEO, slug or output-validation call, no table finalisation.
+   *
+   * Supplemental Content is the trigger (FR-5); description and specs are optional grounding that
+   * `runFaqPipeline` passes through to the FAQ prompt. A blank Supplemental Content returns at once with
+   * no call and no state change (defence in depth behind the form's own guard, FR-16). Otherwise the
+   * previous result is replaced by the AC-13 shape: no description, no translations, no SEO, no slugs.
+   */
+  async generateFaqOnly(input: ProductInput, useThinking: boolean): Promise<void> {
+    if (!input.supplementalContent?.trim()) return;
+
+    this.content.set({ mainHtmlUa: '', translations: {}, seoData: null, slugData: null, website: input.website, faqArtifacts: {}, mainHtmlLocale: MASTER_LOCALE });
+    this.validationIssues.set([]);
+    this.repairReport.set([]);
+    this.blockPatchTally.clear();
+    this.bulletLeadFixTally.clear();
+    this.repairReportMeta.set({ product: input.name, store: input.website.name, generatedAt: new Date().toISOString() });
+
+    await this.withProgress(async () => {
+      // The pipeline never throws, so the history entry below is written even when the master fails.
+      await this.runFaqPipeline(input, useThinking);
+
+      this.historyService.add(input, this.content());
+      this.progressMessage.set('FAQ Generation Done!');
+    }, 'Error during FAQ generation.', 'FAQ Generation failed.');
+  }
+
   private normalizeSlugResponse(raw: SlugResponse, typedName = ''): SlugResponse {
     // US-7.1 (FR-10): a protected name keeps every typed-name slug token through the 100-character trim.
     const isProtected = typedName.trim() !== '' && classifyProductName(typedName).protected;
