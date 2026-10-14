@@ -6,7 +6,7 @@ status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-14T20:30:00Z
-updated_at: 2026-10-14T21:10:00Z
+updated_at: 2026-10-14T21:30:00Z
 supersedes: null
 inputs_consumed:
   - key: story
@@ -46,7 +46,7 @@ open_decisions_blocking: false
 | T10 `deriveTabDescriptors` extracted, UA-Description and FAQ-only tab cases | angular | DONE | 3e9db41 |
 | T11 FAQ Generator component state and `generateFaqOnly()` call | angular | DONE | 88670be |
 | T12 FAQ Generator mode button, form and Generate button in the template | angular | DONE | c04096a |
-| T13 README documentation | angular | NOT STARTED | - |
+| T13 README documentation | angular | DONE | 7a0613e |
 
 ## T1 - section 9 stop and approval record
 
@@ -179,6 +179,17 @@ open_decisions_blocking: false
 - `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
 - Open points left as recorded (not decided here): OD-8, OD-9(e) (a FAQ-only run shows the existing ZIP and TXT controls because `hasOutput()` is true; nothing hidden). A rendered-in-browser check of the new mode is a manual QUALITY_GATE concern.
 - Outcome: T12 complete, one commit (c04096a), no test file touched.
+
+## T13 - results (real runs)
+
+- File (`git show --stat 7a0613e`: 1 file, 4 insertions, 3 deletions; not FROZEN): `README.md` only. Changed the "What it does" FAQ bullet, "How generation works" step 5, Usage step 3 and added the FAQ Generator entry to "Tools & modes". Written from the code (`runFaqPipeline`, `generateFaqOnly`, `faq-gate.ts`, `tab-descriptors.ts`, `faq-form.ts`): one uk-UA master FAQ, sequential translation into the other store languages, 3 attempts in total per FAQ (`FAQ_MAX_ATTEMPTS = 3`), skip on failure (master failure: nothing stored and nothing translated; translation failure: only that language skipped), `<b>` not `<strong>`, FAQ Generator needs Store + Product Name + Supplemental Content with Original Description and Tech Specs optional. The "FAQ / HowTo" wording was reduced to "FAQ" because the orchestrator generates no HowTo artifact. The architecture section's mention of `task-howto.ts` and the file tree were left as they were.
+- Not documented as decided: OD-6 (translation model tier and protected-name handling), OD-8 (skipped-language messaging), OD-9 (TXT download of a FAQ-only run).
+- `grep -n "FAQ Generator" README.md` matches in "Tools & modes" and in Usage step 3.
+- `npx tsc --noEmit`: exit 0. `npm run lint`: exit 0. `npm run build`: exit 0 (only the existing "not ESM" warnings).
+- `npx vitest run` (test:logic): `Test Files  184 passed (184)`, `Tests  6254 passed | 3 skipped (6257)`, 0 failed.
+- `npm run test:components`: exit 0, `Test Files  2 passed (2)`, `Tests  32 passed (32)`.
+- `bash arch-guard.sh`: exit 0 (ALL CHECKS PASSED). No FROZEN file touched, no `--rebaseline`.
+- Outcome: T13 complete, one commit (7a0613e), no test file touched. All of T1-T13 are DONE; the IMPLEMENTATION stage task table is complete. QUALITY_GATE (full gate incl. coverage) and a rendered-in-browser check remain for later stages.
 
 ## Notes
 
