@@ -137,3 +137,44 @@ export function restoreMediaSrcs(
 
   return { html, restored };
 }
+
+/** Tags the FAQ comparison counts: question headings, paragraphs, lists and list items. */
+const FAQ_COUNTED_TAGS: Array<{ label: string; re: RegExp }> = [
+  { label: '<h3>', re: /<h3\b/gi },
+  { label: '<p>',  re: /<p\b/gi },
+  { label: '<ul>', re: /<ul\b/gi },
+  { label: '<li>', re: /<li\b/gi },
+];
+
+/**
+ * FAQ-only structural comparison between the uk-UA master FAQ and one translated FAQ (US-8.1, FR-3).
+ *
+ * A separate function on purpose: validateStructuralParity() is shared with the description editor
+ * path and its COUNTED_TAGS must not change. The FAQ is selected by calling this function, never by
+ * sniffing the HTML. Counts `<h3>`, `<p>`, `<ul>` and `<li>`; the `\b` boundary keeps `<pre>` from
+ * counting as `<p>`. No `<b>` count and no media check. Same issue shape as validateStructuralParity
+ * (severity 'error', rule 'structural-parity-count', no `path`, so the repair ladder is full
+ * regeneration). An empty translation counts 0 against the master's counts and fails.
+ */
+export function validateFaqStructuralParity(
+  master: string,
+  translated: string,
+  context: string,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  for (const { label, re } of FAQ_COUNTED_TAGS) {
+    const expected = count(master, re);
+    const actual = count(translated, re);
+    if (expected !== actual) {
+      issues.push({
+        severity: 'error',
+        rule: 'structural-parity-count',
+        detail: `${label} count is ${actual} but the uk-UA master has ${expected}. The translated FAQ must preserve the master's structure exactly — do not add, drop, merge or split questions, paragraphs or list items.`,
+        context,
+      });
+    }
+  }
+
+  return issues;
+}
