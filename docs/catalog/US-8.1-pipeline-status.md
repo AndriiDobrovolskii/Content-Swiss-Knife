@@ -37,7 +37,8 @@ open_decisions_blocking: false
 | T1 FAQ variant in task-c.ts (FROZEN, operator-approved) + re-baseline | prompt | DONE | da59195 |
 | T2 `<strong>` to `<b>` in the FAQ generation prompt | prompt | DONE | 3698434 |
 | T3 `faq-html.ts`: `convertStrongToB`, `validateFaqShape` | angular | DONE | c7197f0 |
-| T4 to T13 | - | NOT STARTED | - |
+| T4 `validateFaqStructuralParity` in `structural-parity.ts` | angular | DONE | d09f092 |
+| T5 to T13 | - | NOT STARTED | - |
 
 ## T1 - section 9 stop and approval record
 
@@ -72,6 +73,15 @@ open_decisions_blocking: false
 - `npx vitest run src/utils/faq-html.spec.ts`: `Test Files  1 passed (1)`, `Tests  46 passed (46)` (the suite failed at load, "module not found", before this task).
 - Whole `test:logic` (`vitest run`), post-T2 vs post-T3: failed 502 -> 502, passed 5590 -> 5636 (+46 = the new `faq-html` tests), 3 skipped; failed test files 8. No test that passed post-T2 now fails; the 502 remaining failures are in specs owned by later tasks (T4, T5, T6/T7, T8, T9, T10, T11/T12).
 - Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(structural-parity.faq|faq-gate|content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 15 diagnostics remain (17 post-T2 minus the 2 TS2307/TS2345 formerly in `faq-html.spec.ts`), all in table A specs owned by T4, T5, T8, T9, T10; `faq-html.spec.ts` carries none. `npm run lint` (= `tsc --noEmit`) and `npm run build` are judged by this gate until T10.
+- `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
+- `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
+
+## T4 - results (real runs)
+
+- File: `src/utils/structural-parity.ts` only (not FROZEN); `validateFaqStructuralParity(master, translated, context)` appended with its own `FAQ_COUNTED_TAGS` (`<h3`, `<p`, `<ul`, `<li`). `git diff`: 41 insertions, 0 deletions; no changed line in `validateStructuralParity`, `COUNTED_TAGS` or `restoreMediaSrcs`; `html-editor.component.ts` untouched. CRLF preserved.
+- `npx vitest run src/utils/structural-parity.faq.spec.ts src/utils/structural-parity.spec.ts src/utils/structural-parity.v4.spec.ts src/utils/structural-parity-restore.spec.ts src/utils/simplified-translation-parity.spec.ts`: `Test Files  5 passed (5)`, `Tests  66 passed (66)`.
+- Whole `test:logic` (`vitest run`), post-T3 vs post-T4: failed 502 -> 486, passed 5636 -> 5652 (+16 = the `structural-parity.faq.spec.ts` tests), 3 skipped; failed test files 7. No test that passed post-T3 now fails; the 486 remaining failures are in specs owned by later tasks.
+- Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(faq-gate|content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 13 diagnostics remain (tab-descriptors 8, faq-standalone 3, faq-form 1, faq-gate 1), all in table A specs owned by T5, T8, T9, T10; `structural-parity.faq.spec.ts` carries none. `npm run lint` / `npm run build` are judged by this gate until T10.
 - `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
 - `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
 
