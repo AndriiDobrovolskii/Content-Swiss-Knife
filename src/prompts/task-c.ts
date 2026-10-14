@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { buildDeliveryRegionBlock, taskLangToIso, US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
+import { buildDeliveryRegionBlock, taskLangToIso, isoToHumanLang, US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
 import { SIMPLIFIED_TRANSLATION_CLAUSE } from './simplified-template-blocks';
@@ -433,10 +433,6 @@ Keep a single space between a number and its unit.
 
 ${NO_LEAKED_REASONING_CLAUSE}`;
 
-const FAQ_LANGUAGE_NAMES: Record<string, string> = {
-  PL: 'Polish', RU: 'Russian', DE: 'German', UA: 'Ukrainian', ES: 'Spanish', PT: 'Portuguese',
-};
-
 const FAQ_PRODUCT_NAME_NOTE = `[PRODUCT NAMES]
 A product, brand or model name that appears in a question or an answer keeps its Latin-script form.
 Translate a generic descriptive word only when it is a plain common noun in the sentence; never
@@ -500,8 +496,9 @@ Do not carry Ukraine-specific carriers, phone numbers or places into the US text
 ${FAQ_PRODUCT_NAME_NOTE}`;
 }
 
-function faqGenericRules(targetLang: string): string {
-  const name = FAQ_LANGUAGE_NAMES[targetLang] ?? targetLang;
+function faqGenericRules(targetLang: string, storeName: string): string {
+  // Display name derived from STORE_REGISTRY (task label -> BCP-47 -> human name), no local table.
+  const name = isoToHumanLang(taskLangToIso(targetLang, storeName));
   return `[LANGUAGE — ${name.toUpperCase()}]
 Translate into natural, native ${name} — idiomatic technical writing, not a word-for-word rendering.
 Keep a direct, professional tone.
@@ -533,7 +530,7 @@ function buildFaqLanguageInstruction(targetLang: string, storeName: string, webs
     instruction = FAQ_EXPERT3D_PT_RULES;
     expert3dLocaleRules = true;
   } else {
-    instruction = faqGenericRules(targetLang);
+    instruction = faqGenericRules(targetLang, storeName);
   }
 
   // EXPERT3D Tone of Voice: skipped for ES/PT, whose FAQ rules above already carry the formal register.

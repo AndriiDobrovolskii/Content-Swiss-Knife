@@ -1,5 +1,5 @@
 import type { AppMode, TabDescriptor } from './types';
-import { getStore, bcp47ToTaskCLang } from '../prompt-core/constants';
+import { getStore, bcp47ToTaskCLang, MASTER_LOCALE } from '../prompt-core/constants';
 
 export interface TabDescriptorLabels {
   /** uiLabels().uaGenerator — label of the single uk-UA description tab in ua-generator mode. */
@@ -42,17 +42,17 @@ export function deriveTabDescriptors(ctx: TabDescriptorContext): TabDescriptor[]
   if (ctx.appMode === 'ua-generator' || ctx.appMode === 'faq-generator') {
     const tabs: TabDescriptor[] = [];
     if (ctx.appMode === 'ua-generator') {
-      tabs.push({ id: 'html', label: labels.uaGenerator, type: 'english', color: 'purple', iso: 'uk-UA', isFaq: false });
+      tabs.push({ id: 'html', label: labels.uaGenerator, type: 'english', color: 'purple', iso: MASTER_LOCALE, isFaq: false });
     }
-    if (faqArtifacts?.['uk-UA']) {
+    if (faqArtifacts?.[MASTER_LOCALE]) {
       tabs.push({
         id: 'faq-html',
         label: ctx.appMode === 'ua-generator' ? 'FAQ' : labels.baseFaqTab,
-        type: 'faq-english', color: 'green', iso: 'uk-UA', isFaq: true,
+        type: 'faq-english', color: 'green', iso: MASTER_LOCALE, isFaq: true,
       });
     }
     for (const iso of store.languages) {
-      if (iso === 'uk-UA') continue;
+      if (iso === MASTER_LOCALE) continue;
       if (!faqArtifacts?.[iso]) continue;
       const taskKey = bcp47ToTaskCLang(iso, store.group);
       tabs.push({ id: `faq-trans-${iso}`, label: `${taskKey} FAQ`, type: 'faq-translation', color: 'green', iso, taskKey, isFaq: true });
