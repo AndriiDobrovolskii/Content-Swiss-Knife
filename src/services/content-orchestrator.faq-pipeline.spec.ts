@@ -401,7 +401,9 @@ for (const mode of MODES) {
             master: '<h3>Яка нитка?</h3><p>Використовуйте нитку 1.75mm.</p>',
             translation: (_n, _p, iso) => (iso === en ? '<h3>Which filament?</h3><p>Use 1.75mm filament.</p>' : translationOf(iso, '<h3>Яка нитка?</h3><p>Використовуйте нитку 1.75mm.</p>')),
           });
-          expect(r.orchestrator.content().faqArtifacts![en] ?? '').toContain('1.75 mm');
+          // The repo's unit-spacing normaliser (number-format-fixer) inserts U+00A0 between number and unit,
+          // so "a space" is any whitespace (\s covers U+00A0) - the master FR-21 guard above does the same.
+          expect(r.orchestrator.content().faqArtifacts![en] ?? '').toMatch(/1\.75\smm/);
           expect(r.orchestrator.content().faqArtifacts![en] ?? '').not.toContain('1.75mm');
         });
 
