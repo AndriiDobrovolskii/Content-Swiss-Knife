@@ -6,7 +6,7 @@ status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-14T20:30:00Z
-updated_at: 2026-10-14T21:00:00Z
+updated_at: 2026-10-14T21:10:00Z
 supersedes: null
 inputs_consumed:
   - key: story
@@ -42,7 +42,11 @@ open_decisions_blocking: false
 | T6 `runFaqPipeline` / `storeFaq` in the orchestrator, used by `generate()` | angular | DONE (the 6 FR-21 English-translation tests were a test defect, corrected in c62e30a; they pass) | f3343e1 |
 | T7 `generateUaContent()` Step 4 replaced by the shared `runFaqPipeline` | angular | IMPLEMENTED, owned tests GREEN | 7f534d7 |
 | T8 `generateFaqOnly()` standalone orchestrator method | angular | DONE | 9f20a15 |
-| T9 to T13 | - | NOT STARTED | - |
+| T9 `AppMode` + `TOOL_LABEL` + `faq-form.ts` (+ feedback form `create-form.gs` entry) | angular | DONE | e8dcf56 |
+| T10 `deriveTabDescriptors` extracted, UA-Description and FAQ-only tab cases | angular | DONE | 3e9db41 |
+| T11 FAQ Generator component state and `generateFaqOnly()` call | angular | DONE | 88670be |
+| T12 FAQ Generator mode button, form and Generate button in the template | angular | DONE | c04096a |
+| T13 README documentation | angular | NOT STARTED | - |
 
 ## T1 - section 9 stop and approval record
 
@@ -163,6 +167,18 @@ open_decisions_blocking: false
 - `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
 - Open points left as recorded (not decided here): OD-8 (history restore and skipped-language messaging unchanged), OD-9(e) (TXT download of a FAQ-only run: `hasOutput` is now true for a FAQ-only result so the existing download controls appear; no download code changed and nothing hidden).
 - Outcome: T11 complete, one commit (88670be), no test file touched.
+
+## T12 - results (real runs)
+
+- File (`git show --stat c04096a`: 1 file, 111 insertions, 5 deletions; not FROZEN; the CRLF line endings of the checkout were preserved): `src/app/app.component.html` only. Added a FAQ Generator mode button in the vacant cell of the UA row of the `grid-cols-2` switcher (label `uiLabels().faqGenerator`); an `@else if (appMode() === 'faq-generator')` sidebar form after the Slug form (store select bound to `faqSelectedWebsite` / `onFaqWebsiteChange`, Product Name input bound to `updateFaqProductName`, three `app-source-input` for Original Description (not required), Tech Specs (not required) and Supplemental Content (required), the shared Extended Thinking toggle via `seoUseThinking()` / `toggleSeoThinking()`, no content-template select); a Generate button in the footer chain calling `generateFaqOnly()` with `[disabled]="isGenerating() || !isFaqFormValid()"`; `'faq-generator'` added to the three conditions (download-controls `@if`, result-view `@if`, header `@if`); the SEO tab button condition is now `appMode() !== 'slug-generator' && appMode() !== 'faq-generator'`; and the busy-overlay spinner got green border bindings for the mode (cosmetic, same file, mirrors the other modes).
+- Not touched: any download control or code (the ZIP and TXT buttons stay as they were; OD-9(e) not decided), `restoreHistory`, the FAQ tab panels (they already render from `faqArtifacts`), any TypeScript, any spec. `grep -c "content-template-select" src/app/app.component.html`: 2 before, 2 after.
+- `npx vitest run src/app/app.component.template-wiring.spec.ts src/app/app.component.export-guard.spec.ts`: `Test Files  2 passed (2)`, `Tests  40 passed (40)`; the 7 T12 pins pass.
+- Whole `test:logic` (`vitest run`), post-T11 vs post-T12: failed 7 -> 0, passed 6247 -> 6254 (+7 = the T12 pins), 3 skipped; `Test Files  184 passed (184)`. Nothing that passed before fails.
+- Compile gate: `npx tsc --noEmit` exit 0, zero diagnostics; `npm run build` exit 0 (template type-check), zero errors, only the existing js-beautify / jszip "not ESM" warnings.
+- `npm run test:components`: exit 0, `Test Files  2 passed (2)`, `Tests  32 passed (32)`.
+- `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
+- Open points left as recorded (not decided here): OD-8, OD-9(e) (a FAQ-only run shows the existing ZIP and TXT controls because `hasOutput()` is true; nothing hidden). A rendered-in-browser check of the new mode is a manual QUALITY_GATE concern.
+- Outcome: T12 complete, one commit (c04096a), no test file touched.
 
 ## Notes
 
