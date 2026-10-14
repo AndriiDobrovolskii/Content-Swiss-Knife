@@ -40,7 +40,8 @@ open_decisions_blocking: false
 | T4 `validateFaqStructuralParity` in `structural-parity.ts` | angular | DONE | d09f092 |
 | T5 `faq-gate.ts`: `buildFaqValidator`, `isFaqStorable`, `FAQ_MAX_ATTEMPTS` | angular | DONE | 54ee224 |
 | T6 `runFaqPipeline` / `storeFaq` in the orchestrator, used by `generate()` | angular | IMPLEMENTED, 6 owned tests RED (test defect, loop-back `changes_required_tests`) | f3343e1 |
-| T7 to T13 | - | NOT STARTED | - |
+| T7 `generateUaContent()` Step 4 replaced by the shared `runFaqPipeline` | angular | IMPLEMENTED, owned tests GREEN | 7f534d7 |
+| T8 to T13 | - | NOT STARTED | - |
 
 ## T1 - section 9 stop and approval record
 
@@ -107,6 +108,16 @@ open_decisions_blocking: false
 - `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
 - `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
 - Outcome: the implementation is complete and committed; the 6 Generator FR-21 English-translation tests cannot pass without changing a test, so the task is reported as CHANGES_REQUIRED with loop-back `changes_required_tests`. After the test fix T6 needs a re-run, not a rebuild.
+
+## T7 - results (real runs)
+
+- File: `src/services/content-orchestrator.service.ts` only (not FROZEN). `git show --stat 7f534d7`: 1 file, 5 insertions, 50 deletions. `generateUaContent()` Step 4 (the uk-UA-only inline FAQ gate with no locale overlay) is replaced, not wrapped, by `await this.runFaqPipeline(input, useThinking)`; the post-FAQ code (validation, table finalisation, history) is unchanged. `grep -n buildPromptFaq` shows it only at the import and inside `runFaqPipeline` (line 825). No literal language list or currency symbol, no retrieval, no prompt text added.
+- `npx vitest run src/services/content-orchestrator.faq-pipeline.spec.ts src/services/content-orchestrator.simplified.spec.ts src/services/content-orchestrator.ua-doc-pipeline.spec.ts`: `Test Files  3 passed (3)`, `Tests  572 passed (572)` (Generator and UA groups, FR-19 parity and premise groups, the simplified `UA-only mode` test, the UA FR-21 twins with the NBSP-tolerant assertion from c62e30a).
+- Whole `test:logic` (`vitest run`), post-T6-correction vs post-T7: failed 314 -> 132, passed 5868 -> 6050 (+182), 3 skipped (total 6185 both times); 0 tests that passed before now fail. The remaining failing files are exactly the later-task specs: `content-orchestrator.faq-standalone.spec.ts` 112 failed tests (T8), `app.component.template-wiring.spec.ts` 20 failed tests (T9/T11/T12), and `faq-form.spec.ts` and `tab-descriptors.spec.ts` failing at load, module not found (T9, T10).
+- Per-task compile gate: `npx tsc --noEmit` prints 12 diagnostics, all in `tab-descriptors.spec.ts` (8), `content-orchestrator.faq-standalone.spec.ts` (3) and `faq-form.spec.ts` (1), the allowlist after T7; `faq-pipeline.spec.ts` and `simplified.spec.ts` carry none. `npm run lint` / `npm run build` are judged by this gate until T10.
+- `bash arch-guard.sh`: exit 0, "All frozen files unchanged". No FROZEN file touched, no `--rebaseline`.
+- `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
+- Outcome: T7 complete, one commit, no test file touched.
 
 ## Notes
 
