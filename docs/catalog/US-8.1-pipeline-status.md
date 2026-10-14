@@ -210,11 +210,20 @@ open_decisions_blocking: false
 - No test file, fixture, golden or coverage setting modified; no test pinned the removed table.
 - Outcome: V-1 and V-2 fixed. Re-verification (IMPLEMENTATION_VERIFICATION) is the orchestrator's next step.
 
-## Loop-back fix 2 of 3 (changes_required: security finding B-1) - held at the TDD gate
+## Loop-back fix 2 of 3 (changes_required: security finding B-1) - fixed
 
-- Trigger: `docs/reviews/security/US-8.1-security-review.md` v1, verdict CHANGES_REQUIRED. B-1 (blocking): `validateFaqShape` in `src/utils/faq-html.ts` never sees a tag whose quote is unpaired or whose closing `>` is missing, so such a tag is stored and reaches `bypassSecurityTrustHtml`.
-- Check performed: `src/utils/faq-html.spec.ts` has no test for an unpaired single quote, an unpaired double quote, an unterminated trailing `<img ...`, an HTML comment, or the clean-input guards that must survive the fix. No red test exists for B-1.
-- Action: NO code changed. The builder does not own test files (AGENTS.md 7.7) and the fix must not precede its failing tests. Returned `changes_required_tests` (-> TEST_WRITING) with the exact test cases to write. The fix (fail closed in `validateFaqShape`: after removing the exact permitted tags no `<` may remain) is deferred until those tests exist and are red.
+- Trigger: `docs/reviews/security/US-8.1-security-review.md` v1, verdict CHANGES_REQUIRED. B-1 (blocking): `validateFaqShape` in `src/utils/faq-html.ts` never saw a tag whose quote is unpaired or whose closing `>` is missing, so such a tag was stored and reached `bypassSecurityTrustHtml`.
+- Red tests (TEST_WRITING, commit 97d8913): the "B-1" block in `src/utils/faq-html.spec.ts` (R1-R9 reject, G1-G10 guards), `src/utils/faq-gate.spec.ts`, and the `-t B-1` cases in `src/services/content-orchestrator.faq-pipeline.spec.ts`. No test file was touched by the fix.
+- Fix (commit `1ac82e1`, one commit): `src/utils/faq-html.ts` only (12 insertions, 1 deletion; not FROZEN). New constant `PERMITTED_TAG = /<\/?(?:h3|p|b|ul|li)\s*>/gi`; after the existing tag-regex pass, `html.replace(PERMITTED_TAG, '')` must contain no `<`, otherwise `faq-not-well-formed` is reported (an existing rule id; no rule id added). The tag-regex pass is unchanged, so `faq-attribute-present` and `faq-element-not-allowed` keep firing for well-formed bad tags. A literal `<` in text must be written `&lt;`.
+- Not touched: `html-cleaner.ts`, `output-validator.ts`, `safe-html.pipe.ts`, any FROZEN file, any spec; no second `bypassSecurityTrust*` call.
+
+## Loop-back fix 2 - results (real runs)
+
+- `npx vitest run src/utils/faq-html.spec.ts src/utils/faq-gate.spec.ts`: `Test Files  2 passed (2)`, `Tests  115 passed (115)`. `npx vitest run src/services/content-orchestrator.faq-pipeline.spec.ts -t B-1`: `Tests  6 passed | 540 skipped (546)`. The B-1 reject cases R1-R9 and the guards G1-G10 are green.
+- Whole `test:logic` (`vitest run`): `Test Files  184 passed (184)`, `Tests  6285 passed | 3 skipped (6288)`, 0 failed. Baseline before the red tests was 6254 passed | 3 skipped; the difference of 31 is the new B-1 tests (6288 is the total including the 3 skipped).
+- `npx tsc --noEmit`: exit 0. `npm run lint`: exit 0. `npm run build`: exit 0. `npm run test:components`: `Test Files  2 passed (2)`, `Tests  32 passed (32)`. `bash arch-guard.sh`: exit 0 (ALL CHECKS PASSED), no `--rebaseline`.
+- Probe (`validateFaqShape` through tsx): R1 (unpaired single quote), R2 (unpaired double quote), R3 (unterminated trailing `<img ...`) each report `faq-not-well-formed` (1 error); a clean FAQ (`h3`, `p`, `b`, `ul`, `li`) reports 0.
+- Outcome: B-1 fixed. Re-running SECURITY_REVIEW (and the gates after it) is the orchestrator's next step.
 
 ## Notes
 
