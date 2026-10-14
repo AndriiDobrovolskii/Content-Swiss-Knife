@@ -12,6 +12,7 @@ import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../
 import { formatRepairReportMarkdown } from '../utils/repair-gate';
 import { TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
 import { deriveTabDescriptors } from './tab-descriptors';
+import { isFaqFormComplete } from '../utils/faq-form';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
@@ -45,6 +46,9 @@ const TRANSLATIONS = {
     loadingHtmlEditor: 'Loading editor…',
     seoGenBtn: 'Generate Metadata',
     seoOnlyTitle: 'SEO Metadata Generator',
+    faqGenerator: 'FAQ Generator',
+    faqOnlyTitle: 'FAQ Generator',
+    faqGenBtn: 'Generate FAQ',
     slugGenerator: 'Slugs',
     slugOnlyTitle: 'SEO Slug Generator',
     slugTab: 'Slugs',
@@ -215,6 +219,9 @@ const TRANSLATIONS = {
     loadingHtmlEditor: 'Завантаження редактора…',
     seoGenBtn: 'Генерувати метадані',
     seoOnlyTitle: 'Генератор SEO метаданих',
+    faqGenerator: 'FAQ Generator',
+    faqOnlyTitle: 'Генератор FAQ',
+    faqGenBtn: 'Генерувати FAQ',
     slugGenerator: 'Слаги',
     slugOnlyTitle: 'Генератор SEO-слагів',
     slugTab: 'Слаги',
@@ -478,6 +485,15 @@ export class AppComponent {
   // read — this is the one mode with no ProductDescriptionDoc to resolve a suffix from otherwise.
   slugProductDescription = signal<string>('');
 
+  // --- FAQ GENERATOR: isolated input state (US-8.1) ---
+  // Store, Product Name and Supplemental Content are required; Original Description and Tech Specs are
+  // optional grounding context and never gate Generate (AC-12).
+  faqSelectedWebsite = signal<WebsiteOption | null>(null);
+  faqProductName = signal<string>('');
+  faqDescription = signal<string>('');
+  faqSpecs = signal<string>('');
+  faqSupplementalContent = signal<string>('');
+
   // --- IMAGE TOOLS STATE ---
   imgFiles = signal<InputImage[]>([]);
   imgTargetFormat = signal<'image/jpeg' | 'image/png' | 'image/webp'>('image/jpeg');
@@ -549,13 +565,16 @@ export class AppComponent {
   hasSeoOutput = computed(() => !!this.content().seoData);
   hasSlugOutput = computed(() => !!this.content().slugData);
   // Aggregate for ZIP/TXT download enablement etc. Generator layout MUST use hasGeneratorOutput().
-  hasOutput = computed(() => this.hasGeneratorOutput() || this.hasSeoOutput() || this.hasSlugOutput());
+  // A FAQ-only run leaves mainHtmlUa empty, so it is detected through faqArtifacts.
+  hasFaqOutput = computed(() => Object.keys(this.content().faqArtifacts ?? {}).length > 0);
+  hasOutput = computed(() => this.hasGeneratorOutput() || this.hasSeoOutput() || this.hasSlugOutput() || this.hasFaqOutput());
 
   // The product-name signal that owns the currently active mode's input form.
   activeProductName = computed(() => {
     switch (this.appMode()) {
       case 'seo-generator': return this.seoProductName();
       case 'slug-generator': return this.slugProductName();
+      case 'faq-generator': return this.faqProductName();
       default: return this.productName();
     }
   });
@@ -693,6 +712,14 @@ export class AppComponent {
     !!this.slugSelectedWebsite() && this.slugProductName().trim().length > 0
   );
 
+  isFaqFormValid = computed(() =>
+    isFaqFormComplete({
+      website: this.faqSelectedWebsite(),
+      productName: this.faqProductName(),
+      supplementalContent: this.faqSupplementalContent(),
+    })
+  );
+
   isOptimizerValid = computed(() => this.optimizerInputHtml().trim().length > 0);
 
   isTranslatorValid = computed(() => this.translatorInput().trim().length > 0);
@@ -795,6 +822,11 @@ export class AppComponent {
     this.slugSelectedWebsite.set(this.websiteOptions.find(w => w.name === name) ?? null);
   }
 
+  onFaqWebsiteChange(event: Event) {
+    const name = (event.target as HTMLSelectElement).value;
+    this.faqSelectedWebsite.set(this.websiteOptions.find(w => w.name === name) ?? null);
+  }
+
   onTemplateChange(templateId: string) {
     this.selectedTemplateId.set(templateId);
     this.includeAccessoriesFunctionality.set(false);
@@ -821,6 +853,7 @@ export class AppComponent {
   updateSeoProductName(event: Event) { this.seoProductName.set((event.target as HTMLInputElement).value); }
   updateSlugProductName(event: Event) { this.slugProductName.set((event.target as HTMLInputElement).value); }
   updateSlugProductDescription(event: Event) { this.slugProductDescription.set((event.target as HTMLTextAreaElement).value); }
+  updateFaqProductName(event: Event) { this.faqProductName.set((event.target as HTMLInputElement).value); }
   updateCustomInstructions(event: Event) { this.customInstructions.set((event.target as HTMLTextAreaElement).value); }
   updateOptimizerInput(event: Event) { this.optimizerInputHtml.set((event.target as HTMLTextAreaElement).value); }
   updateTranslatorInput(event: Event) { this.translatorInput.set((event.target as HTMLTextAreaElement).value); }
@@ -923,6 +956,23 @@ export class AppComponent {
     };
     this.activeTab.set('slugs');
     await this.orchestrator.generateSlugs(input, this.seoUseThinking());
+  }
+
+  async generateFaqOnly() {
+    const currentSite = this.faqSelectedWebsite();
+    if (!currentSite || !this.isFaqFormValid()) {
+      alert(this.uiLabels().alertFillFields);
+      return;
+    }
+    const input: ProductInput = {
+      website: currentSite,
+      name: this.faqProductName(),
+      description: this.faqDescription(),
+      specs: this.faqSpecs(),
+      supplementalContent: this.faqSupplementalContent(),
+    };
+    this.activeTab.set('faq-html');
+    await this.orchestrator.generateFaqOnly(input, this.seoUseThinking());
   }
 
   copySlugItem(item: SlugItem, ev?: Event) {
@@ -1067,6 +1117,17 @@ export class AppComponent {
         this.slugProductDescription.set('');
         this.activeTab.set('slugs');
         this.orchestrator.content.update(c => ({ ...c, slugData: null }));
+        break;
+
+      case 'faq-generator':
+        this.faqSelectedWebsite.set(null);
+        this.faqProductName.set('');
+        this.faqDescription.set('');
+        this.faqSpecs.set('');
+        this.faqSupplementalContent.set('');
+        this.activeTab.set('faq-html');
+        this.orchestrator.content.update(c => ({ ...c, faqArtifacts: {}, website: undefined }));
+        this.orchestrator.validationIssues.set([]);
         break;
 
       case 'optimizer':
