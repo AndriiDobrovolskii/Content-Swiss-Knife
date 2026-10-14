@@ -35,7 +35,8 @@ open_decisions_blocking: false
 | Task | Track | Status | Commit |
 |---|---|---|---|
 | T1 FAQ variant in task-c.ts (FROZEN, operator-approved) + re-baseline | prompt | DONE | da59195 |
-| T2 to T13 | - | NOT STARTED | - |
+| T2 `<strong>` to `<b>` in the FAQ generation prompt | prompt | DONE | 3698434 |
+| T3 to T13 | - | NOT STARTED | - |
 
 ## T1 - section 9 stop and approval record
 
@@ -54,6 +55,15 @@ open_decisions_blocking: false
 - Whole `test:logic` (`vitest run`), before vs after T1 (compared test by test): failed 570 -> 505, passed 5522 -> 5587; 0 tests that passed before now fail; 65 turned green (all of `task-c.faq.spec.ts`). The 505 remaining failures are in specs owned by later tasks: `app.component.template-wiring.spec.ts` (20, T9/T11/T12), `task-faq.spec.ts` (3, T2), `content-orchestrator.faq-pipeline.spec.ts` (349, T6/T7), `content-orchestrator.faq-standalone.spec.ts` (112, T8), `content-orchestrator.simplified.spec.ts` (5, T6/T7), `structural-parity.faq.spec.ts` (16, T4), and the load-failure suites `faq-html` (T3), `faq-gate` (T5), `faq-form` (T9), `tab-descriptors` (T10).
 - Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(faq-html|structural-parity.faq|faq-gate|content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing. 17 diagnostics remain, all in those six table A specs (TS2307 x5, TS2339 x3, TS2345 x7, TS2724 x2); none in `task-c.faq.spec.ts`, none in a non-spec file, none in a table B spec. `npm run lint` / `npm run build` are judged by this per-task gate until T10 (the exit code is non-zero while the allowlist is non-empty).
 - `npm run test:components` (Karma): not run; no component, template or Karma spec was touched by T1.
+
+## T2 - results (real runs)
+
+- File: `src/prompts/task-faq.ts` only (not FROZEN). Two occurrences changed: the header doc comment and the output-contract tag list now read `<p>, <b>, <ul>, <li>`; `git diff --stat`: 1 file, 2 insertions, 2 deletions; CRLF line endings preserved; `grep strong src/prompts/task-faq.ts` prints nothing.
+- `npx vitest run src/prompts/task-faq.spec.ts src/prompts/task-faq.v4.spec.ts`: `Test Files  2 passed (2)`, `Tests  18 passed (18)` (the 3 AC-6 tests were red before).
+- Whole `test:logic` (`vitest run`), post-T1 vs post-T2: failed 505 -> 502, passed 5587 -> 5590 (3 skipped); the 3 newly green tests are the AC-6 group of `task-faq.spec.ts`; no test that passed post-T1 now fails (counts move by exactly the 3).
+- Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(faq-html|structural-parity.faq|faq-gate|content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 17 diagnostics in total, unchanged from post-T1, all in table A specs. `task-faq.spec.ts` (table B) carries none.
+- `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
+- `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
 
 ## Notes
 
