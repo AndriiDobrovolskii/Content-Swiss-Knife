@@ -38,7 +38,8 @@ open_decisions_blocking: false
 | T2 `<strong>` to `<b>` in the FAQ generation prompt | prompt | DONE | 3698434 |
 | T3 `faq-html.ts`: `convertStrongToB`, `validateFaqShape` | angular | DONE | c7197f0 |
 | T4 `validateFaqStructuralParity` in `structural-parity.ts` | angular | DONE | d09f092 |
-| T5 to T13 | - | NOT STARTED | - |
+| T5 `faq-gate.ts`: `buildFaqValidator`, `isFaqStorable`, `FAQ_MAX_ATTEMPTS` | angular | DONE | 54ee224 |
+| T6 to T13 | - | NOT STARTED | - |
 
 ## T1 - section 9 stop and approval record
 
@@ -82,6 +83,15 @@ open_decisions_blocking: false
 - `npx vitest run src/utils/structural-parity.faq.spec.ts src/utils/structural-parity.spec.ts src/utils/structural-parity.v4.spec.ts src/utils/structural-parity-restore.spec.ts src/utils/simplified-translation-parity.spec.ts`: `Test Files  5 passed (5)`, `Tests  66 passed (66)`.
 - Whole `test:logic` (`vitest run`), post-T3 vs post-T4: failed 502 -> 486, passed 5636 -> 5652 (+16 = the `structural-parity.faq.spec.ts` tests), 3 skipped; failed test files 7. No test that passed post-T3 now fails; the 486 remaining failures are in specs owned by later tasks.
 - Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(faq-gate|content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 13 diagnostics remain (tab-descriptors 8, faq-standalone 3, faq-form 1, faq-gate 1), all in table A specs owned by T5, T8, T9, T10; `structural-parity.faq.spec.ts` carries none. `npm run lint` / `npm run build` are judged by this gate until T10.
+- `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
+- `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
+
+## T5 - results (real runs)
+
+- File: `src/utils/faq-gate.ts` only (new, not FROZEN; `output-validator.ts` and `repair-strategy.ts` untouched, `validateGeneratedHtml` imported). `git show --stat 54ee224`: 1 file, 102 insertions. Pure module, CRLF line endings matching the checkout. Issue order as pinned: shape issues, then (translation only) `validateFaqStructuralParity`, then the frozen `validateGeneratedHtml` issues and the `non-html-output` check, the last two forced to `severity: 'warning'`; `providerFailed()` true returns exactly one path-less `faq-provider-error`.
+- `npx vitest run src/utils/faq-gate.spec.ts src/utils/repair-strategy.spec.ts src/utils/repair-gate.spec.ts`: `Test Files  3 passed (3)`, `Tests  214 passed (214)` (`faq-gate.spec.ts` failed at load, "module not found", before this task). `resolveLadder` is pinned to `['full-regen']` for every emitted contract rule id by `faq-gate.spec.ts`; `REPAIR_STRATEGIES` has none of them.
+- Whole `test:logic` (`vitest run`), post-T4 vs post-T5: failed 486 -> 486, passed 5652 -> 5696 (+44 = the `faq-gate` tests), 3 skipped; failed test files 6. No test that passed post-T4 now fails; the 486 remaining failures are in specs owned by later tasks.
+- Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 12 diagnostics remain (13 post-T4 minus the 1 TS2307 formerly in `faq-gate.spec.ts`), all in table A specs owned by T8, T9, T10; `faq-gate.spec.ts` carries none. `npm run lint` / `npm run build` are judged by this gate until T10.
 - `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
 - `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
 
