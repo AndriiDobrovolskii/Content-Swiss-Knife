@@ -191,6 +191,25 @@ open_decisions_blocking: false
 - `bash arch-guard.sh`: exit 0 (ALL CHECKS PASSED). No FROZEN file touched, no `--rebaseline`.
 - Outcome: T13 complete, one commit (7a0613e), no test file touched. All of T1-T13 are DONE; the IMPLEMENTATION stage task table is complete. QUALITY_GATE (full gate incl. coverage) and a rendered-in-browser check remain for later stages.
 
+## Loop-back fix 1 of 3 (changes_required: V-1, V-2) - section 9 stop and approval record
+
+- Trigger: `docs/verification/US-8.1-verification-report.md` v1, verdict CHANGES_REQUIRED. V-1 (blocking): hard-coded `FAQ_LANGUAGE_NAMES` table in `src/prompts/task-c.ts`. V-2 (non-blocking): `'uk-UA'` literals in `src/app/tab-descriptors.ts`.
+- FROZEN file: `src/prompts/task-c.ts` only (AGENTS.md section 9). `constants.ts`, `master-system-prompt.ts`, `output-validator.ts`, `task-a.ts`, `task-b.ts` were not touched.
+- Exact change: removed the `FAQ_LANGUAGE_NAMES` table; `faqGenericRules(targetLang, storeName)` now computes `isoToHumanLang(taskLangToIso(targetLang, storeName))` (`isoToHumanLang` added to the existing `../prompt-core/constants` import); the single call site in `buildFaqLanguageInstruction` passes `storeName`. The description path (`buildPromptC` non-FAQ branch) is untouched.
+- Approval (second grant, the operator's answer in this session), quoted verbatim: "I explicitly grant permission to modify src/prompts/task-c.ts under AGENTS.md §9 for the V-1 fix only; re-baseline .arch-guard-checksums in the same commit." It covers this one file for the V-1 fix only; the T1 grant was not relied on.
+- Prompt-text effect (FAQ generic branch only, reached for non-EXPERT3D stores): PL, RU, DE and UA names are unchanged (Polish, Russian, German, Ukrainian). ES now reads "Castilian Spanish" (was "Spanish") and PT "European Portuguese" (was "Portuguese"), because that is what the registry helper returns; both are the same languages named more precisely and still satisfy the identity regexes pinned in `task-c.faq.spec.ts`. EXPERT3D ES/PT use their dedicated rule blocks and are unchanged.
+- V-2: `tab-descriptors.ts` imports `MASTER_LOCALE` and uses it in place of the four `'uk-UA'` code literals (two `iso:` fields, the `faqArtifacts?.[...]` lookup, the `iso ===` skip); comments left as written. The `sourceLocale === 'uk-UA'` in `buildFaqLanguageInstruction` was LEFT as is: it mirrors the description path's guard at `buildPromptC` (frozen, unchanged), and `UK_SOURCE_ANTICALQUE` is keyed to uk-UA specifically; changing one without the other would diverge the two paths.
+
+## Loop-back fix 1 - results (real runs)
+
+- Commit `8c89bce` (one commit): `.arch-guard-checksums` (1 line, `task-c.ts`), `src/app/tab-descriptors.ts`, `src/prompts/task-c.ts`; 3 files, 11 insertions, 14 deletions. CRLF line endings preserved.
+- `bash arch-guard.sh --rebaseline` run after the edit; `bash arch-guard.sh`: exit 0 (ALL CHECKS PASSED).
+- `npx tsc --noEmit`: exit 0. `npm run lint`: exit 0. `npm run build`: exit 0 (only the existing "not ESM" warnings).
+- `npx vitest run` (test:logic): `Test Files  184 passed (184)`, `Tests  6254 passed | 3 skipped (6257)`, 0 failed - equal to the baseline. This includes `task-c.faq.spec.ts` and the 16-pair `task-c.description-bytes.spec.ts` golden, unchanged and green.
+- `npm run test:components`: exit 0, `Test Files  2 passed (2)`, `Tests  32 passed (32)`.
+- No test file, fixture, golden or coverage setting modified; no test pinned the removed table.
+- Outcome: V-1 and V-2 fixed. Re-verification (IMPLEMENTATION_VERIFICATION) is the orchestrator's next step.
+
 ## Notes
 
 - Test components were accepted as unevaluated until T10 (user decision, no stub added); first real run at T10: 2 files, 32 tests passed.
