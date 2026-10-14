@@ -36,7 +36,8 @@ open_decisions_blocking: false
 |---|---|---|---|
 | T1 FAQ variant in task-c.ts (FROZEN, operator-approved) + re-baseline | prompt | DONE | da59195 |
 | T2 `<strong>` to `<b>` in the FAQ generation prompt | prompt | DONE | 3698434 |
-| T3 to T13 | - | NOT STARTED | - |
+| T3 `faq-html.ts`: `convertStrongToB`, `validateFaqShape` | angular | DONE | c7197f0 |
+| T4 to T13 | - | NOT STARTED | - |
 
 ## T1 - section 9 stop and approval record
 
@@ -62,6 +63,15 @@ open_decisions_blocking: false
 - `npx vitest run src/prompts/task-faq.spec.ts src/prompts/task-faq.v4.spec.ts`: `Test Files  2 passed (2)`, `Tests  18 passed (18)` (the 3 AC-6 tests were red before).
 - Whole `test:logic` (`vitest run`), post-T1 vs post-T2: failed 505 -> 502, passed 5587 -> 5590 (3 skipped); the 3 newly green tests are the AC-6 group of `task-faq.spec.ts`; no test that passed post-T1 now fails (counts move by exactly the 3).
 - Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(faq-html|structural-parity.faq|faq-gate|content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 17 diagnostics in total, unchanged from post-T1, all in table A specs. `task-faq.spec.ts` (table B) carries none.
+- `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
+- `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
+
+## T3 - results (real runs)
+
+- File: `src/utils/faq-html.ts` only (new, not FROZEN; `output-validator.ts` untouched, only the `ValidationIssue` type is imported). `git show --stat c7197f0`: 1 file. Pure module: stack-based tokenizer, no `DOMParser`, no DOM, clock or random call (NFR-8). CRLF line endings, matching the checkout.
+- `npx vitest run src/utils/faq-html.spec.ts`: `Test Files  1 passed (1)`, `Tests  46 passed (46)` (the suite failed at load, "module not found", before this task).
+- Whole `test:logic` (`vitest run`), post-T2 vs post-T3: failed 502 -> 502, passed 5590 -> 5636 (+46 = the new `faq-html` tests), 3 skipped; failed test files 8. No test that passed post-T2 now fails; the 502 remaining failures are in specs owned by later tasks (T4, T5, T6/T7, T8, T9, T10, T11/T12).
+- Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(structural-parity.faq|faq-gate|content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 15 diagnostics remain (17 post-T2 minus the 2 TS2307/TS2345 formerly in `faq-html.spec.ts`), all in table A specs owned by T4, T5, T8, T9, T10; `faq-html.spec.ts` carries none. `npm run lint` (= `tsc --noEmit`) and `npm run build` are judged by this gate until T10.
 - `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
 - `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
 
