@@ -6,7 +6,7 @@ status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-14T20:30:00Z
-updated_at: 2026-10-14T20:30:00Z
+updated_at: 2026-10-14T21:00:00Z
 supersedes: null
 inputs_consumed:
   - key: story
@@ -39,9 +39,10 @@ open_decisions_blocking: false
 | T3 `faq-html.ts`: `convertStrongToB`, `validateFaqShape` | angular | DONE | c7197f0 |
 | T4 `validateFaqStructuralParity` in `structural-parity.ts` | angular | DONE | d09f092 |
 | T5 `faq-gate.ts`: `buildFaqValidator`, `isFaqStorable`, `FAQ_MAX_ATTEMPTS` | angular | DONE | 54ee224 |
-| T6 `runFaqPipeline` / `storeFaq` in the orchestrator, used by `generate()` | angular | IMPLEMENTED, 6 owned tests RED (test defect, loop-back `changes_required_tests`) | f3343e1 |
+| T6 `runFaqPipeline` / `storeFaq` in the orchestrator, used by `generate()` | angular | DONE (the 6 FR-21 English-translation tests were a test defect, corrected in c62e30a; they pass) | f3343e1 |
 | T7 `generateUaContent()` Step 4 replaced by the shared `runFaqPipeline` | angular | IMPLEMENTED, owned tests GREEN | 7f534d7 |
-| T8 to T13 | - | NOT STARTED | - |
+| T8 `generateFaqOnly()` standalone orchestrator method | angular | DONE | 9f20a15 |
+| T9 to T13 | - | NOT STARTED | - |
 
 ## T1 - section 9 stop and approval record
 
@@ -107,7 +108,7 @@ open_decisions_blocking: false
 - Per-task compile gate: `npx tsc --noEmit | grep "error TS" | grep -v -E "(content-orchestrator.faq-standalone|faq-form|tab-descriptors).spec.ts\("` prints nothing; 12 diagnostics remain, all in those three table A specs owned by T8, T9, T10 (unchanged from post-T5); `faq-pipeline.spec.ts` and `simplified.spec.ts` carry none. `npm run lint` / `npm run build` are judged by this gate until T10.
 - `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
 - `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
-- Outcome: the implementation is complete and committed; the 6 Generator FR-21 English-translation tests cannot pass without changing a test, so the task is reported as CHANGES_REQUIRED with loop-back `changes_required_tests`. After the test fix T6 needs a re-run, not a rebuild.
+- Outcome at the time: the 6 Generator FR-21 English-translation tests could not pass without changing a test (reported as `changes_required_tests`). Resolution: test correction c62e30a accepts the NBSP unit spacing; after it the 6 tests pass (post-T6-correction state: failed 314, passed 5868) and T6 needed a re-run, not a rebuild. T6 is DONE.
 
 ## T7 - results (real runs)
 
@@ -118,6 +119,17 @@ open_decisions_blocking: false
 - `bash arch-guard.sh`: exit 0, "All frozen files unchanged". No FROZEN file touched, no `--rebaseline`.
 - `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
 - Outcome: T7 complete, one commit, no test file touched.
+
+## T8 - results (real runs)
+
+- File: `src/services/content-orchestrator.service.ts` only (not FROZEN). `git show --stat 9f20a15`: 1 file, 28 insertions, 0 deletions; CRLF preserved. Added `generateFaqOnly(input, useThinking)` after `generateSlugs`: returns at once (no call, no state change, no progress, no history) when `supplementalContent` is blank; otherwise sets `content` to the AC-13 shape (`mainHtmlUa: ''`, `translations: {}`, `seoData: null`, `slugData: null`, `website`, `faqArtifacts: {}`, `mainHtmlLocale: MASTER_LOCALE`), resets `validationIssues`, `repairReport`, both patch tallies and `repairReportMeta`, then inside `withProgress` awaits `runFaqPipeline`, writes one history entry and sets "FAQ Generation Done!". No description, SEO or slug call, no `runOutputValidation` / `finalizeTablesForDisplay`, no download code, `zip-generator.ts` untouched. A failed master still ends with the AC-13 shape and one history entry (the pipeline never throws); this follows the sibling methods and is not pinned further by the spec. Uses the `MASTER_LOCALE` constant, no literal language list or currency symbol.
+- `npx vitest run src/services/content-orchestrator.faq-standalone.spec.ts src/services/content-orchestrator.faq-pipeline.spec.ts`: `Test Files  2 passed (2)`, `Tests  652 passed (652)`. `npx vitest run content-orchestrator.simplified.spec.ts content-orchestrator.ua-doc-pipeline.spec.ts content-orchestrator.doc-gate.spec.ts`: `Test Files  3 passed (3)`, `Tests  48 passed (48)`.
+- Whole `test:logic` (`vitest run`, JSON reporter), post-T7 vs post-T8: failed 132 -> 20, passed 6050 -> 6162 (+112 = the `faq-standalone` tests), 3 skipped (total 6185 both times); no test that passed post-T7 now fails (counts move by exactly the 112). The 20 remaining failures are all in `app.component.template-wiring.spec.ts` (T9/T11/T12); `faq-form.spec.ts` (T9) and `tab-descriptors.spec.ts` (T10) still fail at load, module not found.
+- Per-task compile gate: `npx tsc --noEmit | grep "error TS"` prints 9 diagnostics, all in `tab-descriptors.spec.ts` (8) and `faq-form.spec.ts` (1), the allowlist after T8; `faq-standalone.spec.ts` carries none (its 3 TS2339 are gone); table B specs carry none. `npm run lint` / `npm run build` are judged by this gate until T10.
+- `bash arch-guard.sh`: exit 0, all checks passed. No FROZEN file touched, no `--rebaseline`.
+- `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
+- Open points left as recorded (not decided here): OD-6 (the `faqTranslationPayload` seam is unchanged), OD-8, OD-9 (empty `description_uk-UA.html` in a standalone ZIP unchanged; TXT download of a FAQ-only run is open point OD-9(e), no download code changed).
+- Outcome: T8 complete, one commit, no test file touched.
 
 ## Notes
 
