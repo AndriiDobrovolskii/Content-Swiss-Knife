@@ -60,3 +60,10 @@ stories:
     path: docs/stories/US-7.1-preserve-proper-product-names.md
     state: ARCHIVED
     created_at: 2026-10-09T00:00:00Z
+  - id: US-8.1
+    title: "Generate the FAQ once in uk-UA and translate it into the other store languages, use <b> instead of <strong> in FAQ HTML, and add a standalone FAQ tool"
+    slug: single-master-faq-and-standalone-faq-tool
+    track: angular
+    path: docs/stories/US-8.1-single-master-faq-and-standalone-faq-tool.md
+    state: IN_PROGRESS
+    created_at: 2026-10-14T00:00:00Z
