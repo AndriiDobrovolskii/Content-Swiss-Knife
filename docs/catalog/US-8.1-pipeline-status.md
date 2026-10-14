@@ -210,6 +210,12 @@ open_decisions_blocking: false
 - No test file, fixture, golden or coverage setting modified; no test pinned the removed table.
 - Outcome: V-1 and V-2 fixed. Re-verification (IMPLEMENTATION_VERIFICATION) is the orchestrator's next step.
 
+## Loop-back fix 2 of 3 (changes_required: security finding B-1) - held at the TDD gate
+
+- Trigger: `docs/reviews/security/US-8.1-security-review.md` v1, verdict CHANGES_REQUIRED. B-1 (blocking): `validateFaqShape` in `src/utils/faq-html.ts` never sees a tag whose quote is unpaired or whose closing `>` is missing, so such a tag is stored and reaches `bypassSecurityTrustHtml`.
+- Check performed: `src/utils/faq-html.spec.ts` has no test for an unpaired single quote, an unpaired double quote, an unterminated trailing `<img ...`, an HTML comment, or the clean-input guards that must survive the fix. No red test exists for B-1.
+- Action: NO code changed. The builder does not own test files (AGENTS.md 7.7) and the fix must not precede its failing tests. Returned `changes_required_tests` (-> TEST_WRITING) with the exact test cases to write. The fix (fail closed in `validateFaqShape`: after removing the exact permitted tags no `<` may remain) is deferred until those tests exist and are red.
+
 ## Notes
 
 - Test components were accepted as unevaluated until T10 (user decision, no stub added); first real run at T10: 2 files, 32 tests passed.
