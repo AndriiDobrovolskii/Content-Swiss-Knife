@@ -131,6 +131,16 @@ open_decisions_blocking: false
 - Open points left as recorded (not decided here): OD-6 (the `faqTranslationPayload` seam is unchanged), OD-8, OD-9 (empty `description_uk-UA.html` in a standalone ZIP unchanged; TXT download of a FAQ-only run is open point OD-9(e), no download code changed).
 - Outcome: T8 complete, one commit, no test file touched.
 
+## T9 - results (real runs)
+
+- Files (`git show --stat e8dcf56`: 4 files, 30 insertions, 1 deletion; none FROZEN): `src/app/types.ts` (`AppMode` + `'faq-generator'`), `src/app/app.component.ts` (the `TOOL_LABEL` entry `'faq-generator': 'FAQ Generator'` only, nothing else in the file), `src/utils/faq-form.ts` (new: `FaqFormValues`, `isFaqFormComplete`; pure, `WebsiteOption` imported as a type), `tools/feedback-form/create-form.gs` (one `'FAQ Generator'` entry in `TOOLS`, built as written despite the scope-growth flag; no test, reviewed by reading).
+- `npx vitest run src/utils/faq-form.spec.ts src/app/app.component.template-wiring.spec.ts`: `faq-form.spec.ts` 21 of 21 passed (`faq-form.spec.ts` now loads, its diagnostic is gone); the two T9 pins in the template-wiring spec pass ("AppMode includes faq-generator", "TOOL_LABEL ... maps it to FAQ Generator"). The 18 other tests of the template-wiring spec still fail by design (T11 component pins, T12 template pins).
+- Whole `test:logic` (`vitest run`), post-T8 vs post-T9: failed 20 -> 18, passed 6162 -> 6185 (+23 = 21 `faq-form` tests + 2 `TOOL_LABEL` pins), 3 skipped; `Test Files  2 failed | 182 passed (184)`. No test that passed post-T8 now fails (the counts move by exactly the 23). The remaining failures: 18 in `app.component.template-wiring.spec.ts` (T11/T12) and `tab-descriptors.spec.ts` failing at load, module not found (T10).
+- Per-task compile gate: `npx tsc --noEmit | grep "error TS"` prints exactly one line, `src/app/tab-descriptors.spec.ts(32,91): error TS2307`, in the allowlist after T9; zero diagnostics in any non-spec file (so the `Record<AppMode, string>` exhaustiveness holds and no other exhaustive `AppMode` consumer exists), `faq-form.spec.ts` and the table B specs carry none. `npm run lint` / `npm run build` are judged by this gate until T10.
+- `bash arch-guard.sh`: exit 0, all checks passed. No FROZEN file touched, no `--rebaseline`.
+- `npm run test:components`: not run (accepted as unevaluated until T10/QUALITY_GATE; no component spec touched).
+- Outcome: T9 complete, one commit (e8dcf56), no test file touched.
+
 ## Notes
 
 - Test components are accepted as unevaluated until T10/QUALITY_GATE (user decision); no stub was added.
