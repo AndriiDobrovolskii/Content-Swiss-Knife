@@ -69,6 +69,8 @@ import { buildTranslatePrompt } from '../prompts/task-translate';
 import { validateTranslationIntegrity, withTranslateFeedback } from '../utils/translation-integrity';
 import { stripLeakedPreamble, scanForLeakedPreamble } from '../utils/llm-output-integrity';
 import { buildPromptFaq } from '../prompts/task-faq';
+import { convertStrongToB } from '../utils/faq-html';
+import { buildFaqValidator, isFaqStorable, FAQ_MAX_ATTEMPTS } from '../utils/faq-gate';
 import { buildOptimizerPrompt } from '../prompts/optimizer';
 import { buildReadabilityPrompt } from '../prompts/readability';
 import { buildKeywordsPrompt } from '../prompts/keywords';
@@ -792,6 +794,167 @@ export class ContentOrchestratorService {
     return { ...result, artifact: html, finalIssues };
   }
 
+  /**
+   * US-8.1 — the single-master FAQ pipeline (plan D5). ONE uk-UA master is generated through the
+   * repair gate (fixed cap of FAQ_MAX_ATTEMPTS, a provider throw is one failed attempt) and then
+   * translated, sequentially, into every other language of the store. A language whose translation
+   * never passes is skipped; the master and the other languages are kept.
+   *
+   * Never throws: every gate call is wrapped, so a provider error or a failing block repairer in the
+   * FAQ step cannot abort the run, skip table finalisation or lose the history entry (SP-1). It does
+   * no retrieval (Rule 2) and builds no prompt text of its own (Rule 3).
+   */
+  private async runFaqPipeline(input: ProductInput, useThinking: boolean): Promise<void> {
+    // FR-5: the trigger is Supplemental Content alone; description and specs are only grounding.
+    if (!input.supplementalContent?.trim()) return;
+
+    const store = getStore(input.website.name);
+    // SP-3: a store profile without the master locale (the getStore() fallback) cannot be served.
+    if (!store.languages.includes(MASTER_LOCALE)) {
+      console.warn(`[FAQ] Store "${input.website.name}" does not list ${MASTER_LOCALE}; FAQ generation skipped.`);
+      return;
+    }
+
+    try {
+      // ── Master ────────────────────────────────────────────────────────────────────────────────
+      const masterHuman = isoToHumanLang(MASTER_LOCALE);
+      const masterLabel = `FAQ (${MASTER_LOCALE})`;
+      this.progressMessage.set(`Generating FAQ artifact (${MASTER_LOCALE})…`);
+      const masterResult = await this.runFaqGate({
+        input, useThinking, iso: MASTER_LOCALE, label: masterLabel,
+        basePayload: buildPromptFaq(
+          input.name, input.description, input.specs,
+          input.supplementalContent ?? '', masterHuman, store.currencySymbol,
+          buildNativeLangOverlay(bcp47ToTaskCLang(MASTER_LOCALE, store.group), masterHuman, input.website.name),
+        ),
+      });
+      if (!masterResult.storable) {
+        this.validationIssues.update(issues => [...issues, ...masterResult.finalIssues]);
+        console.warn(`[FAQ] ${masterLabel}: no valid master after ${FAQ_MAX_ATTEMPTS} attempts. No FAQ stored, no translation.`);
+        return;
+      }
+      // FR-10: an empty or whitespace-only master is the terminal "no FAQ" outcome, distinct from an
+      // invalid one: the gate sees no issue in it, so there is no retry. Nothing stored, no translation.
+      if (masterResult.html.trim() === '') {
+        console.info(`[FAQ] ${masterLabel}: the model returned no FAQ. Nothing stored, no translation.`);
+        return;
+      }
+      const master = convertStrongToB(masterResult.html);
+      this.storeFaq(MASTER_LOCALE, master);
+
+      // ── Translations ──────────────────────────────────────────────────────────────────────────
+      // Sequential, as the description loop is, to stay inside provider rate limits. transLangs holds
+      // Task C language keys, not ISO codes: map back for labels and for the faqArtifacts key.
+      const { transLangs } = getLangsForStore(input.website.name);
+      for (const taskLang of transLangs) {
+        const iso = taskLangToIso(taskLang, input.website.name);
+        const label = `FAQ translation (${iso})`;
+        this.progressMessage.set(`Translating FAQ to ${iso}…`);
+        const translated = await this.runFaqGate({
+          input, useThinking, iso, label, master,
+          basePayload: this.faqTranslationPayload(master, taskLang, input),
+        });
+        if (translated.storable && translated.html.trim() !== '') {
+          this.storeFaq(iso, translated.html);
+        } else {
+          // FR-11: skipped, never stored; the failure stays visible as a validation issue.
+          this.validationIssues.update(issues => [...issues, ...translated.finalIssues]);
+          console.warn(`[FAQ] ${label}: no valid translation after ${FAQ_MAX_ATTEMPTS} attempts. Skipped.`);
+        }
+      }
+    } catch (error) {
+      // Safety net: nothing above is expected to throw, but this step must never abort the run.
+      console.error('[FAQ] FAQ pipeline failed unexpectedly; the rest of the run continues.', error);
+    }
+  }
+
+  /**
+   * One FAQ artifact (master, or one translation when `master` is given) through the repair gate.
+   * Returns the gate's best artifact and whether it may be stored (plan D6). Never throws.
+   */
+  private async runFaqGate(opts: {
+    input: ProductInput;
+    useThinking: boolean;
+    iso: string;
+    label: string;
+    basePayload: PromptPayload;
+    master?: string;
+  }): Promise<{ html: string; storable: boolean; finalIssues: ValidationIssue[] }> {
+    const { input, useThinking, iso, label, basePayload, master } = opts;
+    // Set inside produce() when the provider call throws; read by the validator. Reset at the START of
+    // every produce call, so one early throw can never taint a later successful attempt.
+    let threw = false;
+    try {
+      const result = await runRepairGate<string>({
+        label,
+        // One attempt is one produce call (plan D5), so the cap is the number of regenerations + 1.
+        maxRepairs: FAQ_MAX_ATTEMPTS - 1,
+        basePayload,
+        produce: async (payload) => {
+          threw = false;
+          let html: string;
+          try {
+            html = await this.llm.generateText(payload, useThinking, { taskLabel: label, productName: input.name, store: input.website.name, lang: iso });
+          } catch (error) {
+            threw = true;
+            console.warn(`[FAQ] ${label}: the provider call failed; counted as one failed attempt.`, error);
+            return '';
+          }
+          html = convertStrongToB(stripCodeFences(html));
+          // The FAQ is held to the master's standard, so it gets the same deterministic normalizers.
+          // Ordering mirrors the description translation loop.
+          html = fixNumberFormatting(html, input.name, iso);
+          html = fixDecimalSeparator(html, iso);
+          html = restoreIdentifierDots(html, iso);
+          html = cyrillizeUnits(html, iso);
+          html = normalizeTerminology(html, iso);
+          return canonicalizeMultiInOne(html, iso);
+        },
+        validate: buildFaqValidator({
+          context: label, productName: input.name, locale: iso, master, providerFailed: () => threw,
+        }),
+        withFeedback: appendRepairFeedback,
+        // The block rung is the only instrument that can act on a FAQ warning. Its output is converted
+        // too, so a rewritten block cannot bring <strong> back (silent-failure risk 4).
+        repairBlocks: async (artifact, issues) =>
+          convertStrongToB(await this.blockRepairer(iso, label, input)(artifact, issues)),
+        onAttempt: (n, c) =>
+          this.progressMessage.set(`Repairing ${label} (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
+      });
+      if (result.repairsUsed > 0) console.info(`[repair-gate] ${label}: ${result.repairsUsed} repair(s) applied`);
+      this.repairReport.update(r => [...r, toArtifactReport(label, result, this.blockPatchTally.get(label))]);
+      return { html: result.artifact, storable: isFaqStorable(result.finalIssues), finalIssues: result.finalIssues };
+    } catch (error) {
+      console.error(`[FAQ] ${label}: the repair gate failed unexpectedly.`, error);
+      return {
+        html: '',
+        storable: false,
+        finalIssues: [{
+          severity: 'error', rule: 'faq-provider-error', context: label,
+          detail: 'The FAQ step failed unexpectedly; no usable FAQ text was produced.',
+        }],
+      };
+    }
+  }
+
+  /**
+   * The ONE place that decides the FAQ translation call's parameters (plan OD-6 seam): the Task C
+   * FAQ variant, with no protected-name block and no store-specific URL replacements. Thinking mode is
+   * passed through by the caller, exactly as the description loop does.
+   */
+  private faqTranslationPayload(master: string, taskLang: string, input: ProductInput): PromptPayload {
+    return buildPromptC(
+      master, taskLang, input.website.name, getStore(input.website.name).group, undefined,
+      { sourceLocale: MASTER_LOCALE, contentKind: 'faq' },
+    );
+  }
+
+  /** The single choke point that writes `faqArtifacts`; re-applies `<strong>` -> `<b>` (AC-7). */
+  private storeFaq(iso: string, html: string): void {
+    const stored = convertStrongToB(html);
+    this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [iso]: stored } }));
+  }
+
   async generate(input: ProductInput, useThinking = false): Promise<void> {
     // Reuse an editor-approved slug ONLY when it was approved for THIS exact product+store
     // (from a prior standalone Slug run); otherwise start clean. This makes the approved
@@ -1192,73 +1355,10 @@ export class ContentOrchestratorService {
       }
 
       // Step 5 — FAQ artifacts (schema-free, for Journal theme native module fields).
-      // Optional: runs only when Supplemental Content is supplied. Description and specs
-      // are still passed to the builder as grounding context, but they do not trigger it.
-      if (input.supplementalContent?.trim()) {
-        const store = getStore(input.website.name);
-        for (const isoCode of store.languages) {
-          const humanLang = isoToHumanLang(isoCode);
-          const faqLocaleOverlay = buildNativeLangOverlay(
-            bcp47ToTaskCLang(isoCode, store.group), humanLang, input.website.name,
-          );
-
-          this.progressMessage.set(`Generating FAQ artifact (${isoCode})…`);
-          const basePayloadFaq = buildPromptFaq(
-            input.name, input.description, input.specs,
-            input.supplementalContent ?? '', humanLang, store.currencySymbol,
-            faqLocaleOverlay,
-          );
-          const validateFaqHtml = (html: string): ValidationIssue[] => {
-            const issues = validateGeneratedHtml(html, `FAQ (${isoCode})`, input.name, isoCode);
-            if (html && !html.trim().startsWith('<')) {
-              issues.push({
-                severity: 'error', rule: 'non-html-output',
-                detail: 'Output is not HTML (does not start with "<").',
-                context: `FAQ (${isoCode})`,
-              });
-            }
-            return issues;
-          };
-          const faqResult = await runRepairGate<string>({
-            label: `FAQ (${isoCode})`,
-            maxRepairs: this.maxRepairs(),
-            basePayload: basePayloadFaq,
-            produce: async (payload) => {
-              let html = await this.llm.generateText(payload, useThinking, { taskLabel: `FAQ (${isoCode})`, productName: input.name, store: input.website.name, lang: isoCode });
-              html = stripCodeFences(html);
-              // The FAQ is validated by the same validateGeneratedHtml as the master, so it must
-              // get the same deterministic normalizers. Without them the gate reports unit-spacing
-              // and latin-unit-in-cyrillic-text findings that no instrument can reach (the FAQ had
-              // no block rung either) — held to the master's standard without the master's tooling.
-              // Ordering mirrors produceHtmlA above and is documented there.
-              html = fixNumberFormatting(html, input.name, isoCode);
-              html = fixDecimalSeparator(html, isoCode);
-              html = restoreIdentifierDots(html, isoCode);
-              html = cyrillizeUnits(html, isoCode);
-              html = normalizeTerminology(html, isoCode);
-              return canonicalizeMultiInOne(html, isoCode);
-            },
-            validate: validateFaqHtml,
-            withFeedback: appendRepairFeedback,
-            // Without this rung a FAQ warning was unreachable by ANY instrument: the block pass is
-            // the only thing that can act on a warning (see the master gate's note), and the FAQ
-            // gate simply had none. That is why the L2 Pro report listed three FAQ warnings under
-            // "not repaired" with no patch attempts against them. blockRepairer makes no
-            // assumptions about document shape, so it is safe on the FAQ's schema-free HTML.
-            repairBlocks: this.blockRepairer(isoCode, `FAQ (${isoCode})`, input),
-            onAttempt: (n, c) =>
-              this.progressMessage.set(`Repairing FAQ (${isoCode}) (attempt ${n}, ${c} issue${c > 1 ? 's' : ''})…`),
-          });
-          const { artifact: faqHtml, repairsUsed: faqRepairs } = faqResult;
-          if (faqRepairs > 0) console.info(`[repair-gate] FAQ (${isoCode}): ${faqRepairs} repair(s) applied`);
-          this.repairReport.update(r => [...r, toArtifactReport(`FAQ (${isoCode})`, faqResult, this.blockPatchTally.get(`FAQ (${isoCode})`))]);
-          if (faqHtml.startsWith('<')) {
-            this.content.update(c => ({ ...c, faqArtifacts: { ...c.faqArtifacts, [isoCode]: faqHtml } }));
-          } else {
-            console.warn(`[FAQ] No usable artifact for ${isoCode}: model returned non-HTML after repair. Skipped.`);
-          }
-        }
-      }
+      // US-8.1: ONE uk-UA master FAQ, translated into every other store language. Optional: runs only
+      // when Supplemental Content is supplied. The pipeline never throws, so output validation, table
+      // finalisation and the history entry below always run.
+      await this.runFaqPipeline(input, useThinking);
 
       // Post-generation acceptance-criteria check (non-blocking — reports only).
       this.runOutputValidation(input.website.name, input.name, input.templateId, 'uk-UA');
