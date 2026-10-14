@@ -152,6 +152,18 @@ open_decisions_blocking: false
 - `bash arch-guard.sh`: exit 0, all checks passed. No FROZEN file touched, no `--rebaseline`.
 - Outcome: T10 complete, one commit (3e9db41), no test file touched.
 
+## T11 - results (real runs)
+
+- File (`git show --stat 88670be`: 1 file, 62 insertions, 1 deletion; not FROZEN): `src/app/app.component.ts` only. Added the signals `faqSelectedWebsite`, `faqProductName`, `faqDescription`, `faqSpecs`, `faqSupplementalContent`; `isFaqFormValid` (computed through `isFaqFormComplete` with website, product name and supplemental content only, so Original Description and Tech Specs never gate Generate); `onFaqWebsiteChange` and `updateFaqProductName` (input handlers the T12 template will bind); `generateFaqOnly()` (re-checks `!site || !isFaqFormValid()`, alerts with the existing `alertFillFields` label and returns before any orchestrator call; otherwise builds the `ProductInput` with description, specs and supplemental content, sets the active tab to `faq-html` and calls `orchestrator.generateFaqOnly(input, seoUseThinking())`); the `activeProductName` branch; the `clearAll()` branch (clears the five signals, sets `faqArtifacts: {}` and `website: undefined`, resets `validationIssues`); `hasFaqOutput` (from `faqArtifacts` keys) included in `hasOutput`; and the labels `faqGenerator` ("FAQ Generator" in en and uk), `faqOnlyTitle`, `faqGenBtn` in `TRANSLATIONS` en and uk. Ukrainian UI strings only for the title and button; code and comments English.
+- Not touched: `downloadZip` / `downloadText` (`git diff` has no match), `restoreHistory`, any download code, `zip-generator.ts`, the template. No `AppComponent` spec added. No secret or key in browser code.
+- `npx vitest run src/app/app.component.template-wiring.spec.ts src/app/app.component.export-guard.spec.ts`: export guard green; template-wiring 7 failed, 33 passed in the two files. All 10 T11 component pins pass (en and uk label, `isFaqFormValid` via `isFaqFormComplete`, no Description/Specs in validity, guard-then-return in `generateFaqOnly`, description/specs/supplemental reach `ProductInput`, `seoUseThinking()`, `activeProductName`, `clearAll`, `hasOutput`). The 7 remaining failures are the T12 template pins (mode button, Extended Thinking toggle in the FAQ form, text inputs, no template dropdown, Generate button binding, three result-view conditions, SEO tab hidden).
+- Whole `test:logic` (`vitest run`), post-T10 vs post-T11: failed 17 -> 7, passed 6237 -> 6247 (+10 = the T11 component pins), 3 skipped; `Test Files  1 failed | 183 passed (184)`. Only that spec fails; nothing that passed post-T10 now fails (the counts move by exactly the 10). The 7 remaining failures are T12-owned.
+- Compile gate with the EMPTY allowlist: `npx tsc --noEmit` exit 0, zero diagnostics; `npm run build` exit 0, zero errors (only the existing file-saver / js-beautify / jszip "not ESM" warnings). No template change was needed, so the template type-check is unaffected until T12.
+- `npm run test:components`: exit 0, `Test Files  2 passed (2)`, `Tests  32 passed (32)`.
+- `bash arch-guard.sh`: exit 0. No FROZEN file touched, no `--rebaseline`.
+- Open points left as recorded (not decided here): OD-8 (history restore and skipped-language messaging unchanged), OD-9(e) (TXT download of a FAQ-only run: `hasOutput` is now true for a FAQ-only result so the existing download controls appear; no download code changed and nothing hidden).
+- Outcome: T11 complete, one commit (88670be), no test file touched.
+
 ## Notes
 
 - Test components were accepted as unevaluated until T10 (user decision, no stub added); first real run at T10: 2 files, 32 tests passed.
