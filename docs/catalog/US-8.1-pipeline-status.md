@@ -56,6 +56,7 @@ open_decisions_blocking: false
 | T12 FAQ Generator mode button, form and Generate button in the template | angular | DONE | c04096a |
 | T13 README documentation | angular | DONE | 7a0613e |
 | T15 exclude `faq-generator` from the empty-state condition (v4 delta) | angular | DONE | 9494b2b |
+| T16 move the Supplemental Content input directly after Product Name (v4 delta) | angular | DONE | 81bee6a |
 
 ## T1 - section 9 stop and approval record
 
@@ -266,6 +267,16 @@ open_decisions_blocking: false
 - Whole `test:logic`: `Test Files  1 failed | 184 passed (185)`, `Tests  5 failed | 6375 passed | 3 skipped (6383)` (before T14: 10 failed | 6370 passed); the only failures are the T16/T17-owned red pins.
 - `npx tsc --noEmit`: exit 0, no diagnostics (compile allowlist empty). `npm run lint`: exit 0. `npm run build`: exit 0. `npm run test:components`: `Test Files  2 passed (2)`, `Tests  32 passed (32)`. `bash arch-guard.sh`: exit 0, no `--rebaseline`.
 - Outcome: T14 complete, one commit. T16 and T17 remain (T17 reads the new key).
+
+## v4 delta - T16 results (real runs)
+
+- Scope: `src/app/app.component.html` only; the FAQ form's Supplemental Content `app-source-input` (nine lines plus its trailing blank line) was cut from after Tech Specs and pasted directly after the Product Name `</div>`. Commit `81bee6a` (`feat(US-8.1 T16): ...`). `git diff -w --color-moved` showed a pure relocation with no attribute added or removed (`[label]` still `uiLabels().supplementalContent`, `[required]="true"` kept; T17 owns the relabel). CRLF line endings preserved (the file was rewritten byte-wise); lines 1032, 1280, 1289, 1316 and the empty-state guard untouched; `generatorForm` untouched; no `.ts`, test, FROZEN file or `.arch-guard-checksums` changed.
+- FAQ form order is now Website/Store, Product Name, Supplemental Content, Original Description, Tech Specs, Deep Thinking toggle, Generate button.
+- `npx vitest run src/app/app.component.faq-layout.spec.ts -t "owner T16"`: `Test Files  1 passed (1)`, `Tests  2 passed | 35 skipped (37)`.
+- Whole faq-layout spec: `Tests  3 failed | 34 passed (37)`; the 3 failing are exactly the T17-owned pins; all `[baseline-guard]` tests green.
+- Whole `test:logic`: `Test Files  1 failed | 184 passed (185)`, `Tests  3 failed | 6377 passed | 3 skipped (6383)` (before T16: 5 failed | 6375 passed); the only failures are the T17-owned red pins. `template-wiring.spec` and `export-guard.spec` unmodified and green. `npm run test:components`: `Tests  32 passed (32)`.
+- `npx tsc --noEmit`: exit 0, no diagnostics (compile allowlist empty). `npm run lint`: exit 0. `npm run build`: exit 0. `bash arch-guard.sh`: exit 0.
+- Outcome: T16 complete, one commit. T17 remains.
 
 ## Notes
 
