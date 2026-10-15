@@ -32,7 +32,8 @@ import { MASTER_LOCALE, STORE_REGISTRY } from '../prompt-core/constants';
 import {
   registryStores, stubBrowserGlobals, FAQ_MASTER_HTML, FAQ_STRONG_HTML, FAQ_INVALID_HTML, MASTER_COUNTS, PRODUCT,
   translationOf, isoOf, generationCalls, translationCalls, translationCallsFor, faqCalls, isDescriptionTranslation,
-  storeLanguages, translationLanguages, countOf, runGenerate, runUa, type Run, type FaqRoutes,
+  storeLanguages, translationLanguages, countOf, runGenerate, runUa, faqTranslationPromptProblems, looksLikeDescriptionPrompt,
+  type Run, type FaqRoutes,
 } from '../../test/fixtures/faq-pipeline';
 import type { ProductInput } from '../app/types';
 
@@ -464,6 +465,44 @@ describe('FR-19 / AC-14: Generator and UA Description run the same FAQ pipeline'
       expect(ua.mock.calls.filter(isDescriptionTranslation)).toEqual([]);
       expect(gen.mock.calls.filter(isDescriptionTranslation).length).toBeGreaterThanOrEqual(translationLanguages(store).length);
     });
+  });
+});
+
+// ── AC-19, integration half (FR-12 items 1 and 3): the pipeline asks for the FAQ variant of the Task C prompt ──
+// `task-c.faq.spec.ts` proves the variant exists when `buildPromptC` is asked for it; nothing there proves the
+// production pipeline asks. This block reads only what the stubbed model RECEIVED on each FAQ translation
+// call (system blocks + user content) and asserts it is the FAQ variant, never the option that selects it.
+// Wording is OD-5, so it asserts the FR-12 items, not sentences. It must go red if the pipeline sends FAQ HTML
+// through the full description Task C prompt (closing H2 / CTA, delivery sentence, H1 LOCK, master prompt).
+for (const mode of MODES) {
+  describe(`AC-19 integration: ${mode.name} translates the FAQ with the FAQ prompt, not the description prompt`, () => {
+    describe.each(STORES)('store %s', (store) => {
+      let r: Run;
+      beforeAll(async () => { r = await mode.run(store); });
+
+      it('premise: one FAQ translation call per non-master language was captured', () => {
+        expect([...new Set(translationCalls(r.mock).map(c => isoOf(c.label)))].sort()).toEqual([...translationLanguages(store)].sort());
+        expect(translationCalls(r.mock).length).toBe(translationLanguages(store).length);
+      });
+
+      it('every FAQ translation prompt demands an element-for-element translation and carries NO description-only instruction', () => {
+        for (const c of translationCalls(r.mock)) {
+          expect(faqTranslationPromptProblems(c.payload), c.label).toEqual([]);
+        }
+      });
+    });
+  });
+}
+
+describe('AC-19 integration: the markers discriminate (a description translation call in the same run IS flagged)', () => {
+  it.each(STORES)('Generator, store %s: the description (HTML) translation prompts carry description-only instructions and fail the FAQ check', async (store) => {
+    const r = await runGenerate(store);
+    const description = r.mock.calls.filter(isDescriptionTranslation);
+    expect(description.length, 'description translation calls exist in the Generator run').toBeGreaterThanOrEqual(translationLanguages(store).length);
+    for (const c of description) {
+      expect(looksLikeDescriptionPrompt(c.payload), c.label).toBe(true);
+      expect(faqTranslationPromptProblems(c.payload).length, c.label).toBeGreaterThan(0);
+    }
   });
 });
 

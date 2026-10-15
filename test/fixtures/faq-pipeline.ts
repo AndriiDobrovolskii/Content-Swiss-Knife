@@ -28,6 +28,7 @@ import { RetrievalService } from '../../src/services/retrieval.service';
 import { HistoryService } from '../../src/services/history.service';
 import { MASTER_LOCALE, STORE_REGISTRY } from '../../src/prompt-core/constants';
 import { buildPromptFaq } from '../../src/prompts/task-faq';
+import { MASTER_SYSTEM_PROMPT } from '../../src/prompt-core/master-system-prompt';
 import type { PromptPayload } from '../../src/prompt-core/payload';
 import type { ProductInput } from '../../src/app/types';
 import {
@@ -84,6 +85,49 @@ export const storeLanguages = (store: string): string[] => STORE_REGISTRY[store]
 export const translationLanguages = (store: string): string[] => storeLanguages(store).filter(l => l !== MASTER_LOCALE);
 export const countOf = (html: string, tag: 'h3' | 'p' | 'ul' | 'li' | 'strong' | 'b'): number =>
   (html.match(new RegExp(`<${tag}\\b`, 'gi')) ?? []).length;
+
+// ── The FAQ TRANSLATION prompt, as observed at the stubbed LLM boundary (US-8.1 AC-19 integration half) ──
+//
+// `task-c.faq.spec.ts` proves the FAQ variant exists when `buildPromptC` is asked for it. These helpers let the
+// orchestrator specs prove the PRODUCTION pipeline asks for it, by reading only what the stubbed model received
+// (`systemBlocks` + `userContent`), never the option that selects it. Wording is OD-5, so only the three FR-12
+// items are looked at: (1) element-for-element, (3) no description-only instruction. The marker list is the
+// plan's D4 list, the same one `task-c.faq.spec.ts` applies.
+
+/** Description-only instructions that must NOT reach a FAQ translation call (FR-12 item 3, case-sensitive). */
+export const DESCRIPTION_ONLY_MARKERS = [
+  '</section>', '<hr', '<h2', 'COMMERCIAL CLOSING', 'CTA', 'H1 LOCK',
+  'Technical specifications', "What's in the box", '[Delivery',
+] as const;
+
+/** The 35 KB description master prompt, or a slice of it, in any system block of the payload. */
+const masterPromptBlocks = (p: PromptPayload): boolean =>
+  [MASTER_SYSTEM_PROMPT, MASTER_SYSTEM_PROMPT.slice(0, 400), MASTER_SYSTEM_PROMPT.slice(3000, 3400)]
+    .some(slice => p.systemBlocks.some(b => b.text.includes(slice)));
+
+const allText = (p: PromptPayload): string => `${p.systemBlocks.map(blk => blk.text).join('\n')}\n${p.userContent}`;
+
+/**
+ * What is wrong with a FAQ translation call's prompt, as human-readable reasons. `[]` means it is the FAQ
+ * variant: it demands an element-for-element translation naming the four structural elements and forbidding
+ * additions, and carries none of the description-only instructions (closing H2 / CTA block, delivery-region
+ * sentence, H1 LOCK, spec labels, MASTER_SYSTEM_PROMPT).
+ */
+export function faqTranslationPromptProblems(p: PromptPayload): string[] {
+  const system = p.systemBlocks.map(blk => blk.text).join('\n');
+  const everything = allText(p);
+  const problems: string[] = [];
+  if (!/element[- ]for[- ]element/i.test(system)) problems.push('no element-for-element translation instruction');
+  for (const tag of ['<h3>', '<p>', '<ul>', '<li>']) if (!system.includes(tag)) problems.push(`system blocks do not name ${tag}`);
+  if (!/(adding none|add none|do not add|don't add|never add|must not add|without adding)/i.test(system)) problems.push('no instruction forbidding added elements');
+  for (const m of DESCRIPTION_ONLY_MARKERS) if (everything.includes(m)) problems.push(`description-only marker present: ${m}`);
+  if (masterPromptBlocks(p)) problems.push('the description MASTER_SYSTEM_PROMPT is part of the prompt');
+  return problems;
+}
+
+/** True when the payload carries a description-only marker or the master prompt (used as a discrimination control). */
+export const looksLikeDescriptionPrompt = (p: PromptPayload): boolean =>
+  masterPromptBlocks(p) || DESCRIPTION_ONLY_MARKERS.some(m => allText(p).includes(m));
 
 type Responder = (n: number, payload: PromptPayload, label: string) => string;
 

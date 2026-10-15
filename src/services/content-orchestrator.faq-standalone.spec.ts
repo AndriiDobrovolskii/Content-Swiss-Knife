@@ -27,7 +27,8 @@ import { MASTER_LOCALE } from '../prompt-core/constants';
 import {
   registryStores, stubBrowserGlobals, bootFaqOnly, generatorInput, runGenerate, FAQ_MASTER_HTML, FAQ_STRONG_HTML,
   FAQ_INVALID_HTML, translationOf, isoOf, generationCalls, translationCalls, translationCallsFor, faqCalls,
-  isFaqGeneration, isFaqTranslation, storeLanguages, translationLanguages, countOf, PRODUCT, type FaqRoutes,
+  isFaqGeneration, isFaqTranslation, storeLanguages, translationLanguages, countOf, PRODUCT, faqTranslationPromptProblems,
+  type FaqRoutes,
 } from '../../test/fixtures/faq-pipeline';
 import type { GeneratedContent, ProductInput } from '../app/types';
 
@@ -337,5 +338,29 @@ describe('AC-9 (AC-14): a not-valid answer is regenerated, only a valid FAQ is s
     const r = await runFaqOnly('EXPERT3D', { translation: (n, _p, iso) => (iso === target && n === 1 ? `${translationOf(iso)}<h2>Extra</h2>` : translationOf(iso)) });
     expect(translationCallsFor(r.booted.mock, target)).toHaveLength(2);
     for (const html of Object.values(content(r).faqArtifacts!)) expect(html).not.toMatch(/<h2\b/i);
+  });
+});
+
+// ── AC-19, integration half (FR-12 items 1 and 3), standalone entry point ───────────────────────────────────────
+// Reads only what the stubbed model received on each FAQ translation call (system blocks + user content) and
+// asserts it is the FAQ variant of the Task C prompt: element-for-element, none of the description-only
+// instructions (closing H2 / CTA, delivery-region sentence, H1 LOCK, spec labels, MASTER_SYSTEM_PROMPT). It
+// never references the option that selects the variant; wording is OD-5, so only the FR-12 items are asserted.
+describe('AC-19 integration: generateFaqOnly translates the FAQ with the FAQ prompt, not the description prompt', () => {
+  describe.each(STORES)('store %s', (store) => {
+    const run = lazy(() => runFaqOnly(store));
+
+    it('premise: one FAQ translation call per non-master language was captured', async () => {
+      const r = await run();
+      expect([...new Set(translationCalls(r.booted.mock).map(c => isoOf(c.label)))].sort()).toEqual([...translationLanguages(store)].sort());
+      expect(translationCalls(r.booted.mock).length).toBe(translationLanguages(store).length);
+    });
+
+    it('every FAQ translation prompt demands an element-for-element translation and carries NO description-only instruction', async () => {
+      const r = await run();
+      for (const c of translationCalls(r.booted.mock)) {
+        expect(faqTranslationPromptProblems(c.payload), c.label).toEqual([]);
+      }
+    });
   });
 });

@@ -244,3 +244,99 @@ describe('US-8.1 T12 / AC-13 UI side — the result view treats the FAQ Generato
     expect(htmlLf.slice(Math.max(0, at - 300), at)).toContain("'faq-generator'");
   });
 });
+
+// ── Loop-back tightening (RECONCILIATION v1, N-2): the AC-10 label key and the AC-11 predicate arguments ──────
+// Test-only. Each pin below closes a hole the reconciliation named: a button wired to the wrong label key, or a
+// predicate fed the wrong signal, passed every pin above. They remain source-text pins (no rendered DOM).
+
+describe('US-8.1 AC-10 (tightened) — the mode button is bound to the faqGenerator label key and sits with its siblings', () => {
+  /** The mode switcher: from the first mode button to the History Panel that follows it. */
+  const switcher = () => {
+    const start = htmlLf.indexOf("(click)=\"setMode('dashboard')\"");
+    const end = htmlLf.indexOf('<!-- History Panel');
+    return start >= 0 && end > start ? htmlLf.slice(start, end) : '';
+  };
+  /** The one button whose click handler is setMode(<mode>), through its closing tag. */
+  const modeButton = (mode: string): string => blockOf(htmlLf, new RegExp(`<button\\s+\\(click\\)="setMode\\('${mode}'\\)"[\\s\\S]*?</button>`));
+
+  it('the FAQ Generator mode button shows uiLabels().faqGenerator (not faqOnlyTitle, faqGenBtn or another key)', () => {
+    const button = modeButton('faq-generator');
+    expect(button, 'the faq-generator mode button was not found').not.toBe('');
+    const keys = [...button.matchAll(/\{\{\s*uiLabels\(\)\.(\w+)\s*\}\}/g)].map(m => m[1]);
+    expect(keys).toEqual(['faqGenerator']);
+  });
+
+  it('the faqGenerator key resolves to "FAQ Generator" in BOTH label maps (so the button text is the Story\'s label)', () => {
+    const enBlock = tsLf.slice(tsLf.indexOf('const TRANSLATIONS'), tsLf.indexOf('\n  uk: {'));
+    const ukBlock = blockOf(tsLf.slice(tsLf.indexOf('\n  uk: {')), /[\s\S]*?\n\};/);
+    expect(enBlock).toMatch(/\bfaqGenerator\s*:\s*'FAQ Generator'/);
+    expect(ukBlock).toMatch(/\bfaqGenerator\s*:\s*'FAQ Generator'/);
+  });
+
+  it('the mode switcher holds the FAQ Generator button together with the SEO Meta and Slugs mode buttons', () => {
+    const block = switcher();
+    expect(block, 'the mode switcher was not located').not.toBe('');
+    for (const mode of ['faq-generator', 'seo-generator', 'slug-generator']) {
+      expect(block, `setMode('${mode}')`).toContain(`setMode('${mode}')`);
+    }
+  });
+
+  it('the FAQ Generator button is in the same switcher row as the UA Description button (one button group, no other control between)', () => {
+    const block = switcher();
+    const ua = block.indexOf("setMode('ua-generator')");
+    const faq = block.indexOf("setMode('faq-generator')");
+    expect(ua, "setMode('ua-generator')").toBeGreaterThanOrEqual(0);
+    expect(faq, "setMode('faq-generator')").toBeGreaterThan(ua);
+    expect(block.slice(ua, faq), 'a row boundary sits between the two buttons').not.toContain('</div>');
+  });
+});
+
+describe('US-8.1 AC-11 (tightened) — the predicate is fed the Store, Product Name and Supplemental Content signals', () => {
+  const validity = () => blockOf(tsLf, /isFaqFormValid\s*=\s*computed\([\s\S]*?\);[ \t]*\n/);
+  const faqForm = () => {
+    const start = htmlLf.search(/\n {4}@else if \(appMode\(\) === 'faq-generator'\)/);
+    if (start < 0) return '';
+    const rest = htmlLf.slice(start + 1);
+    const end = rest.slice(10).search(/\n {4}@else/);
+    return end < 0 ? rest : rest.slice(0, end + 10);
+  };
+
+  it('isFaqFormComplete receives faqSelectedWebsite() as the store, faqProductName() and faqSupplementalContent()', () => {
+    const block = validity();
+    expect(block, 'isFaqFormValid not found').not.toBe('');
+    expect(block).toMatch(/website\s*:\s*this\.faqSelectedWebsite\(\)/);
+    expect(block).toMatch(/productName\s*:\s*this\.faqProductName\(\)/);
+    expect(block).toMatch(/supplementalContent\s*:\s*this\.faqSupplementalContent\(\)/);
+  });
+
+  it('it is given exactly those three arguments (no Original Description or Tech Specs, no other signal)', () => {
+    const args = [...validity().matchAll(/\b(website|productName|supplementalContent|description|specs)\s*:/g)].map(m => m[1]);
+    expect(args).toEqual(['website', 'productName', 'supplementalContent']);
+  });
+
+  it('the Store select writes faqSelectedWebsite (the signal the predicate reads)', () => {
+    const form = faqForm();
+    expect(form, 'FAQ form block not found').not.toBe('');
+    expect(form).toMatch(/<select\b[^>]*\(change\)="onFaqWebsiteChange\(\$event\)"/);
+    const handler = blockOf(tsLf, /onFaqWebsiteChange\([^)]*\)\s*\{[\s\S]*?\n  \}\n/);
+    expect(handler, 'onFaqWebsiteChange not found').not.toBe('');
+    expect(handler).toMatch(/this\.faqSelectedWebsite\.set\(/);
+  });
+
+  it('the Product Name input writes faqProductName (the signal the predicate reads)', () => {
+    const form = faqForm();
+    expect(form, 'FAQ form block not found').not.toBe('');
+    expect(form).toMatch(/<input\b[^>]*\(input\)="updateFaqProductName\(\$event\)"/);
+    expect(tsLf).toMatch(/updateFaqProductName\([^)]*\)\s*\{\s*this\.faqProductName\.set\(/);
+  });
+
+  it('the Supplemental Content source input writes faqSupplementalContent and is the required one', () => {
+    const form = faqForm();
+    expect(form, 'FAQ form block not found').not.toBe('');
+    const inputs = [...form.matchAll(/<app-source-input\b[\s\S]*?\/>/g)].map(m => m[0]);
+    const supplemental = inputs.filter(i => i.includes('(valueChange)="faqSupplementalContent.set($event)"'));
+    expect(supplemental).toHaveLength(1);
+    expect(supplemental[0]).toContain('[value]="faqSupplementalContent()"');
+    expect(supplemental[0]).toMatch(/\[required\]="true"/);
+  });
+});

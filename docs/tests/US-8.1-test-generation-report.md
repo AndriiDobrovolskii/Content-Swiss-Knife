@@ -1,12 +1,12 @@
 ---
 artifact: test_generation_report
 story: US-8.1
-version: 2
+version: 3
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-14T19:45:00Z
-updated_at: 2026-10-14T23:30:00Z
-supersedes: docs/tests/US-8.1-test-generation-report.md#1
+updated_at: 2026-10-15T13:00:00Z
+supersedes: docs/tests/US-8.1-test-generation-report.md#2
 inputs_consumed:
   - key: story
     version: 2
@@ -23,8 +23,10 @@ inputs_consumed:
   - key: test_strategy
     version: 1
   - key: ac_test_matrix
-    version: 2
+    version: 3
   - key: security_review
+    version: 1
+  - key: reconciliation_report
     version: 1
 open_decisions_blocking: false
 ---
@@ -178,3 +180,55 @@ Finding: **R9 is not red.** The brief expected `<h3>Q</h3><p onclick='x()>A</p>`
 `npx tsc --noEmit`: exit 0, 0 diagnostics. The new tests import only existing modules and symbols, so no import-level red exists in this loop-back.
 
 Builder acceptance check: `npx vitest run src/utils/faq-html.spec.ts src/utils/faq-gate.spec.ts` plus `npx vitest run src/services/content-orchestrator.faq-pipeline.spec.ts -t "B-1"`; all must be green after the fix, then the full `npm run test:logic` must return to 184 files, 6288 passed, 3 skipped.
+
+## Loop-back addendum (v3): RECONCILIATION finding F-1, the AC-19 integration half (TEST_WRITING loop-back 2 of 3)
+
+Trigger: RECONCILIATION returned CHANGES_REQUIRED (`changes_required_tests`), `docs/reconciliation/US-8.1-reconciliation-report.md` v1, finding F-1 (blocking) plus the recommended tightening N-1/N-2. No implementation file, FROZEN file or `.arch-guard-checksums` was touched; no existing assertion was edited, weakened or skipped (the only edits to existing lines are the import lists of two specs that gained names).
+
+### What was missing
+
+`task-c.faq.spec.ts` proves the FAQ variant of the Task C prompt exists when `buildPromptC` is called with the explicit FAQ option. Nothing proved the production pipeline passes it. The reviewer removed the option from the translation call in a throwaway worktree and 1442 tests across 30 files stayed green: FAQ HTML would have gone through the full description prompt (closing H2 / CTA, delivery sentence, H1 LOCK, master prompt) with every gate green.
+
+### Tests added (+58, all logic runner, no `*.component.spec.ts`)
+
+| File | Added | What |
+|---|---|---|
+| `test/fixtures/faq-pipeline.ts` | helpers only | `DESCRIPTION_ONLY_MARKERS` (the nine plan-D4 markers, the same list `task-c.faq.spec.ts` uses), `faqTranslationPromptProblems(payload)` (returns the reasons a payload is not the FAQ variant: no element-for-element instruction, an element name missing, no no-additions instruction, any description-only marker anywhere in system blocks or `userContent`, a `MASTER_SYSTEM_PROMPT` block or slice), `looksLikeDescriptionPrompt(payload)` |
+| `src/services/content-orchestrator.faq-pipeline.spec.ts` | 35 | Generator (`generate`) and UA Description (`generateUaContent`), per store of `STORE_REGISTRY` (7): a premise test (one FAQ translation call per non-master language captured) and "every FAQ translation prompt demands an element-for-element translation and carries NO description-only instruction" (28 tests); plus a discrimination control per store, Generator: the description translation prompts of the same run ARE flagged by the same helpers (7 tests), so the markers are not trivially absent |
+| `src/services/content-orchestrator.faq-standalone.spec.ts` | 14 | `generateFaqOnly`, per store (7): the same two tests |
+| `src/app/app.component.template-wiring.spec.ts` | 9 | AC-10: the mode button's only label binding is `uiLabels().faqGenerator`; the key is `'FAQ Generator'` in both label maps; the switcher holds the faq, seo and slug mode buttons; the FAQ button sits in the same row as the UA Description button. AC-11: `isFaqFormComplete` receives exactly `faqSelectedWebsite()`, `faqProductName()`, `faqSupplementalContent()`; the Store select, the Product Name input and the Supplemental Content source input each write the signal the predicate reads |
+
+None of the orchestrator specs imports or names the option that selects the variant; they assert on what the stubbed `LlmService` received. They assert the FR-12 items (element-for-element, no description-only instruction), not exact sentences (OD-5). Languages come from the registry (every non-master language of each of the 7 stores = 16 translation prompts per entry point), never from a typed list.
+
+### Mutation proof (not vacuous), real output
+
+The tests pass against the current correct code (expected for a coverage-gap loop-back): `npx vitest run` on the two orchestrator specs = `Test Files 2 passed (2)`, `Tests 707 passed (707)`.
+
+Mutation 1 (temporary local edit of `src/services/content-orchestrator.service.ts`, one line: `{ sourceLocale: MASTER_LOCALE, contentKind: 'faq' }` -> `{ sourceLocale: MASTER_LOCALE }` in `faqTranslationPayload`; reverted with `git checkout -- src/services/content-orchestrator.service.ts`, `git diff` for that path empty afterwards): the same two files = `Test Files 2 failed (2)`, `Tests 21 failed | 686 passed (707)`. The 21 are exactly 7 stores x 3 entry points, all of them the "every FAQ translation prompt ..." test:
+
+| Entry point | Failing tests | Right reason (real output) |
+|---|---|---|
+| Generator (`generate`) | 7 | `AssertionError: FAQ translation (en-GB): expected [ ...(9) ] to deeply equal []`; the received list includes `"no element-for-element translation instruction"` and `"description-only marker present: </section>"` |
+| UA Description (`generateUaContent`) | 7 | same shape (`FAQ translation (pl-PL): expected [ ...(10) ] to deeply equal []`) |
+| `generateFaqOnly` | 7 | same shape (`FAQ translation (en-ES): ...`) |
+
+The premise tests (7 per entry point) and every pre-existing test stayed green under the mutation (686 passed), which matches the reviewer's finding that the old suite could not see this regression.
+
+Mutation 2 (the AC-10 and AC-11 pins; temporary edits of `src/app/app.component.html` (the mode button label key `faqGenerator` -> `faqOnlyTitle`) and `src/app/app.component.ts` (the `productName:` argument of `isFaqFormComplete` rewired to `this.faqDescription()`), both reverted with `git checkout`): `src/app/app.component.template-wiring.spec.ts` = `Tests 3 failed | 39 passed (42)`. The two NEW pins fail ("the FAQ Generator mode button shows uiLabels().faqGenerator ..." and "isFaqFormComplete receives faqSelectedWebsite() as the store, faqProductName() and faqSupplementalContent()"); the third failure is the existing "AC-12: the validity computation does not read Original Description or Tech Specs", which the rewiring to `faqDescription()` legitimately violates. Unmutated: 42 passed.
+
+After both mutations `git status` listed only the four test paths (and, later, the two docs); no implementation file.
+
+### Final run (real output)
+
+- `npm run test:logic`: `Test Files 184 passed (184)`, `Tests 6343 passed | 3 skipped (6346)`, exit 0. Baseline before this loop-back: 184 files, 6285 passed, 3 skipped, 0 failed. 6343 - 6285 = 58 = exactly the new tests (35 + 14 + 9); no spec file was added, so the file count is unchanged.
+- `npx tsc --noEmit`: exit 0, 0 diagnostics.
+- `bash arch-guard.sh`: exit 0 ("ALL CHECKS PASSED").
+- `npm run test:components` was not re-run in this loop-back (no component spec or Angular source was touched).
+
+### Matrix corrections (ac_test_matrix v3)
+
+The "State now" / "Green by" columns were stale (the TEST_WRITING-time RED snapshot). v3 keeps that snapshot as "State at TEST_WRITING" and adds a refreshed "State now (v3)" column (all GREEN, observed by the full run above). The faq-form row claimed whitespace "incl. NBSP"; `faq-form.spec.ts` tests spaces, tab and newline only, so the claim was corrected rather than a test added (the implementation's `trim()` would handle U+00A0 but nothing asserts it). New rows: AC-19 pipeline and standalone, AC-10 and AC-11 wiring.
+
+### Limits (unchanged by this loop-back)
+
+The AC-4 / AC-10 / AC-11 wiring pins are still source-text pins, not a rendered DOM; "alongside SEO Meta and Slugs" is pinned as presence in the one mode switcher plus adjacency to UA Description, not as visual position. A manual run of the FAQ Generator in a browser remains advisable at HUMAN_PR_APPROVAL (reconciliation N-3).
