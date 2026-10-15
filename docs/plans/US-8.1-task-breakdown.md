@@ -1,29 +1,80 @@
 ---
 artifact: task_breakdown
 story: US-8.1
-version: 3
-status: APPROVED
+version: 4
+status: DRAFT
 owner: so-implementation-planner
 created_at: 2026-10-14T20:00:00Z
-updated_at: 2026-10-15T00:00:00Z
-supersedes: docs/plans/US-8.1-task-breakdown.md#2
+updated_at: 2026-10-15T15:00:00Z
+supersedes: docs/plans/US-8.1-task-breakdown.md#3
 inputs_consumed:
   - key: story
-    version: 2
+    version: 3
   - key: specification
-    version: 2
+    version: 3
   - key: impact_analysis
-    version: 1
+    version: 2
   - key: implementation_plan
-    version: 1
-  - key: plan_review
     version: 2
 open_decisions_blocking: false
 ---
 
 # Task breakdown: US-8.1 (one master FAQ, translated; `<b>` not `<strong>`; standalone FAQ Generator)
 
-13 tasks. Exactly one task (T1) edits a FROZEN file (`src/prompts/task-c.ts`, under the operator's
+> **Revision v4 (2026-10-15).** v3 (APPROVED) planned T1 to T13 for Specification v2 (FR-1 to FR-23). All thirteen are **built and
+> committed** on this branch (status table below). Specification v3 (APPROVED at HUMAN_SPEC_APPROVAL, c7098af) adds FR-24 to FR-28
+> and NFR-9 (Story v3, AC-21 to AC-26: the FAQ Generator screen layout), designed in implementation plan v2 as D12 to D16. This
+> revision adds **T14 to T17** for that delta only. T1 to T13 keep their text; they are marked DONE and are not re-planned,
+> re-opened or re-tested here. The status goes back to `DRAFT`: plan review and `HUMAN_PLAN_APPROVAL` run again against v4.
+> Task breakdown v3 is `SUPERSEDED` by this file (the file path is unchanged; v3's exact text is recoverable with `git show b6ceebe:docs/plans/US-8.1-task-breakdown.md`). v3's `plan_review`
+> input (plan_review v3, which reviewed the v1 plan) is not consumed here: it predates plan v2 and is stale for this revision.
+> Everything below that speaks in the present or future tense about T1 to T13 is the v3 text, kept as written; the status table
+> says what happened.
+
+Task count: **17** (T1 to T13 DONE, T14 to T17 new). The v2 delta is **four tasks in two files** (`src/app/app.component.html`,
+`src/app/app.component.ts`), all track `angular`, none FROZEN, plus **one new spec file** written by `TEST_WRITING`
+(`src/app/app.component.faq-layout.spec.ts`, `test:logic`). Nothing in the delta touches a prompt, `STORE_REGISTRY`, a FROZEN file,
+`.arch-guard-checksums`, a golden, a fixture, `server/**` or any already-built FR-1 to FR-23 file.
+
+## Revision notes (v3 to v4, design delta D12 to D16)
+
+| Item | Change in v4 |
+|---|---|
+| T1 to T13 | Text kept intact; each marked DONE with its commit (status table). Their tests lists, files, acceptance checks and the v3 gate convention are not rewritten. The two post-T13 loop-back fixes (8c89bce, 1ac82e1) are recorded below the status table as fixes, not as tasks. |
+| New tasks | **T14** (label key `supplementalContentRequired` in both `TRANSLATIONS` blocks, D15), **T15** (empty-state guard conjunct, D12, which also satisfies FR-25 per D13), **T16** (Supplemental Content input moved directly after Product Name, D14), **T17** (relabel binding in the FAQ form, D15). |
+| Ordering | Contract before consumer: T14 (the key) before T17 (the binding that reads it). Riskiest first: T15 (the only edit that can change another mode's screen). T14 and T15 are independent, in disjoint files. T15, T16, T17 are serial because they all edit `app.component.html`. |
+| New spec | `src/app/app.component.faq-layout.spec.ts` is a **table B** spec: it reads `app.component.html` / `.ts` as text and imports nothing a task of this Story creates. It must carry **zero** `tsc` diagnostics at every task, from the first commit. Its pins are red or green at baseline as classified in "v4 test-state classification". |
+| Gate | The v3 per-task gate applies. For T14 to T17 the allowlist is empty (table A is empty and the delta adds no table A spec), so `npm run lint` and `npm run build` must exit 0 after every one of them. See "v4 per-task gate". |
+| Coverage | Extended: plan items D12 to D16 and FR-24 to FR-28 / NFR-9 map to T14 to T17, and a full AC-1 to AC-26 table is added. |
+| Open points | Carried forward and updated (section "Open points carried to HUMAN_PLAN_APPROVAL"); nothing is decided by this breakdown. |
+
+## Task status (T1 to T13 are built; T14 to T17 are planned)
+
+| Task | Status | Commit |
+|---|---|---|
+| T1 FAQ variant in `task-c.ts` + re-baseline (FROZEN, operator-approved) | DONE | da59195 |
+| T2 `<b>` not `<strong>` in the FAQ generation prompt | DONE | 3698434 |
+| T3 `faq-html.ts` | DONE | c7197f0 |
+| T4 `validateFaqStructuralParity` | DONE | d09f092 |
+| T5 `faq-gate.ts` | DONE | 54ee224 |
+| T6 `runFaqPipeline` / `storeFaq`, `generate()` | DONE (the FR-21 English-translation assertion was a test defect, corrected by the test-only commit c62e30a) | f3343e1 |
+| T7 `generateUaContent()` wiring | DONE | 7f534d7 |
+| T8 `generateFaqOnly()` | DONE | 9f20a15 |
+| T9 `faq-generator` `AppMode`, `TOOL_LABEL`, `faq-form.ts`, feedback form entry | DONE | e8dcf56 |
+| T10 `deriveTabDescriptors` | DONE | 3e9db41 |
+| T11 FAQ Generator component state | DONE | 88670be |
+| T12 FAQ Generator mode button, form, Generate button | DONE | c04096a |
+| T13 README | DONE | 7a0613e |
+| T14 label key `supplementalContentRequired` in both `TRANSLATIONS` blocks | planned | n/a |
+| T15 exclude `faq-generator` from the empty-state condition | planned | n/a |
+| T16 move the Supplemental Content input directly after Product Name | planned | n/a |
+| T17 bind the FAQ Supplemental Content label to the new key | planned | n/a |
+
+Post-T13 loop-back fixes (not tasks of this breakdown, recorded for accuracy): 8c89bce (registry-derived language name in the FAQ
+variant of `task-c.ts`, under a second and separate section 9 grant; `MASTER_LOCALE` in `tab-descriptors.ts`) and 1ac82e1
+(`validateFaqShape` fails closed on markup the tag pass cannot see). Neither is re-planned here.
+
+13 tasks (v3 text). Exactly one task (T1) edits a FROZEN file (`src/prompts/task-c.ts`, under the operator's
 recorded AGENTS.md section 9 permission) and it carries the section 9 stop. No task edits
 `master-system-prompt.ts`, `output-validator.ts`, `task-a.ts`, `task-b.ts`, `constants.ts`,
 `payload.ts`, `repair-strategy.ts`, `zip-generator.ts`, `server/**`, `src/domain/**` or
@@ -209,6 +260,89 @@ need and the allowlist rows it would then require:
    each with a missing-symbol kind. Any diagnostic in a table B spec is a defect to fix before the
    stage ends.
 
+## v4 delta: gate, test state and constraints for T14 to T17
+
+This section applies to T14 to T17 only. It extends, and does not replace, the v3 text above.
+
+### v4 per-task gate
+
+The v3 gate (items 1 to 5) holds with these specialisations:
+
+1. **Own tests.** Every pin the task owns (selected with `-t "owner T<n>"`, see constraint V4-3) passes.
+2. **No regression.** Every test that passed before the task still passes in `test:logic` (the whole suite was 184 files, all green,
+   after T13 and the loop-back fixes; the figure to compare against is the run taken immediately before the task), including every pin of
+   `app.component.template-wiring.spec.ts` (with its `>= 3` line-count pin at lines 236 to 239) and `app.component.export-guard.spec.ts`.
+   The baseline-green guards of the new spec must stay green after every task. Pins owned by a later task (still red) are not counted
+   as regressions.
+3. **Compile gate, empty allowlist.** Table A is empty and the delta adds no table A spec, so `npx tsc --noEmit` reports **zero**
+   diagnostics and `npm run lint` and `npm run build` exit **0** after every one of T14 to T17. This is stricter than the v3 gate for
+   T1 to T9, and it is achievable because the new spec is a source-text spec (it imports no module that a task creates, and no
+   `AppComponent`), so it can never carry a missing-symbol diagnostic. `npm run test:components` also exits 0 (two files, 32 tests, no file added).
+4. **Frozen baseline.** `bash arch-guard.sh` exits 0 and `.arch-guard-checksums` is **byte-unchanged** (`git diff --stat` does not list it);
+   no `--rebaseline`, no section 9 stop (nothing here is FROZEN; the section 9 grants recorded for `task-c.ts` covered FR-1 to FR-23 only and are neither used nor extended).
+5. **Scope.** `git diff` for the commit lists only the files in the task's Files table (NFR-9 diff property).
+
+The full suite with coverage is proved green only by `QUALITY_GATE`, after T17.
+
+### The new spec is table B, with zero diagnostics
+
+`src/app/app.component.faq-layout.spec.ts` (`test:logic`; matches `src/**/*.spec.ts`, does not match `*.component.spec.ts`, so
+`test:components` gains no file) is **table B**. It reads `src/app/app.component.html` and `src/app/app.component.ts` **as text**, in the
+idiom of `app.component.template-wiring.spec.ts` and `app.component.export-guard.spec.ts`, and evaluates one template condition against
+stubbed `appMode`, `content` and `isGenerating`. It imports **no** symbol that any task of this Story creates (no `faq-form`,
+`tab-descriptors`, `faq-gate`, `faq-html`, no `FAQ_*` constant), nothing that exists only after T14 (the key is a string in the source
+text, never an import), and not `AppComponent` or any Angular package. It is therefore never in the allowlist, never red by load failure, and carries zero
+`tsc` diagnostics at every task and from the TEST_WRITING commit onward. A diagnostic in this file at any time is a defect in the spec, to be fixed before TEST_WRITING ends.
+Its red pins fail at runtime by assertion ("expected X, got Y"); none fails by "module not found". The "cannot find module" red state
+accepted in v3 for the four brand-new-module specs does **not** extend to this delta.
+
+### v4 test-state classification (so TEST_WRITING and the builder do not misread it)
+
+Not every pin fails before its task lands. A green pin at baseline is a **regression guard** (FR-28 / NFR-9): it exists to fail if a
+task goes wrong, not to drive a change. It is not "a test that exercises nothing", and TEST_WRITING must not make it red to look like a test-first pin.
+
+| State on the current tree (before T14) | Pins | Owner of the change that turns it green (or keeps it green) |
+|---|---|---|
+| **Red first** | FR-24 / AC-21: the extracted empty-state `@if` condition, evaluated for `faq-generator`, is `false` in every grid state (before a run, during a run, after a FAQ-only run, after a no-FAQ run); the condition text contains `appMode() !== 'faq-generator'` | T15 |
+| **Red first** | FR-26 / AC-23: the strictly increasing anchor order Store, Product Name, Supplemental `valueChange`, Description `valueChange`, Specs `valueChange`, `toggleSeoThinking()`; the first `<app-source-input` of the FAQ form is the Supplemental one | T16 |
+| **Red first** | FR-27 / AC-24, template side: the FAQ Supplemental input has `[label]="uiLabels().supplementalContentRequired"`; `uiLabels().supplementalContent` (exact key) occurs exactly once in the whole template, inside `generatorForm` | T17 |
+| **Red first** | FR-27 / AC-24, source side: `en` carries `supplementalContentRequired: 'Supplemental Content (Required)'` (no "Optional"); `uk` carries the key with runtime value `Додатковий контент (Обов'язково)` (apostrophe U+0027; not "Опціонально"; no U+2019 or U+02BC; differs from English); the `en` and `uk` key sets are equal **and contain** the new key | T14 |
+| **Green at baseline [baseline-guard]** | FR-24: `noContentYet` and `fillFormStart` each occur once, in one block that also holds the `fa-file-code` icon; the condition holds no `hasOutput`, `hasFaqOutput` or `faqArtifacts` | stays green through T15 |
+| **Green at baseline [baseline-guard]** | FR-28 / AC-26 empty state: for `generator`, `ua-generator`, `seo-generator`, `slug-generator`, over a state grid that includes the trap states (stale `faqArtifacts` with empty output fields; `seoData` or `slugData` set; `mainHtmlUa` set; `isGenerating`), the evaluated condition equals an oracle that is a **literal copy of today's condition** (`appMode() !== 'generator' && !mainHtmlUa && !seoData && !slugData && !isGenerating()`) | must stay green at T15 (the task that can break it), T16, T17 |
+| **Green at baseline [baseline-guard]** | FR-28 / AC-26 forms and labels: the `generatorForm` Supplemental input is bound to `uiLabels().supplementalContent` (not the new key) and has no `[required]`; the order of the `description.set`, `specs.set`, `supplementalContent.set` targets in `generatorForm` is unchanged; `en.supplementalContent` is still `'Supplemental Content (Optional)'` and `uk.supplementalContent` still `'Додатковий контент (Опціонально)'`; the SEO and Slug form blocks do not bind the new key | must stay green at T14, T16, T17 |
+| **Green at baseline [baseline-guard]** | FR-27 parity, whole dictionary: the `en` and `uk` top-level key sets are equal (170 and 170 today, none one-sided). The "contains the new key" half is red-first (above); the equality half is a guard that turns red only if the key is added to one block only | must stay green at T14 (add to both blocks in the same commit) |
+| **Green at baseline [baseline-guard]** | FR-25 / AC-22 structure: between the tab bar's closing `</header>` and the first `@for (tab of tabDescriptors()`, once the validation `<details>`, the repair `<details>` and the empty-state block are removed, only the scroll container's opening tag remains; the container's class tokens hold no `flex` token, `grid`, `items-*`, `justify-*`, `h-full` or `min-h-*`; the FAQ result panel root carries no `h-full`, `min-h-*`, `justify-*`, `items-center`, `mt-*`, `pt-*` | stays green through T15, T16, T17 (none may add a wrapper or class) |
+| **Existing, unmodified, already green** | `app.component.template-wiring.spec.ts` (including `>= 3` `app-source-input` in the FAQ form at 213 to 217, the single `faqSupplementalContent` input with `[required]="true"` at 333 to 341, the `faqForm()` extraction helper, and the line-count pin at 236 to 239), `app.component.export-guard.spec.ts`, `faq-form.spec.ts`, `content-orchestrator.faq-standalone.spec.ts` (FR-18: `mainHtmlUa === ''` etc.) | must stay green through every task; none is edited |
+
+FR-25's geometric clause (AC-22: the panel's top edge is the container's top padding below the tab bar, not vertically centred) has
+**no automated pin and no task**. It is the manual browser check (OD-15 default), recorded by `QUALITY_GATE` (see the open points). It is
+not pipeline evidence, and `RECONCILIATION` must treat it as a recorded claim.
+
+### Constraints on TEST_WRITING for the v4 delta
+
+V4-1. **One new file, no edits to existing specs.** The pins live in `src/app/app.component.faq-layout.spec.ts` (name fixed by plan D16).
+   `app.component.template-wiring.spec.ts`, `app.component.export-guard.spec.ts` and every other existing spec are not edited, weakened or
+   excluded (AGENTS.md section 7.7); this also keeps the brittle `>= 3` line-count pin at template-wiring lines 236 to 239 visibly undisturbed.
+V4-2. **Table B, source text, zero diagnostics.** As above. The spec normalises CRLF (`text.split('\r\n').join('\n')`) like the wiring spec,
+   uses the same extraction idioms (FAQ form block = from `\n    @else if (appMode() === 'faq-generator')` to the next `\n    @else`; `en` block =
+   from `const TRANSLATIONS` to `\n  uk: {`; `uk` block = from `\n  uk: {` to the first `\n};` after it; keys by the four-space regex `^    (\w+):`),
+   and **starts each group with premise assertions** (block found, slice non-empty) so a mis-slice fails loudly instead of passing vacuously.
+V4-3. **Owner tags in titles.** Every `it` title (or its `describe`) carries its requirement id (FR-24 .. FR-28, NFR-9) **and** the owner
+   marker `(owner T14)`, `(owner T15)`, `(owner T16)`, `(owner T17)` for a red-first pin, or `[baseline-guard]` for a baseline-green regression
+   guard, so each task's acceptance check can select its own pins with `-t "owner T<n>"` and run the guards with `-t "baseline-guard"`. The `[baseline-guard]` token is a unique token that appears in **no** red-first title, and no guard title contains an `owner T` marker; a pin with a red half and a guard half (the FR-27 key-set parity) is **split into two tests**, so `-t "baseline-guard"` never selects a pin that is still red and `-t "owner T<n>"` never selects a guard.
+V4-4. **The condition pin fails closed.** The `@if (...)` guarding the empty-state block is extracted with a balanced-parenthesis scan
+   starting at the block that contains `noContentYet`, and evaluated with stubbed `appMode`, `content`, `isGenerating`. If extraction or
+   evaluation throws or finds nothing, the test **fails** (it never skips). The FR-28 oracle is a literal copy of today's condition, not a
+   re-derivation from the new template.
+V4-5. **Apostrophe.** The `uk` pin compares the runtime value after turning the source escape `\'` into `'` and asserts code point U+0027,
+   rejecting U+2019 and U+02BC (plan R16).
+V4-6. **Report requirement.** The test generation report lists, for this spec, its table (B), the exact `tsc --noEmit` result on the branch
+   after TEST_WRITING (**zero** diagnostics), and for every pin its baseline state: red-first with the runtime failure reason ("expected X,
+   got Y") and its owner task, or baseline-green guard with the task whose change it protects. Any red-first pin that fails by a load
+   error, and any diagnostic in the file, is a defect to fix before the stage ends.
+V4-7. **No pin in the existing wiring spec is reused as evidence for a delta requirement** unless the AC matrix names it as existing; the
+   FR-25 / AC-22 geometric clause is listed as "manual, QUALITY_GATE", not as covered by a pin.
+
 ## Execution order
 
 1. **T1** FAQ variant in `task-c.ts` + re-baseline (prompt, FROZEN) — first, alone
@@ -233,6 +367,24 @@ so they are serial. T12 edits only `app.component.html`.
 Dependencies: T1<-none; T2<-none; T3<-none; T4<-none; T5<-T3,T4; T6<-T1,T3,T4,T5; T7<-T6; T8<-T6,T7;
 T9<-none; T10<-T9; T11<-T8,T9,T10; T12<-T11; T13<-T12.
 
+### v4 execution order (T14 to T17)
+
+T1 to T13 are built (status table); the order above is history. The remaining order is:
+
+12. **T15** exclude `faq-generator` from the empty-state condition (`app.component.html` only). First, because it is the riskiest edit of the delta.
+13. **T14** add the label key `supplementalContentRequired` to both `TRANSLATIONS` blocks (`app.component.ts` only). **Independent of T15**
+    (disjoint files, no shared pin); it may run before or in parallel with T15. It is listed second only because T15 carries the risk. It must land
+    before T17.
+14. **T16** move the Supplemental Content input directly after Product Name (`app.component.html`). Logically independent; serial after T15
+    only because both edit the same file.
+15. **T17** bind the FAQ Supplemental Content label to the new key (`app.component.html`; needs T14 and T16).
+
+Parallelisable group: **T14 and T15** (mutually independent, disjoint files). Serial constraint: T15, T16, T17 all edit
+`app.component.html`, so they run in that order, one commit each.
+
+Dependencies (v4): T14<-none; T15<-none; T16<-none (logical; serial after T15 for the shared file); T17<-T14,T16. T1 to T13 are built and
+are the baseline for all four.
+
 ## Risk-first rationale
 
 T1 is first because the plan's one load-bearing assumption (D4/D8: dropping `MASTER_SYSTEM_PROMPT`
@@ -243,47 +395,85 @@ orchestrator chain later. It is also the only task that can silently change ever
 translation prompt (FR-13), so it must land while the byte-identity golden is the only thing it can
 disturb.
 
+### Risk-first rationale (v4 delta)
+
+T15 is first in the delta because it is the only edit that can change another mode's screen. The empty-state block is shared by
+`ua-generator`, `seo-generator`, `slug-generator` and `faq-generator`, and `content` is one signal shared by all modes (`setMode()` does not reset
+it), so a wrong guard (for example one derived from `hasOutput()` or `faqArtifacts`) would silently hide or show the block in the wrong mode (plan
+R13). The condition pin (evaluated against a literal oracle of today's condition, trap states included) proves or breaks that approach
+immediately, and it is the pin that fails closed if the condition ever stops being evaluable. T14 is independent and low risk (two string
+literals, one parity pin). T16 and T17 are presentational and each is guarded by pins that already exist.
+
 ## Open points carried to HUMAN_PLAN_APPROVAL
 
 These are recorded here because the Open Decisions log is not an output of this stage. They add no
-requirement and no task; the orchestrator is asked to surface them for the OD-9 / OD-6 entries.
+requirement and no task; the orchestrator is asked to surface them. This list is the v3 list updated for the v2 delta: the
+v4 items come first, then the standing items with wording corrected to what happened. **Nothing here is decided by this breakdown.**
 
-- **OD-9(e) — export of a FAQ-only run (open, not decided).** `downloadTextPackage`
-  (`zip-generator.ts:84-113`) ignores `faqArtifacts`. T11 makes `hasOutput()` true for a FAQ-only
-  result, so the TXT download control would appear and save a file containing only the header; the
-  ZIP carries an empty `description_uk-UA.html` (pre-existing behaviour for SEO-only and Slug-only
-  runs, plan OD-9 default). Options for the human: (1) accept the TXT as is; (2) hide the TXT control
-  for `faq-generator` (a one-binding change in T12 if chosen); (3) make `downloadTextPackage` include
-  the FAQ text (a `zip-generator.ts` edit, which would need a new task and a Specification decision).
-  Until answered, T11 and T12 change no download code and hide nothing.
-- **OD-6 seam** (protected-name block, thinking tier, extra normalisers for FAQ translation): wired
-  behind the single `faqTranslationPayload(...)` seam in T6 at today's behaviour; the human should
-  answer at the gate.
-- **`tools/feedback-form/create-form.gs`** (T9) is outside the Story's Surface and the impact
-  analysis; confirm at approval or drop that one line from T9.
-- **Per-task gate convention (interpretation of AGENTS.md section 6).** Because tests exist for the
-  whole Story before any task runs, `npm run lint` / `npm run build` cannot exit 0 until T10 (table A
-  specs carry missing-symbol diagnostics). v3 therefore defines a per-task gate: zero diagnostics
-  outside the table A specs whose owner has not landed, zero in table B specs always, exit 0 from
-  T10, the full gate at QUALITY_GATE after T13. It is an interpretation of AGENTS.md section 6 item 1
-  and `so-builder` definition-of-done item 3 for a tests-first branch; it changes no threshold and
-  skips no check. The human is asked to confirm it.
-- **Departure from `so-test-writer` text ("cannot find module is a broken test, not a red one").**
-  Constraint 4 accepts "module not found" as the red state for the four brand-new-module specs
-  (`faq-html`, `faq-gate`, `faq-form`, `tab-descriptors`), with the test generation report listing
-  them by name ("red by absent module, by design") and a runtime failure reason required for every
-  other spec. This matches the US-5.1 / US-7.1 precedent but departs from the skill's literal
-  wording; the human is asked to confirm it, or to direct TEST_WRITING to add empty module stubs
-  instead (which would add source files this breakdown does not list).
-- **Plan wording to acknowledge.** Plan risk R10 says the Generator tab snapshot is "generated from
-  the pre-extraction function". That cannot be done mechanically (`AppComponent` is not
-  instantiable in the logic runner). T10 supersedes it with hand-derived expected literals plus a
-  move-only diff check. This is a risk-mitigation wording, not a design decision; the plan file is
-  not edited by this stage.
+### v4 items (the FAQ Generator layout delta)
+
+- **OD-15 — manual browser check for AC-22's geometric clause (required, not automated).** No task and no automated pin verifies that the
+  active FAQ panel's top edge sits one container padding (`p-8`, 32 px) below the tab bar's bottom edge and is not vertically centred; the
+  repository has no layout engine (`happy-dom` has none) and no browser-test tool. The plan's default is the structure pin (T15 plus the
+  FR-25 guards) plus a **manual** check in DevTools, recorded by `QUALITY_GATE` (who, when, result). `RECONCILIATION` must read it as a
+  recorded claim, not pipeline evidence. The human may require a stronger check at this gate.
+- **OD-13 — Ukrainian label default.** T14 implements the labelled default `Додатковий контент (Обов'язково)` (ASCII apostrophe U+0027) in the
+  `uk` block. The Specification flagged it for human approval; the approval of Specification v3 carried the default. The English text is fixed by
+  AC-24. If the human chooses other wording, the change is one literal in T14 and its pin.
+- **OD-16 — blank central area after a run that stores no FAQ.** T15 removes the only "nothing was produced" cue for `faq-generator`. No message is added by any task
+  (the failure-state message stays with OD-8). Accepted as flagged.
+- **OD-11 — pre-run tab strip.** The tab-bar `<header>` (line 1289) is rendered for `faq-generator` unconditionally, so before a run it is an
+  empty bordered strip. No task hides it, because that would rewrite line 1289 and disturb the `>= 3` pin and no requirement asks for it.
+- **OD-12 — validation and repair panels stay above the result.** FR-25 is asserted for the case with no such panel; in a run that skips a language a panel
+  can appear and FR-25 then holds only vacuously. No task reorders the panels.
+- **OD-17 — `alertFillFields` wording.** Unchanged; a FAQ-only alert would need a new key and a branch in `generateFaqOnly()`, and is not planned.
+- **OD-14 (tab labels) and OD-10 (FAQ Generator only).** Defaults implemented: tab labels and styling are untouched; the Generator, UA Description, SEO and
+  Slug screens and the shared `supplementalContent` key are untouched (guarded at T14, T15 and T17).
+
+### Standing items (from v3, wording aligned with what happened)
+
+- **OD-9(e) — export of a FAQ-only run (still open, not decided, not in scope of this revision).** `downloadTextPackage` (`zip-generator.ts`)
+  ignores `faqArtifacts`. T11 made `hasOutput()` true for a FAQ-only result, so the TXT control appears for a FAQ-only run and saves a file with only the header;
+  the ZIP carries an empty `description_uk-UA.html` (pre-existing behaviour for SEO-only and Slug-only runs). T11 and T12 changed no download code and hid
+  nothing. Options for the human: (1) accept as is; (2) hide the TXT control for `faq-generator` (a one-binding template change, which would be a new task);
+  (3) make `downloadTextPackage` include the FAQ text (a `zip-generator.ts` edit, a new task and a Specification decision). **No v4 task touches this.**
+- **OD-6 seam (still open, not in scope of this revision).** Protected-name block, thinking tier and extra normalisers for FAQ translation: T6 built the single
+  `faqTranslationPayload(...)` seam at today's behaviour; the human should answer at the gate. No v4 task touches it.
+- **Other open points left open and not in scope here:** OD-8 (skipped-language wording and severity), OD-9 (tab layout, history restore, empty `description_uk-UA.html`
+  in a standalone ZIP), OD-18 to OD-20 (carried SP-1 to SP-3 handling). The review loop-backs already closed on the built code (8c89bce, 1ac82e1)
+  are not reopened by this revision.
+- **`tools/feedback-form/create-form.gs` (T9, built).** The v3 text flagged this file as outside the Story's Surface and the first impact analysis. It was presented
+  at the v3 HUMAN_PLAN_APPROVAL (2026-10-14T16:00:08Z, approved with no approver comment) and T9 was then built with that one `'FAQ Generator'` dropdown entry (e8dcf56),
+  without a test. The approval note records only OD-6, OD-8, OD-9(e) and SP-1..SP-3 as not decided, so this file is not an open question; it is retained for the record. The v4
+  delta does not touch it and needs no new decision on it.
+- **Per-task gate convention (interpretation of AGENTS.md section 6, applied during T1 to T9).** Presented at the same v3 gate and applied while building: because tests were
+  written for the whole Story before any task ran, `npm run lint` / `npm run build` could not exit 0 until T10 (table A specs carried missing-symbol diagnostics); the gate
+  admitted zero diagnostics outside table A specs whose owner had not landed, zero in table B always, and exit 0 from T10. It changed no threshold and skipped no check. Retained
+  for the record. For T14 to T17 it is simpler and stricter: no allowlist, lint and build exit 0 after every task (see "v4 per-task gate"); v4 needs no new decision on it.
+- **"Cannot find module" red state (departure from `so-test-writer` text).** Presented at the v3 gate and applied: it was accepted for the four brand-new-module specs of FR-1
+  to FR-23 (`faq-html`, `faq-gate`, `faq-form`, `tab-descriptors`), listed by name in the test generation report as "red by absent module, by design", with a runtime
+  failure reason for every other spec. Those specs are built and green. The v4 delta needs **no** such departure: its one new spec is table B and, where red, fails by
+  assertion. Retained for the record; v4 needs no new decision on it.
+- **Plan wording to acknowledge (R10).** "Snapshot generated from the pre-extraction function" could not be done mechanically; T10 used hand-derived literals plus a
+  move-only diff check. A risk-mitigation wording, not a design decision; the plan file is not edited by this stage.
+- **What the rejected gate asked for, and what it did not.** v4 exists because the operator rejected HUMAN_PR_APPROVAL (2026-10-15T10:06:10Z) with exactly two UI
+  change requests, re-routed to the Story and the Specification at 10:11:05Z: (1) FAQ Generator central area: remove the empty-state block and put the result directly
+  under the version tabs (AC-21, AC-22; T15); (2) FAQ Generator form: Supplemental Content directly under Product Name, labelled "Required" (AC-23 to AC-25; T14, T16, T17).
+  Those two requests are the whole scope of T14 to T17 (AC-26 keeps every other mode unchanged). The same note records that the operator had already tried the FAQ Generator
+  in a browser and found everything else working; that is the operator's statement, not a recorded AC-22 geometry check, so the OD-15 manual check above is still required.
+  **Not in scope of that follow-up** (they stay open points, none is decided by v4): OD-9(e), OD-6, OD-8, OD-9, OD-11, OD-12, OD-14, OD-16 and OD-17 as listed above.
+
+### Not in scope of this revision
+
+No task of v4 addresses OD-9(e), OD-6, OD-8, OD-9, the TXT download, the pre-run tab strip (OD-11), the panel order (OD-12), a failure-state
+message (OD-16/OD-8), the `alertFillFields` text (OD-17), the version-tab labels (OD-14), or a stronger-than-manual AC-22 geometry check. They stay open points
+with their labelled defaults. If the human decides any of them differently at this gate, that is a new Specification decision and a new task, not an edit to
+T14 to T17.
 
 ---
 
 ## T1 — Add the additive FAQ translation variant to `task-c.ts` and re-baseline the checksums
+> **Status (v4): DONE**, commit da59195. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -337,6 +527,7 @@ It is the only characterization test in this Story that is green from the start.
 ---
 
 ## T2 — Replace `<strong>` with `<b>` in the FAQ generation prompt
+> **Status (v4): DONE**, commit 3698434. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -368,6 +559,7 @@ and no longer list `<strong>`. Nothing else in the prompt changes.
 ---
 
 ## T3 — Add the `<strong>` to `<b>` conversion and the FAQ shape validator
+> **Status (v4): DONE**, commit c7197f0. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -415,6 +607,7 @@ is then reported as `faq-attribute-present`; per-task gate compile rule holds (a
 ---
 
 ## T4 — Add the FAQ-only structural parity comparison
+> **Status (v4): DONE**, commit d09f092. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -454,6 +647,7 @@ Regexes are `<p\b`, `<ul\b`, `<h3\b`, `<li\b` so `<pre` does not count as `<p>`.
 ---
 
 ## T5 — Add the FAQ validation composition and the store-or-skip decision
+> **Status (v4): DONE**, commit 54ee224. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -525,6 +719,7 @@ a contract error; translation: the parity rule rejects it).
 ---
 
 ## T6 — Introduce the single-master FAQ pipeline and use it in `generate()`
+> **Status (v4): DONE**, commit f3343e1 (plus the test-only correction c62e30a). Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -570,6 +765,7 @@ translates sequentially into `getLangsForStore(store).transLangs` with `contentK
 ---
 
 ## T7 — Use the shared FAQ pipeline in `generateUaContent()`
+> **Status (v4): DONE**, commit 7f534d7. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -603,6 +799,7 @@ Plan risk R1: leaving this call site untouched shows as `faqArtifacts` of size 1
 ---
 
 ## T8 — Add the standalone `generateFaqOnly()` orchestrator method
+> **Status (v4): DONE**, commit 9f20a15. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -641,6 +838,7 @@ same parameter style as `generateSeoMetadata` / `generateSlugs`.
 ---
 
 ## T9 — Register the `faq-generator` mode, its feedback label and the form predicate
+> **Status (v4): DONE**, commit e8dcf56. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -690,6 +888,7 @@ export function isFaqFormComplete(values: FaqFormValues): boolean;
 ---
 
 ## T10 — Extract `deriveTabDescriptors` and add the UA-Description and FAQ-only tab cases
+> **Status (v4): DONE**, commit 3e9db41. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -789,6 +988,7 @@ other than `ua-generator` and `faq-generator` must be identical. `_autoSelectTab
 ---
 
 ## T11 — Add the FAQ Generator component state and its `generateFaqOnly()` call
+> **Status (v4): DONE**, commit 88670be. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -826,6 +1026,7 @@ Do not add an `AppComponent` spec (prior deliberate decision; it would also add 
 ---
 
 ## T12 — Add the FAQ Generator mode button, form and Generate button to the template
+> **Status (v4): DONE**, commit c04096a. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -861,6 +1062,7 @@ The FAQ tab panels already render from `faqArtifacts[tab.iso]` through `parseFaq
 ---
 
 ## T13 — Document the single-master FAQ and the FAQ Generator in the README
+> **Status (v4): DONE**, commit 7a0613e. Built; text below is the v3 plan, not re-opened.
 
 | | |
 |---|---|
@@ -886,6 +1088,188 @@ no test — this task changes no behaviour, because it edits documentation only.
 
 ### Notes
 Describe only what is implemented (one uk-UA master, sequential translation, retry limit of 3, skip on failure). Do not document OD-6/OD-8 choices as decided.
+
+---
+
+## T14 — Add the FAQ-only label key `supplementalContentRequired` to both `TRANSLATIONS` blocks
+
+> **Status (v4): planned** (new in v4, design delta D15).
+
+| | |
+|---|---|
+| **Track** | angular |
+| **Depends on** | none (T1 to T13 are built). Independent of T15 (disjoint files); must land before T17. |
+| **FROZEN (AGENTS.md §9)** | no |
+
+### What changes
+The `en` and `uk` blocks of the `TRANSLATIONS` literal each gain one key, `supplementalContentRequired`, placed immediately after the existing
+`supplementalContent` line of that block, so that the T17 template binding reads a key that exists in both UI languages (contract before consumer). The
+existing `supplementalContent` key is **not** changed: it is read by the Generator and UA Description form too (FR-28). No logic, signal, computed,
+predicate or type changes.
+
+| Block | Line to add (source text) |
+|---|---|
+| `en` (after the `supplementalContent` line, about line 147) | `supplementalContentRequired: 'Supplemental Content (Required)',` |
+| `uk` (after the `supplementalContent` line, about line 320) | `supplementalContentRequired: 'Додатковий контент (Обов\'язково)',` |
+
+### Files
+| File | Change |
+|---|---|
+| `src/app/app.component.ts` | modify: two lines, one in each `TRANSLATIONS` block, nothing else |
+
+### Tests to turn green
+Written by `TEST_WRITING` before this task starts; they exist and are red.
+
+| Test file | Runner | Covers |
+|---|---|---|
+| `src/app/app.component.faq-layout.spec.ts` (new; pins tagged `(owner T14)`) | `test:logic` | FR-27 / AC-24, source side: `en` carries the key with `'Supplemental Content (Required)'`, no "Optional"; `uk` carries the key, runtime value `Додатковий контент (Обов'язково)` with apostrophe U+0027, not "Опціонально", no U+2019 / U+02BC, different from the English value; the `en` and `uk` key sets are equal and both contain the new key (red first on the "contains the new key" half) |
+| same file (pins tagged `[baseline-guard]`, green at baseline) | `test:logic` | FR-28 / AC-26: `en.supplementalContent` is still `'Supplemental Content (Optional)'` and `uk.supplementalContent` still `'Додатковий контент (Опціонально)'`; the key-set equality (170 and 170 today) stays green because the key is added to both blocks in this one commit |
+
+### Acceptance check
+- `npx vitest run src/app/app.component.faq-layout.spec.ts -t "owner T14"` passes; `-t "baseline-guard"` still passes (the pins owned by T15 to T17 are not run here and may still be red).
+- `npx vitest run src/app/app.component.template-wiring.spec.ts src/app/app.component.export-guard.spec.ts` passes unmodified.
+- `git diff` lists only `src/app/app.component.ts` and adds exactly two lines; the shared `supplementalContent` lines are unchanged.
+- Compile gate with the empty allowlist: `npx tsc --noEmit` reports zero diagnostics (an unescaped apostrophe in the `uk` literal is a syntax error and fails here), `npm run lint` and `npm run build` exit 0; `bash arch-guard.sh` exits 0 with `.arch-guard-checksums` unchanged.
+
+### Notes
+- The apostrophe in `Обов'язково` is ASCII U+0027 (verified in the Specification bytes, plan D15). In the single-quoted `uk` block it is written `\'`, as the existing `обов\'язкові` already is. Do not use U+2019 or U+02BC.
+- The `*` of the required marker is not part of the string; it comes from `[required]="true"`.
+- The Ukrainian text is the OD-13 labelled default; do not resolve OD-13 here.
+- Whether `ng build` would fail on a one-sided key is unverified (`tsconfig.json` sets no `strict` / `strictTemplates`); the whole-dictionary parity pin, not the build, is what catches it.
+
+---
+
+## T15 — Exclude `faq-generator` from the empty-state condition
+
+> **Status (v4): planned** (new in v4, design delta D12 and D13).
+
+| | |
+|---|---|
+| **Track** | angular |
+| **Depends on** | none (T1 to T13 are built). First task of the delta because it is the riskiest; independent of T14 (disjoint files). |
+| **FROZEN (AGENTS.md §9)** | no |
+
+### What changes
+In the result view, the single `@if` that guards the "no content yet" block (`noContentYet` / `fillFormStart`, `fa-file-code` icon) gains exactly one conjunct,
+`appMode() !== 'faq-generator' &&`, directly after `appMode() !== 'generator' &&` and before `!content().mainHtmlUa`. For every other mode the new
+expression is logically identical to today's, so SEO Generator, Slug Generator and UA Description render the block exactly when they do now (FR-28, by construction).
+For `faq-generator` the conjunct is false in every state, so the block is absent before a run, during a run and after a run, including a run that stores no FAQ (FR-24).
+This one edit also satisfies FR-25's structural clauses (plan D13): in the no-panel case the FAQ result panel becomes the first content below the tab bar.
+No component logic, data field or other template line changes.
+
+```
+before: @if (appMode() !== 'generator' && !content().mainHtmlUa && !content().seoData && !content().slugData && !isGenerating())
+after:  @if (appMode() !== 'generator' && appMode() !== 'faq-generator' && !content().mainHtmlUa && !content().seoData && !content().slugData && !isGenerating())
+```
+
+### Files
+| File | Change |
+|---|---|
+| `src/app/app.component.html` | modify: the condition at line 1447 only. Lines 279, 1032, 1280, 1289 and 1316 are **not** touched. |
+
+### Tests to turn green
+| Test file | Runner | Covers |
+|---|---|---|
+| `src/app/app.component.faq-layout.spec.ts` (new; pins tagged `(owner T15)`, red first) | `test:logic` | FR-24 / AC-21: the extracted `@if` condition evaluated with `appMode = 'faq-generator'` is `false` for every grid state (empty content and not generating; generating; after a FAQ-only run with `mainHtmlUa ''`, `translations {}`, `seoData null`, `slugData null`, `faqArtifacts` populated; after a no-FAQ run with everything empty); the condition text contains `appMode() !== 'faq-generator'` |
+| same file (pins tagged `[baseline-guard]`, green at baseline, **must stay green**) | `test:logic` | FR-28 / AC-26: the same condition for `generator`, `ua-generator`, `seo-generator`, `slug-generator` equals the literal oracle of today's condition over the state grid incl. trap states (stale `faqArtifacts` with empty output fields; `seoData` / `slugData` / `mainHtmlUa` set; `isGenerating`); `noContentYet` and `fillFormStart` occur once each in one block with the `fa-file-code` icon; the condition holds no `hasOutput`, `hasFaqOutput` or `faqArtifacts`. FR-25 / AC-22 structure guards (nothing between the tab bar and the result except the validation panel, the repair panel and, until now, the empty-state block; no centring or height class on the container or on the FAQ panel root) |
+| `src/app/app.component.template-wiring.spec.ts`, `app.component.export-guard.spec.ts`, `src/services/content-orchestrator.faq-standalone.spec.ts` (existing, already green) | `test:logic` | the `>= 3` line-count pin at 236 to 239 is undisturbed because lines 1032, 1280, 1289 and 1316 are untouched; FR-18 data fields (`mainHtmlUa ''` etc.) unchanged |
+
+### Acceptance check
+- `npx vitest run src/app/app.component.faq-layout.spec.ts -t "owner T15"` passes; `-t "baseline-guard"` passes (the FR-28 oracle comparison is the proof that no other mode changed).
+- `npx vitest run src/app/app.component.template-wiring.spec.ts src/app/app.component.export-guard.spec.ts src/services/content-orchestrator.faq-standalone.spec.ts` passes unmodified.
+- `git diff -U0 src/app/app.component.html` shows **one** changed line (1447) and the hunk adds only `appMode() !== 'faq-generator' && `; `git diff` lists no other file.
+- Compile gate, empty allowlist: `npx tsc --noEmit` zero diagnostics; `npm run lint` and `npm run build` exit 0 (template type-check); `npm run test:components` exits 0; `bash arch-guard.sh` exits 0, `.arch-guard-checksums` unchanged.
+- Manual (not this task's acceptance, recorded at QUALITY_GATE): the AC-22 geometric check in a browser (open point OD-15).
+
+### Notes
+- Do **not** derive the exclusion from `hasOutput()`, `hasFaqOutput()` or `faqArtifacts`, make the FAQ-only result non-empty, add a wrapper `@if`, hide it with CSS, add an `isFaqOnlyMode` computed, or reformat / wrap / extract any of lines 1032, 1280, 1289, 1316 (plan Rejected 13 to 15, risks R13 and R17). The condition must stay a single expression of `appMode()`, `content()` and `isGenerating()` so the spec can evaluate it.
+- `content` is one shared signal across modes and `setMode()` does not reset it; that is why the guard is by mode and not by data.
+- The tab-bar `<header>` (line 1289) stays rendered for `faq-generator` (OD-11); the validation and repair panels stay above the result (OD-12).
+- Keep the file's existing line endings.
+
+---
+
+## T16 — Move the Supplemental Content input directly after Product Name in the FAQ form
+
+> **Status (v4): planned** (new in v4, design delta D14).
+
+| | |
+|---|---|
+| **Track** | angular |
+| **Depends on** | none logically; serial after T15 only because both edit `app.component.html`. |
+| **FROZEN (AGENTS.md §9)** | no |
+
+### What changes
+In the FAQ Generator form block (`@else if (appMode() === 'faq-generator')`), the Supplemental Content `<app-source-input>` is cut from after Tech Specs
+(lines 625 to 633) and pasted between the Product Name `<div class="space-y-2">` (ends line 604) and the Original Description input. The resulting DOM
+order is Target Website select, Product Name input, Supplemental Content, Original Description, Tech Specs, then the Deep Thinking toggle (FR-26; DOM order is the keyboard
+tab order). The moved element is byte-identical: same attributes, **including `[required]="true"`**, `[value]="faqSupplementalContent()"`,
+`(valueChange)="faqSupplementalContent.set($event)"`, the same 8-space indent, and the **same `[label]` binding** (it is relabelled by T17, not here).
+
+### Files
+| File | Change |
+|---|---|
+| `src/app/app.component.html` | modify: move one `app-source-input` element inside the FAQ form block; no attribute changes |
+
+### Tests to turn green
+| Test file | Runner | Covers |
+|---|---|---|
+| `src/app/app.component.faq-layout.spec.ts` (new; pins tagged `(owner T16)`, red first) | `test:logic` | FR-26 / AC-23: in the FAQ form block the character indices of these anchors are strictly increasing: the Store `<select ... (change)="onFaqWebsiteChange($event)"`, the Product Name `<input ... (input)="updateFaqProductName($event)"`, `(valueChange)="faqSupplementalContent.set($event)"`, `(valueChange)="faqDescription.set($event)"`, `(valueChange)="faqSpecs.set($event)"`, `toggleSeoThinking()`; the first `<app-source-input` of the block is the Supplemental one and the block still has exactly three |
+| same file (`[baseline-guard]` pins) | `test:logic` | FR-28 and FR-25 guards stay green: the `generatorForm` Supplemental input and its order of `description.set`, `specs.set`, `supplementalContent.set` are untouched; no wrapper or class is added around the FAQ panel or the container |
+| `src/app/app.component.template-wiring.spec.ts` (existing, already green; **must stay green unmodified**) | `test:logic` | `>= 3` `app-source-input` in the FAQ form (213 to 217); exactly one input with `(valueChange)="faqSupplementalContent.set($event)"` containing `[value]="faqSupplementalContent()"` and `[required]="true"` (333 to 341); the `faqForm()` extraction helper (start `\n    @else if (appMode() === 'faq-generator')`, end at the next 4-space `\n    @else`); the `>= 3` line-count pin (236 to 239) |
+
+### Acceptance check
+- `npx vitest run src/app/app.component.faq-layout.spec.ts -t "owner T16"` passes; `-t "baseline-guard"` passes.
+- `npx vitest run src/app/app.component.template-wiring.spec.ts src/app/app.component.export-guard.spec.ts` passes unmodified (the existing FAQ-form pins prove `[required]="true"`, the single `faqSupplementalContent` input and the extraction helper are intact).
+- `git diff -w --color-moved=zebra src/app/app.component.html` shows the nine-line element **relocated unchanged** (a pure move: no added or removed attribute), and `git diff` lists no other file.
+- Compile gate, empty allowlist: `npx tsc --noEmit` zero diagnostics; `npm run lint` and `npm run build` exit 0; `npm run test:components` exits 0; `bash arch-guard.sh` exits 0, `.arch-guard-checksums` unchanged.
+
+### Notes
+- Five independent signals back the five inputs, so order is a template-only matter: no signal, predicate (`isFaqFormComplete`) or handler changes; `README.md` needs no change (it names no field order).
+- The move keeps the 8-space indent and adds no 4-space `@else` line, so the existing `faqForm()` helper does not truncate the block (plan R20). Do not re-indent.
+- Do not relabel here; T17 owns the `[label]` binding. Splitting the move from the relabel keeps each commit to one requirement (FR-26, then FR-27).
+
+---
+
+## T17 — Bind the FAQ Supplemental Content label to the new key
+
+> **Status (v4): planned** (new in v4, design delta D15).
+
+| | |
+|---|---|
+| **Track** | angular |
+| **Depends on** | T14 (the key must exist in both `TRANSLATIONS` blocks first), T16 (same element; avoids editing a moving target in `app.component.html`) |
+| **FROZEN (AGENTS.md §9)** | no |
+
+### What changes
+The `[label]` binding of the FAQ form's Supplemental Content `<app-source-input>` changes from `uiLabels().supplementalContent` to
+`uiLabels().supplementalContentRequired`, so the English label reads "Supplemental Content (Required) *" (the `*` comes from `[required]="true"`, unchanged). The
+`generatorForm` template (used by Generator and UA Description) keeps `uiLabels().supplementalContent` and its "(Optional)" text (FR-28). `placeholderSupplemental`
+stays shared. `source-input.component.*` is not edited.
+
+### Files
+| File | Change |
+|---|---|
+| `src/app/app.component.html` | modify: the one `[label]` binding of the FAQ form's Supplemental input (line 626 before T16; about line 606 after it). Line 279 is **not** touched. |
+
+### Tests to turn green
+| Test file | Runner | Covers |
+|---|---|---|
+| `src/app/app.component.faq-layout.spec.ts` (new; pins tagged `(owner T17)`, red first) | `test:logic` | FR-27 / AC-24, template side: in the FAQ form block the Supplemental `app-source-input` has `[label]="uiLabels().supplementalContentRequired"` and still has `[required]="true"`; `uiLabels().supplementalContent` (the exact key, not the `...Required` one) occurs exactly once in the whole template, inside `generatorForm` |
+| same file (`[baseline-guard]` pins) | `test:logic` | FR-28 / AC-26: the `generatorForm` input is still bound to `uiLabels().supplementalContent` and has no `[required]`; the SEO and Slug form blocks do not bind the new key |
+| `src/app/app.component.template-wiring.spec.ts` (existing, already green; **must stay green unmodified**) | `test:logic` | the single required `faqSupplementalContent` input (333 to 341) and AC-25 enablement pins (`isFaqFormValid`, Generate `[disabled]`) |
+| `src/utils/faq-form.spec.ts` (existing, already green) | `test:logic` | AC-25 / FR-16: `isFaqFormComplete` is untouched; the delta changes no predicate |
+
+### Acceptance check
+- `npx vitest run src/app/app.component.faq-layout.spec.ts` passes **entirely** (T14, T15, T16, T17 pins and all guards): this is the first point at which every pin of the new spec is green.
+- `npx vitest run src/app/app.component.template-wiring.spec.ts src/app/app.component.export-guard.spec.ts src/utils/faq-form.spec.ts` passes unmodified.
+- `git diff -U0` shows **one** changed line in `app.component.html` (the `[label]` binding); `git diff` lists no other file.
+- Compile gate, empty allowlist: `npx tsc --noEmit` zero diagnostics; `npm run lint` and `npm run build` exit 0 (the template type-check reads the new key); `npm run test:components` exits 0; `bash arch-guard.sh` exits 0, `.arch-guard-checksums` unchanged.
+- Whole-delta diff property (NFR-9 b), checked once here against the four delta commits (the spec file itself is added by TEST_WRITING, before T14, and is not a task output): `git diff --stat <commit before T14>..HEAD` lists only `src/app/app.component.html`, `src/app/app.component.ts` and the new spec (plus docs); no FROZEN file, no `.arch-guard-checksums`, no golden or fixture.
+
+### Notes
+- Relabelling the shared key instead would change three forms at once (FR-28) and no existing test would notice; the guards exist for that reason (plan R14).
+- A label literal or a ternary on the shared binding is rejected (plan Rejected 16 and 17).
 
 ---
 
@@ -958,3 +1342,56 @@ Every task maps to at least one plan item and one requirement: T1 (D4; FR-12/13/
 T3 (D7; FR-7/8/9/22), T4 (D3; FR-3), T5 (D6; FR-9/10/11), T6 (D5; FR-1/2/5/7/10/11/19/21/23),
 T7 (D5; FR-4), T8 (D11; FR-17/18/19/20), T9 (D9; FR-15/16), T10 (D9; FR-4/18), T11 (D9; FR-15/16/17),
 T12 (D9; FR-15/16/17), T13 (D9; Story README scope).
+
+## Coverage table (v4 additions for implementation plan v2 and Specification v3)
+
+### Plan v2 item to tasks
+
+| Plan v2 item | Task(s) |
+|---|---|
+| D12 FR-24 and the empty-state half of FR-28: one conjunct at the single condition (`app.component.html` line 1447) | T15 |
+| D13 FR-25: no reorder, no wrapper; satisfied structurally by D12; panels stay (OD-12), strip stays (OD-11), blank area accepted (OD-16) | T15 (the only edit); T16 and T17 must not add a wrapper or class (FR-25 guards) |
+| D14 FR-26: Supplemental Content input moved directly after Product Name | T16 |
+| D15 FR-27 and the label half of FR-28: new FAQ-only key in both `TRANSLATIONS` blocks; the template binding | T14 (key, both blocks), T17 (binding) |
+| D16 verification: one new source-text spec `src/app/app.component.faq-layout.spec.ts`, `test:logic`, existing tests unmodified | written by TEST_WRITING (no task creates it); turned green by T14, T15, T16, T17 per the classification table; AC-22 geometric clause = manual check, no task |
+| v2 Files: `app.component.html` (line 1447; FAQ form move; `[label]`) | T15, T16, T17 |
+| v2 Files: `app.component.ts` (`TRANSLATIONS`, both blocks) | T14 |
+| v2 Files: the new spec | TEST_WRITING (not a task output) |
+| v2 Not changed: `types.ts`, `tab-descriptors.ts`, `faq-form.ts`, `source-input.component.*`, `src/services/**`, `src/prompts/**`, `src/prompt-core/**`, `src/domain/**`, `src/render/**`, `server/**`, `README.md`, `tools/**`, `.arch-guard-checksums`, fixtures, goldens, every existing spec | no task edits them; each v4 task's acceptance check lists only its own file(s) in `git diff` and an unchanged `.arch-guard-checksums` |
+| v2 FROZEN / STORE_REGISTRY / prompt / server position: no stop needed | none by design; no v4 task is FROZEN |
+| v2 Risks R13 to R20 | R13 T15 (oracle with trap states); R14 T17 (shared-key guards); R15 T14 (parity pin); R16 T14 (U+0027 pin, lint); R17 T15, T16, T17 (lines 1032/1280/1289/1316 untouched, `git diff -U0`); R18 manual check (open point); R19 accepted defaults (open points); R20 T16 (8-space indent kept, existing helper pins) |
+| v2 Rejected alternatives 13 to 24 | no task; T15 and T17 notes carry the prohibitions |
+
+### `FR-n` / AC to tasks (v4 additions)
+
+| Requirement | AC | Task(s) |
+|---|---|---|
+| FR-24 | AC-21 | T15 |
+| FR-25 | AC-22 | T15 (structural clauses; T16 and T17 keep the guards green); geometric clause: manual check at QUALITY_GATE, no task |
+| FR-26 | AC-23 | T16 |
+| FR-27 | AC-24, AC-25 | T14 (source side, both languages), T17 (template side); AC-25 enablement is FR-16 and is untouched, held by the existing `faq-form.spec.ts` and wiring pins (T17 re-runs them) |
+| FR-28 | AC-26 | T15 (empty state), T14 and T17 (labels); guards re-run at every v4 task; T16 holds the `generatorForm` guards |
+| NFR-9 | | T14 to T17: pins need no LLM; diff property (only the two app files and the new spec; no FROZEN file; checksums unchanged) checked in T17's acceptance check and by IMPLEMENTATION_VERIFICATION; geometric clause manual |
+| FR-1 to FR-23, NFR-1 to NFR-8 | | Unchanged; T1 to T13 stand (DONE) |
+
+### Full AC-1 to AC-26 to tasks
+
+| AC | Task(s) | AC | Task(s) |
+|---|---|---|---|
+| AC-1 | T6, T8 | AC-14 | T6, T8 |
+| AC-2 | T6 | AC-15 | T8 |
+| AC-3 | T4, T5, T6 | AC-16 | T5, T6 |
+| AC-4 | T7, T10 | AC-17 | T5, T6 |
+| AC-5 | T6, T7, T8 | AC-18 | T1 |
+| AC-6 | T2 | AC-19 | T1, T4, T5, T6 |
+| AC-7 | T3, T6 | AC-20 | T1 |
+| AC-8 | T3, T6 | AC-21 | T15 |
+| AC-9 | T3, T5, T6 | AC-22 | T15 (structure); manual geometric check at QUALITY_GATE |
+| AC-10 | T9, T11, T12 | AC-23 | T16 |
+| AC-11 | T8, T9, T11, T12 | AC-24 | T14, T17 |
+| AC-12 | T8, T11, T12 | AC-25 | existing (FR-16 predicate, T9 / T11 / T12), re-run by T16 and T17; the required marker is kept by T16 and T17 |
+| AC-13 | T8, T10 | AC-26 | T14, T15, T17 (guards re-run at T16) |
+
+Every v4 task maps to at least one plan v2 item and one requirement: T14 (D15; FR-27, FR-28), T15 (D12, D13; FR-24, FR-25, FR-28),
+T16 (D14; FR-26), T17 (D15; FR-27, FR-28). Every plan v2 decision D12 to D16 and every FR-24 to FR-28 / NFR-9 is reachable through at
+least one task, except the AC-22 geometric clause, which is a recorded manual check by design (OD-15), not an unplanned gap.
