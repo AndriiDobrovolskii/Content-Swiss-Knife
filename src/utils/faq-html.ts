@@ -53,7 +53,7 @@ const TAG = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
 /** One exact permitted tag: no attributes, optional whitespace before ">" (the fail-closed check, B-1). */
 const PERMITTED_TAG = /<\/?(?:h3|p|b|ul|li)\s*>/gi;
 
-const MARKDOWN_BOLD =/\*\*[^*\n]+\*\*/;
+const MARKDOWN_BOLD = /\*\*[^*\n]+\*\*/;
 const MARKDOWN_HEADING = /^[ \t]*#{1,6}[ \t]+\S/m;
 const MARKDOWN_FENCE = /```/;
 
