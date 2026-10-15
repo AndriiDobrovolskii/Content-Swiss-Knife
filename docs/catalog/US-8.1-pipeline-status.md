@@ -1,12 +1,12 @@
 ---
 artifact: pipeline_status
 story: US-8.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-14T20:30:00Z
-updated_at: 2026-10-14T21:30:00Z
+updated_at: 2026-10-15T10:15:00Z
 supersedes: null
 inputs_consumed:
   - key: story
@@ -26,6 +26,14 @@ inputs_consumed:
   - key: test_strategy
     version: 1
   - key: ac_test_matrix
+    version: 3
+  - key: test_generation_report
+    version: 3
+  - key: verification_report
+    version: 3
+  - key: security_review
+    version: 2
+  - key: reconciliation_report
     version: 1
 open_decisions_blocking: false
 ---
@@ -225,10 +233,23 @@ open_decisions_blocking: false
 - Probe (`validateFaqShape` through tsx): R1 (unpaired single quote), R2 (unpaired double quote), R3 (unterminated trailing `<img ...`) each report `faq-not-well-formed` (1 error); a clean FAQ (`h3`, `p`, `b`, `ul`, `li`) reports 0.
 - Outcome: B-1 fixed. Re-running SECURITY_REVIEW (and the gates after it) is the orchestrator's next step.
 
+## Confirmation pass after the TEST_WRITING loop-back (RECONCILIATION finding F-1)
+
+- Trigger: RECONCILIATION (`reconciliation_report` v1, CHANGES_REQUIRED, F-1: the AC-19 pipeline wiring was untested) looped back to TEST_WRITING, which added tests only (commit `b9eef79`; `ac_test_matrix` v3, `test_generation_report` v3). The stage state re-entered IMPLEMENTATION. The new tests are coverage-gap tests, expected GREEN against the existing implementation; no production change was expected.
+- Result: confirmed. No production code, FROZEN file, test, fixture or coverage setting changed; none of the new tests failed.
+- New tests confirmed passing against the current code: `src/services/content-orchestrator.faq-pipeline.spec.ts` (35 added), `src/services/content-orchestrator.faq-standalone.spec.ts` (14 added), `src/app/app.component.template-wiring.spec.ts` (9 added, AC-10 and AC-11 pins). The three files together: `Test Files  3 passed (3)`, `Tests  749 passed (749)`.
+- Gate (real runs, this pass):
+  - `npx vitest run` (test:logic): `Test Files  184 passed (184)`, `Tests  6343 passed | 3 skipped (6346)`, exit 0. This supersedes the earlier 6285 figure above (6343 - 6285 = 58 new tests).
+  - `npm run test:components`: `Test Files  2 passed (2)`, `Tests  32 passed (32)`.
+  - `npx tsc --noEmit`: exit 0, no diagnostics. `npm run build`: exit 0 (only the existing "not ESM" CommonJS warnings).
+  - `bash arch-guard.sh`: exit 0 (ALL CHECKS PASSED), no `--rebaseline`.
+- Verifier non-blocking N-2 done: commit `d33292c`, `style(US-8.1): ...`, a one-line whitespace-only edit in `src/utils/faq-html.ts` (`const MARKDOWN_BOLD =/...` to `const MARKDOWN_BOLD = /...`). Its own commit, separate from this status update. After it: `npx vitest run src/utils` = 72 files / 2254 tests passed, `npx tsc --noEmit` exit 0, `bash arch-guard.sh` exit 0; the full-suite figures above were taken before this whitespace edit, which cannot change behaviour.
+- Outcome: IMPLEMENTATION confirmed unchanged; the orchestrator's next step is re-running the gates after it (QUALITY_GATE is owned by so-gate-enforcer and was not run here).
+
 ## Notes
 
 - Test components were accepted as unevaluated until T10 (user decision, no stub added); first real run at T10: 2 files, 32 tests passed.
 - No test file, fixture, golden or coverage setting was modified.
 - Not edited: `master-system-prompt.ts`, `constants.ts`, `task-a.ts`, `task-b.ts`, `output-validator.ts`, any `.spec.ts`.
 - `.arch-guard-checksums` is hashed from the working-copy bytes (the file `task-c.ts` is CRLF in this checkout); the edit preserved the existing CRLF line endings.
-- QUALITY_GATE not run (owned by so-gate-enforcer).
+- QUALITY_GATE not run by so-builder (owned by so-gate-enforcer); the gate figures in this file are so-builder's own task-level runs, not the QUALITY_GATE record.
