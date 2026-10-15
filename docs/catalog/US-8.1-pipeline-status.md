@@ -55,6 +55,7 @@ open_decisions_blocking: false
 | T11 FAQ Generator component state and `generateFaqOnly()` call | angular | DONE | 88670be |
 | T12 FAQ Generator mode button, form and Generate button in the template | angular | DONE | c04096a |
 | T13 README documentation | angular | DONE | 7a0613e |
+| T15 exclude `faq-generator` from the empty-state condition (v4 delta) | angular | DONE | 9494b2b |
 
 ## T1 - section 9 stop and approval record
 
@@ -245,6 +246,16 @@ open_decisions_blocking: false
   - `bash arch-guard.sh`: exit 0 (ALL CHECKS PASSED), no `--rebaseline`.
 - Verifier non-blocking N-2 done: commit `d33292c`, `style(US-8.1): ...`, a one-line whitespace-only edit in `src/utils/faq-html.ts` (`const MARKDOWN_BOLD =/...` to `const MARKDOWN_BOLD = /...`). Its own commit, separate from this status update. After it: `npx vitest run src/utils` = 72 files / 2254 tests passed, `npx tsc --noEmit` exit 0, `bash arch-guard.sh` exit 0; the full-suite figures above were taken before this whitespace edit, which cannot change behaviour.
 - Outcome: IMPLEMENTATION confirmed unchanged; the orchestrator's next step is re-running the gates after it (QUALITY_GATE is owned by so-gate-enforcer and was not run here).
+
+## v4 delta - T15 results (real runs)
+
+- Scope: `src/app/app.component.html` line 1447 only; one conjunct, `appMode() !== 'faq-generator' &&`, added directly after `appMode() !== 'generator' &&`. Commit `9494b2b` (`feat(US-8.1 T15): ...`). `git diff -U0` showed one changed line and no other file; lines 1032, 1280, 1289, 1316 untouched; no `.ts` logic, no test, FROZEN file or `.arch-guard-checksums` changed.
+- `npx vitest run src/app/app.component.faq-layout.spec.ts -t "owner T15"`: `Test Files  1 passed (1)`, `Tests  4 passed | 33 skipped (37)`.
+- Whole faq-layout spec: `Tests  10 failed | 27 passed (37)`; the 10 failing are exactly T14 (5), T16 (2) and T17 (3); all `[baseline-guard]` tests green.
+- `npx vitest run src/app/app.component.template-wiring.spec.ts src/app/app.component.export-guard.spec.ts src/services/content-orchestrator.faq-standalone.spec.ts`: `Test Files  3 passed (3)`, `Tests  175 passed (175)`.
+- Whole `test:logic`: `Tests  10 failed | 6370 passed | 3 skipped (6383)` (before T15: 14 failed | 6366 passed); the only failures are the T14/T16/T17-owned red pins.
+- `npx tsc --noEmit`: exit 0, no diagnostics (compile allowlist empty). `npm run lint`: exit 0. `npm run build`: exit 0. `npm run test:components`: `Test Files  2 passed (2)`, `Tests  32 passed (32)`. `bash arch-guard.sh`: exit 0, no `--rebaseline`.
+- Outcome: T15 complete, one commit. T14, T16, T17 remain. The AC-22 geometric check stays a manual check at QUALITY_GATE (OD-15).
 
 ## Notes
 
