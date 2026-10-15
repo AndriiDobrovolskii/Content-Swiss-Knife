@@ -1,27 +1,27 @@
 ---
 artifact: plan_review
 story: US-8.1
-version: 3
-status: APPROVED
+version: 4
+status: DRAFT
 owner: so-plan-reviewer
-created_at: 2026-10-14T23:00:00Z
-updated_at: 2026-10-15T01:00:00Z
-supersedes: docs/reviews/plans/US-8.1-plan-review.md#2
+created_at: 2026-10-15T16:00:00Z
+updated_at: 2026-10-15T16:00:00Z
+supersedes: docs/reviews/plans/US-8.1-plan-review.md#3
 inputs_consumed:
   - key: story
-    version: 2
-  - key: specification
-    version: 2
-  - key: impact_analysis
-    version: 1
-  - key: implementation_plan
-    version: 1
-  - key: task_breakdown
     version: 3
+  - key: specification
+    version: 3
+  - key: impact_analysis
+    version: 2
+  - key: implementation_plan
+    version: 2
+  - key: task_breakdown
+    version: 4
 open_decisions_blocking: false
 ---
 
-# Plan Review: US-8.1 — One master FAQ, translated; `<b>` not `<strong>`; standalone FAQ Generator
+# Plan Review: US-8.1 — One master FAQ, translated; `<b>` not `<strong>`; standalone FAQ Generator (v3 layout delta)
 
 **Verdict:** PASS
 **Loop-back:** n/a
@@ -29,208 +29,284 @@ open_decisions_blocking: false
 > `PASS` here is **not** human approval. Only `/so:approve` records that (AGENTS.md section 10). The plan and task breakdown
 > stay `DRAFT` until HUMAN_PLAN_APPROVAL.
 
-This is the third pass over the task breakdown (re-review of task_breakdown v3 after loop-back attempt 2 of 3). It supersedes
-plan_review v2, which recorded task_breakdown v2 and returned CHANGES_REQUIRED on R4. All inputs consumed are current
-(Specification v2 APPROVED; impact analysis v1; plan v1; task breakdown v3 DRAFT; none SUPERSEDED).
+This is plan_review v4. It supersedes plan_review v3 (APPROVED), which reviewed implementation plan v1 and task breakdown v3 for
+Specification v2 and is stale for this revision; its text is recoverable with
+`git show 5cedb99:docs/reviews/plans/US-8.1-plan-review.md`. All inputs consumed are current: Story v3, Specification v3
+(APPROVED at HUMAN_SPEC_APPROVAL, c7098af), impact analysis v2, implementation plan v2 (DRAFT) and task breakdown v4 (DRAFT); none
+is `SUPERSEDED`, and `open_decisions_blocking` is false (Open Decisions v2, OD-1 to OD-20, all non-blocking).
 
 ## Summary
 
-R4 is fixed in the normative task text, not only in the revision notes, and the whole per-task compile gate holds when walked
-task by task T1 to T13 against the repository as it stands today. No further spec-vs-allowlist or dependency-order defect of
-the R4 class was found. The design, the single FROZEN edit (T1, with the section 9 stop), Rule 2 and the ordering are
-unchanged and sound. Remaining points are non-blocking.
+The v3 layout delta (FR-24 to FR-28, NFR-9; AC-21 to AC-26) is buildable as written. It is a two-file, template-and-labels change
+(`app.component.html`, the `TRANSLATIONS` literal in `app.component.ts`) plus one new source-text spec, decomposed into four small,
+correctly ordered, single-track tasks (T14 to T17). I re-derived every claim against the repository and found the design sound: the
+empty-state fix is scoped by `appMode()` only, cannot change another mode, leaves the FR-18 data fields alone, leaves the shared
+`supplementalContent` key alone, and leaves the brittle `>= 3` pin undisturbed. T1 to T13 are built, match git and the pipeline
+status, and their task text is unaltered. The most important thing to carry forward is not a defect in the plan: AC-22's geometric
+clause has **no owner able to perform it** in the pipeline as defined (finding N1, a human decision), and several guard pins need
+word-boundary and slice-scoping care when TEST_WRITING writes them (N2, N3).
 
-## Resolution of v2 required change R4
+## Verification performed (real runs, this review)
 
-| Where R4 had to be fixed | v3 text (read, not taken from the revision table) | Verdict |
-|---|---|---|
-| Table A / Table B ownership | "Spec ownership and the allowlist": table A lists exactly seven specs, each with one owner task (task-c.faq T1, faq-html T3, structural-parity.faq T4, faq-gate T5, faq-standalone T8, faq-form T9, tab-descriptors T10). Table B lists five specs that are never allowlisted: task-faq, faq-pipeline, simplified (R6 block), template-wiring, description-bytes. The v2 clause "plus `faq-gate` and `faq-html`" is gone. | resolved |
-| Constraint 1 / 1a | Constraint 1 splits the orchestrator specs (`faq-pipeline` for T6/T7, `faq-standalone` for T8). Constraint 1a forbids table B specs from importing anything a task of this Story creates, and names `faq-gate` / `faq-html` explicitly as not importable by the orchestrator specs. | resolved |
-| Constraint 6 | Report requirement: per spec its table, plus the exact `tsc --noEmit` diagnostics after TEST_WRITING; any diagnostic in a table B spec is a defect to fix before the stage ends. | resolved |
-| "Remaining red specs" table | Rows T1 to T9 list only table A members, shrinking as owners land; T10 to T13 empty. Re-derived below; consistent with the ownership table. | resolved |
-| T2, T6, T7, T8, T9 acceptance lines | T2: table B spec carries no diagnostic, allowlist unchanged from T1. T6: allowlist is faq-standalone / faq-form / tab-descriptors; `faq-pipeline` and `simplified` carry none. T7: same allowlist, both specs it runs are table B. T8: faq-standalone carries none after the task. T9: allowlist is tab-descriptors only. All agree with the table. | resolved |
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` on the current tree | no diagnostics printed, exit 0 |
+| `bash arch-guard.sh` | `ALL CHECKS PASSED`, all frozen files unchanged |
+| `npx vitest run` (whole `test:logic`) | 184 files passed, 6343 tests passed, 3 skipped (matches the breakdown's "184 files, all green") |
+| Line-1447 empty-state condition extracted by balanced-paren scan and evaluated for `appMode = 'faq-generator'` | before a run: **true**; during a run: false; after a FAQ-only run (`mainHtmlUa ''`, `translations {}`, `seoData/slugData null`, populated `faqArtifacts`): **true**; after a no-FAQ run: **true** |
+| `git diff b6ceebe 65c620a -U0` on the task breakdown | hunks outside the new v4 sections are only the front matter, the intro, the open-points list and 13 inserted `Status (v4): DONE` lines (one per T1..T13); no line inside any T1..T13 task body was changed or removed |
+| Per-task commits da59195, 3698434, c7197f0, d09f092, 54ee224, f3343e1, 7f534d7, 9f20a15, e8dcf56, 3e9db41, 88670be, c04096a, 7a0613e; fixes 8c89bce, 1ac82e1; test correction c62e30a | all exist on `feat/US-8.1-single-master-faq`, subjects match the status table |
+| `en` and `uk` blocks of `TRANSLATIONS`, top-level keys by the four-space regex | 170 and 170, no one-sided key, no duplicate (the baseline for the parity pin) |
+| Bytes of "Обов'язково" in the Specification | apostrophe is `0x27` (ASCII), as plan D15 states |
 
-Mechanism re-verified on the repository: `tsconfig.json` includes `src/**/*` and `test/**/*`, has no `strict`, so a missing
-module or export yields diagnostics located in the importing spec only (no cascade); `npm run lint` is `tsc --noEmit`;
-`angular.json` build uses the same `tsconfig.json`; `npx tsc --noEmit` is clean today (run in this review, no output) and
-`bash arch-guard.sh` exits 0 today (run in this review). The observable check (`grep "error TS" | grep -v -E "(path|...)\("`)
-matches tsc's `path(line,col): error TSnnnn` format and is path-based, so it excuses exactly the named files.
-
-## Per-task compile-gate walk, T1 to T13 (independent)
-
-For each task: what exists at that point, which specs are table A and not yet owned (excused), and whether the task's own
-allowlist and owned tests are achievable.
-
-| Task | Symbols/modules available at task end | Excused (table A, owner not landed) | Table B specs | Achievable? |
-|---|---|---|---|---|
-| T1 | `contentKind` option, FAQ variant in `task-c.ts` | faq-html, structural-parity.faq, faq-gate, faq-standalone, faq-form, tab-descriptors | `description-bytes` green before and after (never passes `contentKind`; `buildPromptC` opts today is `{ localizedName?; sourceLocale? }`, checked); `task-faq` / `faq-pipeline` / `simplified` / `template-wiring` import only existing symbols | yes. `task-c.faq.spec` turns clean at T1. arch-guard: baseline matches today; rebaseline in the same commit is a one-line diff (file has one line per frozen file) |
-| T2 | `task-faq.ts` tag list | same as T1 | `task-faq` runtime-red then green | yes. Only `task-faq.ts` lines 24 and 53 mention `strong`; no existing spec pins the old tag list |
-| T3 | `faq-html.ts` (needs only the `ValidationIssue` type from the frozen validator) | structural-parity.faq, faq-gate, faq-standalone, faq-form, tab-descriptors | unchanged | yes |
-| T4 | `validateFaqStructuralParity` appended | faq-gate, faq-standalone, faq-form, tab-descriptors | unchanged | yes |
-| T5 | `faq-gate.ts` (imports `faq-html` T3, `validateFaqStructuralParity` T4, frozen `validateGeneratedHtml`, `repair-strategy`) | faq-standalone, faq-form, tab-descriptors | unchanged | yes. `faq-gate.spec` may import `faq-html` and the parity export: both exist, T5 depends on T3 and T4 |
-| T6 | `runFaqPipeline`, `storeFaq` in the service; T1, T3, T4, T5 present | faq-standalone, faq-form, tab-descriptors | `faq-pipeline` (Generator groups green; UA groups runtime-red until T7) and `simplified` (R6 Generator part) import nothing new, so no diagnostic at any task | yes. Only `simplified.spec` references FAQ among existing specs (grep), and it is the one TEST_WRITING rewrites |
-| T7 | `generateUaContent()` Step 4 replaced | same as T6 | UA groups and UA part of R6 turn green | yes |
-| T8 | `generateFaqOnly` on the service | faq-form, tab-descriptors | `faq-pipeline` entirely green (T7 landed; dependency line now `T6, T7`) | yes |
-| T9 | `'faq-generator'` in `AppMode`, `TOOL_LABEL` entry, `faq-form.ts` | tab-descriptors | `template-wiring` `TOOL_LABEL` pins | yes. `TOOL_LABEL` is the only `Record<AppMode, ...>` in `src/` and the only `AppMode` consumer besides `setMode(mode: AppMode)` (grep), so non-spec diagnostics stay zero with the single `app.component.ts` line |
-| T10 | `tab-descriptors.ts`; `TabDescriptor` (id, label, type, color, iso, taskKey?, isFaq) exists in `types.ts` as the context needs | none | unchanged | yes; allowlist empty, lint and build exit 0 |
-| T11 | component state, `generateFaqOnly()` call (T8), `isFaqFormComplete` (T9) | none | `template-wiring` component pins | yes |
-| T12 | template bindings to T11 signals | none | `template-wiring` template pins | yes |
-| T13 | README only | none | none | yes |
-
-Re-derived allowlist rows (after T1 .. T13) match the breakdown's table exactly. Group A order permutations are covered by the
-stated rule. Three further classes checked and clear:
-
-- **Spec-vs-allowlist (R4 class), every spec.** Each of the 12 new or extended specs was matched against the symbols it
-  can need: table A specs import only symbols that exist at the end of their owner; table B specs import nothing created by
-  this Story. No spec needs an allowlist row it does not have.
-- **Dependency order.** T5 after T3 and T4; T6 after T1, T3, T4, T5; T7 after T6; T8 after T6 and T7; T10 after T9 (needs
-  the `'faq-generator'` literal); T11 after T8, T9, T10; T12 after T11. The three `app.component.ts` tasks and the three
-  service tasks are serial. No consumer is scheduled before its contract.
-- **Existing-test regressions (gate item 2).** Existing specs that read `app.component.ts` / `.html` as text
-  (`template-wiring`, `export-guard`, `content-template-labels`) pin: `content-template-select` exactly twice, no
-  `/consumables/i` in the template, the `includeFunctionality` occurrence count, the `downloadZip` / `downloadText` bodies.
-  None is contradicted by T9 to T12 as scoped (the FAQ form has no template select, no download code changes).
+Not run in this review (so not claimed): `npm run build`, `npm run test:components`.
 
 ## 1. Specification coverage (re-derived, both directions)
 
-| FR | Reached by task(s) | Verdict |
-|---|---|---|
-| FR-1, FR-2 | T6 (master `FAQ (uk-UA)`, sequential translation, `storeFaq`), T8 | covered |
-| FR-3 | T4, T5, T6 | covered |
-| FR-4 | T7 (call site), T10 (tab per language) | covered |
-| FR-5 | T6, T7, T8 | covered |
-| FR-6 | T2 | covered |
-| FR-7, FR-8 | T3, T6 (three placements: after fence strip, around `repairBlocks`, in `storeFaq`) | covered |
-| FR-9 | T3, T5, T6 | covered |
-| FR-10, FR-11 | T5 (`FAQ_MAX_ATTEMPTS`, storability, `faq-provider-error`), T6 (empty master terminal, skip, issues pushed); T7 mirrors in UA mode | covered |
-| FR-12, FR-13, FR-14 | T1 (variant, 16-pair golden, checksum re-baseline in the same commit) | covered |
-| FR-15, FR-16 | T9, T11, T12 (+ T8 guard) | covered |
-| FR-17, FR-18, FR-19, FR-20 | T8 (+ T10 tab side of FR-18; T11, T12 grounding inputs) | covered |
-| FR-21, FR-22, FR-23 | T6 (normaliser chain kept), T3 (whitelist, Markdown rule, attribute rule), T1 (prompt rules) | covered |
-| NFR-1..8 | T6, T1/T2, T3 to T5; NFR-2 review-by-reading | covered |
+I rebuilt the mapping from the Specification and the Story, not from the plan's tables.
 
-AC-1 to AC-20 each reachable through the tasks implementing their FRs and each has a named test file (T1: AC-18/19/20; T2:
-AC-6; T3: AC-7/8/9; T4: AC-3/19; T5: AC-3/9/16/17; T6: AC-1/2/5/7/8/9/16/17; T7: AC-4 and UA-mode 16/17; T8:
-AC-12/13/14/15; T9, T11, T12: AC-10/11/12; T10: AC-4 and AC-13 UI sides). 16 store x non-master-language pairs confirmed from
-`STORE_REGISTRY` (2+2+2+4+1+3+2).
+| FR / NFR | AC | Reached by task(s) | Verdict |
+|---|---|---|---|
+| FR-1 to FR-14 | AC-1 to AC-9, AC-14, AC-16 to AC-20 | T1 to T8, T10 (DONE; see the DONE verification below) | covered |
+| FR-15 to FR-20 | AC-10 to AC-13, AC-15 | T8 to T12 (DONE) | covered |
+| FR-21 to FR-23 (section 4) | none | T1, T3, T6 (DONE) | covered |
+| FR-24 | AC-21 | T15 (pin red first; the guard half stays green) | covered |
+| FR-25 | AC-22 | structural clauses: T15 (nothing else may sit between the tab bar and the result; T16 and T17 must add no wrapper or class); geometric clause: manual, no task | covered, with the manual clause called out (N1) |
+| FR-26 | AC-23 | T16 | covered |
+| FR-27 | AC-24, AC-25 | T14 (both-language source), T17 (binding); enablement is FR-16 and is untouched, held by existing pins | covered |
+| FR-28 | AC-26 | T15 (empty state), T14 and T17 (labels), T16 (order guards) | covered |
+| NFR-9 | none | T14 to T17 | covered |
+
+AC-1 to AC-26: each has at least one task or, for AC-25, an existing built task plus the existing pins that T16 and T17 re-run; AC-22
+has one designed-manual clause. No FR is unreached.
 
 | Task | Traces to | Verdict |
 |---|---|---|
-| T1 | plan D4, D8; FR-12/13/14 | ok |
-| T2 | plan D2; FR-6 | ok |
-| T3 | plan D7; FR-7/8/9/22 | ok |
-| T4 | plan D3; FR-3 | ok |
-| T5 | plan D6; FR-9/10/11 | ok |
-| T6 | plan D5; FR-1/2/5/7/10/11/19/21/23 | ok (largest task, one cohesive file) |
-| T7 | plan D5; FR-4 | ok |
-| T8 | plan D11; FR-17/18/19/20 | ok |
-| T9 | plan D9; FR-15/16 | ok. The `create-form.gs` line is not in the Story Surface or the survey; marked "confirm at approval or drop", no test depends on it |
-| T10 | plan D9; FR-4/18 | ok |
-| T11, T12 | plan D9; FR-15/16/17 | ok |
-| T13 | plan D9; Story Surface lists README | ok |
+| T14 | plan D15 -> FR-27, FR-28 | ok |
+| T15 | plan D12, D13 -> FR-24, FR-25, FR-28 | ok |
+| T16 | plan D14 -> FR-26 | ok |
+| T17 | plan D15 -> FR-27, FR-28 | ok |
 
-Checked against the Specification's *Out of scope* by name: no task touches the `<h3>` tag or its CMS rendering, makes the FAQ
-unconditional, changes description / Optimizer / HTML-editor `<b>`/`<strong>` handling, adds FAQPage markup, changes question
-count or word target, changes another mode or SEO / slug generation, or edits `task-a.ts`, `task-b.ts`,
-`master-system-prompt.ts`, `output-validator.ts`. No scope creep other than the one marked `create-form.gs` line. Export of a
-FAQ-only run (OD-9(e)) is left undecided and no download code changes, consistent with Out of scope.
+No scope creep. Checked by name against the Specification's *Out of scope*: no task hides the pre-run tab strip (OD-11), reorders the
+validation and repair panels (OD-12), renames or restyles the version tabs (OD-14), adds a failure-state message (OD-16 / OD-8),
+changes the `alertFillFields` text (OD-17), touches the FAQ-only TXT/ZIP export (OD-9e), the FAQ pipeline, or any other mode's
+layout, label or empty state. The one item beyond the literal requirements is a test-only whole-dictionary `en`/`uk` key-set parity
+pin (see N8); it asserts no new product behaviour.
+
+### T1 to T13: DONE claims and "not silently altered"
+
+- The status table commits all exist and their subjects match the task titles. `pipeline_status` (DRAFT, last updated 2026-10-15T10:15Z)
+  agrees on every task; its cell for T7 reads "IMPLEMENTED, owned tests GREEN" while its body and the breakdown say complete (N9,
+  wording only).
+- The whole logic suite is 184/184 files green on the current tree, `tsc --noEmit` is clean and `arch-guard.sh` passes, so the built
+  state the delta rests on is real, not claimed.
+- The v4 diff contains no change inside any T1 to T13 body (see the table above). The v3 gate, constraints and open points were
+  extended, not rewritten; the v3 `create-form.gs` open point was re-worded to "presented at the v3 gate and approved" and that is
+  true (history.jsonl: HUMAN_PLAN_APPROVAL 2026-10-14T16:00:08Z, no approver comment).
+- The two post-T13 loop-back fixes are recorded as fixes, not tasks. 8c89bce is the second, separate section 9 grant for
+  `task-c.ts` (history.jsonl: V-1/V-2 fix under "the operator second section 9 grant", checksums re-baselined in the same commit).
+  Neither is re-opened by v4.
 
 ## 2. FROZEN files (AGENTS.md section 9)
 
-| Task | Frozen file touched | Section 9 stop present? | Sibling-file pattern used? | Verdict |
+| Task | Frozen file touched | section 9 stop present? | Sibling-file pattern used? | Verdict |
 |---|---|---|---|---|
-| T1 | `src/prompts/task-c.ts` (additive FAQ variant, early branch) | yes: states file, exact change and reason; requires the operator's instruction "in the builder's own session"; Story v2 is only the record of the earlier grant; a second stop is named if `master-system-prompt.ts` or `constants.ts` is needed | no, correctly: `buildPromptC` is the dispatch point | ok |
-| T1 | `.arch-guard-checksums` | n/a (baseline); same commit, one-line diff | n/a | ok |
-| T3, T5 | `src/utils/output-validator.ts` | not edited; FR-9 lives in sibling `faq-html.ts`; T5 imports `validateGeneratedHtml` and asserts no diff | yes | ok |
-| all others | none | n/a | n/a | ok |
+| T1 (DONE) | `src/prompts/task-c.ts` | yes (operator instruction quoted in `pipeline_status`; second grant for 8c89bce recorded) | additive edit under recorded permission | ok, built |
+| T2 to T13 (DONE) | none | n/a | n/a | ok |
+| T14 | none (`app.component.ts`) | n/a | n/a | ok |
+| T15 | none (`app.component.html`) | n/a | n/a | ok |
+| T16 | none | n/a | n/a | ok |
+| T17 | none | n/a | n/a | ok |
 
-Plan assumes approval it does not have: **no.**
+Plan assumes approval it does not have: **no**. Plan v2 states that the earlier `task-c.ts` permission "covered FR-1 to FR-23 only and is
+neither used nor extended"; `.arch-guard-checksums` is byte-unchanged in every v4 acceptance check; no `--rebaseline`. `arch-guard.sh`
+passes today (run in this review), so the frozen baseline matches the files as built.
 
 ## 3. Architecture rules (AGENTS.md section 3)
 
 | Rule | Checked | Finding |
 |---|---|---|
-| 1 — no direct SDK outside `server/providers/` | T6, T8 call `this.llm.generateText`; no `server/**` edit | clear |
-| **2 — retrieval separate from generation** (no automated check anywhere) | Checked by reading T6, T7, T8, T11 and the existing Step 5 code they replace: no search or page-fetch call in any new path; `generateFaqOnly` has no grounding step; FR-17 context is operator-typed text; v3 added no network call | clear. arch-guard cannot see this; IMPLEMENTATION_VERIFICATION must re-read the diff |
-| 3 — prompt text out of services | FAQ translation text lives in `task-c.ts`; the service holds wiring (`faqTranslationPayload` seam); T6 acceptance runs `arch-guard.sh` | clear |
-| 4 — no key in the bundle | no `server/**` change, no env var | clear |
-| 5 — no existing feature broken | byte-identity golden for 16 pairs; `validateStructuralParity` and its html-editor caller untouched; Generator tab behaviour kept by move-only diff plus hand-derived literals | clear |
-| `STORE_REGISTRY` sole source of locales/currency | languages via `getLangsForStore` / `store.languages`, symbol via `store.currencySymbol`, `MASTER_LOCALE` constant, `deriveTabDescriptors` resolves the store itself | clear |
-| `systemBlocks` not collapsed into `userContent` | FAQ variant keeps cached `systemBlocks`, dynamic data in `userContent` (T1, tested under NFR-4) | clear |
+| 1 — no direct SDK outside `server/providers/` | by reading the v4 file list | clear; no `server/**` or service file is in the delta |
+| **2 — retrieval separate from generation** | deliberately, by reading | clear for the delta (no service, prompt or orchestrator file is touched). Re-checked the built `runFaqPipeline` region (lines 807 onward): its only model call is `this.llm.generateText`; the one `this.retrieval` use in the orchestrator is `extractContent` (line 2102), unrelated to the FAQ |
+| 3 — prompt text out of services | by reading | clear; the delta adds only UI label strings, which are not prompt text |
+| 4 — no key in the bundle | by reading | clear; no key path |
+| 5 — no existing feature breaks | by pins | clear by construction for the empty state (new expression identical to today's for every mode but `faq-generator`); the shared `supplementalContent` key and `generatorForm` are untouched and guarded |
+| `STORE_REGISTRY` sole source of locales/currency | by reading | clear; the delta reads and writes no language list, locale or symbol. The Ukrainian string is a UI-language label, not a store locale |
+| `systemBlocks` not collapsed into `userContent` | by reading | not applicable to the delta; unchanged for the built pipeline |
 
 ## 4. prompt -> schema -> renderer -> validator
 
-- Links touched: prompt (`task-faq.ts` tag list; Task C FAQ variant) and validator (siblings `faq-html.ts`, `faq-gate.ts`,
-  `validateFaqStructuralParity`). The FAQ has no Zod schema and no renderer; `faqArtifacts` stays `Record<string,string>`;
-  `src/domain/**` and `src/render/**` untouched.
-- Stay in agreement: yes. T2 (master prompt), T1 (translation prompt), T3 (normaliser and validator), T5, T6 (store choke
-  point) all name the same five-element, `<b>`-only contract.
-- Contract-before-consumer ordering holds: yes (see the dependency walk above).
-- AGENTS.md section 4 criteria in play (number/unit spacing, HTML only, no `<br>`, anglicisms, no Product `itemtype`): each
-  has an enforcement point (T6 normaliser chain, T3 whitelist and Markdown rule, T1 and T6 terminology). List complete for
-  what is in play.
+- Links touched: **none** by the delta (Specification: "AGENTS.md section 4 in play: none"). FR-21 to FR-23 are not weakened.
+- Stay in agreement: n/a for the delta; the built FAQ chain was reviewed in v3 and is unchanged.
+- Contract-before-consumer ordering holds: **yes** where it exists — T14 (the `supplementalContentRequired` key in both blocks) is
+  scheduled before T17 (the binding that reads it).
+- section 4 criteria the renderer must keep satisfying: none to list for the delta; the built FAQ keeps FR-21 to FR-23 as before.
 
 ## 5. Task quality
 
 | Check | Result |
 |---|---|
-| All eight fields present on every task | Yes, T1 to T13 (track, depends on, FROZEN, what changes, files, tests, acceptance, notes) |
-| Acceptance checks observable | Yes. Compile rule is a concrete `tsc | grep -v` pipeline; build is judged by `tsc` as proxy until T10, then exit 0 |
-| Each task could end in one green commit (section 13) | Yes under the per-task gate (own tests pass, no regression, compile rule, arch-guard exit 0, scope = Files table). The gate is an interpretation of AGENTS.md section 6 for a tests-first branch and is carried to the human as an open point |
-| No task spans two tracks | Yes (T9's `create-form.gs` line is explicitly a non-track config edit) |
-| Ordered by dependency and risk, riskiest first, rationale stated | Yes. T1 first (FROZEN edit plus the load-bearing D4/D8 assumption) |
-| Fixture updates sit with the change that moves them | Yes (golden before the `task-c.ts` hunk; R6 block rewrite owned by TEST_WRITING and consumed by T6/T7) |
+| All eight fields present on every task | yes: Track, Depends on, FROZEN, What changes, Files, Tests to turn green, Acceptance check, Notes on T14 to T17 |
+| Acceptance checks observable | yes: named vitest `-t` selectors, `git diff -U0` line counts, tsc, lint, build, arch-guard. One wording defect: N4 |
+| Each task could end in one green commit (section 13) | yes under the per-task gate convention already approved at the v3 gate: a pin owned by a later task may still be red (T14, T15, T16 leave T16/T17-owned pins red). The convention changes no threshold; for the delta it is stricter than v3 (empty compile allowlist, lint and build exit 0 after every task) |
+| No task spans two tracks | yes, all four are `angular` |
+| Ordered by dependency and risk, riskiest first, rationale stated | yes: T15 first (the only edit that can change another mode's screen), T14 independent (disjoint file), T16 and T17 serial after T15 because all three edit `app.component.html`, T17 after T14 and T16. Dependencies are acyclic |
+| Fixture updates sit with the change that moves them | n/a, no fixture or golden moves; the new spec is created by TEST_WRITING, not by a task |
+
+Sizing: T14 adds two lines, T15 changes one line, T16 relocates one nine-line element (verified: lines 625 to 633), T17 changes one
+binding. Each is a single-requirement commit.
+
+### Verification of the plan's repository claims (not taken on trust)
+
+- The empty-state block: `noContentYet` and `fillFormStart` occur once each (html lines 1450 and 1451), in the single `@if` at line
+  1447, whose icon `fa-file-code` is at line 1449. The condition is exactly as plan D12 quotes it.
+- The block is reached by a data-only guard, and `content` is one shared signal (`setMode()` does not reset it, line 775); a
+  data-derived fix would have leaked into SEO, Slug and UA Description. The chosen `appMode()` conjunct cannot.
+- FR-18 is held by `content-orchestrator.faq-standalone.spec.ts:176` (`mainHtmlUa === ''`), unmodified.
+- The `>= 3` pin (`template-wiring.spec.ts:236-239`) counts lines containing both `appMode() === 'slug-generator'` and
+  `appMode() === 'faq-generator'`: exactly three today (lines 1032, 1280, 1289). T15's new conjunct uses `!==` on line 1447 and
+  mentions no `slug-generator`, so the count and the pin are undisturbed. Line 1316 (`!==`) is not counted and is not edited.
+- FAQ form block (`@else if (appMode() === 'faq-generator')`, lines 570 to 651): current order is Store, Product Name, Description,
+  Tech Specs, Supplemental. `[required]="true"` is on the Supplemental input; the `*` is rendered by `source-input.component.html`
+  line 4 (`@if (required) { <span class="text-red-500">*</span> }`).
+- `uiLabels().supplementalContent` is read at exactly two template sites: line 279 (`generatorForm`, used by Generator and UA
+  Description) and line 626 (FAQ). Relabelling the shared key would change three forms; adding a FAQ-only key does not.
+- TRANSLATIONS: `en.supplementalContent` line 147, `uk.supplementalContent` line 320, the existing escaped-apostrophe precedent at line
+  302 (`обов\'язкові`). The new `uk` literal needs `\'`; an unescaped quote is a `tsc` syntax error caught by `npm run lint`.
+- Container between the tab bar and the result: three siblings only (validation `<details>`, repair `<details>`, the empty-state
+  block); the container class is `flex-1 overflow-y-auto p-8 relative` (no centring token), the FAQ panel root is
+  `max-w-5xl mx-auto space-y-6` (no `h-full`, `mt-*`, `pt-*`). The overlay at line 1090 is `absolute inset-0` and the comparison at
+  line 1130 is `fixed`; neither is an in-flow sibling.
 
 ## 6. Test strategy
 
 | Check | Result |
 |---|---|
-| Every task names test files **and** runner | Yes, all `test:logic`; T13 states it changes no behaviour (documentation only) |
-| Component specs named `*.component.spec.ts` | Not applicable: no component spec is added; `app.component.template-wiring.spec.ts` does not match the Karma suffix and runs in the logic runner as intended |
-| Untested tasks justify changing no behaviour | Yes (T13) |
-| Failure paths from the FRs are covered | Yes. v3 added the empty / whitespace master terminal case and the translation provider-throw case to T6 and mirrored both in T7 |
-| Nothing relies on weakening/skipping a test (section 7.7) | Yes. The R6 block is rewritten because it pins the retired per-language contract; no golden regenerated with `-u`; constraint 5 forbids snapshots |
+| Every task names test files **and** runner | yes: `app.component.faq-layout.spec.ts` plus the existing specs, all `test:logic` |
+| Component specs named `*.component.spec.ts` | n/a. The new file is deliberately **not** a component spec: `angular.json` includes `**/*.component.spec.ts` for `ng test`, and `app.component.faq-layout.spec.ts` does not match it, so it runs in `vitest run` and `test:components` stays at two files |
+| Untested tasks justify changing no behaviour | n/a, every task has pins |
+| Failure paths from the FRs are covered | FR-24 failure path (a run that stores no FAQ) is a grid state of the condition pin; FR-27 and FR-28 failure paths are the guards; FR-25's failure path asserts nothing beyond FR-24 |
+| Nothing relies on weakening/skipping a test (section 7.7) | yes: no existing spec is edited, and the delta modifies no test |
 
-Constraint 4 (a brand-new module's spec is red by absent module) departs from the literal text of `so-test-writer`, follows
-the US-5.1 / US-7.1 precedent, requires the four specs to be named in the report and a runtime reason for every other spec,
-and is now listed under "Open points carried to HUMAN_PLAN_APPROVAL" (v2 non-blocking item addressed).
+### Red-first versus baseline-green classification, checked against the code
+
+- **FR-24 / AC-21 evaluated condition: genuinely red before T15** (my own evaluation above: three of the four grid states are `true`
+  today). It is **not** red in every row: the "during a run" state is already `false` (the existing `!isGenerating()`), so it is a
+  regression guard inside a red-first pin (N2).
+- **FR-26 order pin: red before T16** (Supplemental `valueChange` currently follows Description and Specs).
+- **FR-27 template side and the "exactly one use of the shared key" count: red before T17** (two uses today).
+- **FR-27 source side: red before T14** (the key does not exist).
+- **FR-28 oracle comparison: green at baseline and not vacuous.** The oracle is a literal copy of today's condition and the grid
+  includes the trap states (stale `faqArtifacts` with empty output fields; `seoData`, `slugData` or `mainHtmlUa` set; generating), so a
+  data-derived fix would turn it red. It holds after T15 because the new expression equals the oracle for every mode but
+  `faq-generator`.
+- **Other baseline-green guards** (`generatorForm` binding, the two literal values, the 170/170 parity, the FR-25 structure class
+  tokens, the `noContentYet` single-occurrence): each can fail on a plausible wrong implementation, so none is vacuous, subject to
+  the matching cautions in N3. The two-way split of the FR-27 parity pin (equality half is a guard, "contains the new key" half is
+  red-first) is correct and V4-3 requires it.
+- **Empty compile allowlist is achievable.** The new spec is source-text only: it imports `vitest`, `node:fs` and `node:path`, nothing a
+  task creates, and not `AppComponent`. `tsconfig.json` includes `src/**/*` and has no `strict`, so such a file cannot carry a
+  missing-symbol diagnostic; `tsc --noEmit` is clean today.
+- **Dynamic evaluation of the template condition.** The pin compiles an extracted expression (a `new Function`-style evaluation). I
+  checked: `arch-guard.sh` has no `eval` / `Function` rule, `npm run lint` is plain `tsc --noEmit`, there is no ESLint config; no rule
+  forbids it. It runs only on repository-owned template text inside a test (N6).
 
 ## 7. Impact-analysis fidelity
 
-- Plan consumed the survey rather than re-deriving it: yes. The one deliberate departure (`repair-strategy.ts` not edited)
-  is correct: a path-less rule resolves to `['full-regen']`, and T5 pins that.
-- Files touched but not surveyed: `tools/feedback-form/create-form.gs` (T9, flagged as scope growth with a drop option); new
-  sibling modules `faq-form.ts`, `faq-gate.ts`, `tab-descriptors.ts` are planner decisions, not survey gaps.
+- Plan consumed the survey rather than re-deriving it: **yes**. The plan's two-file list, the shared-key finding, the
+  data-derived-fix trap, the wiring-pin analysis and the "no `strict`" unknown are the survey's, re-verified and, where the plan found
+  the survey's correction (no existing key-for-key parity spec), carried into a new pin.
+- Files touched but not surveyed: **none**. The plan touches `app.component.html`, `app.component.ts` and the new spec, all listed.
+  The survey's "must change" list for this revision is exactly those two files plus the spec the survey called for.
+
+## Findings
+
+### Blocking
+
+None.
+
+### Non-blocking findings (travel with the PASS)
+
+**N1. AC-22's geometric clause: manual by design, and nothing in the pipeline owns performing it. Flagged for the human; not decided
+here.**
+- The Specification (FR-25, NFR-9, OD-15 default) already fixes that the geometric clause is verified only by a manual browser check,
+  and the human approved Specification v3 with that default. The plan and breakdown honestly mark it manual and give it no task.
+- Facts for the decision, against AGENTS.md section 5: section 5 requires the failing test first and says to test behaviour; it has
+  no category for a manual check, and the Definition of Done (section 6) has a "not machine-checkable" item that names Rule 2, the
+  section 4 HTML criteria and the registry, not UI geometry. The repository has no layout engine (`happy-dom` has none) and no
+  browser-test tool, so a stronger automated check would need a new dependency (section 7.8: a scope change for the human).
+- Ownership gap: the breakdown assigns the check to "QUALITY_GATE (who, when, result)". The owning skill, `so-gate-enforcer`, runs
+  commands and reports real output; it has no manual-check step. The last quality-gate report for this Story (section 8, line 304)
+  recorded "Browser / manual check: NOT performed", and the operator then found the AC-21 defect by hand at HUMAN_PR_APPROVAL. Unless
+  the human names who performs the AC-22 check (and where it is recorded), expect it to be reported "NOT performed" again and
+  RECONCILIATION to find no evidence for that clause.
+- Options for the human (not chosen here): accept the default; name the operator as the performer, recorded at HUMAN_PR_APPROVAL;
+  require a stronger check.
+
+**N2. Mixed baseline states inside "red first" pins; TEST_WRITING must split them (V4-3 only splits the parity pin).**
+- T15: the "during a run" grid row of the FR-24 pin is already `false` at baseline. Tag it `[baseline-guard]` (or keep the red-first
+  assertion aggregate over the three red states) so `-t "owner T15"` and the V4-6 baseline-state report are accurate.
+- T16: "the block still has exactly three `app-source-input`" is green at baseline; it must not carry an `(owner T16)` tag.
+- T17: "still has `[required]="true"`" is green at baseline; same.
+
+**N3. Matching and slicing hazards that would make a guard vacuous or a red pin unsatisfiable. TEST_WRITING should state these in its
+constraints.**
+- `uiLabels().supplementalContent` is a prefix of `uiLabels().supplementalContentRequired`. The "exactly once, inside `generatorForm`"
+  count and the `generatorForm` binding checks must match the exact key (a boundary or the closing quote); a substring count is 2
+  before and after T17 and could never go green.
+- `fa-file-code` occurs twice in the template (line 1449, the empty-state icon, and line 1856, an unrelated download button). The
+  "block also holds the icon" check must be scoped to the empty-state block.
+- `@for (tab of tabDescriptors()` occurs twice: inside the tab-bar `<header>` (line 1295) and at the result view (line 1455). The
+  FR-25 slice must start after the `</header>` that closes the tab bar, or it measures the wrong span.
+- The new key name is a prefix match for nothing else, but the premise assertions (block found, non-empty slice) V4-2 requires are what
+  keep these from passing vacuously; keep them.
+
+**N4. T17's whole-delta diff check names the wrong range.** It uses `git diff --stat <commit before T14>..HEAD` and says the new spec is
+added "before T14". The v4 execution order puts **T15 first**, so that range omits the riskiest commit. It should read "the commit
+before the first v4 task". The per-task scope checks still cover T15, so this does not block, but the wording should be fixed at the
+next revision.
+
+**N5. The required marker `*` (AC-24, AC-25) is unpinned at the rendering level.** The marker comes from an unchanged shared component
+(`source-input.component.html` line 4); that component has no spec. The delta's pins assert `[required]="true"` on the input, not that
+the component renders `*`. A one-line source-text pin on the component template would close it. Not in the plan; a TEST_WRITING
+option.
+
+**N6. Dynamic evaluation in a test.** No rule forbids it (checked above). It executes repository-owned template text only. Mention it to
+the security reviewer; the alternative is a hand-written parser of the six-token expression. Either is acceptable.
+
+**N7. Tension with AGENTS.md section 5, carried from the standing decision.** Section 5 asks for rendered, user-observable
+assertions for components and says not to query by CSS-implementation selectors; the FAQ-layout pins are source-text pins, including
+class-token checks (`h-full`, `justify-*`, `mt-*`) as the structural proxy for AC-22. This is the idiom the repository already uses for
+`AppComponent` ("no `AppComponent` spec" by standing decision: heavy DI), it was in the v3 plan the human approved, the plan states
+it as rejected alternatives 11 and 20, and `happy-dom` cannot measure layout. It is flagged for the human, not decided.
+
+**N8. The condition-text pin over-specifies one form and the parity pin couples unrelated keys.**
+- Pin (c) requires the condition text to contain `appMode() !== 'faq-generator'`; the evaluated behaviour pin is the real guard, and a
+  behaviourally equivalent form (for example a negated list) would fail the text pin. Acceptable and consistent with the plan's
+  "single `appMode()` conjunct" decision; note it.
+- The whole-dictionary `en`/`uk` key-set parity pin (170/170 today) will fail any future one-sided key anywhere in the dictionary. That
+  is the strict alternative the plan chose over a name-only pin (Rejected 23); no defect.
+
+**N9. Status wording and stale artifacts.** `pipeline_status` v2 cell for T7 reads "IMPLEMENTED, owned tests GREEN" (body and breakdown:
+complete, DONE). `pipeline_status`, `test_strategy`, `ac_test_matrix` and `test_generation_report` still record plan v1 / task
+breakdown v3 as inputs and cover AC-1 to AC-20 only; they are revised by TEST_WRITING and IMPLEMENTATION re-entry, which this gate
+precedes.
+
+**N10. Decisions carried to the human at HUMAN_PLAN_APPROVAL (none decided here).** OD-13 (Ukrainian label default
+"Додатковий контент (Обов'язково)", ASCII apostrophe, `\'` in source), OD-11 (pre-run empty tab strip), OD-12 (panels above the result,
+FR-25 holds vacuously when a panel is shown), OD-16 (blank central area after a run that stores no FAQ), OD-17 (`alertFillFields`
+still names Original Description), OD-6, OD-8, OD-9(e) (the TXT control appears for a FAQ-only run), and N1 above.
 
 ## Verdict rationale
 
-The single blocking defect from v2 (R4) is fixed consistently in all five places it lives (ownership tables, constraint 1 /
-1a / 6, remaining-red table, T2/T6/T7/T8/T9 acceptance), and a full independent walk of the compile gate from T1 to T13 finds
-no task whose allowlist is unachievable, no acceptance criterion left unreachable, and no consumer scheduled before its
-contract. Nothing remains that a task-breakdown, plan or Specification revision must fix before the human gate, so `PASS`.
-This is a verdict, not approval.
+Every one of the seven axes is clear for a PASS. The delta's design decisions D12 to D16 are right and verified: the guard is scoped by
+mode, not data (the choice that matters, because `content` is a shared signal and the other modes would otherwise silently change);
+the shared label key and `generatorForm` are untouched; the new key is added to both language blocks with the correct escape; the
+`>= 3` pin and `.arch-guard-checksums` are untouched; no FROZEN file, `STORE_REGISTRY` surface, prompt, renderer, validator or
+server file is reached. The decomposition is correct and the ordering holds. The findings above are about how the tests are written
+and where one clause is verified, not about the design or the task list, so none of `changes_required`,
+`changes_required_tasks` or `changes_required_specification` applies: a Specification fault would not be the cause either, because
+the Specification explicitly accepts the manual clause (OD-15) and N1 is a question of who performs it, which is a human decision
+rather than a Specification defect.
 
-## Non-blocking findings
-
-- **T6 wording on languages.** `getLangsForStore(...).transLangs` returns Task C language keys (`bcp47ToTaskCLang`), not
-  ISO codes, and it takes a store name, not a profile. The builder must map keys back with `taskLangToIso` (or iterate
-  `store.languages` minus `MASTER_LOCALE`) to build `FAQ translation (${iso})` and the `faqArtifacts` keys. Wording only.
-- **Non-spec TEST_WRITING helpers.** The gate admits zero diagnostics in non-spec files, but constraint 1a names specs only.
-  If TEST_WRITING adds a shared stub harness under `test/` or `src/`, it must obey the same import rule. Worth one sentence.
-- **Diagnostic-code list in gate item 3.** tsc also reports TS2724 ("no exported member ... did you mean") for a missing export
-  with a similarly named one (for example `validateFaqStructuralParity` next to `validateStructuralParity`). The observable
-  check is path-based so it is excused in practice; the prose list could say "missing-symbol kinds, for example".
-- **T11 AC-10 pin.** The "shared toggle binding `seoUseThinking` / `toggleSeoThinking()`" pin would already pass against
-  today's `app.component.ts`, so it does not turn green with T11. The template-binding pin (T12) is the real check.
-- **Generator-mode FAQ tab visibility.** The retained Generator algorithm shows a translated FAQ tab only when the
-  description translation for that language exists (pre-existing rule, `translations[taskKey]`). A language whose description
-  translation failed but whose FAQ translation was stored gets no tab. Unchanged behaviour; RECONCILIATION may want to know.
-- **Items to confirm at HUMAN_PLAN_APPROVAL (already in the breakdown's open-points list):** the per-task gate convention;
-  the "module not found is the red state" departure for four new-module specs; `create-form.gs` scope; OD-9(e) FAQ-only export
-  (undecided, no download code changes); OD-6 seam behaviour. SP-1 to SP-3 are still not in
-  `docs/decisions/US-8.1-open-decisions.md`.
-- **UI acceptance by source-text pins** (AC-10 to AC-12) is the repository's established idiom; RECONCILIATION should read the
-  pins critically.
-- **Plan R10 wording** ("snapshot generated from the pre-extraction function") is superseded by T10's hand-derived literals
-  plus move-only diff; the plan file is not edited by this stage. Adopt the same wording if the plan is revised later.
-- **IMPLEMENTATION_VERIFICATION** must re-read the diff for Rule 2 (no retrieval call), since no tool checks it.
+`PASS` is not human approval. The plan and task breakdown stay `DRAFT` until `/so:approve` at HUMAN_PLAN_APPROVAL.
