@@ -1,40 +1,40 @@
 ---
 artifact: pipeline_status
 story: US-8.1
-version: 2
+version: 3
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-14T20:30:00Z
-updated_at: 2026-10-15T10:15:00Z
+updated_at: 2026-10-15T11:55:00Z
 supersedes: null
 inputs_consumed:
   - key: story
-    version: 2
+    version: 3
   - key: specification
-    version: 2
+    version: 3
   - key: open_decisions
-    version: 1
-  - key: impact_analysis
-    version: 1
-  - key: implementation_plan
-    version: 1
-  - key: task_breakdown
-    version: 3
-  - key: plan_review
-    version: 3
-  - key: test_strategy
-    version: 1
-  - key: ac_test_matrix
-    version: 3
-  - key: test_generation_report
-    version: 3
-  - key: verification_report
-    version: 3
-  - key: security_review
     version: 2
+  - key: impact_analysis
+    version: 2
+  - key: implementation_plan
+    version: 2
+  - key: task_breakdown
+    version: 4
+  - key: plan_review
+    version: 4
+  - key: test_strategy
+    version: 2
+  - key: ac_test_matrix
+    version: 4
+  - key: test_generation_report
+    version: 4
+  - key: verification_report
+    version: 4
+  - key: security_review
+    version: 3
   - key: reconciliation_report
-    version: 1
+    version: 2
 open_decisions_blocking: false
 ---
 
@@ -55,8 +55,10 @@ open_decisions_blocking: false
 | T11 FAQ Generator component state and `generateFaqOnly()` call | angular | DONE | 88670be |
 | T12 FAQ Generator mode button, form and Generate button in the template | angular | DONE | c04096a |
 | T13 README documentation | angular | DONE | 7a0613e |
+| T14 `supplementalContentRequired` label key in both `TRANSLATIONS` blocks (v4 delta) | angular | DONE | 6c19042 |
 | T15 exclude `faq-generator` from the empty-state condition (v4 delta) | angular | DONE | 9494b2b |
 | T16 move the Supplemental Content input directly after Product Name (v4 delta) | angular | DONE | 81bee6a |
+| T17 bind the FAQ Supplemental Content label to the new key (v4 delta) | angular | DONE | 3dc3490 |
 
 ## T1 - section 9 stop and approval record
 
@@ -277,6 +279,16 @@ open_decisions_blocking: false
 - Whole `test:logic`: `Test Files  1 failed | 184 passed (185)`, `Tests  3 failed | 6377 passed | 3 skipped (6383)` (before T16: 5 failed | 6375 passed); the only failures are the T17-owned red pins. `template-wiring.spec` and `export-guard.spec` unmodified and green. `npm run test:components`: `Tests  32 passed (32)`.
 - `npx tsc --noEmit`: exit 0, no diagnostics (compile allowlist empty). `npm run lint`: exit 0. `npm run build`: exit 0. `bash arch-guard.sh`: exit 0.
 - Outcome: T16 complete, one commit. T17 remains.
+
+## v4 delta - T17 results (real runs)
+
+- Scope: `src/app/app.component.html` line 607 only; the FAQ Generator form's Supplemental Content `app-source-input` `[label]` changed from `uiLabels().supplementalContent` to `uiLabels().supplementalContentRequired`. Commit `3dc3490` (`feat(US-8.1 T17): ...`). `git diff -U0` showed one changed line; `[required]="true"` and every other attribute kept; the `generatorForm` binding (line 279) still reads `uiLabels().supplementalContent` (AC-26 / FR-28); no `.ts`, test, FROZEN file or `.arch-guard-checksums` changed; lines 1032, 1280, 1289, 1316 and the empty-state guard untouched; line endings preserved (the file is LF in this checkout).
+- `npx vitest run src/app/app.component.faq-layout.spec.ts`: `Test Files  1 passed (1)`, `Tests  37 passed (37)` (the 3 `(owner T17)` pins turned green; all `[baseline-guard]` tests green).
+- Whole `test:logic` (`vitest run`): `Test Files  185 passed (185)`, `Tests  6380 passed | 3 skipped (6383)`, 0 failed (before T17: 3 failed | 6377 passed).
+- `npx tsc --noEmit`: exit 0 (compile allowlist empty). `npm run lint`: exit 0. `npm run build`: exit 0. `npm run test:components`: `Test Files  2 passed (2)`, `Tests  32 passed (32)`. `bash arch-guard.sh`: exit 0, no `--rebaseline`. `npm run validate:harness`: OK.
+- Full `npm test` (= `test:logic` then `test:components`): both green, counts as above. `npm run test:coverage`: exit 0, global Statements 94.13%, Branches 87.95%, Functions 95.62%, Lines 94.69% (floors 80/75/80/80 met; no threshold error reported).
+- Whole-delta scope check: `git diff --stat 4c5f37e..HEAD` lists, outside `docs/`, only `src/app/app.component.faq-layout.spec.ts` (new), `src/app/app.component.html` and `src/app/app.component.ts`; no FROZEN file and no `.arch-guard-checksums` change in that range.
+- Outcome: T17 complete, one commit. **The whole v4 delta (T14 to T17) is complete.** The AC-22 geometric check stays a manual check at QUALITY_GATE (OD-15). QUALITY_GATE is not run by so-builder.
 
 ## Notes
 
