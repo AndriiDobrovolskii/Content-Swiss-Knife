@@ -1,21 +1,19 @@
 ---
 artifact: specification
 story: US-8.1
-version: 2
-status: APPROVED
+version: 3
+status: DRAFT
 owner: so-spec-writer
 created_at: 2026-10-14T15:00:00Z
-updated_at: 2026-10-14T17:00:00Z
-supersedes: docs/specifications/US-8.1-spec.md#1
+updated_at: 2026-10-15T12:00:00Z
+supersedes: docs/specifications/US-8.1-spec.md#2
 inputs_consumed:
   - key: story
-    version: 2
+    version: 3
   - key: clarification_report
-    version: 1
+    version: 2
   - key: open_decisions
-    version: 1
-  - key: specification_review
-    version: 1
+    version: 2
 open_decisions_blocking: false
 ---
 
@@ -27,7 +25,9 @@ For a store with several languages, a run produces one FAQ: it is generated once
 language of the selected store, so every language carries the same questions with the same structure. Every stored FAQ
 uses `<b>` for emphasis and never `<strong>`. A new "FAQ Generator" mode produces only the FAQ, through the same
 single-master pipeline, without producing a description, SEO metadata or slugs. The UA Description mode produces the FAQ
-for every store language too.
+for every store language too. The FAQ Generator screen shows its result at the top of the central area with no
+"No content generated yet" block, and its left-panel form places the now-mandatory Supplemental Content directly under
+Product Name with the label "Supplemental Content (Required)"; no other mode's screen changes (v3).
 
 ## Background
 
@@ -39,14 +39,26 @@ explicit AGENTS.md §9 permission "modify `src/prompts/task-c.ts`" (2026-10-14).
 Specification with nine non-blocking Open Decisions (OD-1 to OD-9). Where a requirement below depends on one, it is marked
 and carries the clarifier's proposed default, which the human may overturn at HUMAN_SPEC_APPROVAL; see Open questions.
 
+**v3 change of requirements (2026-10-15).** After the operator rejected the HUMAN_PR_APPROVAL gate and instructed that the
+findings be recorded as a change of requirements and the work returned to SPECIFICATION, the Story was amended to v3 with
+AC-21 to AC-26 (FAQ Generator layout), and clarification was re-run (clarification report v2, Open Decisions v2 with OD-1 to
+OD-20, all non-blocking). The cause the Story author found: the central area's empty-state block is shown whenever the mode
+is not Generator and the description, SEO and slug results are all empty; a standalone FAQ run leaves all three empty by
+design (AC-13 / FR-18), so the block also appeared after a successful run, above the FAQ result. The label read
+"(Optional)" because the Supplemental Content label text is shared with the Generator and UA Description forms, where the
+field really is optional. AC-1 to AC-20 are unchanged, FR-1 to FR-23 and NFR-1 to NFR-8 keep their ids and meaning, and
+the new requirements FR-24 to FR-28 are added. The Specification is back to `DRAFT`: it must pass SPEC_REVIEW and
+HUMAN_SPEC_APPROVAL again.
+
 ## Scope
 
 | | |
 |---|---|
 | **Stores** | All of `STORE_REGISTRY`: `3DDevice`, `3DPrinter`, `3DScanner`, `Center 3D Print`, `Drukarka 3D`, `EXPERT3D`, `Expert-3DPrinter`. Every one lists `uk-UA` in `languages`, and the smallest (`Drukarka 3D`: `pl-PL`, `uk-UA`) has N = 2. |
-| **Locales** | All locales in the selected store's `languages` (read from `STORE_REGISTRY`, never hard-coded). uk-UA is the master FAQ; every other locale of the store receives a translation of it. Fan-out of a uk-UA change: one master reaches N−1 other languages; there is no per-language FAQ authoring. A store profile that does not list `uk-UA` (the `getStore()` fallback for an unregistered store name, `languages: ['en-GB']`, N = 1) is outside every acceptance criterion; no requirement is written for it (SP-3). |
+| **Locales** | All locales in the selected store's `languages` (read from `STORE_REGISTRY`, never hard-coded). uk-UA is the master FAQ; every other locale of the store receives a translation of it. Fan-out of a uk-UA change: one master reaches N−1 other languages; there is no per-language FAQ authoring. A store profile that does not list `uk-UA` (the `getStore()` fallback for an unregistered store name, `languages: ['en-GB']`, N = 1) is outside every acceptance criterion; no requirement is written for it (OD-20, formerly SP-3). The v3 layout requirements (FR-24 to FR-28) are store-independent and add no locale fan-out: the English label text is fixed by AC-24, and the only locale-dependent point is the interface-language (not store-locale) wording of the label, OD-13. |
+| **UI scope of the v3 change** | The FAQ Generator mode (`faq-generator`) only: its left-panel form and its central area, plus the FAQ-Generator-specific label text. The layouts of Generator, UA Description, SEO Generator, Slug Generator and every other mode are not changed (AC-26, FR-28; OD-10 default). |
 | **Track** | angular (per the Story). The work also reaches a prompt and a service; the task breakdown assigns a per-task track and the prompt-track FROZEN stop applies to the `task-c.ts` task. |
-| **FROZEN files (AGENTS.md §9)** | `src/prompts/task-c.ts` only, on the operator's explicit permission "modify `src/prompts/task-c.ts`" (2026-10-14) recorded in the Story. `src/prompts/task-a.ts`, `src/prompts/task-b.ts`, `src/prompt-core/master-system-prompt.ts` and `src/utils/output-validator.ts` are not authorised; needing any of them is a new §9 stop. |
+| **FROZEN files (AGENTS.md §9)** | `src/prompts/task-c.ts` only, on the operator's explicit permission "modify `src/prompts/task-c.ts`" (2026-10-14) recorded in the Story. `src/prompts/task-a.ts`, `src/prompts/task-b.ts`, `src/prompt-core/master-system-prompt.ts` and `src/utils/output-validator.ts` are not authorised; needing any of them is a new §9 stop. The v3 layout change (FR-24 to FR-28) concerns the application component only, touches no FROZEN file and needs no prompt change; needing one would be a new §9 stop. |
 
 ## Functional requirements
 
@@ -153,7 +165,7 @@ master, counting the repair gate's own repair attempts inside it. An empty or wh
 "no FAQ" outcome, distinct from "not valid HTML": no retry, nothing stored, no translation call (OD-4 default; the prompt
 itself allows an empty response when no question is answerable).
 
-**Provider error (SP-1 default):** when the master call itself throws (timeout, rate limit or truncated response surfaced
+**Provider error (OD-18 default, formerly SP-1):** when the master call itself throws (timeout, rate limit or truncated response surfaced
 by the provider layer), that call counts as one failed attempt under the same budget of 3; it does not abort the run.
 
 **Failure path:** if the master is still not valid after 3 attempts (including attempts lost to a provider error), no FAQ
@@ -171,7 +183,7 @@ after 3 attempts has no entry in `faqArtifacts`, and the other languages' entrie
 remains visible as a validation issue (FR-3). An empty or whitespace-only translation is a parity failure (FR-3) and is
 retried under this requirement; it is not a separate terminal outcome.
 
-**Provider error (SP-1 default):** when a translation call throws, that call counts as one failed attempt for that language
+**Provider error (OD-18 default, formerly SP-1):** when a translation call throws, that call counts as one failed attempt for that language
 under the same budget of 3; a language whose attempts are exhausted that way is skipped, and the remaining languages are
 still translated.
 
@@ -309,6 +321,86 @@ FR-9 and from the Story's Out of scope (FAQPage markup is supplied by the CMS mo
 Criteria not in play for the FAQ artifact: spec-count parity, figure/figcaption and image-loading rules, video survival, and
 the SEO length and CTA rules. They remain true for the description path, which this Story does not change (FR-13).
 
+## FAQ Generator layout requirements (v3 change of requirements)
+
+These concern the FAQ Generator mode (`faq-generator`) only (OD-10 default). They are observable on the rendered screen with
+stubbed run state and a stubbed LLM; none needs a live model.
+
+**AGENTS.md §4 in play: none.** The v3 change alters labels, field order and the arrangement of the central area, not any
+generated HTML. No §4 criterion is restated for it; FR-21 to FR-23 (the §4 criteria for the FAQ artifact) are unchanged and
+not weakened. No `STORE_REGISTRY`, prompt or FROZEN-file change is implied.
+
+### FR-24: No empty-state block in FAQ Generator
+
+In FAQ Generator mode the central area never renders the empty-state block: no "No content generated yet" text, no "Select a
+website, fill the form, and click Generate." text, and no icon belonging to that block, in each of three states: before any
+run, during a run, and after a completed run.
+
+The field semantics of FR-18 are unchanged by this requirement and are not a means of satisfying it: after a standalone run
+`mainHtmlUa` is still `''`, `translations` is still `{}`, and `seoData` and `slugData` are still `null`. FR-18 and FR-24 hold
+together; neither is met by altering the other.
+
+**Failure path:** a FAQ Generator run that stores no FAQ (the master was empty or failed, FR-10) leaves the central area
+without the empty-state block as well; what, if anything, tells the operator that nothing was produced is not fixed by any
+acceptance criterion (OD-8, OD-16: AC-21 removes the only "nothing was produced" cue, so that run shows a blank central area;
+flagged for the human, no requirement written). The empty-state block of the other modes is governed by FR-28.
+
+### FR-25: The result is the first content directly below the version tabs
+
+After a completed FAQ Generator run, the generated result (the panel of the active version tab) is the first content directly
+below the version tab bar. Whenever no validation panel and no repair panel is shown, both of the following hold:
+
+1. no other element, in particular no empty-state block, sits between the tab bar and the result panel;
+2. the result panel is not vertically centred and is not pushed down by a full-height sibling.
+
+How this is checked (OD-15 default, carried): clause 1, and for clause 2 the absence of a full-height or centring sibling in
+the FAQ Generator branch of the result view, are asserted from the template structure; actual rendered geometry is verified
+only by a manual browser check, and the human may require a stronger check at HUMAN_SPEC_APPROVAL.
+
+When a validation panel or a repair panel is shown (they appear only when issues or a repair report exist), where it sits
+relative to the result is not changed by this Specification: by default (OD-12) the panels stay where they are today, above
+the result, and this requirement is stated for the case with no such panel. The version tabs' labels and styling and the
+result block's own content, styling and copy buttons are unchanged (OD-14 default; only the position of the result is in
+scope).
+
+**Failure path:** a FAQ Generator run that stores no FAQ has no result panel; this requirement then asserts nothing beyond
+FR-24.
+
+### FR-26: Field order in the FAQ Generator form
+
+In the FAQ Generator form, Supplemental Content is positioned directly under the Product Name field and before Original
+Description and Tech Specs. The field order is Target Website, Product Name, Supplemental Content, Original Description,
+Tech Specs.
+
+**Failure path:** n/a, no failure path — a static property of the form layout.
+
+### FR-27: Supplemental Content label and required marker in the FAQ Generator
+
+In the FAQ Generator form, with the English interface, the Supplemental Content label reads "Supplemental Content
+(Required)" followed by the required marker `*`; the text "Optional" does not appear in that label. The field carries the
+required marker (the marker is part of this requirement because the field is mandatory; the enablement behaviour is FR-16
+and is unchanged by FR-26).
+
+With the Ukrainian interface the FAQ Generator shows a Ukrainian label for the same field, and it does not read "Опціонально".
+Default carried (OD-13, flagged for human approval at HUMAN_SPEC_APPROVAL): "Додатковий контент (Обов'язково)". AC-24 itself
+fixes the English text only; the Ukrainian wording is a labelled default, not a decision.
+
+This requirement is FAQ-Generator-specific: the label text of the Generator and UA Description forms is governed by FR-28.
+
+**Failure path:** n/a, no failure path — a static property of the form. The Generate-guard alert text that still lists
+"Original Description" as mandatory is not covered by any acceptance criterion and is unchanged (OD-17, reported to the
+human as a finding; no requirement written).
+
+### FR-28: Other modes are unchanged by FR-24 to FR-27
+
+The Generator and UA Description forms keep the Supplemental Content label "Supplemental Content (Optional)" (English
+interface; the Ukrainian interface keeps the label it shows today) and their current field order. The empty-state block is
+still rendered in every mode other than FAQ Generator exactly when it is rendered today (in particular SEO Generator and Slug
+Generator before their first run keep it; OD-10 default). The layouts, field labels and empty state of SEO Generator, Slug
+Generator and every other mode are unchanged.
+
+**Failure path:** any change of those outputs in a mode other than FAQ Generator is a defect.
+
 ## Non-functional requirements
 
 - **NFR-1 (provider independence, AGENTS.md §3 Rule 1):** the FAQ generation and translation calls go through the
@@ -328,6 +420,9 @@ the SEO length and CTA rules. They remain true for the description path, which t
   pure on their input (no wall-clock or unseeded randomness), so each is testable with a stubbed LLM; no acceptance criterion
   requires a live model. Statements about free model wording (FR-21 and FR-23 beyond their normaliser and prompt-text parts)
   are review criteria and are not asserted automatically.
+- **NFR-9 (UI change containment, v3):** FR-24 to FR-28 are verifiable with stubbed run state and the template structure, with
+  no live model; they change no prompt, no `STORE_REGISTRY` entry and no FROZEN file (AGENTS.md §9), and no data field of the
+  result (FR-18). The geometric clause of FR-25 is verified manually (OD-15 default).
 
 ## Out of scope
 
@@ -337,16 +432,31 @@ the SEO length and CTA rules. They remain true for the description path, which t
 - FAQPage / schema.org markup, the HowTo artifact, the number of questions (3–5) and the 150–400 word target of the FAQ prompt.
 - Changing any other mode, or the per-language SEO and slug generation.
 - Any edit to `task-a.ts`, `task-b.ts`, `master-system-prompt.ts` or `output-validator.ts`.
-- Operator-facing wording and severity of messages about a skipped language or dropped FAQ, and the layout of the standalone
-  tool's output tabs, state reset and history restore (OD-8, OD-9): no acceptance criterion fixes them, so no requirement is
-  written until a human decides.
+- Operator-facing wording and severity of messages about a skipped language or dropped FAQ (OD-8), and what the operator sees
+  after a FAQ Generator run that stores no FAQ now that the empty-state block is gone (OD-16).
+- Of the standalone tool's screen, everything that FR-24 to FR-28 do not fix: which tabs a standalone run shows and their
+  order, state reset on a mode switch, history restore (OD-9), what the central area shows before a run beyond the absence
+  of the empty-state block, including whether an empty tab-bar strip is hidden (OD-11), and where the validation and repair
+  panels sit relative to the result (OD-12). v2 excluded "the layout of the standalone tool's output tabs" wholesale; v3
+  narrows that exclusion to exactly these items, because AC-21 and AC-22 now fix the empty-state block and the result
+  position, and AC-23 to AC-25 fix the form.
+- The layout, field order, field labels and empty state of Generator, UA Description, SEO Generator, Slug Generator and every
+  other mode (FR-28); renaming or restyling the FAQ Generator version tabs (OD-14), and the FAQ result block's own content,
+  styling and copy buttons.
+- The text of the Generate-guard alert that names Original Description as mandatory (OD-17).
+- Treating the operator's manual browser test of the FAQ Generator as acceptance evidence: it is a recorded claim in the
+  Story, not an acceptance criterion and not evidence produced by the pipeline.
 - A live-model run as release evidence; acceptance is by stubbed LLM.
 
 ## Open questions
 
-All nine are recorded in `docs/decisions/US-8.1-open-decisions.md` (v1), all `blocking: false`. None is resolved by this
-Specification. Carried-default means a requirement above states the clarifier's proposed default, which the human may
-overturn at HUMAN_SPEC_APPROVAL.
+All twenty Open Decisions are recorded in `docs/decisions/US-8.1-open-decisions.md` (v2), all `blocking: false`. None is
+resolved by this Specification. Carried-default means a requirement above states the clarifier's proposed default, which the
+human may overturn at HUMAN_SPEC_APPROVAL. OD-1 to OD-9 are carried from v1 of the log with their ids and text unchanged. The
+three open points that Specification v2 held as its own SP-1 to SP-3 are now OD-18 to OD-20 in the log, and are referenced
+here by those ids.
+
+### Carried from Specification v2 (OD-1 to OD-9)
 
 - **OD-1** (Story Q1) — "3 attempts" versus the repair gate budget; master exhausted; "exactly one call" versus retries.
   Carried default in FR-1, FR-10, FR-11.
@@ -364,24 +474,47 @@ overturn at HUMAN_SPEC_APPROVAL.
   that the stored text has no `<strong>` and `<strong>` alone never fails FR-9 (v1 of this Specification had FR-7 and FR-9
   in conflict on this point). The human may overturn this at approval.
 - **OD-8** — surfacing a skipped language or dropped FAQ; history entry for a partial result. No requirement written (no AC);
-  FR-20 notes the gap.
-- **OD-9** — standalone tool inputs, output tabs, state reset, history restore. No requirement written beyond AC-10 to AC-15.
+  FR-20 notes the gap. Interacts with OD-16.
+- **OD-9** — standalone tool inputs, output tabs, state reset, history restore. No requirement written beyond AC-10 to AC-15
+  and, for the screen layout, the v3 requirements FR-24 to FR-28 (AC-21 to AC-26); the rest stays open (Out of scope).
 
-Three further open points were raised while revising this Specification after SPEC_REVIEW v1. They are **not yet in the
-Open Decisions log** (this stage does not edit it); they are non-blocking, none is resolved here, and the clarifier or the
-human may record them there.
+### Raised by the v3 change (OD-10 to OD-17)
 
-- **SP-1** (review R3) — a thrown provider error (timeout, rate limit, truncated response) on a master or translation call.
-  The Story and Open Decisions say nothing. Carried default in FR-10 and FR-11: it counts as one failed attempt under the same
-  budget of 3 and does not abort the run; a FAQ failure never discards output produced earlier in the run. The Story's ACs do
-  not settle whether it is an attempt or an immediate skip.
-- **SP-2** (review N5) — whether a FAQ translation must preserve the master's numbers, units, currency symbol and product
-  name. AGENTS.md §4 says "Don't change values or units" for descriptions; the Story has no AC for it for FAQ translations,
-  and writing one would add a Story-level requirement. No FR is written. The prompt-level handle (FR-12, item 2: unit and
-  number rules kept) is the only coverage. Related: OD-6 (protected-name block). The human decides whether the Story needs an
-  AC.
-- **SP-3** (review N4) — a store profile with no `uk-UA` / N = 1 (the `getStore()` fallback). Every `STORE_REGISTRY` store has
-  uk-UA and N ≥ 2, and AC-1 is stated for N ≥ 2; behaviour outside that is unspecified and no requirement is written.
+Each Story-level question (UI-Q1 to UI-Q5) carries the Story's own default, which AC-21 to AC-26 already assume and which the
+clarifier proposes a specification may carry. Carried defaults are labelled in the requirements.
+
+- **OD-10** (Story UI-Q1) — scope of the layout change. Carried default (FAQ Generator only; other modes, including the empty
+  state of SEO and Slug Generator, unchanged) in the Scope table, FR-24 to FR-28.
+- **OD-11** (Story UI-Q2) — what the FAQ Generator central area shows before any run, including whether an empty tab-bar strip
+  is hidden. Carried default: nothing beyond whatever the tab bar renders today; AC-21 constrains only the empty-state block.
+  No requirement is written for the tab strip (Out of scope).
+- **OD-12** (Story UI-Q3) — validation and repair panels versus "result directly under the tabs". Carried default in FR-25:
+  panels stay where they are; FR-25 is stated for the case with no panel. Note for the human: when a language is skipped
+  (OD-8 default) a panel can appear in exactly those runs, so FR-25 may hold only vacuously for real runs.
+- **OD-13** (Story UI-Q4) — Ukrainian-interface wording of the FAQ Generator label. Carried default in FR-27 ("Додатковий
+  контент (Обов'язково)"), **flagged for human approval at HUMAN_SPEC_APPROVAL**; AC-24 fixes the English text only.
+- **OD-14** (Story UI-Q5) — version-tab labels. Carried default: unchanged (Out of scope, FR-25).
+- **OD-15** — how AC-22's geometric clause is verified. Carried default in FR-25 and NFR-9: template-structure assertion
+  for the structural clause and for the absence of a full-height or centring sibling; real geometry by manual browser check;
+  the human may require a stronger check.
+- **OD-16** — AC-21 removes the only "nothing was produced" cue, so a run that stores no FAQ leaves a blank central area.
+  No requirement written beyond FR-24; the failure-state message stays with OD-8; flagged to the human as a consequence of
+  AC-21.
+- **OD-17** — the Generate-guard alert text names Original Description as mandatory in FAQ Generator. Carried default:
+  unchanged; no requirement written; reported to the human as a finding (FR-27, Out of scope).
+
+### Formerly Specification-internal points (OD-18 to OD-20, were SP-1 to SP-3)
+
+- **OD-18** (was SP-1; review R3) — a thrown provider error (timeout, rate limit, truncated response) on a master or
+  translation call. The Story and OD-1 say nothing. Carried default in FR-10 and FR-11: it counts as one failed attempt under
+  the same budget of 3 and does not abort the run; a FAQ failure never discards output produced earlier in the run.
+- **OD-19** (was SP-2; review N5) — whether a FAQ translation must preserve the master's numbers, units, currency symbol and
+  product name. AGENTS.md §4 says "Don't change values or units" for descriptions; the Story has no AC for it for FAQ
+  translations, and writing one would add a Story-level requirement. No FR is written. The prompt-level handle (FR-12, item
+  2: unit and number rules kept) is the only coverage. Related: OD-6. The human decides whether the Story needs an AC.
+- **OD-20** (was SP-3; review N4) — a store profile with no `uk-UA` / N = 1 (the `getStore()` fallback). Every
+  `STORE_REGISTRY` store has uk-UA and N ≥ 2, and AC-1 is stated for N ≥ 2; behaviour outside that is unspecified and no
+  requirement is written.
 
 ## Traceability matrix
 
@@ -399,23 +532,39 @@ human may record them there.
 | AC-10 | FR-15 | |
 | AC-11 | FR-16 | |
 | AC-12 | FR-17 | |
-| AC-13 | FR-18 | Data fields only; tabs are OD-9. |
+| AC-13 | FR-18 | Data fields only; tabs are OD-9. FR-24 holds together with it (the fields are not changed to remove the empty-state block). |
 | AC-14 | FR-19, FR-1 | Same pipeline as AC-1–AC-3 and AC-6–AC-9. |
 | AC-15 | FR-20 | |
-| AC-16 | FR-10 | Provider-error handling: SP-1 default. |
-| AC-17 | FR-11 | Provider-error handling: SP-1 default. |
+| AC-16 | FR-10 | Provider-error handling: OD-18 default (formerly SP-1). |
+| AC-17 | FR-11 | Provider-error handling: OD-18 default (formerly SP-1). |
 | AC-18 | FR-13 | |
 | AC-19 | FR-12, FR-3 | FR-12 items 1–3 are the pinned prompt content. |
 | AC-20 | FR-14 | |
-| (none — AGENTS.md §4) | FR-21, FR-22, FR-23 | Required by the §4 rule for generated-HTML Stories; Story states no dedicated AC. FR-22/FR-23 partly overlap AC-9. FR-21 and the anglicism part of FR-23 are asserted only at normaliser and prompt-text level. |
+| AC-21 | FR-24 | Before a run, during a run, after a completed run. Blank area after a no-FAQ run: OD-16. Pre-run tab strip: OD-11. |
+| AC-22 | FR-25, FR-24 | Asserted for the case with no validation or repair panel (OD-12). Geometric clause: OD-15 default. |
+| AC-23 | FR-26 | |
+| AC-24 | FR-27 | English text fixed by AC-24; Ukrainian-interface wording is the OD-13 labelled default. |
+| AC-25 | FR-16, FR-27 | Enablement is FR-16 (restates AC-11, unchanged by the move); the required marker is part of FR-27. No second enablement requirement is invented. |
+| AC-26 | FR-28 | FAQ Generator only (OD-10 default). |
+| (none — AGENTS.md §4) | FR-21, FR-22, FR-23 | Required by the §4 rule for generated-HTML Stories; Story states no dedicated AC. FR-22/FR-23 partly overlap AC-9. FR-21 and the anglicism part of FR-23 are asserted only at normaliser and prompt-text level. The v3 layout change touches no §4 criterion. |
 
 ## Change history
 
+- **v3** — revision against Story v3 (the operator's FAQ Generator layout change of requirements, AC-21 to AC-26),
+  clarification report v2 and Open Decisions v2 (OD-1 to OD-20). Status returned to `DRAFT`; v2 is superseded and must pass
+  SPEC_REVIEW and HUMAN_SPEC_APPROVAL again. Added FR-24 to FR-28 (empty-state block, result position, field order, label and
+  required marker, other modes unchanged) and NFR-9; extended the traceability matrix so that AC-1 to AC-26 each trace to at
+  least one FR. FR-1 to FR-23 and NFR-1 to NFR-8 keep their ids and meaning; the only edits to them are the reference
+  renames SP-1 to OD-18 and SP-3 to OD-20 (no change of behaviour). Revised Out of scope: v2's exclusion of "the layout of the
+  standalone tool's output tabs" is narrowed, consistently with AC-21 and AC-22, to the items FR-24 to FR-28 do not fix.
+  Open questions now lists OD-1 to OD-20 as labelled carried defaults; the Specification's own SP-1 to SP-3 are replaced by
+  OD-18 to OD-20. `specification_review` is no longer listed in `inputs_consumed`: review v2 was written against
+  Specification v2 and is stale for this revision. No Open Decision was resolved.
 - **v2** — revision after SPEC_REVIEW v1 (CHANGES_REQUIRED), attempt 1 of 3. R1: FR-7 now converts `<strong>` before the
   FR-9 and FR-3 checks and again after every repair, and states how "attributes kept" meets FR-9's "no attributes". R2: FR-9
   excludes empty responses; FR-10 makes an empty master terminal, FR-11 treats an empty translation as a parity failure. R3:
-  FR-10 and FR-11 gained the provider-error path and "earlier output is never discarded" (SP-1). R4: FR-21 and FR-23 are
-  restated at normaliser and prompt-text level, with the rest declared review-only (NFR-8). N3: FR-12 carries the pinned
-  FAQ-variant content. N4: scope row and SP-3. N5: SP-2 (no FR written). N6: FR-23 cites §4 only for the `Product`
-  `itemtype`. No Open Decision was resolved.
+  FR-10 and FR-11 gained the provider-error path and "earlier output is never discarded" (SP-1, now OD-18). R4: FR-21 and
+  FR-23 are restated at normaliser and prompt-text level, with the rest declared review-only (NFR-8). N3: FR-12 carries the
+  pinned FAQ-variant content. N4: scope row and SP-3 (now OD-20). N5: SP-2 (now OD-19; no FR written). N6: FR-23 cites §4
+  only for the `Product` `itemtype`. No Open Decision was resolved.
 - **v1** — first draft against Story v2.
