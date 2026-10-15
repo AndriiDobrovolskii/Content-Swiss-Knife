@@ -604,6 +604,16 @@
         </div>
 
         <app-source-input
+          [label]="uiLabels().supplementalContent"
+          [placeholder]="uiLabels().placeholderSupplemental"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [required]="true"
+          [textHeight]="'min-h-[140px]'"
+          [value]="faqSupplementalContent()"
+          (valueChange)="faqSupplementalContent.set($event)" />
+
+        <app-source-input
           [label]="uiLabels().originalDescription"
           [placeholder]="uiLabels().placeholderDesc"
           [labels]="uiLabels()"
@@ -621,16 +631,6 @@
           [enableTableNormalize]="true"
           [value]="faqSpecs()"
           (valueChange)="faqSpecs.set($event)" />
-
-        <app-source-input
-          [label]="uiLabels().supplementalContent"
-          [placeholder]="uiLabels().placeholderSupplemental"
-          [labels]="uiLabels()"
-          [accent]="'blue'"
-          [required]="true"
-          [textHeight]="'min-h-[140px]'"
-          [value]="faqSupplementalContent()"
-          (valueChange)="faqSupplementalContent.set($event)" />
 
         <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
            <div>
