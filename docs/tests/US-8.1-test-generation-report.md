@@ -1,35 +1,38 @@
 ---
 artifact: test_generation_report
 story: US-8.1
-version: 3
+version: 4
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-14T19:45:00Z
-updated_at: 2026-10-15T13:00:00Z
-supersedes: docs/tests/US-8.1-test-generation-report.md#2
+updated_at: 2026-10-15T17:00:00Z
+supersedes: docs/tests/US-8.1-test-generation-report.md#3
 inputs_consumed:
   - key: story
-    version: 2
+    version: 3
   - key: specification
-    version: 2
+    version: 3
   - key: impact_analysis
-    version: 1
+    version: 2
   - key: implementation_plan
-    version: 1
+    version: 2
   - key: task_breakdown
-    version: 3
+    version: 4
   - key: plan_review
-    version: 3
+    version: 4
   - key: test_strategy
-    version: 1
+    version: 2
   - key: ac_test_matrix
-    version: 3
+    version: 4
   - key: security_review
     version: 1
   - key: reconciliation_report
     version: 1
 open_decisions_blocking: false
 ---
+
+> **Revision v4 (2026-10-15).** v3 (the sections below, unchanged) reported TEST_WRITING for Specification v2 and its two loop-backs. v4 adds the final
+> section "v4 addendum: the FAQ Generator layout delta (T14 to T17)" with real command output. Nothing above it is reworded.
 
 # Test Generation Report - US-8.1
 
@@ -232,3 +235,141 @@ The "State now" / "Green by" columns were stale (the TEST_WRITING-time RED snaps
 ### Limits (unchanged by this loop-back)
 
 The AC-4 / AC-10 / AC-11 wiring pins are still source-text pins, not a rendered DOM; "alongside SEO Meta and Slugs" is pinned as presence in the one mode switcher plus adjacency to UA Description, not as visual position. A manual run of the FAQ Generator in a browser remains advisable at HUMAN_PR_APPROVAL (reconciliation N-3).
+
+---
+
+## v4 addendum: the FAQ Generator layout delta (T14 to T17; FR-24 to FR-28, NFR-9; AC-21 to AC-26)
+
+Stage: TEST_WRITING for the APPROVED plan v2 (D12 to D16) and task breakdown v4 (T14 to T17), written on branch `feat/US-8.1-single-master-faq` at HEAD `4c5f37e`, **before any implementation of T14 to T17**. T1 to T13 are built and green and were not touched.
+Binding instructions followed: the approver's N2 (split mixed baseline states), N3 (exact key / icon / slice matching), N4 (diff range = the commit before the first v4 task, which is T15), N5 (the `*` pin, done).
+
+### Files changed
+
+| Path | Change |
+|---|---|
+| `src/app/app.component.faq-layout.spec.ts` | **new**, 37 tests, `test:logic`. Table B: reads `app.component.html`, `app.component.ts`, `source-input.component.html` and `source-input.component.ts` as text; imports only `vitest`, `node:fs`, `node:path` |
+| `docs/tests/US-8.1-test-strategy.md` | v1 -> v2 (addendum) |
+| `docs/tests/US-8.1-ac-test-matrix.md` | v3 -> v4 (AC-21 to AC-26 rows) |
+| `docs/tests/US-8.1-test-generation-report.md` | v3 -> v4 (this section) |
+
+No implementation file (`src/app/app.component.html`, `src/app/app.component.ts`, `source-input.component.*`), no FROZEN file, no `.arch-guard-checksums`, no existing test, fixture or golden was edited. `git status` after the work lists only the new spec and the three docs.
+
+### Table, runner, compile state (V4-6)
+
+| Spec | Table | Runner | `tsc --noEmit` | Red because |
+|---|---|---|---|---|
+| `src/app/app.component.faq-layout.spec.ts` | **B** (source text; imports nothing a task creates; not `AppComponent`; no Angular) | `test:logic` (not `*.component.spec.ts`; `test:components` gains no file) | **0 diagnostics** (`npx tsc --noEmit` exit 0) | runtime assertion failures ("expected X, got Y"); none by a load error |
+
+### Per-pin baseline state (37 tests: 14 red-first, 23 baseline-guard)
+
+| Tag | Test (shortened) | State on the tree at `4c5f37e` | Runtime failure reason (real output) / protects |
+|---|---|---|---|
+| `(owner T15)` | FR-24 before a run: faq-generator, empty content, not generating -> condition false | RED | `AssertionError: expected true to be false` (the evaluated condition is true today) |
+| `(owner T15)` | FR-24 after a FAQ-only run (faqArtifacts populated, other fields empty) -> false | RED | `expected true to be false` |
+| `(owner T15)` | FR-24 after a run that stored no FAQ (faqArtifacts empty) -> false | RED | `expected true to be false` |
+| `(owner T15)` | FR-24 condition text contains `appMode() !== 'faq-generator'` | RED | `AssertionError` (text lacks the term) |
+| `(owner T16)` | FR-26 anchors in order Store, Product Name, Supplemental, Description, Specs, toggle | RED | `expected [ 'Store select', ...(5) ] to deeply equal [ ... ]`; received `Store select, Product Name input, Original Description, Tech Specs, Supplemental Content, Deep Thinking toggle` |
+| `(owner T16)` | FR-26 first `app-source-input` of the FAQ form is the Supplemental one | RED | `expected '<app-source-input ... [label]="uiLabels().originalDescription" ...' to contain '(valueChange)="faqSupplementalContent.set($event)"'` |
+| `(owner T17)` | FR-27 FAQ Supplemental input has `[label]="uiLabels().supplementalContentRequired"` | RED | `expected '<app-source-input ... [label]="uiLabels().supplementalContent" ...' to contain '[label]="uiLabels().supplementalContentRequired"'` |
+| `(owner T17)` | FR-27 / FR-28 exact key `uiLabels().supplementalContent` used exactly once in the template, inside `generatorForm` | RED | `expected [ ...(2) ] to have a length of 1 but got 2` |
+| `(owner T17)` | FR-27 the new key is read exactly once, in the FAQ form | RED | `expected [] to have a length of 1 but got +0` |
+| `(owner T14)` | FR-27 `en` carries `supplementalContentRequired: 'Supplemental Content (Required)'` | RED | `expected null to be 'Supplemental Content (Required)'` |
+| `(owner T14)` | FR-27 the `en` label has no "Optional" | RED | `en supplementalContentRequired is missing: expected null not to be null` |
+| `(owner T14)` | FR-27 `uk` = `Додатковий контент (Обов'язково)`, apostrophe U+0027 | RED | `expected null to be 'Додатковий контент (Обов\'язково)'` |
+| `(owner T14)` | FR-27 `uk` has no U+2019 / U+02BC, no "Опціонально", no "Optional", differs from `en` | RED | `uk supplementalContentRequired is missing: expected null not to be null` |
+| `(owner T14)` | FR-27 new key present in BOTH blocks | RED | `expected [ 'appTitle', 'generator', ...(168) ] to include 'supplementalContentRequired'` |
+| `[baseline-guard]` x3 | FR-24 premises: `noContentYet` / `fillFormStart` once each in one block with its own `fa-file-code`; condition is a plain expression of `appMode()`, `content()`, `isGenerating()` only; condition holds no `hasOutput` / `hasFaqOutput` / `faqArtifacts` | GREEN | stay green through T15 |
+| `[baseline-guard]` | FR-24 during a run (isGenerating true) -> false for every content state | GREEN (already false through the existing `!isGenerating()`; split out of the red rows per N2) | stays green through T15 |
+| `[baseline-guard]` x5 | FR-28 oracle: `generator`, `ua-generator`, `seo-generator`, `slug-generator` each over 48 states incl. trap states vs. the literal oracle of today's condition; plus the oracle-discrimination test | GREEN | must stay green at T15 (the task that can break it), T16, T17 |
+| `[baseline-guard]` x6 | FR-28 forms and labels: blocks found; `generatorForm` input bound to the exact `supplementalContent` key, no `[required]`; order `description.set`, `specs.set`, `supplementalContent.set`; SEO / Slug / `generatorForm` do not bind the new key; `en` and `uk` shared literals unchanged | GREEN | must stay green at T14, T16, T17 |
+| `[baseline-guard]` x4 | FR-25 structure: slice premise; only the container opening tag remains; container class tokens; FAQ panel root class tokens | GREEN | stay green through T15, T16, T17 |
+| `[baseline-guard]` | FR-26 premise: six anchors once each, exactly three source inputs (split out of the T16 red rows per N2) | GREEN | stays green through T16 |
+| `[baseline-guard]` | FR-27 whole-dictionary parity en = uk key set (170 / 170 today; none one-sided, none duplicated) | GREEN | must stay green at T14 (key added to both blocks in one commit) |
+| `[baseline-guard]` x2 | FR-27 `[required]="true"` on the FAQ Supplemental input (split out of the T17 rows per N2); the shared `source-input` component renders `*` from `@if (required)` and defaults `required = false` (plan review N5) | GREEN | stay green through T16, T17 |
+
+Selectors, observed: `-t "owner T14"` selects 5 failing tests, `T15` 4, `T16` 2, `T17` 3 (14 red); `-t "baseline-guard"` = `23 passed | 14 skipped (37)`; no title carries both markers.
+
+### Observed red run, real output
+
+`npx vitest run src/app/app.component.faq-layout.spec.ts` on the tree at `4c5f37e` + the new spec (no implementation of T14 to T17):
+
+```
+ Test Files  1 failed (1)
+      Tests  14 failed | 23 passed (37)
+```
+
+The 14 failures are exactly the 14 red-first rows above, each an `AssertionError` with the message quoted in the table. Excerpts of the real output:
+
+```
+FAIL  ... > (owner T15) FR-24 before a run: faq-generator, empty content, not generating -> the empty-state condition is false
+AssertionError: expected true to be false // Object.is equality
+FAIL  ... > (owner T16) FR-26 the anchors appear in this order: Store, Product Name, Supplemental Content, Original Description, Tech Specs, Deep Thinking toggle
+- Expected  "Store select", "Product Name input", "Supplemental Content", "Original Description", "Tech Specs", "Deep Thinking toggle"
++ Received  "Store select", "Product Name input", "Original Description", "Tech Specs", "Supplemental Content", "Deep Thinking toggle"
+FAIL  ... > (owner T17) FR-27 / FR-28 the shared key uiLabels().supplementalContent is used exactly once in the whole template, inside generatorForm
+AssertionError: expected [ ...(2) ] to have a length of 1 but got 2
+FAIL  ... > (owner T14) FR-27 supplementalContentRequired is present in BOTH TRANSLATIONS blocks (the new key is not one-sided)
+AssertionError: expected [ 'appTitle', 'generator', ...(168) ] to include 'supplementalContentRequired'
+```
+
+Right reason: every one fails because the behaviour is missing (the empty state is rendered for `faq-generator`; the field is last; the FAQ form reads the shared key; the new key is absent), none because of a missing module or a bad selector.
+
+### Not vacuous (1): the red pins are satisfiable, and each is owned by one task
+
+Throwaway probe (`mutate.cjs` + `probe.sh` in the session scratchpad, not part of the repository): apply the planned implementation to the working tree, run the spec, `git checkout --` the three source files, verify. After every probe `git diff --stat` was empty.
+
+| Applied | Result (real) | Reading |
+|---|---|---|
+| T14 + T15 + T16 + T17 (exactly the plan's four edits) | `Tests 37 passed (37)` | every red pin is satisfiable by the planned edits, and no guard breaks |
+| T14 only | `9 failed / 28 passed` | the 5 `(owner T14)` tests turned green, the 4 T15, 2 T16, 3 T17 stay red; all guards green |
+| T15 only | `10 failed / 27 passed` | the 4 `(owner T15)` tests turned green; T14 (5), T16 (2), T17 (3) stay red; all guards green |
+
+### Not vacuous (2): throwaway-mutation probe of the guards
+
+Each row applies the full correct implementation (T14 to T17) plus one realistic WRONG change, runs the spec, and reverts. "Fails" lists the tests that went red (real output); every other test stayed green.
+
+| Wrong implementation | Fails (real) |
+|---|---|
+| relabel the SHARED key values (`en` -> `(Required)`, `uk` -> `(Обов'язково)`) | 2: `[baseline-guard] ... en keeps supplementalContent 'Supplemental Content (Optional)'`, `... uk keeps supplementalContent 'Додатковий контент (Опціонально)'` |
+| bind the `generatorForm` input to the new key (Generator and UA Description would read "Required") | 4: guard `generatorForm: ... bound to uiLabels().supplementalContent (exact key)`, guard `... do not bind the new FAQ-only key`, and the two `(owner T17)` exact-count tests |
+| data-derived empty-state fix (`&& !content().faqArtifacts`) instead of a mode term, alone | 6: guard `no data-derived exclusion`, `(owner T15)` before a run, `(owner T15)` text, and the 3 guards `ua-generator` / `seo-generator` / `slug-generator` vs. the oracle (the trap state) |
+| the same data-derived conjunct added on top of the correct T15 | 4: guard `no data-derived exclusion` and the 3 oracle guards (so even a fix that does hide the FAQ block is caught when it leaks to other modes) |
+| mode term that also hides the block for `slug-generator` | 1: guard `slug-generator: ... equals today's condition` |
+| `supplementalContentRequired` missing from `uk` only | 4: two `(owner T14)` uk tests, `(owner T14)` both-blocks, and guard `whole-dictionary parity` |
+| `supplementalContentRequired` missing from `en` only | 4: two `(owner T14)` en tests, `(owner T14)` both-blocks, and guard `whole-dictionary parity` |
+| a stray extra key in `uk` only (one-sided dictionary) | 1: guard `whole-dictionary parity` |
+| typographic apostrophe U+2019 in the `uk` label | 2: `(owner T14)` uk equals U+0027 literal, `(owner T14)` uk rejects U+2019 / U+02BC |
+| "Опціонально" left in the new `uk` label | 2: the same two `(owner T14)` uk tests |
+| Supplemental placed after Description but before Tech Specs | 2: both `(owner T16)` tests |
+| `generatorForm`: Supplemental moved above Description | 1: guard `generatorForm: the order description.set, specs.set, supplementalContent.set is unchanged` |
+| `generatorForm` Supplemental made `[required]` | 1: guard `generatorForm: ... exact key ... and has no [required]` |
+| scroll container turned into a centring flex box (`flex items-center justify-center`) | 1: guard `the scroll container carries no flex ... class` |
+| extra wrapper element between the tab bar and the container | 2: guards `nothing but the scroll container's opening tag remains` and the container class guard |
+| FAQ panel root gets `mt-16 min-h-full` | 1: guard `the FAQ result panel root carries no h-full, min-h-*, ...` |
+| `[required]="true"` dropped from the FAQ Supplemental input | 1: guard `the FAQ Supplemental source input is passed [required]="true"` |
+| shared `source-input` stops rendering the `*` | 1: guard `the source-input component renders the * marker ...` |
+| `isGenerating` conjunct removed from the empty-state condition (applied WITHOUT T15; after T15 the mode term makes the FAQ rows ignore `isGenerating`, so this guard can only bite before it) | 9: guard `FAQ during a run: ... -> false for every content state`, guard `the condition is a plain expression of appMode(), content() and isGenerating() only` (the evaluator now sees only two reads), the 4 `(owner T15)` tests (still red, unchanged) and the 3 oracle guards `ua-generator` / `seo-generator` / `slug-generator` |
+| T15 done through a helper (`!isFaqOnlyMode() &&`), which the plan rejects | 9: guard `plain expression ...` (`expected [ 'appMode', 'content', ...(2) ] to deeply equal [ Array(3) ]`) and every evaluated test errors with `ReferenceError: isFaqOnlyMode is not defined` (5 of them), which is the V4-4 fail-closed behaviour: the evaluated pins fail, never skip. Includes guard `during a run` and the 3 oracle guards; the `(owner T15)` text test fails too |
+| T16 done as a copy instead of a move (Supplemental present twice, four source inputs; applied after T14 and T15) | 4: guard `FR-26 premise: ... each of the six anchors exactly once and exactly three source inputs`, and the three `(owner T17)` tests (the copy still reads the shared key) |
+| the `fa-file-code` icon moved out of the empty-state block to just before its `@if` | 2: guard `noContentYet and fillFormStart each occur once ... in one block that also holds its fa-file-code icon`, guard `FR-25 nothing but the scroll container's opening tag remains ...` (the stray icon sits between the tab bar and the result) |
+
+Mutation coverage by guard (22 probes in all, each reverted; `git diff --stat` empty after every one): every `[baseline-guard]` has at least one probe that turns it red EXCEPT the oracle-discrimination test (`the oracle discriminates ...`), which tests the literal oracle function itself and has no mutation of the template that can reach it (it fails only if the oracle copy in the spec is edited); that is stated here rather than claimed. The FR-24 icon-in-block guard is killed by the icon-move probe, the plain-expression guard by the helper and the `isGenerating` probes, the FR-24 during-a-run guard by the `isGenerating` and helper probes, the FR-26 premise guard by the copy-not-move probe, and the FR-25 structure guards by the wrapper, flex, panel-root and icon probes.
+
+### Final run (real output)
+
+- `npm run test:logic`: `Test Files  1 failed | 184 passed (185)`, `Tests  14 failed | 6366 passed | 3 skipped (6383)`, exit non-zero. Baseline before this delta: 184 files, 6343 passed, 3 skipped, 0 failed. 6366 - 6343 = 23 = exactly the new spec's green tests; 14 failed = exactly its red-first tests; 6343 + 3 + 37 = 6383. The 184 pre-existing files are all green: the only red is the new spec's 14 red-first tests.
+- `npx tsc --noEmit`: exit 0, 0 diagnostics.
+- `bash arch-guard.sh`: exit 0 ("ALL CHECKS PASSED"; "All frozen files unchanged").
+- `npm run test:components` was not run: no component spec or Angular source was touched.
+- `git status --short` before the commit: `?? src/app/app.component.faq-layout.spec.ts` plus the three modified docs.
+
+The IMPLEMENTATION stage expects, after T17, `npx vitest run src/app/app.component.faq-layout.spec.ts` = 37 passed and `npm run test:logic` = 185 files, 6366 + 14 = 6380 passed, 3 skipped, 0 failed (6343 + 37).
+
+### Coverage gaps and limits
+
+- **AC-22's geometric clause has no automated test.** Manual browser check by the operator at HUMAN_PR_APPROVAL (approver's N1 confirmation; D16 / OD-15 default). The structural pins are only a proxy and were mutation-checked for exactly that (wrapper, flex container, panel root classes).
+- All pins are source-text or condition-evaluation pins, not rendered DOM (standing decision; plan review N7 flags the tension with AGENTS.md section 5 for the human).
+- The condition evaluator runs repository-owned template text through `new Function`, after a whitelist check of its characters and with the three reads stubbed (plan review N6: mention to the security reviewer).
+- AC-25's enablement has no new test (the delta changes no predicate): the existing `faq-form.spec.ts` and wiring pins cover it and stay green unmodified.
+- NFR-9's diff property is a gate / diff-review check, not a test. The diff range for the whole-delta check is "the commit before the first v4 task" (T15), not "the commit before T14" (N4): `git diff --stat 4c5f37e..HEAD` after T17 lists the new spec, the three test docs, `src/app/app.component.html`, `src/app/app.component.ts` and whatever other `docs/` files later stages commit (workflow state, reports), and no other source file.
+- The task breakdown's T17 acceptance line still says `<commit before T14>`; it was not edited here (it is an approved input). The strategy v2 records the corrected range.

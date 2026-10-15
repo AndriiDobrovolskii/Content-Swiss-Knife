@@ -1,29 +1,37 @@
 ---
 artifact: ac_test_matrix
 story: US-8.1
-version: 3
+version: 4
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-14T19:45:00Z
-updated_at: 2026-10-15T13:00:00Z
-supersedes: docs/tests/US-8.1-ac-test-matrix.md#2
+updated_at: 2026-10-15T17:00:00Z
+supersedes: docs/tests/US-8.1-ac-test-matrix.md#3
 inputs_consumed:
   - key: story
-    version: 2
+    version: 3
   - key: specification
+    version: 3
+  - key: impact_analysis
     version: 2
   - key: implementation_plan
-    version: 1
+    version: 2
   - key: task_breakdown
-    version: 3
+    version: 4
+  - key: plan_review
+    version: 4
   - key: test_strategy
-    version: 1
+    version: 2
   - key: security_review
     version: 1
   - key: reconciliation_report
     version: 1
 open_decisions_blocking: false
 ---
+
+> **Revision v4 (2026-10-15).** v3 (the rows below, unchanged) covers AC-1 to AC-19 (AC-20 mechanical) against Story v2. v4 adds the section
+> "v4 addendum: AC-21 to AC-26 (Story v3, the FAQ Generator layout delta)" at the end of this file. No v3 row is edited. The v3 "Coverage"
+> paragraph's "Every `AC-1` to `AC-19`" is complete for Story v2; the complete AC-1 to AC-26 coverage statement is in the v4 addendum.
 
 # AC <-> Test Matrix - US-8.1
 
@@ -129,3 +137,53 @@ All rows above are green now (the builder fix landed in `src/utils/faq-html.ts`)
 Source: `docs/reconciliation/US-8.1-reconciliation-report.md` v1 (CHANGES_REQUIRED, `changes_required_tests`). This adds **no new AC**. The rows above carry the new tests (AC-19 pipeline and standalone, AC-10 and AC-11 wiring). The "State at TEST_WRITING" cell of those rows is `n/a`: they are written against the already-correct implementation (a coverage-gap loop-back), so the proof that they are not vacuous is the mutation recorded in the generation report, not a red run before the code.
 
 The 'State now' / 'Green by' columns of every v2 row were refreshed (v2 still showed the TEST_WRITING-time RED snapshot). No v2 test row was removed or reworded other than the corrected faq-form claim above.
+
+---
+
+## v4 addendum: AC-21 to AC-26 (Story v3, the FAQ Generator layout delta)
+
+Ids are the Story v3 `AC-n`. Every row names the one new file `src/app/app.component.faq-layout.spec.ts` (abbreviated `layout` below), runner `test:logic`, plus the existing specs where an AC is covered by an unmodified existing test.
+Test names are the `it` titles of `layout` (shortened here; the tag is part of the title and selects the test with `-t`):
+`(owner T<n>)` = red first, turned green by that task; `[baseline-guard]` = green at TEST_WRITING by design (a FR-28 / NFR-9 regression guard or a premise assertion), it fails only if a task goes wrong.
+**State at TEST_WRITING (v4)** is the observed state on the tree at `4c5f37e` + the new spec (real run, see the generation report v4); **State now (v4)** is the same, because no implementation of T14 to T17 exists yet at this stage (`RED` rows stay red until their owner lands; the builder updates nothing here).
+
+| AC | Test file | Test (describe > it) | State at TEST_WRITING (v4) | State now (v4) | Green by |
+|---|---|---|---|---|---|
+| AC-21 | layout | "FR-24 / AC-21 - the FAQ Generator never shows the empty state" > "(owner T15) FR-24 before a run: faq-generator, empty content, not generating -> the empty-state condition is false" | RED: `expected true to be false` | RED | T15 |
+| AC-21 | layout | same describe > "(owner T15) FR-24 after a FAQ-only run: mainHtmlUa empty, seoData and slugData null, faqArtifacts populated -> false" | RED: `expected true to be false` | RED | T15 |
+| AC-21 | layout | same describe > "(owner T15) FR-24 after a run that stored no FAQ: every output field empty, faqArtifacts empty -> false" | RED: `expected true to be false` | RED | T15 |
+| AC-21 | layout | same describe > "(owner T15) FR-24 the exclusion is by mode: the condition text contains appMode() !== 'faq-generator'" | RED: condition text lacks `appMode() !== 'faq-generator'` | RED | T15 |
+| AC-21 | layout | same describe > "[baseline-guard] FR-24 during a run: faq-generator with isGenerating true -> false for every content state (already false today)" | guard (green: the existing `!isGenerating()` conjunct) | GREEN (guard) | none (stays green through T15) |
+| AC-21 | layout | "FR-24 / AC-21 - premises" > "[baseline-guard] FR-24 noContentYet and fillFormStart each occur once ... in one block that also holds its fa-file-code icon" (icon looked up inside the block only); "[baseline-guard] FR-24 the condition is a plain expression of appMode(), content() and isGenerating() only"; "[baseline-guard] FR-24 the condition holds no data-derived exclusion (no hasOutput, hasFaqOutput or faqArtifacts)" | guard (3) | GREEN (guard) | none (stays green through T15) |
+| AC-21 | `content-orchestrator.faq-standalone.spec.ts` (existing, unmodified) | FR-18: a standalone run leaves `mainHtmlUa === ''`, `seoData`/`slugData` null (so AC-21 is met by the template, not by changing data) | existing GREEN | GREEN | none |
+| AC-22 | layout | "FR-25 / AC-22 - the result sits directly under the version tabs (structure)" > "[baseline-guard] FR-25 premise: the slice after the tab bar's </header> up to the result @for is found ..."; "[baseline-guard] FR-25 nothing but the scroll container's opening tag remains once the validation panel, the repair panel and the empty-state block are removed" | guard (2) | GREEN (guard) | none (stays green through T15, T16, T17) |
+| AC-22 | layout | same describe > "[baseline-guard] FR-25 the scroll container carries no flex (whole token), grid, items-*, justify-*, h-full or min-h-* class"; "[baseline-guard] FR-25 the FAQ result panel root carries no h-full, min-h-*, justify-*, items-center, mt-* or pt-* class" | guard (2) | GREEN (guard) | none (stays green through T15, T16, T17) |
+| AC-22 (geometric clause) | **no automated test** | the panel's top edge is one container padding (`p-8`, 32 px) below the tab bar's bottom edge, and not vertically centred. There is no layout engine in this repository (`happy-dom` has none) and no browser-test tool. **Manual browser check by the operator at HUMAN_PR_APPROVAL** (approver's N1 confirmation, plan D16 / OD-15 default), recorded there. RECONCILIATION must read it as a recorded claim, not pipeline evidence. The four structural rows above are only its proxy: they prove nothing sits between the tab bar and the result and that no centring or height class is present, not how the page looks | n/a | n/a (manual) | none (manual check) |
+| AC-23 | layout | "FR-26 / AC-23 - FAQ Generator field order ..." > "(owner T16) FR-26 the anchors appear in this order: Store, Product Name, Supplemental Content, Original Description, Tech Specs, Deep Thinking toggle" | RED: received order `Store, Product Name, Original Description, Tech Specs, Supplemental Content, toggle` | RED | T16 |
+| AC-23 | layout | same describe > "(owner T16) FR-26 the first source input of the FAQ form is the Supplemental Content one" | RED: first input is the `faqDescription` one | RED | T16 |
+| AC-23 | layout | same describe > "[baseline-guard] FR-26 premise: the FAQ form block is found, holds each of the six anchors exactly once and exactly three source inputs" | guard | GREEN (guard) | none (stays green through T16) |
+| AC-24 | layout | "FR-27 / AC-24 - the FAQ Supplemental Content label reads Required ..." > "(owner T17) FR-27 the FAQ Supplemental source input is labelled from uiLabels().supplementalContentRequired" | RED: the element has `[label]="uiLabels().supplementalContent"` | RED | T17 |
+| AC-24 | layout | same describe > "(owner T17) FR-27 / FR-28 the shared key uiLabels().supplementalContent is used exactly once in the whole template, inside generatorForm"; "(owner T17) FR-27 the new key is read exactly once in the whole template, in the FAQ form" (exact-key match, not a substring) | RED: `expected [ ...(2) ] to have a length of 1 but got 2`; `expected [] to have a length of 1 but got +0` | RED | T17 |
+| AC-24 | layout | same describe > "(owner T14) FR-27 en carries supplementalContentRequired: 'Supplemental Content (Required)'"; "(owner T14) FR-27 the en label contains no Optional" | RED: `expected null to be 'Supplemental Content (Required)'`; `en supplementalContentRequired is missing` | RED | T14 |
+| AC-24 | layout | same describe > "(owner T14) FR-27 uk carries supplementalContentRequired = Додатковий контент (Обов'язково) with the ASCII apostrophe U+0027"; "(owner T14) FR-27 the uk label has no U+2019 or U+02BC apostrophe, no Опціонально, no Optional, and differs from the English label" | RED: `expected null to be 'Додатковий контент (Обов\'язково)'`; `uk supplementalContentRequired is missing` | RED | T14 |
+| AC-24 | layout | same describe > "(owner T14) FR-27 supplementalContentRequired is present in BOTH TRANSLATIONS blocks (the new key is not one-sided)" | RED: the `en` key list lacks `supplementalContentRequired` | RED | T14 |
+| AC-24 | layout | same describe > "[baseline-guard] FR-27 whole-dictionary parity: the en and uk TRANSLATIONS blocks have the same key set, no one-sided key and no duplicate" (170 / 170 today) | guard | GREEN (guard) | none (must stay green at T14: the key goes into both blocks in one commit) |
+| AC-24, AC-25 (the required marker `*`) | layout | "FR-27 / AC-24, AC-25 - the required marker * stays rendered from the shared component given [required]=true" > "[baseline-guard] FR-27 the FAQ Supplemental source input is passed [required]=\"true\"" and "[baseline-guard] FR-27 the source-input component renders the * marker next to the label when its required input is set, and defaults to not required" (reads `source-input.component.html` and `.ts` as text; plan review N5) | guard (2) | GREEN (guard) | none (stays green through T16, T17) |
+| AC-25 (Generate disabled until Store, Product Name and Supplemental are filled) | `faq-form.spec.ts` (`isFaqFormComplete`) and `app.component.template-wiring.spec.ts` (existing, unmodified: `isFaqFormValid` reads exactly the three signals; Generate `[disabled]`; the single required `faqSupplementalContent` input) | the delta changes no predicate, signal or handler; the field move and the relabel leave these untouched. No new test is claimed for the enablement itself | existing GREEN | GREEN | none |
+| AC-26 | layout | "FR-28 / AC-26 - every other mode keeps today's empty state, exactly" > it.each `generator`, `ua-generator`, `seo-generator`, `slug-generator`: "[baseline-guard] FR-28 <mode>: the evaluated empty-state condition equals today's condition over the whole state grid, trap states included" (48 states per mode against a literal oracle copy of today's condition) | guard (4) | GREEN (guard) | none (must stay green at T15 and after) |
+| AC-26 | layout | same describe > "[baseline-guard] FR-28 the oracle discriminates ..." (the oracle is true before a run, false once `seoData` is set, false for `generator`, and true for `slug-generator` with a stale `faqArtifacts`) | guard | GREEN (guard) | none |
+| AC-26 | layout | "FR-28 / AC-26 - the Generator and UA Description form keeps its Supplemental Content label and field order" > "[baseline-guard] FR-28 generatorForm: the Supplemental input is bound to uiLabels().supplementalContent (exact key) and has no [required]"; "... the order description.set, specs.set, supplementalContent.set is unchanged"; "... generatorForm, the SEO form and the Slug form do not bind the new FAQ-only key"; "... en keeps supplementalContent 'Supplemental Content (Optional)'"; "... uk keeps supplementalContent 'Додатковий контент (Опціонально)'"; premise test "generatorForm, the SEO form and the Slug form blocks are found and non-trivial" | guard (6) | GREEN (guard) | none (stays green at T14, T16, T17) |
+| AC-26 | layout | "(owner T17) FR-27 / FR-28 the shared key uiLabels().supplementalContent is used exactly once in the whole template, inside generatorForm" (also listed under AC-24: it is the one pin that proves the FAQ form no longer reads the shared key) | RED: count 2 | RED | T17 |
+| NFR-9 (no LLM; no prompt / STORE_REGISTRY / FROZEN / data-field change) | layout (every pin is source-text or condition-evaluation, no LLM, no network) + gate | the diff property ("the diff lists only `src/app/app.component.html`, `src/app/app.component.ts` and the new spec (plus docs)", `bash arch-guard.sh` exit 0 with `.arch-guard-checksums` unchanged, goldens unchanged) is a gate and diff-review check, not a unit test. Range: from the commit before the first v4 task (T15), see the strategy v2 | n/a | n/a (gate) | QUALITY_GATE / IMPLEMENTATION_VERIFICATION |
+
+### Coverage (v4)
+
+Every `AC-21` to `AC-26` has a row. AC-21, AC-23 and AC-24 have red-first tests (T15, T16, T14 and T17); AC-26 and the structural half of AC-22 are guards that are green by design and are proved not vacuous by mutation (generation report v4); AC-25 is covered by existing unmodified tests plus the guards on `[required]="true"` and on the shared component's `*`. **AC-22's geometric clause has no automated test: it is a manual browser check by the operator at HUMAN_PR_APPROVAL.** AC-1 to AC-20 are as in the v3 rows above.
+
+### Rows RECONCILIATION should read critically (v4)
+
+- AC-21, AC-22, AC-23, AC-24 and AC-26 rows are **source-text and evaluated-condition pins**, not rendered DOM. They prove the template says the right thing (the extracted condition is evaluated against stubbed state; the anchors are in order; the key and literals are right), not that the page looks right. This is the repository's idiom for `AppComponent` (plan review N7), flagged for the human.
+- The AC-24 "label reads ... Required followed by `*`" is two facts pinned separately: the label comes from a key whose English value is `Supplemental Content (Required)` (T14/T17 rows) and the `*` is rendered by the shared component from `[required]="true"` (the two N5 guards). The `*` is not part of the string.
+- The Ukrainian label is the OD-13 labelled default. The pin fixes `Додатковий контент (Обов'язково)` (U+0027); if the human chooses another term, that one literal and its pin change.
+- Two pins are implementation-shaped (plan review N8): the condition text must contain `appMode() !== 'faq-generator'` (one T15 red test) and must not contain `hasOutput` / `hasFaqOutput` / `faqArtifacts` (a guard). The evaluated tests are the behavioural guard.
+- AC-25 has no new enablement test (the delta changes no predicate); the rows name the existing tests that cover it.
