@@ -257,6 +257,16 @@ open_decisions_blocking: false
 - `npx tsc --noEmit`: exit 0, no diagnostics (compile allowlist empty). `npm run lint`: exit 0. `npm run build`: exit 0. `npm run test:components`: `Test Files  2 passed (2)`, `Tests  32 passed (32)`. `bash arch-guard.sh`: exit 0, no `--rebaseline`.
 - Outcome: T15 complete, one commit. T14, T16, T17 remain. The AC-22 geometric check stays a manual check at QUALITY_GATE (OD-15).
 
+## v4 delta - T14 results (real runs)
+
+- Scope: `src/app/app.component.ts` only; two lines added, one new key `supplementalContentRequired` placed directly after the existing `supplementalContent` key in each `TRANSLATIONS` block (en line 148, uk line 322). Commit `6c19042` (`feat(US-8.1 T14): ...`). The CRLF line endings were kept (1497 CRLF = 1497 LF after the edit). `app.component.html`, the shared `supplementalContent` key and its values, every test, FROZEN file and `.arch-guard-checksums` are untouched.
+- Values: en `'Supplemental Content (Required)'`; uk `'Додатковий контент (Обов\'язково)'`, the label the operator approved at HUMAN_PLAN_APPROVAL (OD-13), written with the ASCII apostrophe U+0027 escaped as `\'` in the single-quoted string. Script check: the uk runtime value contains exactly one apostrophe, code point U+0027 (source bytes `5c 27`), and no U+2019 or U+02BC. Both blocks have 171 keys (170 before), no one-sided key and no duplicate.
+- `npx vitest run src/app/app.component.faq-layout.spec.ts -t "owner T14"`: `Test Files  1 passed (1)`, `Tests  5 passed | 32 skipped (37)`.
+- Whole faq-layout spec: `Tests  5 failed | 32 passed (37)`; the 5 failing are exactly T16 (2) and T17 (3). The `[baseline-guard]` tests, including the whole-dictionary en/uk key-set parity, are green.
+- Whole `test:logic`: `Test Files  1 failed | 184 passed (185)`, `Tests  5 failed | 6375 passed | 3 skipped (6383)` (before T14: 10 failed | 6370 passed); the only failures are the T16/T17-owned red pins.
+- `npx tsc --noEmit`: exit 0, no diagnostics (compile allowlist empty). `npm run lint`: exit 0. `npm run build`: exit 0. `npm run test:components`: `Test Files  2 passed (2)`, `Tests  32 passed (32)`. `bash arch-guard.sh`: exit 0, no `--rebaseline`.
+- Outcome: T14 complete, one commit. T16 and T17 remain (T17 reads the new key).
+
 ## Notes
 
 - Test components were accepted as unevaluated until T10 (user decision, no stub added); first real run at T10: 2 files, 32 tests passed.
