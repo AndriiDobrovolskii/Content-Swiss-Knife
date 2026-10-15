@@ -1444,7 +1444,7 @@
           </details>
         }
 
-        @if (appMode() !== 'generator' && !content().mainHtmlUa && !content().seoData && !content().slugData && !isGenerating()) {
+        @if (appMode() !== 'generator' && appMode() !== 'faq-generator' && !content().mainHtmlUa && !content().seoData && !content().slugData && !isGenerating()) {
           <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
             <i class="fa-regular fa-file-code text-6xl mb-4 opacity-50"></i>
             <p class="text-lg font-medium">{{ uiLabels().noContentYet }}</p>
