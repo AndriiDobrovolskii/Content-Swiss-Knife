@@ -3,11 +3,11 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-8.1
-current_stage: TEST_WRITING
+current_stage: IMPLEMENTATION
 status: IN_PROGRESS
 pending_human_gate: null
 started_at: 2026-10-14T13:19:41Z
-updated_at: 2026-10-15T11:15:56Z
+updated_at: 2026-10-15T11:31:56Z
 stage_attempts: {}
 track: angular
 blockers: []
