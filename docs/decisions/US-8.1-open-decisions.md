@@ -1,32 +1,46 @@
 ---
 artifact: open_decisions
 story: US-8.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-clarifier
 created_at: 2026-10-14T14:00:00Z
-updated_at: 2026-10-14T14:00:00Z
-supersedes: null
+updated_at: 2026-10-15T11:00:00Z
+supersedes: docs/decisions/US-8.1-open-decisions.md#1
 inputs_consumed:
   - key: story
-    version: 2
+    version: 3
+  - key: open_decisions
+    version: 1
 open_decisions_blocking: false
 ---
 
-# US-8.1 - Open Decisions (v1)
+# US-8.1 - Open Decisions (v2)
 
-First clarification run, against Story v2. There was no earlier `open_decisions` for this Story. The Story's own two
-open questions (Q1, Q2) are carried in as OD-1 and OD-2; neither is answered by the Story or by any source read, so
-neither is dropped. This stage records questions only; every "Default a spec may carry" below is a proposal the
-human can overturn at HUMAN_SPEC_APPROVAL, not a decision.
+Re-run against Story v3 (the operator's FAQ Generator layout change of requirements, AC-21 to AC-26, UI-Q1 to UI-Q5).
+v1 (written against Story v2) is superseded. OD-1 to OD-9 are carried forward with their ids and text unchanged; none was
+answered by Story v3 or by any source read, so none is dropped. OD-10 to OD-16 are new from the v3 change; OD-17 is a new
+finding about the same UI; OD-18 to OD-20 record the three points that Specification v2 ("Open questions", SP-1 to SP-3)
+raised but that were never logged. This stage records questions only; every "Default a spec may carry" below is a proposal
+the human can overturn at HUMAN_SPEC_APPROVAL, not a decision.
 
-Sources read: Story v2; `README.md`; `AGENTS.md` (sections 3, 4, 9, 11); `STORE_REGISTRY` in
+Sources read for the v1 items: Story v2; `README.md`; `AGENTS.md` (sections 3, 4, 9, 11); `STORE_REGISTRY` in
 `src/prompt-core/constants.ts`; `test/render-reconciliation.report.md` (headings, grep for FAQ); and, to ground the
 questions, `src/prompts/task-faq.ts`, `src/prompts/task-c.ts`, `src/utils/structural-parity.ts`,
 `src/services/content-orchestrator.service.ts` (`generate()` Steps 4-5, `generateUaContent()` Step 4,
 `generateSeoMetadata`, `generateSlugs`), `src/app/app.component.ts` (`tabDescriptors`, `restoreHistory`,
 mode reset) and `src/utils/output-validator.ts` (`validateGeneratedHtml`). `bash arch-guard.sh` was run read-only: all
 five frozen checksums currently match.
+
+Additional sources read for the v2 items (read-only, nothing changed): Story v3 (Context "Change of requirements", Scope
+"UI scope", AC-21 to AC-26, Out of scope, Open questions UI-Q1 to UI-Q5); `docs/specifications/US-8.1-spec.md` v2 (FR-15,
+FR-16, FR-18, Out of scope, "Open questions" SP-1 to SP-3, read only for the text of SP-1 to SP-3 and for the conflict check;
+it is deliberately not listed in `inputs_consumed`, because this stage precedes it); `src/app/app.component.html` (FAQ form
+`@else if (appMode() === 'faq-generator')`, the generator/SEO/Slug/FAQ result view, the empty-state condition);
+`src/app/app.component.ts` (`TRANSLATIONS` en/uk, `tabDescriptors`, `baseFaqTabLabel`, `generateFaqOnly`);
+`src/app/tab-descriptors.ts`; `src/app/components/source-input/source-input.component.html`;
+`src/app/app.component.template-wiring.spec.ts` (what the existing UI tests pin); `src/prompt-core/constants.ts`
+(`bcp47ToTaskCLang`, `MASTER_LOCALE`).
 
 | id | Topic | Origin | blocking |
 |---|---|---|---|
@@ -39,6 +53,17 @@ five frozen checksums currently match.
 | OD-7 | `<b>` policy beyond the tag swap: placement, preservation in translations, `<strong>` attributes and ordering | new | false |
 | OD-8 | How a skipped language or dropped FAQ is surfaced to the operator | new | false |
 | OD-9 | Standalone FAQ tool: form inputs, output tabs, state reset, history restore | new | false |
+| OD-10 | Scope of the v3 layout change: FAQ Generator only, or also the shared empty state / field order of other modes (Story UI-Q1) | Story UI-Q1 | false |
+| OD-11 | What the FAQ Generator central area shows before any run, including the tab-bar strip (Story UI-Q2) | Story UI-Q2 | false |
+| OD-12 | Validation / repair panels versus "result directly under the tabs" (Story UI-Q3) | Story UI-Q3 | false |
+| OD-13 | Ukrainian-UI wording of the FAQ Generator Supplemental Content label (Story UI-Q4) | Story UI-Q4 | false |
+| OD-14 | Version-tab labels stay as they are (Story UI-Q5) | Story UI-Q5 | false |
+| OD-15 | How AC-22 ("not vertically centred or pushed down by a full-height sibling") is verified | new (v3 ACs) | false |
+| OD-16 | AC-21 removes the only "nothing produced" cue: a run that stores no FAQ leaves a blank central area | new (v3 ACs x OD-8) | false |
+| OD-17 | The Generate-guard alert text names Original Description as mandatory in FAQ Generator | new (v3 ACs) | false |
+| OD-18 | SP-1: a thrown provider error counts as one failed attempt | Spec v2 SP-1 | false |
+| OD-19 | SP-2: FAQ translations preserve numbers, units, currency symbol and product names; no AC | Spec v2 SP-2 | false |
+| OD-20 | SP-3: a store profile without uk-UA / N = 1 (the `getStore()` fallback) | Spec v2 SP-3 | false |
 
 No item is `blocking: true`.
 
@@ -242,6 +267,258 @@ spec writer would invent the layout.
 first); mode switch clears the FAQ output; history restore of a standalone item opens in the standalone mode if the item can be
 identified, otherwise in Generator as SEO-only items do today.
 
+## v2 additions - raised by Story v3 (the FAQ Generator layout change, AC-21 to AC-26)
+
+Common findings behind OD-10 to OD-17, read from the code on the branch (nothing changed):
+
+- The empty-state block is the `<div class="h-full flex ...">` at `app.component.html` ~line 1447, guarded by
+  `appMode() !== 'generator' && !content().mainHtmlUa && !content().seoData && !content().slugData && !isGenerating()`. It
+  sits inside the result view whose outer condition (~line 1289) is `hasGeneratorOutput() || seo-generator || slug-generator ||
+  faq-generator`, so today it appears for SEO Generator and Slug Generator before their first run, and for FAQ Generator both
+  before a run **and after a successful run** (AC-13 leaves all three fields empty). The Story's reading is accurate.
+- The FAQ form already marks Supplemental Content required: `[required]="true"` on the `app-source-input` (the component
+  renders `{{ label }} *` and a red border while blank), and `isFaqFormValid()` already disables Generate while it is blank.
+  The label text comes from the single shared `uiLabels().supplementalContent` (`'Supplemental Content (Optional)'` in `en`,
+  `'Додатковий контент (Опціонально)'` in `uk`), used by the Generator/UA Description form (~line 279) and the FAQ form
+  (~line 626).
+- `uiLanguage` is a global `'en' | 'uk'` toggle that does not depend on the selected store; `TRANSLATIONS.en` and
+  `TRANSLATIONS.uk` are kept key-for-key (the existing `app.component.template-wiring.spec.ts` compares the two blocks).
+- Conflict check against the approved Specification v2: AC-25 restates FR-16 / AC-11 (no conflict); AC-21 to AC-23 and AC-26
+  do not touch FR-15, FR-16 or FR-18 semantics (data fields, enablement, and the mode label are unchanged); AC-13 / FR-18
+  (the three fields stay empty) is the **cause** of the visible defect, and is not changed. One real friction: Specification
+  v2 "Out of scope" excludes "the layout of the standalone tool's output tabs ... (OD-8, OD-9)", which AC-21/AC-22 now
+  partly cover, so the Specification must be revised for the new ACs (a finding for so-spec-writer, not an Open Decision).
+- FROZEN / Rule check: the UI change is in `app.component.html` and `app.component.ts`, neither FROZEN (AGENTS.md section 9);
+  no prompt, `task-c.ts`, validator or `STORE_REGISTRY` change is implied; AGENTS.md section 4 HTML criteria concern generated
+  HTML and are not in play for a layout change; no AC-21 to AC-26 text contradicts a Rule.
+- Store / locale scope: AC-21 to AC-26 are store-independent (they concern the form and the central area for every store).
+  The only locale-dependent point is the Ukrainian-UI label (OD-13); the English label is fixed by AC-24.
+
+## OD-10 (Story UI-Q1) - Scope of the layout change - blocking: false
+
+**Question.** Does the empty-state removal and the field reorder apply to FAQ Generator only (as AC-26 assumes), or does the
+operator also want the shared empty state removed or the Supplemental Content position / label changed in other modes?
+
+**What was checked.** Story Scope row "UI scope", AC-26 and Out of scope all say FAQ Generator only, and the operator's quote in
+the Story names only "FAQ Generator". In the code the empty-state guard (see the common findings above) is shared with SEO Generator and
+Slug Generator, where it is shown only before the first run, so those modes do not show the defect the operator saw (their
+result is non-empty after a run). The Supplemental Content label string is shared with the Generator and UA Description forms,
+where the field really is optional.
+
+**Why it cannot be inferred.** The Story presents this as an open question with a default; no source states the operator's
+intent for the other modes.
+
+**Impact if unresolved.** If the intent was wider, the delivery rejects again at the PR gate for a missing change. If it was
+narrower than AC-26 pins, a test written for AC-26 would lock in the current empty state of SEO / Slug Generator.
+
+**Default a spec may carry (the Story's own, AC-26):** FAQ Generator only; every other mode, including the empty state of SEO
+and Slug Generator, unchanged.
+
+## OD-11 (Story UI-Q2) - What the FAQ Generator central area shows before any run - blocking: false
+
+**Question.** Before a run (and with no store selected), what is in the FAQ Generator central area: nothing, a placeholder, or
+the tab bar strip?
+
+**What was checked.** The Story default says "nothing ... beyond the tab bar, if it is rendered at all (AC-21)", which does not
+decide whether the tab bar is rendered. In the code the `<header role="tablist">` is rendered whenever the mode is
+`faq-generator` (outer condition ~line 1289); `tabDescriptors()` returns `[]` with no store or no `faqArtifacts`
+(`tab-descriptors.ts`), so before a run the header is an empty bordered strip (`pt-6`, no buttons) above an empty area.
+
+**Why it cannot be inferred.** AC-21 pins the absence of the empty-state block only; "if it is rendered at all" leaves two
+different screens, and a test cannot assert both.
+
+**Impact if unresolved.** The specification writer must choose between "empty bordered strip stays" and "no header until a
+result exists". The first leaves a visible empty bar (probably an unintended-looking leftover of the removal); the second is an
+extra change to the tab bar condition that the operator did not ask for.
+
+**Default a spec may carry (the Story's):** nothing is shown beyond whatever the tab bar renders today; AC-21 constrains only
+the empty-state block. Whether to also hide an empty tab strip is left to the human.
+
+## OD-12 (Story UI-Q3) - Validation and repair panels versus "result directly under the tabs" - blocking: false
+
+**Question.** When the validation panel or the repair panel is shown, does it stay above the result (AC-22 is then not met
+literally), or move below it?
+
+**What was checked.** Both panels are rendered inside the same scroll container, above the tab panels
+(`validationIssues().length > 0 && !isGenerating()`; `repairReport().length > 0 && (repairedArtifactsCount() > 0 ||
+validationWarningCount() > 0) && !isGenerating()`). They also appear for warnings, not only errors. Specification v2 reports a
+skipped language only through the OD-8 default (an error issue in `validationIssues`), which would put a panel above the result
+in exactly the runs where a language was skipped. How often a FAQ run produces any issue or repair report was not measured.
+
+**Why it cannot be inferred.** AC-22 is stated "with no validation or repair panel shown", which defines the behaviour only for
+the clean case; the Story leaves the panel case open on purpose.
+
+**Impact if unresolved.** The "clean run" precondition may be the minority case; if so AC-22 is satisfied vacuously for most real
+runs and the operator sees the result pushed down again. A test written for AC-22 must also fix which stubbed run counts as
+"clean".
+
+**Default a spec may carry (the Story's):** panels stay where they are; AC-22 is asserted for the case with no panel.
+
+## OD-13 (Story UI-Q4) - Ukrainian-UI wording of the FAQ Generator Supplemental Content label - blocking: false
+
+**Question.** What is the label text when the interface language is Ukrainian (`uiLanguage` = `uk`) for the FAQ Generator
+field, and does the Generator / UA Description label keep "Додатковий контент (Опціонально)" in that language?
+
+**What was checked.** AC-24 fixes the English text only. `TRANSLATIONS.uk.supplementalContent` is
+`'Додатковий контент (Опціонально)'`. The existing wiring spec compares the `en` and `uk` blocks key for key, so a FAQ-specific
+label key added for English must also exist in `uk`; the Ukrainian string cannot be left undefined. The operator supplied no
+Ukrainian text.
+
+**Why it cannot be inferred.** The wording is a product-copy decision; deriving it from "Опціонально" by substitution is a guess
+about the operator's preferred term (for example "Обов'язково" versus "Обов'язкове").
+
+**Impact if unresolved.** The implementation must ship some Ukrainian string; a test for AC-24 cannot assert it without a
+decision, and a wrong word is operator-visible copy in a project whose user-facing text is Ukrainian-first.
+
+**Default a spec may carry (the Story's):** `"Додатковий контент (Обов'язково)"`, flagged for human approval at
+HUMAN_SPEC_APPROVAL; AC-24 itself fixes only the English text.
+
+## OD-14 (Story UI-Q5) - Version-tab labels - blocking: false
+
+**Question.** Do the FAQ Generator version-tab labels stay as they are today?
+
+**What was checked.** The operator listed "Ukrainian FAQ, European English FAQ, ES FAQ, PT FAQ". In the code the master tab label
+is `baseFaqTabLabel()` = `uiLabels().ukrainianFaqTabLabel` ("Ukrainian FAQ") when `mainHtmlLocale` is `uk-UA`, which the
+standalone run sets; the other tabs are `` `${taskKey} FAQ` `` with `taskKey` from `bcp47ToTaskCLang`: `en-ES` and `en-GB` map
+to "European English", `es-ES` to "ES", `pt-PT` to "PT". For `EXPERT3D` today's labels therefore equal the operator's list
+exactly. The tab bar order is `STORE_REGISTRY` language order, uk-UA first.
+
+**Why it cannot be inferred.** The code evidence suggests "unchanged" is consistent with the operator's message, but only the
+operator can say that no wording change was meant; the Story keeps the question open.
+
+**Impact if unresolved.** Low: the labels would be changed by mistake or left; Out of scope already says they are not renamed.
+
+**Default a spec may carry (the Story's):** unchanged; renaming or restyling the tabs is Out of scope.
+
+## OD-15 - How AC-22 is verified - blocking: false
+
+**Question.** AC-22 contains two clauses: (a) "no other element ... sits between the tab bar and the result panel", and (b) "the
+result panel is not vertically centred or pushed down by a full-height sibling". What check makes them pass or fail?
+
+**What was checked.** Clause (a) is a statement about template structure and can be asserted from the template source (the
+existing `app.component.template-wiring.spec.ts` asserts template and component source text by regex). Clause (b) is a layout
+property (computed geometry). `package.json` lists `vitest` with `happy-dom` (no layout engine) and `ng test`; no Playwright,
+Cypress or other browser-layout runner was found in the dependencies; the Angular `ng test` configuration was not inspected.
+The Story's informational note says the operator's manual browser test covered the screen, but states that this is a recorded
+claim, not pipeline evidence. Story preamble: "Each is checkable with a stubbed LLM; none requires a live model."
+
+**Why it cannot be inferred.** The Story says every AC is checkable but gives no method for a geometric clause; no source
+read defines the project's UI-layout test approach beyond source-text assertions.
+
+**Impact if unresolved.** Clause (b) may end up untested, or be reduced silently to "the empty-state element is absent"
+(which is AC-21 again). The reconciliation stage will then find AC-22 only partly asserted.
+
+**Default a spec may carry:** assert (a) and, for (b), the absence of the full-height centring sibling (no element with the
+empty-state's `h-full` / centring classes in the FAQ Generator branch of the result view) as template-source checks; record
+that real geometry is verified only by a manual browser check. The human may require a stronger check.
+
+## OD-16 - AC-21 removes the only "nothing was produced" cue - blocking: false
+
+**Question.** After a FAQ Generator run that stores no FAQ (the master was empty or failed 3 times, FR-10; no valid output),
+what does the operator see, given AC-21 forbids the "No content generated yet" block in every state?
+
+**What was checked.** Specification v2 FR-10 / FR-18 leave `faqArtifacts` empty on a master failure and all other result fields
+empty. Today that state shows the empty-state block (the guard is true). The code on the branch reports a dropped master only
+via `console.warn` / `console.info` (`content-orchestrator.service.ts`, "[FAQ] ... no valid master after ... attempts" and
+"the model returned no FAQ"); no `validationIssues` entry is added for it, so no panel appears either. OD-8 (still open) is the
+decision on operator-facing reporting.
+
+**Why it cannot be inferred.** AC-21 and OD-8 each look complete alone. Together they produce a screen that is blank after a
+failed run, which no source addresses; AC-22 describes the screen only for a run that produced a result.
+
+**Impact if unresolved.** A failed or empty FAQ run is indistinguishable from "the Generate click did nothing", and the only
+copy that explained the empty screen is removed by this change. A test for AC-21 would pass on that blank screen.
+
+**Default a spec may carry:** no requirement is written beyond AC-21; the failure-state message stays with OD-8 (default:
+Ukrainian error-severity issue naming the language), and the blank-after-failure case is flagged to the human as a consequence
+of AC-21.
+
+## OD-17 - Generate-guard alert text names Original Description as mandatory - blocking: false
+
+**Question.** `generateFaqOnly()` re-checks `isFaqFormValid()` and, on failure, shows `alertFillFields`
+("Please fill in all mandatory fields: Target Website, Product Name, Original Description"). In FAQ Generator the mandatory
+fields are Target Website, Product Name and Supplemental Content, and Original Description is optional (AC-12). Is this text in
+scope of AC-25 ("Supplemental Content ... is mandatory")?
+
+**What was checked.** `app.component.ts` `generateFaqOnly` uses the shared `alertFillFields` string (en line ~129); AC-12 and
+AC-25 name the real mandatory set; no AC mentions the alert text. The guard is reachable only if the disabled Generate button
+is bypassed, so the wrong text is rarely seen.
+
+**Why it cannot be inferred.** AC-25 speaks of the marker and the button state; the Story does not say whether user-visible
+messages about the mandatory set must agree with it.
+
+**Impact if unresolved.** Low: an unreachable-in-normal-use message tells the operator the wrong field is mandatory. Fixing it
+unprompted adds an unrequested change; leaving it leaves a known inconsistency in the mode this Story ships.
+
+**Default a spec may carry:** unchanged (no AC covers it); reported to the human as a finding.
+
+## v2 additions - the three open points from Specification v2 that were never logged
+
+OD-18 to OD-20 come from Specification v2 "Open questions" (SP-1 to SP-3), raised during the revision after SPEC_REVIEW v1. Each
+is recorded as-is with the Specification's proposed default. Nothing here is resolved.
+
+## OD-18 (Spec SP-1) - A thrown provider error counts as one failed attempt - blocking: false
+
+**Question.** When a master or translation call throws (timeout, rate limit, truncated response surfaced by the provider
+layer), does it (a) count as one failed attempt under the same budget of 3, or (b) end that artifact immediately (skip), and
+does it abort the run?
+
+**What was checked.** Story AC-16 and AC-17 speak only of an invalid master and a parity-failing translation. Specification v2
+FR-10 and FR-11 carry the default (a) and say a FAQ failure never discards output produced earlier in the run. The branch code
+already counts a provider failure as "one failed attempt" (`content-orchestrator.service.ts` ~line 900) and the FAQ pipeline is
+wrapped so the rest of the run continues (~line 865), i.e. the implementation follows the Specification default.
+
+**Why it cannot be inferred.** The Story and OD-1 do not mention thrown errors; the budget semantics (attempt versus skip) is a
+product decision, and the code matching the default does not make it the operator's decision.
+
+**Impact if unresolved.** Two valid readings give different call counts and different outcomes on a flaky provider (retry versus
+immediate loss of a language); tests pin one.
+
+**Default a spec may carry (Spec v2 FR-10, FR-11):** a thrown call counts as one failed attempt under the same budget of 3 and
+does not abort the run; earlier output is retained.
+
+## OD-19 (Spec SP-2) - Do FAQ translations preserve numbers, units, currency symbol and product names - blocking: false
+
+**Question.** Must a translated FAQ preserve the master's numbers, units, currency symbol and product name, and is that to be an
+acceptance criterion or only a prompt-level instruction?
+
+**What was checked.** AGENTS.md section 4 says "Don't change values or units" for descriptions; the Story has no AC for it for
+FAQ translations; Specification v2 writes no FR (FR-12 item 2 keeps the unit and number rules in the Task C FAQ variant as the
+only coverage) and notes the relation to OD-6 (US-7.1 protected-name block). Writing an AC would add a Story-level requirement,
+which this stage does not do.
+
+**Why it cannot be inferred.** Adding a requirement is the Story author's / human's call; the sources describe the rule for
+descriptions only.
+
+**Impact if unresolved.** A FAQ translation can alter a number, unit, price symbol or product name and still pass every AC
+(AC-3 counts elements only). No automated test would catch it.
+
+**Default a spec may carry (Spec v2):** no requirement written; the prompt-level handle (FR-12 item 2) is the only coverage; the
+human decides whether the Story needs an AC. Related: OD-6.
+
+## OD-20 (Spec SP-3) - A store without uk-UA / N = 1 - blocking: false
+
+**Question.** What is the behaviour for a store profile that does not list `uk-UA` (the `getStore()` fallback for an unregistered
+store name, `languages: ['en-GB']`, N = 1)?
+
+**What was checked.** Every `STORE_REGISTRY` key has `uk-UA` and N >= 2 (the smallest is `Drukarka 3D`, `pl-PL`, `uk-UA`);
+AC-1 is stated for N >= 2; the Story's Scope row says every store has a master; Specification v2 Scope marks this case outside
+every acceptance criterion. The branch code skips FAQ generation with a `console.warn` for a store that does not list the master
+(`content-orchestrator.service.ts` ~line 814).
+
+**Why it cannot be inferred.** The fallback profile is reachable only by an unregistered name; no source states whether it must
+be supported, rejected or skipped silently.
+
+**Impact if unresolved.** Low: unspecified behaviour for an input the UI does not offer. If a store without uk-UA were later
+added to the registry, the FAQ master rule would have no defined behaviour.
+
+**Default a spec may carry (Spec v2):** unspecified; no requirement written.
+
 ## Change history
 
+- **v2** - re-run against Story v3 (amended by the operator: FAQ Generator layout change, AC-21 to AC-26, UI-Q1 to UI-Q5).
+  OD-1 to OD-9 carried forward unchanged (ids and text). New: OD-10 to OD-14 (Story UI-Q1 to UI-Q5), OD-15 to OD-17 (ambiguities
+  in the new ACs: AC-22 verification, blank screen after a no-FAQ run, the Generate-guard alert text), OD-18 to OD-20 (Spec
+  v2 SP-1 to SP-3). No Open Decision is blocking; none was resolved. Cross-reference notes: OD-8 and OD-9 now interact with
+  AC-21/AC-22 (see OD-16, OD-11), but their questions are unchanged. v1 is superseded.
 - **v1** - first run against Story v2. OD-1 and OD-2 are the Story's own Q1 and Q2; OD-3 to OD-9 are new. No blocking items.
