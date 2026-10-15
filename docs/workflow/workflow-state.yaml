@@ -3,27 +3,12 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-8.1
-current_stage: HUMAN_PLAN_APPROVAL
-status: WAITING_FOR_HUMAN
-pending_human_gate:
-  stage: HUMAN_PLAN_APPROVAL
-  status: PENDING
-  required_artifacts:
-    - key: implementation_plan
-      path: docs/plans/US-8.1-implementation-plan.md
-      version: 2
-    - key: task_breakdown
-      path: docs/plans/US-8.1-task-breakdown.md
-      version: 4
-    - key: plan_review
-      path: docs/reviews/plans/US-8.1-plan-review.md
-      version: 4
-  decided_at: null
-  decided_by: null
-  comment: null
+current_stage: TEST_WRITING
+status: IN_PROGRESS
+pending_human_gate: null
 started_at: 2026-10-14T13:19:41Z
-updated_at: 2026-10-15T10:59:01Z
+updated_at: 2026-10-15T11:15:56Z
 stage_attempts: {}
 track: angular
 blockers: []
-note: null
+note: "AC-22 geometric check is performed manually by the operator in a browser at HUMAN_PR_APPROVAL and recorded in the approval comment (HUMAN_PLAN_APPROVAL comment, see the HUMAN_APPROVED history event)."
