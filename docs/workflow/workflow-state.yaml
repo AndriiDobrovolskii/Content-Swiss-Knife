@@ -3,11 +3,23 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-8.1
-current_stage: SPEC_REVIEW
-status: IN_PROGRESS
-pending_human_gate: null
+current_stage: HUMAN_SPEC_APPROVAL
+status: WAITING_FOR_HUMAN
+pending_human_gate:
+  stage: HUMAN_SPEC_APPROVAL
+  status: PENDING
+  required_artifacts:
+    - key: specification
+      path: docs/specifications/US-8.1-spec.md
+      version: 3
+    - key: specification_review
+      path: docs/reviews/specifications/US-8.1-spec-review.md
+      version: 3
+  decided_at: null
+  decided_by: null
+  comment: null
 started_at: 2026-10-14T13:19:41Z
-updated_at: 2026-10-15T10:20:37Z
+updated_at: 2026-10-15T10:26:49Z
 stage_attempts: {}
 track: angular
 blockers: []
