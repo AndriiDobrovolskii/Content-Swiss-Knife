@@ -3,11 +3,32 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-8.1
-current_stage: RECONCILIATION
-status: IN_PROGRESS
-pending_human_gate: null
+current_stage: HUMAN_PR_APPROVAL
+status: WAITING_FOR_HUMAN
+pending_human_gate:
+  stage: HUMAN_PR_APPROVAL
+  status: PENDING
+  required_artifacts:
+    - key: implementation_report
+      path: docs/verification/US-8.1-implementation-report.md
+      version: 4
+    - key: quality_gate_report
+      path: docs/verification/US-8.1-quality-gate-report.md
+      version: 4
+    - key: verification_report
+      path: docs/verification/US-8.1-verification-report.md
+      version: 4
+    - key: security_review
+      path: docs/reviews/security/US-8.1-security-review.md
+      version: 3
+    - key: reconciliation_report
+      path: docs/reconciliation/US-8.1-reconciliation-report.md
+      version: 2
+  decided_at: null
+  decided_by: null
+  comment: null
 started_at: 2026-10-14T13:19:41Z
-updated_at: 2026-10-15T09:25:18Z
+updated_at: 2026-10-15T09:30:36Z
 stage_attempts: {}
 track: angular
 blockers: []
