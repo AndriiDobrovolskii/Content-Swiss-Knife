@@ -1,13 +1,13 @@
 ---
 artifact: verification_report
 story: US-8.1
-version: 3
+version: 4
 status: DRAFT
 owner: so-implementation-verifier
 stage: IMPLEMENTATION_VERIFICATION
-created_at: 2026-10-15T08:45:00Z
-updated_at: 2026-10-15T08:45:00Z
-supersedes: docs/verification/US-8.1-verification-report.md#2
+created_at: 2026-10-15T10:30:00Z
+updated_at: 2026-10-15T10:30:00Z
+supersedes: docs/verification/US-8.1-verification-report.md#3
 inputs_consumed:
   - key: story
     version: 2
@@ -18,70 +18,85 @@ inputs_consumed:
   - key: task_breakdown
     version: 3
   - key: implementation_report
-    version: 3
+    version: 4
   - key: quality_gate_report
-    version: 3
+    version: 4
 ---
 
-# Implementation Verification Report - US-8.1 (v3, re-verification after the B-1 fix)
+# Implementation Verification Report - US-8.1 (v4, re-verification of HEAD e6088b7)
 
-Scope: `git diff 27b01b8..HEAD` on `feat/US-8.1-single-master-faq` (HEAD `ca7d717`). Version 2 (PASS at `75cc0be`) is superseded. The delta since v2 is `git diff 75cc0be..HEAD`; I read the B-1 commits `97d8913` (tests) and `1ac82e1` (fix) in full and re-ran the FROZEN and scope checks over the whole range. Every check is against the diff and the files as they stand, not against the reports. The mechanical gate was not re-run as verification; `bash arch-guard.sh` was run once, read-only, as a FROZEN cross-check (exit 0).
+Scope: `git diff 27b01b8..HEAD` on `feat/US-8.1-single-master-faq` (HEAD `e6088b7`), plus the delta since the v3 report's code baseline, `git diff 1ac82e1..HEAD`. Version 3 (PASS) is superseded. Every check below is against the diff and the files as they stand, not against the reports. The mechanical gate was not re-run as verification; `bash arch-guard.sh` was run once, read-only, as a FROZEN cross-check (exit 0).
 
-**Verdict: PASS** (`loop_back_stage: null`). The B-1 change introduces no new violation. Three non-blocking findings (N-1 to N-3); one is the style nit the gate reported.
+**Verdict: PASS** (`loop_back_stage: null`). No production-logic change since v3, confirmed from the real diff. Two non-blocking notes (N-1, N-2); the earlier whitespace nit is resolved.
 
-## What changed since v2 (the whole delta)
+## What changed since v3 (the whole code delta)
 
-`git diff 75cc0be..HEAD --stat` over source and tests: `src/utils/faq-html.ts` (+12/-1) and three spec files (`faq-html.spec.ts`, `faq-gate.spec.ts`, `content-orchestrator.faq-pipeline.spec.ts`); everything else is docs and workflow state. `git diff 75cc0be..HEAD -- .arch-guard-checksums src/prompts src/prompt-core src/utils/output-validator.ts server package.json arch-guard.sh` is empty.
+`git diff 1ac82e1..HEAD --stat -- src test server package.json arch-guard.sh .arch-guard-checksums` lists exactly six files:
 
-The fix (`1ac82e1`, one file): a new constant `PERMITTED_TAG = /<\/?(?:h3|p|b|ul|li)\s*>/gi`, and after the existing tag-stack pass, `if (html.replace(PERMITTED_TAG, '').includes('<'))` reports `faq-not-well-formed`. No new rule id; `FAQ_SHAPE_RULES` is unchanged, so every consumer keyed on the five ids is unaffected. The issue carries no `path`, so the repair ladder still resolves it to a full FAQ regeneration, exactly as for the other shape errors. The function stays pure and deterministic (no DOM, clock, random).
+| File | Change |
+| --- | --- |
+| `src/utils/faq-html.ts` | 1 line, `const MARKDOWN_BOLD =/...` to `const MARKDOWN_BOLD = /...` (d33292c). Whitespace only; the regex is byte-identical. |
+| `src/app/app.component.template-wiring.spec.ts` | +96, AC-10 and AC-11 tightening pins (test only) |
+| `src/services/content-orchestrator.faq-pipeline.spec.ts` | +41, AC-19 integration block (test only) |
+| `src/services/content-orchestrator.faq-standalone.spec.ts` | +27, AC-19 integration block (test only) |
+| `test/fixtures/faq-pipeline.ts` | +44, `DESCRIPTION_ONLY_MARKERS`, `faqTranslationPromptProblems`, `looksLikeDescriptionPrompt` (test helper only) |
 
-## B-1 change against the approved Specification
+`.arch-guard-checksums`, `src/prompts/`, `src/prompt-core/`, `src/utils/output-validator.ts`, `server/`, `package.json`, `arch-guard.sh` have no diff in the delta. The rest of the delta is docs and workflow state. So: no production-logic change; confirmed.
 
-**FR-9** says a stored FAQ "parses with no unclosed or mismatched tag and contains no element other than `h3`, `p`, `b`, `ul`, `li`", and by default (OD-4) begins with an `<h3>` and has no attributes on those elements. The fix makes that enforcement total. Before it, input the tag tokenizer could not see (unpaired quote in a tag head, missing `>`, comment, processing instruction, CDATA, bare `<`) was reported as "no issue" and was stored, then reached `bypassSecurityTrustHtml`: a real FR-9 hole. After it, the only `<` that can survive is the head of one of the five exact attribute-free tags (whitespace before `>` tolerated, case-insensitive). This is the five-element, attribute-free allowlist FR-9 states, applied fail-closed. A permitted-tag removal cannot manufacture a safe string out of a bad one: a nested input such as `<<p>script>` leaves `<script>` after the single replace pass, so it is still rejected. A tag with any attribute or a slash form (`<p/>`) is not removed and is rejected, both by the old pass and by the new one.
+## N-2 from v3 (missing space after `=` in `MARKDOWN_BOLD`): RESOLVED
 
-**Does rejecting a residual `<` in text conflict with any requirement, AC or fixture? No.**
-- Specification: no FR, NFR, AC or OD requires a raw `<` to survive in FAQ text. Searching the spec for `&lt;`, "less-than" and "raw <" finds nothing that asks for one; the FR-21/FR-22/FR-23 content rules (unit spacing, no Markdown, no `<br>`, no anglicisms, no `itemtype`) are untouched. A literal `<` in prose has to be written as the entity `&lt;` for the text to be correct HTML in any case, because a raw `<` followed by a letter is parsed as a tag by the browser.
-- Fixtures and tests: `test/fixtures/faq-pipeline.ts` (`FAQ_MASTER_HTML`, the `<strong>` variant, `FAQ_INVALID_HTML`) contain no raw `<` in text; units are `°C` and `мм`. `faq-html.spec.ts` guards G1-G10 pin what stays accepted: G3 `5 &lt; 6 &amp; 7 &gt; 3 &quot;x&quot;` (escaped entities), G4 a literal `>` in text, G2 straight and Ukrainian apostrophes, G5 upper-case tags, G6 whitespace before `>`. Unit symbols (`°`, `×`, `Ø`, `µ`, `≤`, `±`) are not `<` and are not affected. The 16-pair description golden and the description path are untouched.
-- Consequence if a model does emit a raw `<` in prose: the FAQ is a contract error and is regenerated (master: up to 3 attempts per FR-10; translation: FR-11), then not stored. That is the failure path FR-9 already prescribes; it is fail-closed, not an unsafe outcome. See N-1 for the residual quality trade-off.
+`d33292c` restores `const MARKDOWN_BOLD = /\*\*[^*\n]+\*\*/;` (line 56 of `src/utils/faq-html.ts`). Its diff is the single character and nothing else. The neighbouring `MARKDOWN_HEADING` and `MARKDOWN_FENCE` lines are consistent with it.
 
 ## Check 1 - Architecture Rule 2 (retrieval separate from generation): HOLDS
 
-Read: the full diff of `1ac82e1` and `97d8913`, plus the v2 reading of `runFaqPipeline`, `runFaqGate`, `generateFaqOnly`, `buildFaqTranslationPayload`, `faq-gate.ts`, `faq-html.ts`. The B-1 delta adds one regex constant and one string test in a pure utility; no fetch, search, `RetrievalService`/`RetrievalProvider` use, model call or I/O. `server/`, `package.json`, `arch-guard.sh` have no diff in the range or in the delta. No grounding, no SDK import. Review-only: no command checks this rule.
+Read: `runFaqPipeline`, `runFaqGate` and `generateFaqOnly` in `src/services/content-orchestrator.service.ts` (added lines of the whole range), `src/utils/faq-gate.ts`, `faq-html.ts`, `faq-form.ts`, `structural-parity.ts`, `src/app/tab-descriptors.ts`, `src/prompts/task-faq.ts`, and the FAQ variant in `src/prompts/task-c.ts`. A search of the added lines for retrieval, fetch, search, grounding and Serper finds only comments (the `generateFaqOnly` doc comment states "no retrieval (Rule 2)"; "grounding" there means the user-supplied description and specs). The standalone path takes only operator-supplied Supplemental Content, Description and Specs; no `RetrievalService` / `RetrievalProvider` call exists in it. The pure FAQ utilities do no I/O. `server/`, `retrieval.service.ts` and `package.json` have no diff in the range; no Google Grounding is reintroduced. Review-only: no command checks this rule.
 
 ## Check 2 - AGENTS.md section 4 HTML criteria: HOLDS
 
-The change is a validator-only tightening of the FAQ shape gate. Description prompt, Zod schema, renderers and `output-validator.ts` are unchanged, so Product `itemtype`, meta lengths, CTA, figures and video embeds are unaffected. The FAQ stays HTML-only, five elements, no attributes, no Markdown (`MARKDOWN_*` rules intact, order of `note` calls unchanged), no `<br>`. `meta-description-currency`: `output-validator.ts` is not in the diff; the rule stays disarmed and `seo-currency-wiring.spec.ts` is untouched.
+The description prompt path, Zod schema, renderers and `output-validator.ts` are unchanged: `output-validator.ts` has no diff in the range and `seo-currency-wiring.spec.ts` is untouched, so `meta-description-currency` stays disarmed. The additive FAQ variant of Task C is selected only by `contentKind: 'faq'`; the 96-case description golden (`src/prompts/task-c.description-bytes.spec.ts` with `test/fixtures/golden/task-c-description-prompts.json`) pins the description path (system-block digests, lengths, `cache` flags, `userContent` digest) byte for byte, so the Product `itemtype`, unit spacing, spec count, figure, video, `meta_title` / `meta_description` / CTA, `<hr>` and no-Markdown criteria for descriptions cannot have moved. The FAQ artifact itself is held to the FR-9 shape: `h3`, `p`, `b`, `ul`, `li`, no attributes, no Markdown, no `<br>`, `<b>` instead of `<strong>` (T2 and T3; the B-1 fail-closed tag pass is unchanged since v3).
 
-## Check 3 - STORE_REGISTRY as the only source of languages and currency: HOLDS
+## Check 3 - STORE_REGISTRY as the only source of languages and currency: HOLDS in production code; test findings below
 
-The added lines of `1ac82e1` contain no BCP-47 code, currency symbol or code, or URL (checked by search over the added lines). The only added strings are a rule detail message and a comment. The registry-derived language name and `MASTER_LOCALE` use verified in v2 (V-1, V-2) are in `8c89bce`, which is unchanged since.
+Production code (searched the added lines of every non-spec file in the range for BCP-47 codes, Task C key literals, currency symbols and codes, and URLs):
+
+- `content-orchestrator.service.ts`: the master is `MASTER_LOCALE`; the translation set comes from the store profile; log and progress strings interpolate `${MASTER_LOCALE}` and the ISO. No language list, no currency, no URL literal. The V-2 fix (`8c89bce`) is still in place.
+- `tab-descriptors.ts`: `uk-UA` and `UA` appear only in doc comments; tab ids and labels are interpolated from the ISO / task key; ordering is registry order.
+- `faq-gate.ts`, `faq-html.ts`, `faq-form.ts`, `structural-parity.ts`, `app.component.ts`, `app.component.html`, `types.ts`: no locale or currency literal in code (the `AppMode` union gains `'faq-generator'`, a mode id, not a locale). `create-form.gs` gains one UI label.
+- `task-faq.ts`: two tag-list wording edits only.
+- `task-c.ts` (FROZEN, FAQ variant): the per-language rule blocks name languages inside prompt prose (Castilian Spanish es-ES, European Portuguese pt-PT, US English / Spanish, Ukrainian for the US market) and branch on the same `targetLang` / `websiteGroup` / `isExpert3dStore` dispatch labels as the existing description path. These are prompt content mirroring the pre-existing frozen dispatch (FR-12: same dispatch as the description path), not a second language registry. `sourceLocale === 'uk-UA'` mirrors the existing description branch. This is the v3 N-3 note, unchanged. No currency symbol and no image base URL is added anywhere.
+
+Test code (reported as asked; test code is not a production list but I looked at whether it iterates the registry):
+
+- The orchestrator specs, `faq-gate.spec.ts`, `app.component.template-wiring.spec.ts`, `task-c.faq.spec.ts` and `task-c.description-bytes.spec.ts` derive stores and languages from `STORE_REGISTRY`, `MASTER_LOCALE` and `getLangsForStore`-style helpers (`registryStores()`, `storeLanguages(store)`, `translationLanguages(store)`). New AC-19 blocks in the delta iterate `STORES` / `MODES` and compare against `translationLanguages(store)` (registry-derived), with no hard-coded language list.
+- `src/app/tab-descriptors.spec.ts` hard-codes a per-store language table (`NON_MASTER`) and expected tab descriptors with literal ISO codes (`en-GB`, `ru-UA`, `pl-PL`, `de-DE`, `en-ES`, `es-ES`, `pt-PT`, `en-US`, `es-MX`). This is a deliberate hand-derived oracle ("the ORDER is the thing under test, written out by hand"), and it is cross-checked against the registry: `covers every registry store` asserts the store set equals `Object.keys(STORE_REGISTRY)`, and `non-master languages and Task C keys match the registry` asserts each row equals `STORE_REGISTRY[store].languages` minus the master mapped through `bcp47ToTaskCLang`. So if the registry changes, the oracle fails loudly rather than silently diverging. It does hard-code production language data, which is N-1 below.
+- Other literal locales in specs (`'uk-UA'`, `'pl-PL'`, `'en-GB'` as validator context, `Drukarka 3D` as a store name in one standalone test) are inputs to a single case, not language lists.
+- `test/fixtures/faq-pipeline.ts` has one currency literal: `buildPromptFaq('x', '', '', 's', 'Ukrainian', '€')`, used only to render the FAQ generation system block so calls can be classified. It is an argument for fingerprinting, not a list of currencies, and does not feed any assertion about currency. No language list or URL.
 
 ## Check 4 - Prompt-caching block separation: HOLDS
 
-No prompt builder changed in the delta (`src/prompts`, `src/prompt-core` have no diff since `75cc0be`). `buildFaqTranslationPayload` and `buildPromptFaq` keep `systemBlocks` with `cache: true` and per-product data in `userContent`, as verified in v2.
+`buildPromptC`'s FAQ variant returns `systemBlocks: [{ text: FAQ_TRANSLATION_SYSTEM, cache: true }, { text: buildFaqLanguageInstruction(...), cache: true }]` and puts the per-product data (`[Store Name]`, `[BASE FAQ HTML]`) in `userContent` with the comment "Dynamic per-product data stays out of the cached system blocks". The description path's block structure and `cache` flags are pinned by the golden. `buildPromptFaq` keeps its cached system block (v2/v3 reading; `task-faq.ts` diff is two wording lines). Nothing in the delta touches a prompt builder.
 
-## Check 5 - FROZEN files: HOLDS (unchanged from v2)
+## Check 5 - FROZEN files: HOLDS
 
-`git log --oneline 27b01b8..HEAD -- src/prompts/task-c.ts .arch-guard-checksums src/prompts/task-a.ts src/prompts/task-b.ts src/prompt-core/master-system-prompt.ts src/utils/output-validator.ts` lists exactly `da59195` and `8c89bce`, as in v2; the B-1 commits touch none of the five frozen files or `.arch-guard-checksums`. Each of the two commits changed `src/prompts/task-c.ts` and re-baselined `.arch-guard-checksums` in the same commit. The two section 9 grants are recorded in `docs/catalog/US-8.1-pipeline-status.md` ("T1 - section 9 stop and approval record", line 51; "Loop-back fix 1 of 3 ... section 9 stop and approval record", line 194); the B-1 section (line 213) records no section 9 stop because none was needed. `bash arch-guard.sh`: "All frozen files unchanged", exit 0. I can confirm the records exist and the diffs stay inside them; I cannot independently re-observe the in-session grants themselves.
+`git log --oneline 27b01b8..HEAD -- src/prompts/task-c.ts .arch-guard-checksums src/prompts/task-a.ts src/prompts/task-b.ts src/prompt-core/master-system-prompt.ts src/utils/output-validator.ts` lists exactly `da59195` (T1) and `8c89bce` (V-1 / V-2 fix). Only `src/prompts/task-c.ts` is a frozen file that changed (the diff removes only the import line and the old `opts` signature, both extended additively; `task-a.ts`, `task-b.ts`, `master-system-prompt.ts`, `output-validator.ts` have no diff). `.arch-guard-checksums` shows a single changed line, the `task-c.ts` hash, and each of the two commits carries both the edit and the re-baseline in the same commit. The two section 9 grants are recorded in `docs/catalog/US-8.1-pipeline-status.md`: "T1 - section 9 stop and approval record" (line 59, operator instruction quoted verbatim) and "Loop-back fix 1 of 3 ... section 9 stop and approval record" (line 202). The delta since v3 touches neither the frozen files nor the checksums. `bash arch-guard.sh`: Rules 1, 3, 4 OK, "All frozen files unchanged", exit 0. I can confirm the records exist and the diffs stay inside them; I cannot independently re-observe the in-session grants.
 
 ## Check 6 - Angular and server conventions: HOLDS
 
-The delta is a pure `src/utils` function plus specs. No component, NgModule, RxJS, SDK import, prompt string in a service, secret, log line or `server/usage/store.js` change. The fix reduces the attack surface that reaches the `SafeHtml` pipe; it adds none.
+The new component code (`app.component.ts`, the template, `tab-descriptors.ts`) is standalone-style signals and field-level `inject()`; no `NgModule`, no new RxJS beyond the existing HTTP boundary. No SDK import outside `server/providers/` (arch-guard Rule 1 OK); no prompt string added to a service (Rule 3 OK; the FAQ prompt text lives in `src/prompts/`). No secret, response body or log line carries one (Rule 4 OK; the new `console.warn` / `console.info` lines carry labels, counts and the store name). `server/` has no diff, so `server/usage/store.js` is unchanged. The FAQ HTML still reaches `SafeHtml` only after the FR-9 shape gate with the B-1 fail-closed pass from v3, unchanged.
 
-## Check 7 - Scope discipline: HOLDS, with one style finding
+## Check 7 - Scope discipline: HOLDS
 
-The B-1 commits touch only `src/utils/faq-html.ts` (the fix) and three spec files (the red tests, committed before the fix at `97d8913`, then not modified by the fix: `1ac82e1` is a single-file commit), plus docs and workflow state. No drive-by refactor, rename, comment deletion or reformatting of untouched files. The test commit's matrix and generation-report revisions are TEST_WRITING artifacts for the B-1 loop-back.
+Production files in the range: `README.md`, `app.component.html|ts`, `tab-descriptors.ts`, `types.ts`, `task-c.ts`, `task-faq.ts`, `content-orchestrator.service.ts`, `faq-form.ts`, `faq-gate.ts`, `faq-html.ts`, `structural-parity.ts`, `tools/feedback-form/create-form.gs`; all are named in `task-breakdown` v3 (T1-T13, the V-1 / V-2 and B-1 loop-backs). Test-side files are `.spec.ts` files plus `test/fixtures/faq-pipeline.ts`, `test/fixtures/task-c-description-inputs.ts` and the golden JSON, which are TEST_WRITING artifacts listed in the test generation report. The delta since v3 is tests, one whitespace-restoring line, and docs. No drive-by refactor, rename, deleted comment or reformatting of an untouched file was found.
 
 ## Non-blocking findings
 
-- **N-1 (informational): raw `<` in FAQ prose is now a hard rejection.** The FAQ generation prompts (`task-faq.ts`, the FAQ translation variant in `task-c.ts`) do not tell the model to write a literal `<` as `&lt;` (the only `&lt;` mentions in `src/utils` are the new error text and unrelated image helpers). If a model writes a raw `<` in prose (for example "< 0.1 mm"), the output costs a repair attempt and, after the attempts, the FAQ is skipped. This is fail-closed, FR-9-conformant and not a rule violation, and the error detail ("use &lt; for a literal \"<\"") is handed to the repair loop. If this proves to cost real generations, a one-line prompt hint is the follow-up; it would need its own task, and for the Task C variant a section 9 stop. Not required by any AC.
-- **N-2 (style, gate-reported nit, confirmed in the diff): missing space in `src/utils/faq-html.ts`.** `1ac82e1` rewrites the line as `const MARKDOWN_BOLD =/\*\*[^*\n]+\*\*/;` (no space after `=`); the pre-fix line was `const MARKDOWN_BOLD = /\*\*[^*\n]+\*\*/;`. The change to that line is a whitespace-only edit unrelated to B-1 and is the only inconsistent line in the file (every other `const X = /.../` has the space). Behaviour is identical and the gate (lint, tests, build) is green, so it does not block; it is a stray formatting change on a line the fix did not need to touch (section 7 item 8) and should be restored to `= /` the next time the file is edited.
-- **N-3 (informational, carried from v2 N-1/N-3):** the unregistered-store fallback in `faqGenericRules` yields the raw task label, and `sourceLocale === 'uk-UA'` plus the Task C dispatch labels remain literals mirrored from the frozen description path (FR-12 same-dispatch). Neither is changed by B-1. The v2 N-2 note on the FR-21 NBSP assertion correction (`c62e30a`) also stands.
+- **N-1 (informational): a hand-written per-store language table in `tab-descriptors.spec.ts`.** It repeats production language data as literals (the hard-coding the section 7.5 spirit warns against) but is guarded by two registry-equality tests and is intentionally independent of the code under test. No action required; if the registry gains a store or language the guard tests will point at this table.
+- **N-2 (informational, carried from v3 N-1 and N-3):** a raw `<` in FAQ prose is a hard shape-gate rejection (the prompts do not instruct writing `&lt;`); the unregistered-store fallback in `faqGenericRules` yields the raw task label; the `'uk-UA'` source-locale branch and Task C dispatch labels in the FAQ variant are literals mirrored from the frozen description path. None changed since v3 and none is a rule violation.
 
 ## Review-only checks (not caught by any command)
 
-Rule 2 (Check 1); the judgment that the residual-`<` rejection does not conflict with FR-9, an AC or a fixture (the tests only pin the cases they list; they do not say whether a raw `<` in prose is wanted); the STORE_REGISTRY literal scan; the FROZEN approval records and same-commit re-baseline beyond arch-guard's checksum compare; prompt-caching separation; the whitespace-only style change on the `MARKDOWN_BOLD` line (lint passes it).
+Rule 2 (Check 1); the STORE_REGISTRY literal scan across production code and test helpers (Check 3); the judgment that the FAQ Task C language prose is mirrored dispatch rather than a second registry; the FROZEN approval records and same-commit re-baseline beyond arch-guard's checksum compare; prompt-caching separation; the scope read against the task breakdown. A passing `npm run lint`, `npm test` or `bash arch-guard.sh` would not have caught any of these.
 
 ## Result
 
-PASS. The B-1 fix is confined to `src/utils/faq-html.ts`, consistent with FR-9's five-element attribute-free allowlist, introduces no Rule 2, section 4, registry, caching, FROZEN or scope violation, and the residual-`<` rejection conflicts with no requirement, AC or fixture. This is a verdict, not human approval; the artifact stays DRAFT.
+PASS. HEAD `e6088b7` differs from the v3-verified code only by one whitespace-restoring line in `src/utils/faq-html.ts` and added tests and fixtures. No Rule 2, section 4, STORE_REGISTRY, caching, FROZEN or scope violation; `meta-description-currency` stays disarmed. This is a verdict, not human approval; the artifact stays DRAFT.
