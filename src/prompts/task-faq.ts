@@ -21,7 +21,7 @@ Output the FAQ artifact only: the first character of your output is the "<" of t
  * the CTA in one cached prompt and the FAQ in another. See pipeline_status finding F5.
  *
  * Output format: each item is a plain-text question in <h3> followed immediately by an
- * HTML answer (allowed tags: <p>, <strong>, <b>, <ul>, <li>). No wrapper <div>/class —
+ * HTML answer (allowed tags: <p>, <b>, <ul>, <li>). No wrapper <div>/class —
  * the app parser walks <h3> + siblings.
  * If the inputs contain nothing answerable, the model returns an empty response.
  *
@@ -50,7 +50,7 @@ Create an expert FAQ block for "${productName}" in ${humanLang}, based exclusive
 Emit exactly one artifact: 3–5 question/answer pairs — 5 is the hard maximum per Schema v4.0 §8.
 The whole block runs 150–400 words.
 Each pair: <h3>Question text?</h3> followed immediately by the answer, composed only of these tags:
-<p>, <strong>, <b>, <ul>, <li>. Start the output at the first <h3>; end it after the last answer's
+<p>, <b>, <ul>, <li>. Start the output at the first <h3>; end it after the last answer's
 closing tag (wrapper divs, class attributes, and FAQPage/schema.org markup stay out — the CMS FAQ
 module supplies the schema). When zero questions are answerable from the sources, return an empty
 response.

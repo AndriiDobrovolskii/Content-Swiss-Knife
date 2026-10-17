@@ -1,5 +1,5 @@
 import { MASTER_SYSTEM_PROMPT } from '../prompt-core/master-system-prompt';
-import { buildDeliveryRegionBlock, taskLangToIso, US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
+import { buildDeliveryRegionBlock, taskLangToIso, isoToHumanLang, US_MEASUREMENT_RULES, PRODUCT_NAME_LOCALIZATION, EXPERT3D_TOV_TRANSLATION_OVERLAY, EXPERT3D_PT_LOCALE_TOV, isExpert3dStore, C3D_TOV_TRANSLATION_OVERLAY, isCenter3dPrintStore, UNIT_LOCALIZATION_RULES, UK_SOURCE_ANTICALQUE, NO_LEAKED_REASONING_CLAUSE } from '../prompt-core/constants';
 import { PromptPayload } from '../prompt-core/payload';
 import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
 import { SIMPLIFIED_TRANSLATION_CLAUSE } from './simplified-template-blocks';
@@ -99,8 +99,12 @@ export function buildPromptC(
   storeName: string,
   websiteGroup?: string,
   templateId?: string,
-  opts?: { localizedName?: string; sourceLocale?: string },
+  opts?: { localizedName?: string; sourceLocale?: string; contentKind?: 'description' | 'faq' },
 ): PromptPayload {
+  // FAQ translation is a separate, additive variant (US-8.1): selected only by the explicit option.
+  if (opts?.contentKind === 'faq') {
+    return buildFaqTranslationPayload(html, targetLang, storeName, websiteGroup, opts.sourceLocale);
+  }
   // Select the localization-specific instruction first…
   let instruction: string;
   let expert3dEsSelected = false;
@@ -393,4 +397,169 @@ ${labelsBlock}
 - Return ONLY the HTML content.
 
 ${NO_LEAKED_REASONING_CLAUSE}`;
+}
+
+// ── FAQ translation variant (US-8.1) ────────────────────────────────────────
+// Selected ONLY by the explicit `opts.contentKind === 'faq'` — never by sniffing the HTML (a
+// description already carries <h3> spec categories). A FAQ is five elements — <h3>, <p>, <b>,
+// <ul>, <li> — so the variant omits MASTER_SYSTEM_PROMPT and every description-only block (closing
+// commercial H2, delivery-region sentence, H1 LOCK, spec-table preservation, image manifest,
+// section labels). Shared blocks from constants.ts are reused only where they carry no
+// description-structure text; the rest are restated compactly below.
+
+const FAQ_TRANSLATION_SYSTEM = `TASK C — TRANSLATE A PRODUCT FAQ (pure HTML body only).
+You are a professional technical translator and localizer for an e-commerce store. The input is a FAQ
+that was already written and approved in Ukrainian: question headings followed by their answers.
+Translate it into the target language given in the next system block.
+
+[ELEMENT-FOR-ELEMENT TRANSLATION — NON-NEGOTIABLE]
+Translate the FAQ element for element. Keep every <h3>, <p>, <ul> and <li> of the input, in the same
+order and nesting, adding none: do not split, merge, drop, reorder, summarize or expand anything. N
+questions in means N questions out; M list items in means M list items out. Do not add an
+introduction, a conclusion, a heading, a closing paragraph or any new answer.
+
+[ALLOWED MARKUP]
+The only tags are <h3> (a question), <p>, <b>, <ul> and <li>. <b> is the only emphasis tag: keep each
+<b> exactly where the input has it, around the translation of the same words, and never convert it
+to another tag. Output HTML only — no Markdown, no <br>, no wrapper element, no attributes, no
+code fence.
+
+[FIDELITY]
+Translate the language only. Every number, model code, brand name and fact carries over exactly; do
+not invent, remove or "improve" any claim. Keep brand and model names in Latin script as written in
+the input (do not translate, expand, shorten or reorder them); only the embedded unit abbreviations,
+quantity abbreviations and number separators localize, as the language rules in the next block say.
+Keep a single space between a number and its unit.
+
+${NO_LEAKED_REASONING_CLAUSE}`;
+
+const FAQ_PRODUCT_NAME_NOTE = `[PRODUCT NAMES]
+A product, brand or model name that appears in a question or an answer keeps its Latin-script form.
+Translate a generic descriptive word only when it is a plain common noun in the sentence; never
+translate, transliterate, expand or shorten the brand or the model. Count abbreviations and unit
+abbreviations follow the unit rules above.`;
+
+const FAQ_NUMBERS_DECIMAL_COMMA = `[NUMBERS] Use the decimal comma and a space as the thousands separator in every number, in
+questions and answers alike ("1.75 mm" → "1,75 mm"; "12,500" → "12 500"). Never change the digits
+or the unit — only the separator punctuation localizes.`;
+
+const FAQ_NUMBERS_DECIMAL_DOT = `[NUMBERS] Use the decimal point and a comma as the thousands separator in every number ("1.75 mm",
+"12,500"). Never change the digits or the unit.`;
+
+const FAQ_EXPERT3D_ES_RULES = `[LANGUAGE — CASTILIAN SPANISH (es-ES) FOR EXPERT3D]
+Translate into natural Castilian Spanish (es-ES). REGISTER: formal "usted" throughout — NEVER "tú"/"te"/"tu".
+Expert-consultant voice: factual and precise, no marketing fluff. Vocabulary: Ordenador, Móvil, Vídeo,
+Fichero, "Resina", "Laminador" (slicer), "Plataforma" (bed). The count abbreviation is "uds".
+${UNIT_LOCALIZATION_RULES}
+${FAQ_NUMBERS_DECIMAL_COMMA}
+${FAQ_PRODUCT_NAME_NOTE}`;
+
+const FAQ_EXPERT3D_PT_RULES = `[LANGUAGE — EUROPEAN PORTUGUESE (pt-PT) FOR EXPERT3D]
+Translate into natural European Portuguese (pt-PT), NOT Brazilian. REGISTER: formal third person —
+never "tu"; "estar a + infinitivo", never the Brazilian gerund. Vocabulary: ecrã (not tela), ficheiro
+(not arquivo), utilizador (not usuário), rato (not mouse), equipa (not time), "plataforma de
+impressão" (bed), "bico" (nozzle). Post-1990 orthography. The count abbreviation is "un.".
+${UNIT_LOCALIZATION_RULES}
+${FAQ_NUMBERS_DECIMAL_COMMA}
+${FAQ_PRODUCT_NAME_NOTE}`;
+
+const FAQ_EU_EN_RULES = `[LANGUAGE — EUROPEAN ENGLISH]
+Translate into STRICTLY British/European English: "colour", "customise", "fibre", "optimise" — NOT
+American English. If the input is already English, copy-edit it into native European English; do
+not return it unchanged.
+[MEASUREMENT] Metric units only (mm, °C, kg). Do NOT use Imperial. Keep unit abbreviations as written.
+Keep brand-first order and "pcs" for counts. Tone: direct, confident, professional but accessible.
+${FAQ_NUMBERS_DECIMAL_DOT}
+${FAQ_PRODUCT_NAME_NOTE}`;
+
+const FAQ_US_UK_RULES = `[LANGUAGE — UKRAINIAN FOR THE US MARKET]
+Translate into natural, high-converting Ukrainian for a product sold in the US market.
+[MEASUREMENT] Imperial units from the source (inches, lbs) stay Imperial (дюйми, фунти) — never convert them to Metric.
+${UNIT_LOCALIZATION_RULES}
+${FAQ_NUMBERS_DECIMAL_COMMA}
+[STYLE] Direct and professional. Anti-anglicism: "друк" not "прінт", "ПЗ" not "софт"; established tech
+terms may stay. The count abbreviation is "шт.".
+${FAQ_PRODUCT_NAME_NOTE}`;
+
+function faqUsRules(targetLang: string): string {
+  const isEnglish = targetLang.includes('American English');
+  const label = isEnglish ? 'American English (en-US)' : 'US/Latin American Spanish (es-US)';
+  return `[LANGUAGE — ${label.toUpperCase()} FOR THE US MARKET]
+Translate/adapt into ${label} for the US market. If the input is already in the target language,
+copy-edit it into native US wording; do not return it unchanged.
+${US_MEASUREMENT_RULES}
+${UNIT_LOCALIZATION_RULES}
+${FAQ_NUMBERS_DECIMAL_DOT}
+[STYLE] Direct, confident, professional; benefit-first. ${isEnglish ? 'Keep brand-first order and "pcs" for counts.' : 'The count abbreviation is "pzas".'}
+Do not carry Ukraine-specific carriers, phone numbers or places into the US text; use neutral wording
+("our support team") instead and invent no specifics.
+${FAQ_PRODUCT_NAME_NOTE}`;
+}
+
+function faqGenericRules(targetLang: string, storeName: string): string {
+  // Display name derived from STORE_REGISTRY (task label -> BCP-47 -> human name), no local table.
+  const name = isoToHumanLang(taskLangToIso(targetLang, storeName));
+  return `[LANGUAGE — ${name.toUpperCase()}]
+Translate into natural, native ${name} — idiomatic technical writing, not a word-for-word rendering.
+Keep a direct, professional tone.
+${UNIT_LOCALIZATION_RULES}
+${FAQ_NUMBERS_DECIMAL_COMMA}
+${FAQ_PRODUCT_NAME_NOTE}`;
+}
+
+const FAQ_C3D_TOV = `[CENTER 3D PRINT ToV — FAQ]
+Keep the Center 3D Print voice: a service engineer-consultant explaining what the machine does for
+the reader. A bold lead-in that is a verb plus a benefit claim ending in a period stays a verb plus a
+benefit claim ending in a period — never re-nominalize it into a noun label plus a colon. The
+machine stays the grammatical subject. Keep every question heading in question form.`;
+
+function buildFaqLanguageInstruction(targetLang: string, storeName: string, websiteGroup?: string, sourceLocale?: string): string {
+  // Same dispatch conditions as the description path in buildPromptC.
+  let instruction: string;
+  let expert3dLocaleRules = false;
+  if (targetLang === 'European English' || targetLang === 'European English (EXPERT3D)') {
+    instruction = FAQ_EU_EN_RULES;
+  } else if ((targetLang === 'Ukrainian' && websiteGroup === 'US') || targetLang === 'Ukrainian (Expert-3DPrinter)') {
+    instruction = FAQ_US_UK_RULES;
+  } else if (targetLang.includes('American English') || targetLang.includes('American Spanish')) {
+    instruction = faqUsRules(targetLang);
+  } else if (targetLang === 'Spanish (EXPERT3D)' || (targetLang === 'ES' && isExpert3dStore(storeName))) {
+    instruction = FAQ_EXPERT3D_ES_RULES;
+    expert3dLocaleRules = true;
+  } else if (targetLang === 'Portuguese (EXPERT3D)' || (targetLang === 'PT' && isExpert3dStore(storeName))) {
+    instruction = FAQ_EXPERT3D_PT_RULES;
+    expert3dLocaleRules = true;
+  } else {
+    instruction = faqGenericRules(targetLang, storeName);
+  }
+
+  // EXPERT3D Tone of Voice: skipped for ES/PT, whose FAQ rules above already carry the formal register.
+  if (!expert3dLocaleRules && (isExpert3dStore(storeName) || targetLang.includes('(EXPERT3D)'))) {
+    instruction += `\n\n${EXPERT3D_TOV_TRANSLATION_OVERLAY}`;
+  }
+  if (isCenter3dPrintStore(storeName)) instruction += `\n\n${FAQ_C3D_TOV}`;
+
+  // Same source-language interference guard as the description path.
+  if (sourceLocale === 'uk-UA') {
+    const antiCalque = UK_SOURCE_ANTICALQUE[targetLang];
+    if (antiCalque) instruction += `\n\n${antiCalque}`;
+  }
+  return instruction;
+}
+
+function buildFaqTranslationPayload(
+  html: string,
+  targetLang: string,
+  storeName: string,
+  websiteGroup: string | undefined,
+  sourceLocale: string | undefined,
+): PromptPayload {
+  return {
+    systemBlocks: [
+      { text: FAQ_TRANSLATION_SYSTEM, cache: true },
+      { text: buildFaqLanguageInstruction(targetLang, storeName, websiteGroup, sourceLocale), cache: true },
+    ],
+    // Dynamic per-product data stays out of the cached system blocks.
+    userContent: `[Store Name]: ${deriveStoreLabel(storeName, targetLang)}\n\n[BASE FAQ HTML]:\n${html}`,
+  };
 }

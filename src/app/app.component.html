@@ -117,6 +117,12 @@
             [class]="appMode() === 'ua-generator' ? 'bg-white dark:bg-slate-600 text-amber-600 dark:text-amber-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
             <i class="fa-solid fa-language mr-1"></i> {{ uiLabels().uaGenerator }}
           </button>
+          <button
+            (click)="setMode('faq-generator')"
+            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
+            [class]="appMode() === 'faq-generator' ? 'bg-white dark:bg-slate-600 text-green-600 dark:text-green-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
+            <i class="fa-solid fa-circle-question mr-1"></i> {{ uiLabels().faqGenerator }}
+          </button>
         </div>
       </div>
     </div>
@@ -561,6 +567,89 @@
       </div>
     }
 
+    <!-- FAQ GENERATOR FORM -->
+    @else if (appMode() === 'faq-generator') {
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <h2 class="text-sm font-bold text-green-600 dark:text-green-400 flex items-center gap-2 mb-4">
+          <i class="fa-solid fa-circle-question"></i> {{ uiLabels().faqOnlyTitle }}
+        </h2>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().targetWebsite }} <span class="text-red-500">*</span>
+          </label>
+          <select
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all cursor-pointer text-slate-800 dark:text-slate-200"
+            [class.text-slate-400]="!faqSelectedWebsite()"
+            [class.border-red-300]="!faqSelectedWebsite()"
+            (change)="onFaqWebsiteChange($event)">
+            <option value="" [selected]="!faqSelectedWebsite()" class="dark:bg-slate-800">{{ uiLabels().selectWebsite }}</option>
+            @for (site of websiteOptions; track site.name) {
+              <option [value]="site.name" [selected]="faqSelectedWebsite()?.name === site.name" class="dark:bg-slate-800">{{ site.name }} ({{ site.group }})</option>
+            }
+          </select>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            {{ uiLabels().productName }} <span class="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            [class.border-red-300]="!faqProductName()"
+            [value]="faqProductName()"
+            (input)="updateFaqProductName($event)"
+            [placeholder]="uiLabels().placeholderName">
+        </div>
+
+        <app-source-input
+          [label]="uiLabels().supplementalContentRequired"
+          [placeholder]="uiLabels().placeholderSupplemental"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [required]="true"
+          [textHeight]="'min-h-[140px]'"
+          [value]="faqSupplementalContent()"
+          (valueChange)="faqSupplementalContent.set($event)" />
+
+        <app-source-input
+          [label]="uiLabels().originalDescription"
+          [placeholder]="uiLabels().placeholderDesc"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [textHeight]="'min-h-[200px]'"
+          [value]="faqDescription()"
+          (valueChange)="faqDescription.set($event)" />
+
+        <app-source-input
+          [label]="uiLabels().techSpecs"
+          [placeholder]="uiLabels().placeholderSpecs"
+          [labels]="uiLabels()"
+          [accent]="'blue'"
+          [textHeight]="'min-h-[140px]'"
+          [enableTableNormalize]="true"
+          [value]="faqSpecs()"
+          (valueChange)="faqSpecs.set($event)" />
+
+        <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+           <div>
+             <span class="block text-xs font-semibold text-slate-800 dark:text-slate-200">Deep Thinking Mode</span>
+             <span class="text-[10px] text-slate-500 dark:text-slate-400">Uses advanced reasoning (Slower)</span>
+           </div>
+           <button
+             (click)="toggleSeoThinking()"
+             class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+             [class]="seoUseThinking() ? 'bg-green-600' : 'bg-slate-300 dark:bg-slate-600'">
+             <span
+               class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform"
+               [class]="seoUseThinking() ? 'translate-x-5' : 'translate-x-1'"></span>
+           </button>
+         </div>
+
+      </div>
+    }
+
     <!-- COPYWRITER FORM -->
     @else if (appMode() === 'copywriter') {
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
@@ -846,6 +935,19 @@
             <span>{{ uiLabels().slugGenBtn }}</span>
           }
         </button>
+      } @else if (appMode() === 'faq-generator') {
+         <button
+          (click)="generateFaqOnly()"
+          [disabled]="isGenerating() || !isFaqFormValid()"
+          class="w-full py-3 px-4 bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 text-white font-semibold rounded-lg shadow-sm transition-transform active:scale-[0.98] flex items-center justify-center gap-2">
+          @if (isGenerating()) {
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>{{ uiLabels().processing }}</span>
+          } @else {
+            <i class="fa-solid fa-circle-question"></i>
+            <span>{{ uiLabels().faqGenBtn }}</span>
+          }
+        </button>
       } @else if (appMode() === 'optimizer') {
         <div class="flex gap-2">
           <button 
@@ -927,7 +1029,7 @@
           class="flex-1 py-2 px-4 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 text-slate-600 dark:text-slate-300 font-medium rounded-lg shadow-sm transition-transform active:scale-95 text-xs">
           {{ uiLabels().clearAll }}
         </button>
-        @if ((appMode() === 'generator' || appMode() === 'ua-generator' || appMode() === 'seo-generator' || appMode() === 'slug-generator') && hasOutput()) {
+        @if ((appMode() === 'generator' || appMode() === 'ua-generator' || appMode() === 'seo-generator' || appMode() === 'slug-generator' || appMode() === 'faq-generator') && hasOutput()) {
           <button 
             (click)="downloadZip()"
             class="flex-1 py-2 px-4 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium rounded-lg shadow-sm transition-transform active:scale-95 flex items-center justify-center gap-2 text-xs">
@@ -1015,7 +1117,11 @@
           [class.border-amber-100]="appMode() === 'ua-generator'"
           [class.dark:border-amber-900]="appMode() === 'ua-generator'"
           [class.border-t-amber-600]="appMode() === 'ua-generator'"
-          [class.dark:border-t-amber-500]="appMode() === 'ua-generator'"></div>
+          [class.dark:border-t-amber-500]="appMode() === 'ua-generator'"
+          [class.border-green-100]="appMode() === 'faq-generator'"
+          [class.dark:border-green-900]="appMode() === 'faq-generator'"
+          [class.border-t-green-600]="appMode() === 'faq-generator'"
+          [class.dark:border-t-green-500]="appMode() === 'faq-generator'"></div>
         <p class="text-lg font-medium text-slate-700 dark:text-slate-200">{{ progressMessage() }}</p>
       </div>
     }
@@ -1171,7 +1277,7 @@
     }
 
     <!-- GENERATOR VIEW / SEO VIEW / SLUG VIEW -->
-    @if (appMode() === 'generator' || appMode() === 'ua-generator' || appMode() === 'seo-generator' || appMode() === 'slug-generator') {
+    @if (appMode() === 'generator' || appMode() === 'ua-generator' || appMode() === 'seo-generator' || appMode() === 'slug-generator' || appMode() === 'faq-generator') {
       @if ((appMode() === 'generator' || appMode() === 'ua-generator') && !hasGeneratorOutput()) {
         <div class="flex-1 overflow-y-auto p-8">
           <div class="max-w-3xl mx-auto">
@@ -1180,7 +1286,7 @@
         </div>
       }
 
-      @if (hasGeneratorOutput() || appMode() === 'seo-generator' || appMode() === 'slug-generator') {
+      @if (hasGeneratorOutput() || appMode() === 'seo-generator' || appMode() === 'slug-generator' || appMode() === 'faq-generator') {
         <header
           class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 pt-6 pb-0 flex-shrink-0 transition-colors duration-200"
           role="tablist"
@@ -1207,7 +1313,7 @@
               }
             </button>
           }
-          @if (appMode() !== 'slug-generator') {
+          @if (appMode() !== 'slug-generator' && appMode() !== 'faq-generator') {
             <button
               role="tab"
               id="tab-seo"
@@ -1338,7 +1444,7 @@
           </details>
         }
 
-        @if (appMode() !== 'generator' && !content().mainHtmlUa && !content().seoData && !content().slugData && !isGenerating()) {
+        @if (appMode() !== 'generator' && appMode() !== 'faq-generator' && !content().mainHtmlUa && !content().seoData && !content().slugData && !isGenerating()) {
           <div class="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
             <i class="fa-regular fa-file-code text-6xl mb-4 opacity-50"></i>
             <p class="text-lg font-medium">{{ uiLabels().noContentYet }}</p>

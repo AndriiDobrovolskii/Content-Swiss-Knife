@@ -34,7 +34,7 @@ Given a product, the app generates a complete, store‑specific content package:
 - **SEO metadata** — `h1`, `meta_title`, and `meta_description` per target language, with each `meta_description` grounded in a real hard spec pulled from the generated body.
 - **URL slugs** — a localized name + a latin‑only, hyphen‑delimited, cross‑language‑unique slug per target language, deterministically normalized regardless of model output.
 - **Translations** — full localized HTML for every non‑English language a store targets, with Ukrainian generated first.
-- **FAQ / HowTo artifacts** — optional schema‑free HTML blocks for native theme modules, generated per language when supplemental content is supplied.
+- **FAQ artifact** — an optional schema‑free HTML block for native theme modules, generated when supplemental content is supplied. One Ukrainian (uk-UA) master FAQ is written first and then translated into the store's other languages, so every language carries the same questions in the same order.
 - **Validation** — every artifact is passed through deterministic acceptance‑criteria checks (unit spacing, Schema.org rules, lazy‑loading patterns, SEO length constraints) before it reaches the UI.
 
 ---
@@ -95,7 +95,7 @@ A single `generate()` run executes an ordered, multi‑step pipeline. Each step 
 2. **SEO metadata (Task B)** — runs the fast model (Anthropic Haiku) and returns strict JSON. The freshly generated HTML is passed back in as context so each `meta_description` can cite a genuine hard spec rather than generic copy.
 3. **URL slugs (Task Slug)** — immediately follows SEO metadata, on the fast model. The LLM proposes a localized `name` + `slug` per target language; a deterministic post‑processing layer (`normalizeSlug` / `ensureUniqueSlugs`) then guarantees the actual URL contract (latin‑only, lowercase, hyphen‑delimited, unique across languages) regardless of what the model returned. A slug failure is logged and skipped — it never aborts the rest of the run.
 4. **Translations (Task C)** — one fast‑model call per non‑uk-UA target language, translating the uk-UA master. A deterministic structural-parity check enforces that each translation is structurally isomorphic to the master. Store‑specific link/URL rewrites (e.g. Spanish EXPERT3D internal links) are applied as a post‑step.
-5. **FAQ / HowTo artifacts** — generated per language **only** when supplemental content is provided. These are schema‑free HTML blocks intended for native theme module fields.
+5. **FAQ artifact** — generated **only** when supplemental content is provided; a schema‑free HTML block intended for native theme module fields. The pipeline produces **one uk-UA master FAQ**, then translates it into each of the store's other languages **sequentially** (the Task C prompt in its FAQ variant, with the master as the source). Each FAQ — the master and every translation — gets a **total of 3 attempts** through the repair gate. A FAQ that is still invalid after the third attempt is **skipped**: if the master fails, no FAQ is stored and nothing is translated; if one translation fails, only that language is left without a FAQ and the master and the other languages are kept. The skipped FAQ is reported as a validation issue and never aborts the run. The FAQ HTML uses `<b>`, not `<strong>`, for emphasis.
 
 After the pipeline finishes, all artifacts run through `output-validator.ts`. Validation is **advisory**: issues are surfaced to the UI and logged, but never abort a run, so you always get usable output even when a minor acceptance check trips.
 
@@ -110,6 +110,7 @@ Beyond the main generator, the app ships several focused modes:
 - **Generator** — the full product‑content pipeline described above.
 - **SEO Generator** — produces SEO metadata standalone.
 - **Slug Generator** — produces localized name + URL slug pairs standalone, for a single product/store, without running the full pipeline.
+- **FAQ Generator** — produces only the FAQ, standalone, without running the description, SEO or slug steps. It needs a **Store**, a **Product Name** and **Supplemental Content** (the Generate button stays disabled until all three are filled; whitespace-only text counts as empty). **Original Description** and **Tech Specs** are optional and only add grounding for the questions. The result is the same single-master FAQ as in the Generator: one uk-UA master translated sequentially into the store's other languages, 3 attempts per FAQ in total, a failing language skipped, and `<b>` rather than `<strong>` in the HTML. Each language appears as its own FAQ tab.
 - **Optimizer** — refactors dirty/imported HTML into clean, semantic HTML5 (image hygiene, heading cleanup, spec highlighting).
 - **Copywriter** — rewrites existing text to be ~80% unique for a specific target market while preserving technical facts.
 - **Readability** — scores text for clarity/accessibility and returns an optimized rewrite.
@@ -220,7 +221,7 @@ Then open **http://localhost:3000** in your browser.
 
 1. **Pick a store.** This drives market, currency, measurement rules, tone, and the full set of target languages automatically.
 2. **Enter the product** — name, specs, and a base description. Optionally paste/import source content from a **URL** or **PDF**, or enrich by product name.
-3. *(Optional)* Add **supplemental content** to trigger FAQ/HowTo artifact generation, and **custom instructions** to steer the copy.
+3. *(Optional)* Add **supplemental content** to trigger FAQ generation (one uk-UA master FAQ translated into the store's other languages), and **custom instructions** to steer the copy. To produce only the FAQ, without a description, SEO metadata or slugs, use the **FAQ Generator** mode (see [Tools & modes](#tools--modes)).
 4. *(Optional)* Toggle **deep thinking** for the base HTML pass when the product warrants extra reasoning.
 5. **Generate.** Watch progress update live as each step completes: HTML → SEO → translations → artifacts.
 6. **Review** the per‑language live previews and any validation notes, then export. Generated assets can be packaged for upload to the target store.

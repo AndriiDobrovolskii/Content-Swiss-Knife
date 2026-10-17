@@ -10,7 +10,9 @@ import { buildImageAltPrompt } from '../prompts/image-alt';
 import { parseVisionResult, visionResultToEntryPatch } from '../utils/vision-contract';
 import { downloadPackage, downloadTextPackage, downloadImagesPackage } from '../utils/zip-generator';
 import { formatRepairReportMarkdown } from '../utils/repair-gate';
-import { getStore, bcp47ToTaskCLang, TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
+import { TRANSLATOR_LANGUAGES } from '../prompt-core/constants';
+import { deriveTabDescriptors } from './tab-descriptors';
+import { isFaqFormComplete } from '../utils/faq-form';
 import { SafeHtmlPipe } from './pipes/safe-html.pipe';
 import { SourceInputComponent } from './components/source-input/source-input.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
@@ -44,6 +46,9 @@ const TRANSLATIONS = {
     loadingHtmlEditor: 'Loading editor…',
     seoGenBtn: 'Generate Metadata',
     seoOnlyTitle: 'SEO Metadata Generator',
+    faqGenerator: 'FAQ Generator',
+    faqOnlyTitle: 'FAQ Generator',
+    faqGenBtn: 'Generate FAQ',
     slugGenerator: 'Slugs',
     slugOnlyTitle: 'SEO Slug Generator',
     slugTab: 'Slugs',
@@ -140,6 +145,7 @@ const TRANSLATIONS = {
     placeholderRewrite: 'Paste text or HTML to rewrite here...',
     textToRewrite: 'Text to Rewrite',
     supplementalContent: 'Supplemental Content (Optional)',
+    supplementalContentRequired: 'Supplemental Content (Required)',
     placeholderSupplemental: 'Paste FAQs here...',
     customInstructions: 'Custom Instructions (Optional)',
     placeholderInstructions: 'e.g., "Write in a more casual tone", "Focus on durability for industrial use."',
@@ -214,6 +220,9 @@ const TRANSLATIONS = {
     loadingHtmlEditor: 'Завантаження редактора…',
     seoGenBtn: 'Генерувати метадані',
     seoOnlyTitle: 'Генератор SEO метаданих',
+    faqGenerator: 'FAQ Generator',
+    faqOnlyTitle: 'Генератор FAQ',
+    faqGenBtn: 'Генерувати FAQ',
     slugGenerator: 'Слаги',
     slugOnlyTitle: 'Генератор SEO-слагів',
     slugTab: 'Слаги',
@@ -310,6 +319,7 @@ const TRANSLATIONS = {
     placeholderRewrite: 'Вставте текст або HTML для переписування сюди...',
     textToRewrite: 'Текст для переписування',
     supplementalContent: 'Додатковий контент (Опціонально)',
+    supplementalContentRequired: 'Додатковий контент (Обов\'язково)',
     placeholderSupplemental: 'Вставте FAQ сюди...',
     customInstructions: 'Додаткові інструкції (Опціонально)',
     placeholderInstructions: 'напр., "Писати в більш неформальному стилі", "Зосередитись на міцності для промислового використання."',
@@ -388,6 +398,7 @@ const TOOL_LABEL: Record<AppMode, string> = {
   'slug-generator': 'Slug Generator',
   'html-editor': 'HTML-редактор',
   'dashboard': 'Dashboard',
+  'faq-generator': 'FAQ Generator',
 };
 
 @Component({
@@ -476,6 +487,15 @@ export class AppComponent {
   // read — this is the one mode with no ProductDescriptionDoc to resolve a suffix from otherwise.
   slugProductDescription = signal<string>('');
 
+  // --- FAQ GENERATOR: isolated input state (US-8.1) ---
+  // Store, Product Name and Supplemental Content are required; Original Description and Tech Specs are
+  // optional grounding context and never gate Generate (AC-12).
+  faqSelectedWebsite = signal<WebsiteOption | null>(null);
+  faqProductName = signal<string>('');
+  faqDescription = signal<string>('');
+  faqSpecs = signal<string>('');
+  faqSupplementalContent = signal<string>('');
+
   // --- IMAGE TOOLS STATE ---
   imgFiles = signal<InputImage[]>([]);
   imgTargetFormat = signal<'image/jpeg' | 'image/png' | 'image/webp'>('image/jpeg');
@@ -547,13 +567,16 @@ export class AppComponent {
   hasSeoOutput = computed(() => !!this.content().seoData);
   hasSlugOutput = computed(() => !!this.content().slugData);
   // Aggregate for ZIP/TXT download enablement etc. Generator layout MUST use hasGeneratorOutput().
-  hasOutput = computed(() => this.hasGeneratorOutput() || this.hasSeoOutput() || this.hasSlugOutput());
+  // A FAQ-only run leaves mainHtmlUa empty, so it is detected through faqArtifacts.
+  hasFaqOutput = computed(() => Object.keys(this.content().faqArtifacts ?? {}).length > 0);
+  hasOutput = computed(() => this.hasGeneratorOutput() || this.hasSeoOutput() || this.hasSlugOutput() || this.hasFaqOutput());
 
   // The product-name signal that owns the currently active mode's input form.
   activeProductName = computed(() => {
     switch (this.appMode()) {
       case 'seo-generator': return this.seoProductName();
       case 'slug-generator': return this.slugProductName();
+      case 'faq-generator': return this.faqProductName();
       default: return this.productName();
     }
   });
@@ -582,50 +605,20 @@ export class AppComponent {
   // SEO is rendered separately, always last.
   tabDescriptors = computed<TabDescriptor[]>(() => {
     const c = this.content();
-    const storeName = c.website?.name ?? this.selectedWebsite()?.name ?? '';
-    if (!storeName) return [];
-
-    // ua-generator: single uk-UA description tab + optional uk-UA FAQ tab. The 'seo' tab is
-    // added separately by _autoSelectTab (same mechanism as every other mode).
-    if (this.appMode() === 'ua-generator') {
-      const tabs: TabDescriptor[] = [
-        { id: 'html', label: this.uiLabels().uaGenerator, type: 'english', color: 'purple', iso: 'uk-UA', isFaq: false },
-      ];
-      if (c.faqArtifacts?.['uk-UA']) {
-        tabs.push({ id: 'faq-html', label: 'FAQ', type: 'faq-english', color: 'green', iso: 'uk-UA', isFaq: true });
-      }
-      return tabs;
-    }
-
-    const store = getStore(storeName);
     const labels = this.uiLabels();
-
-    // The master locale for THIS generated content. Falls back to the store's first en-*
-    // language (historical default) for content generated before mainHtmlLocale was tracked,
-    // e.g. SEO-only/Slug-only runs where mainHtmlUa is empty anyway.
-    const masterIso = c.mainHtmlLocale ?? store.languages.find(iso => iso.startsWith('en-')) ?? store.languages[0];
-
-    const tabs: TabDescriptor[] = [];
-
-    for (const iso of store.languages) {
-      if (iso === masterIso) {
-        tabs.push({ id: 'html', label: this.baseOutputLabel(), type: 'english', color: 'blue', iso, isFaq: false });
-        if (c.faqArtifacts?.[iso]) {
-          tabs.push({ id: 'faq-html', label: this.baseFaqTabLabel(), type: 'faq-english', color: 'green', iso, isFaq: true });
-        }
-        continue;
-      }
-
-      const taskKey = bcp47ToTaskCLang(iso, store.group);
-      if (!c.translations[taskKey]) continue;
-
-      tabs.push({ id: `trans-${taskKey}`, label: `${taskKey} ${labels.translation}`, type: 'translation', color: 'purple', iso, taskKey, isFaq: false });
-      if (c.faqArtifacts?.[iso]) {
-        tabs.push({ id: `faq-trans-${iso}`, label: `${taskKey} FAQ`, type: 'faq-translation', color: 'green', iso, taskKey, isFaq: true });
-      }
-    }
-
-    return tabs;
+    return deriveTabDescriptors({
+      appMode: this.appMode(),
+      storeName: c.website?.name ?? this.selectedWebsite()?.name ?? '',
+      mainHtmlLocale: c.mainHtmlLocale,
+      translations: c.translations,
+      faqArtifacts: c.faqArtifacts,
+      labels: {
+        uaGenerator: labels.uaGenerator,
+        translation: labels.translation,
+        baseOutput: this.baseOutputLabel(),
+        baseFaqTab: this.baseFaqTabLabel(),
+      },
+    });
   });
 
   // If the active tab disappears (e.g. a FAQ artifact wasn't generated), fall back to the
@@ -635,7 +628,7 @@ export class AppComponent {
     const mode = this.appMode();
     if (tabs.length === 0) return;
     const ids = new Set(tabs.map(t => t.id));
-    if (mode !== 'slug-generator') ids.add('seo');
+    if (mode !== 'slug-generator' && mode !== 'faq-generator') ids.add('seo');
     if (mode === 'slug-generator') ids.add('slugs');
     if (!ids.has(this.activeTab())) {
       this.activeTab.set(mode === 'seo-generator' ? 'seo' : mode === 'slug-generator' ? 'slugs' : tabs[0].id);
@@ -719,6 +712,14 @@ export class AppComponent {
 
   isSlugFormValid = computed(() =>
     !!this.slugSelectedWebsite() && this.slugProductName().trim().length > 0
+  );
+
+  isFaqFormValid = computed(() =>
+    isFaqFormComplete({
+      website: this.faqSelectedWebsite(),
+      productName: this.faqProductName(),
+      supplementalContent: this.faqSupplementalContent(),
+    })
   );
 
   isOptimizerValid = computed(() => this.optimizerInputHtml().trim().length > 0);
@@ -823,6 +824,11 @@ export class AppComponent {
     this.slugSelectedWebsite.set(this.websiteOptions.find(w => w.name === name) ?? null);
   }
 
+  onFaqWebsiteChange(event: Event) {
+    const name = (event.target as HTMLSelectElement).value;
+    this.faqSelectedWebsite.set(this.websiteOptions.find(w => w.name === name) ?? null);
+  }
+
   onTemplateChange(templateId: string) {
     this.selectedTemplateId.set(templateId);
     this.includeAccessoriesFunctionality.set(false);
@@ -849,6 +855,7 @@ export class AppComponent {
   updateSeoProductName(event: Event) { this.seoProductName.set((event.target as HTMLInputElement).value); }
   updateSlugProductName(event: Event) { this.slugProductName.set((event.target as HTMLInputElement).value); }
   updateSlugProductDescription(event: Event) { this.slugProductDescription.set((event.target as HTMLTextAreaElement).value); }
+  updateFaqProductName(event: Event) { this.faqProductName.set((event.target as HTMLInputElement).value); }
   updateCustomInstructions(event: Event) { this.customInstructions.set((event.target as HTMLTextAreaElement).value); }
   updateOptimizerInput(event: Event) { this.optimizerInputHtml.set((event.target as HTMLTextAreaElement).value); }
   updateTranslatorInput(event: Event) { this.translatorInput.set((event.target as HTMLTextAreaElement).value); }
@@ -951,6 +958,23 @@ export class AppComponent {
     };
     this.activeTab.set('slugs');
     await this.orchestrator.generateSlugs(input, this.seoUseThinking());
+  }
+
+  async generateFaqOnly() {
+    const currentSite = this.faqSelectedWebsite();
+    if (!currentSite || !this.isFaqFormValid()) {
+      alert(this.uiLabels().alertFillFields);
+      return;
+    }
+    const input: ProductInput = {
+      website: currentSite,
+      name: this.faqProductName(),
+      description: this.faqDescription(),
+      specs: this.faqSpecs(),
+      supplementalContent: this.faqSupplementalContent(),
+    };
+    this.activeTab.set('faq-html');
+    await this.orchestrator.generateFaqOnly(input, this.seoUseThinking());
   }
 
   copySlugItem(item: SlugItem, ev?: Event) {
@@ -1095,6 +1119,17 @@ export class AppComponent {
         this.slugProductDescription.set('');
         this.activeTab.set('slugs');
         this.orchestrator.content.update(c => ({ ...c, slugData: null }));
+        break;
+
+      case 'faq-generator':
+        this.faqSelectedWebsite.set(null);
+        this.faqProductName.set('');
+        this.faqDescription.set('');
+        this.faqSpecs.set('');
+        this.faqSupplementalContent.set('');
+        this.activeTab.set('faq-html');
+        this.orchestrator.content.update(c => ({ ...c, faqArtifacts: {}, website: undefined }));
+        this.orchestrator.validationIssues.set([]);
         break;
 
       case 'optimizer':

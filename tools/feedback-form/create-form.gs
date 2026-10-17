@@ -57,6 +57,7 @@ var TOOLS = [
   'Slug Generator',
   'HTML-редактор',
   'Dashboard',
+  'FAQ Generator',
   'Інше',
 ];
 
