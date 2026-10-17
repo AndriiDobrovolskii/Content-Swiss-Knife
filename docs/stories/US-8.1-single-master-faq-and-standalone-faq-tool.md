@@ -5,7 +5,7 @@ slug: single-master-faq-and-standalone-faq-tool
 title: "Generate the FAQ once in uk-UA and translate it into the other store languages, use <b> instead of <strong> in FAQ HTML, and add a standalone FAQ tool"
 track: angular
 version: 3
-status: DRAFT
+status: ARCHIVED
 owner: so-story-writer
 created_at: 2026-10-14T00:00:00Z
 updated_at: 2026-10-15T10:12:00Z

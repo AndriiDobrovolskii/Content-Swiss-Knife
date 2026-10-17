@@ -65,5 +65,5 @@ stories:
     slug: single-master-faq-and-standalone-faq-tool
     track: angular
     path: docs/stories/US-8.1-single-master-faq-and-standalone-faq-tool.md
-    state: IN_PROGRESS
+    state: ARCHIVED
     created_at: 2026-10-14T00:00:00Z

@@ -3,12 +3,12 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-8.1
-current_stage: PR_CREATION
-status: IN_PROGRESS
+current_stage: ARCHIVED
+status: ARCHIVED
 pending_human_gate: null
 started_at: 2026-10-14T13:19:41Z
-updated_at: 2026-10-17T07:05:10Z
+updated_at: 2026-10-17T14:25:34Z
 stage_attempts: {}
 track: angular
 blockers: []
-note: "AC-22 geometric check is performed manually by the operator in a browser at HUMAN_PR_APPROVAL and recorded in the approval comment (HUMAN_PLAN_APPROVAL comment, see the HUMAN_APPROVED history event)."
+note: "Archived. Delivery summary: docs/knowledge/US-8.1-delivery-summary.md. Open follow-ups: AC-22 manual browser check never recorded, OD-13 uk label unconfirmed, OD-17 Generate-guard alert text."

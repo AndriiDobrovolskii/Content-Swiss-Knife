@@ -100,3 +100,18 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Delivered by PR #138, merge commit `bd564ba`. Summary: `docs/knowledge/US-7.1-delivery-summary.md`.
 - Open items: NFR-7 live-model run on the real fixture not done; Slugs and description enforcement is report-only; FR-5
   part 2 blind spots; security F-1 (block delimiter neutralisation) and F-2 (retry-feedback length cap) not applied.
+
+## US-8.1 — one master FAQ in uk-UA translated per store language, `<b>` markup, standalone FAQ Generator (archived 2026-10-17T14:25:34Z)
+- The FAQ is generated once in uk-UA and translated into every other language of the store (`STORE_REGISTRY` is the only
+  language source); each stored FAQ passes a fail-closed shape gate (`src/utils/faq-html.ts`, `faq-gate.ts`) and a
+  structural-parity check against the master (`structural-parity.ts`), with at most 3 attempts per language; a failing
+  language is skipped, not stored. FAQ HTML uses `<b>`; a returned `<strong>` is converted.
+- New FAQ Generator mode produces only the FAQ (`generateFaqOnly`, form gate `faq-form.ts`, FAQ-only tabs in
+  `tab-descriptors`); UA Description / Generator now also translate the FAQ. Its layout: no empty-state block, Supplemental
+  Content directly under Product Name labelled "(Required)" (`supplementalContentRequired`).
+- FROZEN `src/prompts/task-c.ts` edited in two commits (`da59195`, `8c89bce`) under recorded section 9 grants;
+  `.arch-guard-checksums` re-baselined in the same commits. Description prompts are byte-identical (96-case SHA-256 golden).
+- Delivered by PR #140, merge commit `ce0bbcc`. Summary: `docs/knowledge/US-8.1-delivery-summary.md`.
+- Open items: the AC-22 manual browser layout check was never recorded; OD-13 (uk label default), OD-12/OD-16 (panels above
+  the result, blank area on a no-FAQ run), OD-17 (Generate-guard alert still lists Original Description); security N-1..N-3;
+  no live-model run; AC-21..AC-24 and AC-26 are source-text pins, not rendered DOM.
