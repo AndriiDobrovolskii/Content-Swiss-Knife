@@ -1,0 +1,19 @@
+artifact: pull_request
+story: US-8.1
+version: 1
+status: APPROVED
+owner: so-pr-creator
+created_at: 2026-10-17T00:00:00Z
+updated_at: 2026-10-17T00:00:00Z
+supersedes: null
+inputs_consumed:
+  - key: pr_summary
+    version: 1
+number: 140
+url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/140
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+base: main
+head: feat/US-8.1-single-master-faq
+tip_commit: 8fafbe831d0ca3b8fa5c4fcf8f4db274a0009c96
+opened_at: 2026-10-17T00:00:00Z
+draft: false
