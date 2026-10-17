@@ -2,7 +2,7 @@
 artifact: test_strategy
 story: US-8.1
 version: 2
-status: DRAFT
+status: ARCHIVED
 owner: so-test-writer
 created_at: 2026-10-14T19:45:00Z
 updated_at: 2026-10-15T17:00:00Z

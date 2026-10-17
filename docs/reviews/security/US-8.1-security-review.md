@@ -2,7 +2,7 @@
 artifact: security_review
 story: US-8.1
 version: 4
-status: APPROVED
+status: ARCHIVED
 owner: so-security-reviewer
 stage: SECURITY_REVIEW
 created_at: 2026-10-14T22:55:00Z
