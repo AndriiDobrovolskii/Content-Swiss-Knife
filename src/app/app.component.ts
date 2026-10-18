@@ -923,6 +923,7 @@ export class AppComponent {
       specs: this.specs(),
       supplementalContent: this.supplementalContent(),
       customInstructions: this.customInstructions(),
+      ...this.operatorNotesState.inputPart(),
       templateId: this.selectedTemplateId() || undefined,
       includeFunctionality: this.selectedTemplateId() === 'accessories' ? this.includeAccessoriesFunctionality() : undefined,
       customTemplate: Object.keys(this.customTemplate()).length > 0 ? this.customTemplate() : undefined,
