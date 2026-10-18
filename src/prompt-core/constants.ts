@@ -1247,8 +1247,8 @@ only. The master rule named on the left is REPLACED by the form on the right:
    en "Why it is worth buying [Product] from Center 3D Print?". Use the target language's natural
    equivalent of "worth" (pl "Dlaczego warto kupić …", uk/ru per the locale overlay).
 5. FIGCAPTION lead-in "<b>LEAD-IN LABEL:</b> description": REPLACED by a verb-led, period-
-   terminated opener ("<b>Prints fine detail. </b>..."). The lead-in must still differ from the
-   alt text and from the preceding lead-in <p>, per the global figure rules.
+   terminated opener ("<b>Prints fine detail. </b>..."). The opener must still differ from the
+   alt text and from the paragraph above the figure, per the global figure rules.
 6. KEY BENEFITS and FUNCTIONALITY bullets: verb-led per SIGNATURE MOVE #1, never noun+colon.
 7. §3 "Recommended H2 order" (the master's five §3 topic templates — "Technology / Operating
    principle", "Construction & hardware", "Software & automation", "Safety",
