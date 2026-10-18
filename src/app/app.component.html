@@ -293,6 +293,11 @@
             [placeholder]="uiLabels().placeholderInstructions"></textarea>
         </div>
 
+        <app-operator-notes-fields
+          [values]="operatorNotesState.values()"
+          [labels]="operatorNotesLabels()"
+          (valuesChange)="operatorNotesState.set($event)" />
+
         <!-- Product Images for Generator (hidden for Expert-3DPrinter) -->
         @if (selectedWebsite()?.name !== 'Expert-3DPrinter') {
           <div class="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-700">
