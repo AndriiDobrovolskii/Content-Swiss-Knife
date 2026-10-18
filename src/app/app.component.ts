@@ -1090,6 +1090,7 @@ export class AppComponent {
         this.specs.set('');
         this.supplementalContent.set('');
         this.customInstructions.set('');
+        this.operatorNotesState.clear();
         this.activeTab.set('html');
         this.clearGenImgManifest();
         this.orchestrator.content.update(c => ({
@@ -1111,6 +1112,7 @@ export class AppComponent {
         this.specs.set('');
         this.supplementalContent.set('');
         this.customInstructions.set('');
+        this.operatorNotesState.clear();
         this.activeTab.set('html');
         this.clearGenImgManifest();
         this.orchestrator.content.update(c => ({
