@@ -38,7 +38,7 @@ Branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, started fr
 BASE (read from the fixture headers, never `git merge-base HEAD main`): `6546db83ef4005e9d6a57baf51adf0b35df8d3c7`.
 
 **Result of this run: PARTIAL.** 17 of the 42 tasks are done and committed (plus three verify-only tasks and the baseline-fixtures commit). The rest are
-waiting on an open human answer, on tests that do not exist yet, or are held for the owner's frozen-file order. Nothing was weakened, skipped or regenerated
+waiting on an open human answer, on tests that do not exist yet, or are blocked behind T16 and the master-last order of the plan. Nothing was weakened, skipped or regenerated
 with `-u`; no push, no PR.
 
 ## Human decisions in force (verbatim sources: `docs/workflow/history.jsonl`)
@@ -87,9 +87,9 @@ with `-u`; no push, no PR.
 | T13 `buildGeneratorInput` spreads `inputPart()` | angular | NOT STARTED: depends on T12, T40; the `inputPart()` call-site pin is missing | - |
 | T38 `restoreHistory` calls `restore` | angular | NOT STARTED: depends on T13, T40; no test exists | - |
 | T39 `clearAll` resets both cases | angular | NOT STARTED: depends on T38, T40; no test exists | - |
-| T27..T31 master M1+M2, M3, M4, M5, M6 (FROZEN, approved) | prompt | HELD for the owner's order ("master last"); technically startable (T27 deps T15, T20, T37 are met) | - |
-| T32 master M7 `LIVELINESS_RULES` (FROZEN, approved) | prompt | NOT STARTED: depends on T16 (H-FR20PREC) and T31 | - |
-| T33 consumer checkpoint (verification only) | prompt | NOT STARTED: needs T27..T32 | - |
+| T27..T31 master M1+M2, M3, M4, M5, M6 (FROZEN, approved) | prompt | NOT STARTED: BLOCKED. The breakdown's Group G reads `T27 -> ... -> T32 (after T15/T16/T20/T37 ...; serial; blocked)`, so the group follows T16 (H-FR20PREC); the owner's order also puts the master last. Starting it earlier is a reorder, which is the human's or the planner's decision (Reading guide item 9), not the builder's | - |
+| T32 master M7 `LIVELINESS_RULES` (FROZEN, approved) | prompt | NOT STARTED: BLOCKED, depends on T16 (H-FR20PREC) and T31 | - |
+| T33 consumer checkpoint (verification only) | prompt | NOT STARTED: BLOCKED, needs T27..T32 | - |
 | T34 `description-metrics` | angular | NOT STARTED: H-OD10 open | - |
 | T35 `tools/measure-description.ts` + spawn test | angular | NOT STARTED: depends on T34 | - |
 | T36 live acceptance runs (manual) | prompt | NOT STARTED: H-OD11 open | - |
@@ -166,7 +166,7 @@ byte-identical to commit 3f9ae29. `.arch-guard-checksums` against BASE: only the
 | 6 | `constants.expert3d.spec.ts` | T19 (serial after T18) |
 | 4 | `task-a.deixis-wording.spec.ts` (2 marker tests: T23; 2 instruction tests: T24) | T23 (H-FR11I3), T24 |
 | 3 | `task-a.user-content.golden.spec.ts` (Tier B marker and video+marker) | T23 |
-| 11 / 3 / 4 / 10 / 6 / 16 | `master-system-prompt.no-picture-references` (T27) / `.video-placement` (T28) / `.grounding-lock` (T29) / `.placement` (T30) / `.operator-notes` (T31) / `.liveliness` (T32) | T27..T32 (held; T32 also H-FR20PREC) |
+| 11 / 3 / 4 / 10 / 6 / 16 | `master-system-prompt.no-picture-references` (T27) / `.video-placement` (T28) / `.grounding-lock` (T29) / `.placement` (T30) / `.operator-notes` (T31) / `.liveliness` (T32) | T27..T32 (blocked behind T16, H-FR20PREC) |
 | 80 / 18 / 69 | `task-c.master-reach.spec.ts` / `optimizer.master-reach.spec.ts` / `full-description.golden.us91.spec.ts` | T18, T19, T24, T27..T32 |
 | 12 | `app.component.operator-notes.spec.ts` (labels, placement) | T12 (after T40) |
 | 16 | `test/measure-description.cli.spec.ts` | T35 (after T34, H-OD10) |
@@ -198,13 +198,29 @@ The 286 failing tests sum to the rows above (24+2+6+4+3+11+3+4+10+6+16+80+18+69+
 - **F5 (T23/T24)**: the two "Assert absent: the old marker span" tests and the Tier B marker equalities are red until T23 is built; they cannot be satisfied without
   the unconfirmed FR-11 item 3 wording (H-FR11I3), which the builder must not pick.
 
+- **F6 (T2/T3, detector precision; blocks T34 and T36)**: probed with `node` on the committed module (type stripping), these ordinary product sentences are HITS:
+  uk-UA «Прогрес друку видно на дисплеї.» (`видно на дисплеї`), «Результат показано на екрані.» (`показано на екрані`), «Візок рухається на роликах.» (`на роликах`),
+  «Принтер працює на відео-кадрах з частотою 30 Гц.» (`на відео`); en-GB "The scan is displayed in real time." (`displayed in real`), "The extruder is mounted on the
+  frame." (`on the frame`), "The printer is shown in two colours." (`shown in two`); de-DE "Der Fortschritt wird auf dem Bildschirm angezeigt." (`auf dem Bildschirm`), "Gedruckt
+  wird in Fotopolymerharz." (`in Fotopolymerharz`); es-ES "El escaneo se muestra en tiempo real." (`se muestra en tiempo`); pt-PT "O progresso é visível no ecrã." (`visível no
+  ecrã`). Misses: «Температура вище 200 °C.» and «на фотополімерній смолі» are correctly not hits. Causes: the open `на\s+\p{L}+` / `in\s+\p{L}+` tails of the
+  participle patterns, ambiguous nouns (`ролик`, `frame`, `clip`) and greedy stems (`bild\p{L}*`, `foto\p{L}*`, `дисплей`-like screens). No failing test exists for any of them, so
+  the patterns were NOT narrowed (AGENTS.md section 5). T26 already emits these as warnings and T34 / T36 count any hit as a hard violation, so TEST_WRITING should add these sentences as
+  negatives (OD-7 asserted the uk precision candidates neither way; these are different, plain false positives) before T34.
+- **F7 (T27..T32, fixture ownership)**: `test/fixtures/faq-pipeline.ts` has positional FAQ-negative slices (`0..400`, `3000..3400`) that read the live master; the test strategy hands
+  their re-verification and extension to the builder during T27..T32, but a fixture is not the builder's to edit. TEST_WRITING should take it on before T27, or T27 will stall.
+- **Notes for the verifier**: T26's hunk is `imageDeixisIssues(doc, locale ?? '', context)` plus a one-line comment (the breakdown's text has `locale`; `locale` is `string | undefined` in
+  `validateGeneratedHtml`). T4 defaults to `'uk'`, not the plan's `'uk-UA'` (see T4 note). T17 edited only the comment header of `full-description-inputs.ts`; that header still says
+  the `userContent` of all 12 cases is byte-identical, which stopped being true with T22 (the fixture's owner should correct it; T22's file list did not include it).
+  `docs/workflow/history.jsonl` is modified in the working tree and was deliberately left uncommitted.
+
 ## Open items and what each blocks (nothing was defaulted)
 
 | Open | Blocks |
 |---|---|
-| H-FR20PREC (precedence sentence of `LIVELINESS_RULES`) | T16, then T18, T19 (serial, same file), T32, T33 |
+| H-FR20PREC (precedence sentence of `LIVELINESS_RULES`) | T16, then T18, T19 (serial, same file), and the whole Group G (T27..T32, which the breakdown places after T16), then T33 |
 | H-FR11I3 (marker block wording) | T23, then T24 |
 | H-OD10 (metric definitions D-3, D-4, D-5, D-7, D-9 half) | T34, T35, T41; and the whole `npm run test:components` bundle |
 | H-OD11 (products, who runs, marker split) | T36, T42 |
 | Missing tests (F4) | T40, T12, T13, T38, T39 |
-| Owner's order ("master last") | T27..T31 are held; they need no further answer; T32 and T33 also need H-FR20PREC |
+| Plan order, not an answer | Group G (T27..T32) is placed after T16 in the breakdown and the owner wants the master last. If the owner or the planner wants T27..T31 built before T16 exists, that is a reordering decision (Reading guide item 9) to be recorded; no further FROZEN approval is needed for them |
