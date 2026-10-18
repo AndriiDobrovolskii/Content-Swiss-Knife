@@ -1,4 +1,4 @@
-import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES, NO_LEAKED_REASONING_CLAUSE, COLON_CAPITALIZATION_RULE } from './constants';
+import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES, NO_LEAKED_REASONING_CLAUSE, COLON_CAPITALIZATION_RULE, NO_IMAGE_DEIXIS_RULE } from './constants';
 
 /**
  * STATIC system prompt shared by Task A / B / C and all translations.
@@ -388,6 +388,8 @@ a source-language title standing in a translated artifact. TYPE B direct MP4/CDN
   <div style="text-align:center;"><video width="100%" height="auto" controls style="max-width:800px;border:1px solid #ccc;border-radius:8px;"><source src="[URL]" type="video/[fmt]">[translated fallback]</video></div>
 Detect format by extension. Introduce every embed with a lead-in <p>. Emit exactly one copy
 per language version.
+
+${NO_IMAGE_DEIXIS_RULE}
 
 [IMAGE HANDLING]
 IMAGE SOURCE OF TRUTH: build the image set exclusively from the [IMAGE MANIFEST] block in
