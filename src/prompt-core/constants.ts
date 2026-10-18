@@ -718,6 +718,19 @@ boundaries. If a source English sentence would exceed the TARGET band, SPLIT it;
 language is terser, you may MERGE. Re-fit to the target band instead of mirroring English sentence
 structure 1:1 (critical for de-DE and uk-UA/ru-UA).`;
 
+/**
+ * US-9.1 FR-5: no sentence of the body, a figcaption or an alt text refers to the picture or to the page layout.
+ * Static text with no per-store or per-run interpolation (NFR-1), interpolated once into the cached master.
+ */
+export const NO_IMAGE_DEIXIS_RULE = `[NO PICTURE REFERENCES — body, figcaption and alt, all languages]
+No sentence in the body, in a figcaption or in an alt text refers to the picture or to the page
+layout. Never write "on the image/photo/frame/diagram", "below/above" as a pointer, "as shown/seen",
+"pictured", or their equivalents in the output language (uk: «на зображенні», «на фото», «на знімку»,
+«на кадрі», «нижче», «вище», «як видно», «показано», «зображено», «видно на»). Never make the
+picture, collage, banner, scheme or infographic the subject of a verb («колаж показує», «схема
+демонструє»). State the product fact directly; the figure's position and its figcaption carry the
+link to the image. A sentence whose only job is to point at the picture is deleted, not reworded.`;
+
 /** US mixed measurement rule — the ONLY copy. */
 export const US_MEASUREMENT_RULES = `[MEASUREMENT SYSTEM — MIXED US STANDARD]
 CONVERT to Imperial: Printer Dimensions → inches, Build Volume → inches, Printer Weight → lbs, Filament Spool Weight → lbs (oz for small samples).
