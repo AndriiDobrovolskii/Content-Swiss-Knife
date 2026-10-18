@@ -455,12 +455,14 @@ descriptive mode (e.g. "high-prec-scan.jpg" → "High-precision scanning demonst
 no comparison the filename does not state.
 
 PLACEMENT — STRICT RULES:
-- LEAD-IN: precede every <figure> with a <p> — a SUBSTANTIVE NARRATIVE SENTENCE that
-  integrates the image into the surrounding text. Write fresh phrasing for each image;
-  where the template "The image below shows…" would appear, weave the image's subject into
-  the ongoing argument instead ("The dual-extruder carriage visible here is what enables…"),
-  staying within the IMAGE GROUNDING LOCK.
-- Give lead-in and figcaption separate jobs: the lead-in is narrative context in the flow,
+- PRECEDING PARAGRAPH: precede every <figure> with a <p> of ordinary body text from the same
+  sub-section. It states a product fact (a spec, a mechanism, a benefit) and reads as if the image
+  did not exist; the figure follows the paragraph that discusses its subject, and the figcaption
+  carries the link to the picture. Stay within the IMAGE GROUNDING LOCK.
+- That paragraph refers to the product, never to the picture: it contains no pointer to the image or
+  the page layout (see [NO PICTURE REFERENCES]). A sentence whose only job is to point at the picture
+  is deleted, not reworded.
+- Give the paragraph and the figcaption separate jobs: the paragraph is narrative context in the flow,
   the figcaption is a short label — write them with different sentences and phrasing.
 - SPACING: separate every pair of <figure> blocks with ≥ 1 paragraph of meaningful body
   text; every <figure> in the document therefore has a narrative <p> directly above it.
