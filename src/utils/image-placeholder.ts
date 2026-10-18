@@ -17,6 +17,7 @@
  */
 import type { ImageManifestEntry } from '../app/types';
 import type { ValidationIssue } from './output-validator';
+import { findImageDeixis } from './image-deixis';
 
 /**
  * A marker as the user types it into the Original Description. Case-sensitive on purpose (OD-17):
@@ -203,6 +204,8 @@ export const exhaustedMessage = (marker: string): string =>
 
 export const RULE_NOT_NATIVE = 'image-caption-not-native';
 export const RULE_DUPLICATE_LABEL = 'image-caption-duplicate-label';
+/** FR-19 (US-9.1): the caption of a marker figure points at the picture instead of stating a product fact. */
+export const RULE_CAPTION_DEIXIS = 'image-caption-deixis';
 
 /** FR-21: a recorded label, description or alt was not Ukrainian (or the label was generic); the fallback was used. */
 export const notNativeMessage = (file: string): string =>
@@ -212,6 +215,10 @@ export const notNativeMessage = (file: string): string =>
 export const duplicateLabelMessage = (file: string, label: string): string =>
   `Мітка «${label}» зображення [${file}] збігається з міткою попереднього зображення. Текст залишено без змін, перевірте підписи.`;
 
+/** FR-19: the caption text of a marker figure refers to the picture or to its place on the page. */
+export const captionDeixisMessage = (file: string): string =>
+  `Підпис зображення [${file}] посилається на саму картинку або на її місце на сторінці. Опишіть факт про товар без посилань на зображення.`;
+
 export type PlaceholderWarning = Omit<ValidationIssue, 'context'>;
 
 /**
@@ -220,13 +227,21 @@ export type PlaceholderWarning = Omit<ValidationIssue, 'context'>;
  * for every figure whose label equals that of an earlier figure (the fallback label is exempt).
  * Pure; the figures are not modified and no label is reworded. Each figure's warnings depend only on
  * the figures before it, so a caller may append figures and keep the earlier warnings unchanged.
+ *
+ * FR-19 (US-9.1): also one `image-caption-deixis` per figure whose caption points at the picture. `locale`
+ * selects the detector by its primary language subtag; it defaults to `'uk'` because marker figures are always
+ * native Ukrainian (`buildFigureParts` reads only the `...Uk` Vision texts). The default is a language code, not
+ * a store locale (the NFR-6 pin in `image-placeholder.spec.ts` forbids region-locale literals here).
  */
-export function figureCaptionWarnings(figures: readonly FigureParts[]): PlaceholderWarning[] {
+export function figureCaptionWarnings(figures: readonly FigureParts[], locale = 'uk'): PlaceholderWarning[] {
   const warnings: PlaceholderWarning[] = [];
   const earlier = new Set<string>();
   for (const f of figures) {
     if (f.notNative) {
       warnings.push({ severity: 'warning', rule: RULE_NOT_NATIVE, detail: notNativeMessage(f.file) });
+    }
+    if (findImageDeixis(captionPlainText(f), locale)) {
+      warnings.push({ severity: 'warning', rule: RULE_CAPTION_DEIXIS, detail: captionDeixisMessage(f.file) });
     }
     if (f.fallbackLabel) continue;
     if (earlier.has(f.labelKey)) {
