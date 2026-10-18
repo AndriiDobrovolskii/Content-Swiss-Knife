@@ -1,4 +1,4 @@
-5d0e6e3727dc89e679238bbd908796fee60764b7e33f76f802848c7c83220c97  src/prompts/task-a.ts
+d126ab9149417130ba1e8831c0cb4f9ea3712ca112f6ec026628cead3bab2ce6  src/prompts/task-a.ts
 ad55a5ff3684ea7ffb7d3d58442c554835a644821718397974c66de638cda3c9  src/prompts/task-b.ts
 619c45a98f6dac6ef912316ab26fa05d5c58ab010ac8a54ad8198f0e23329247  src/prompts/task-c.ts
 75eb4d0b9268a514268f2d53b36d12a5ff15bc3537a8d9cf84d6f189f93197f8  src/prompt-core/master-system-prompt.ts
