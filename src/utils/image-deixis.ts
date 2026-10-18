@@ -22,6 +22,8 @@
  * pl, de, es and pt lists are drafted from the same construction classes and are UNREVIEWED by a native
  * speaker (OD-7: accepted as built; native review is out of scope for this Story).
  */
+import type { ValidationIssue } from './output-validator';
+
 /** A detector hit: the phrase that matched and where it starts in the inspected text. */
 export interface DeixisMatch {
   /** The matched phrase, as it appears in the inspected text. */
@@ -177,4 +179,93 @@ export function findImageDeixis(text: string, locale: string): DeixisMatch | nul
     if (m && (best === null || m.index < best.index)) best = { match: m[0], index: m.index };
   }
   return best;
+}
+
+// ── Carrier walk (FR-17) ─────────────────────────────────────────────────────────────────────────────
+
+/** Where in the document a deixis phrase was found. */
+export type DeixisCarrier = 'paragraph' | 'figcaption' | 'alt';
+
+/** One hit per carrier instance: the carrier kind, its inspected text and the first matching phrase. */
+export interface FigureDeixisHit {
+  carrier: DeixisCarrier;
+  /** The full text of the carrier that was inspected. */
+  text: string;
+  /** The first matching phrase inside `text`. */
+  match: string;
+}
+
+/** Parses HTML into a Document; the CLI injects one because it has no global `DOMParser`. */
+export type DeixisParse = (html: string) => Document;
+
+function hitOf(carrier: DeixisCarrier, text: string | null | undefined, locale: string): FigureDeixisHit | null {
+  const found = findImageDeixis(text ?? '', locale);
+  return found ? { carrier, text: text ?? '', match: found.match } : null;
+}
+
+/**
+ * Carriers exactly as FR-17: every `<figure>` (image or video) has a paragraph above it only when its previous
+ * ELEMENT sibling is a `<p>`; every `<figcaption>`; the `alt` of every `<img>`. One hit per carrier instance.
+ * Never throws; a missing document or locale gives no hits.
+ */
+export function collectFigureDeixisFromDocument(doc: Document, locale: string): FigureDeixisHit[] {
+  const hits: FigureDeixisHit[] = [];
+  if (!doc || typeof doc.querySelectorAll !== 'function') return hits;
+  try {
+    for (const figure of Array.from(doc.querySelectorAll('figure'))) {
+      const above = figure.previousElementSibling;
+      if (above && above.tagName.toLowerCase() === 'p') {
+        const hit = hitOf('paragraph', above.textContent, locale);
+        if (hit) hits.push(hit);
+      }
+    }
+    for (const caption of Array.from(doc.querySelectorAll('figcaption'))) {
+      const hit = hitOf('figcaption', caption.textContent, locale);
+      if (hit) hits.push(hit);
+    }
+    for (const img of Array.from(doc.querySelectorAll('img'))) {
+      const hit = hitOf('alt', img.getAttribute('alt'), locale);
+      if (hit) hits.push(hit);
+    }
+  } catch {
+    return [];
+  }
+  return hits;
+}
+
+/**
+ * Parses `html` (with the injected `parse`, else the global `DOMParser`) and returns its deixis hits. Malformed
+ * HTML, a non-string input or no available parser gives `[]`; it never throws.
+ */
+export function collectFigureDeixis(html: string, locale: string, parse?: DeixisParse): FigureDeixisHit[] {
+  if (typeof html !== 'string' || html.trim() === '') return [];
+  try {
+    let doc: Document;
+    if (parse) {
+      doc = parse(html);
+    } else {
+      const Parser = (globalThis as { DOMParser?: typeof DOMParser }).DOMParser;
+      if (typeof Parser !== 'function') return [];
+      doc = new Parser().parseFromString(html, 'text/html');
+    }
+    return collectFigureDeixisFromDocument(doc, locale);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * FR-18: one `warning` (`rule: 'image-deixis'`) per figure whose paragraph above has a hit. The figcaption and
+ * alt carriers produce no issue here (FR-18 carrier table); warnings never enter the repair loop.
+ */
+export function imageDeixisIssues(doc: Document, locale: string, context: string): ValidationIssue[] {
+  return collectFigureDeixisFromDocument(doc, locale)
+    .filter(hit => hit.carrier === 'paragraph')
+    .map(hit => ({
+      severity: 'warning' as const,
+      rule: 'image-deixis',
+      detail: `The paragraph directly above a figure points at the picture ("${hit.match}"). `
+        + 'State a product fact there instead, written as if the picture did not exist.',
+      context,
+    }));
 }
