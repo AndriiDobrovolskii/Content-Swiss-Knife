@@ -1,13 +1,15 @@
 ---
 artifact: test_generation_report
 story: US-9.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-18T15:14:00Z
-updated_at: 2026-10-18T15:14:00Z
-supersedes: null
+updated_at: 2026-10-18T16:44:00Z
+supersedes: docs/tests/US-9.1-test-generation-report.md#1
 inputs_consumed:
+  - key: pipeline_status
+    version: 1
   - key: story
     version: 4
   - key: specification
@@ -21,13 +23,116 @@ inputs_consumed:
   - key: plan_review
     version: 3
   - key: test_strategy
-    version: 1
+    version: 2
   - key: ac_test_matrix
-    version: 1
+    version: 2
 open_decisions_blocking: false
 ---
 
-# Test Generation Report - US-9.1
+# Test Generation Report - US-9.1 (v2, revision run: IMPLEMENTATION loop-back 1 of 3, key `changes_required_tests`)
+
+Run: `date -u` 2026-10-18T16:21Z at start, 2026-10-18T16:43Z at the last command; branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, HEAD `8a7a55b`, Node v24.15.0.
+Nothing was committed; `bash arch-guard.sh --rebaseline` was not run; no production file, no FROZEN file and no golden/oracle fixture was edited. `docs/workflow/history.jsonl` was already modified
+in the working tree before this run (the owner answers) and is not mine. Builder baseline at the start of this run: `Test Files 19 failed | 200 passed (219)`, `Tests 286 failed | 7144 passed | 3 skipped (7433)`.
+
+## Files changed in this run (tests and test fixtures only)
+
+Modified specs: `src/utils/image-placeholder.deixis.spec.ts` (F1), `src/prompts/vision-prepass.no-picture-references.spec.ts` (F2), `src/utils/image-deixis.spec.ts` (F6), `src/app/app.component.operator-notes.spec.ts` (F4: T12, T13, T38, T39),
+`src/prompt-core/constants.liveliness.spec.ts`, `src/prompt-core/master-system-prompt.liveliness.spec.ts` (H-FR20PREC), `src/prompts/task-a.deixis-wording.spec.ts`, `src/prompts/task-a.user-content.golden.spec.ts` (H-FR11I3),
+`src/utils/description-metrics.spec.ts`, `test/measure-description.cli.spec.ts` (H-OD10), `src/app/components/operator-notes-fields/operator-notes-fields.component.spec.ts` (comment only).
+New: `src/app/operator-notes-form-state.spec.ts` (T40), `test/faq-pipeline.master-leak.spec.ts` (F7 guard). Modified fixtures: `test/fixtures/faq-pipeline.ts` (F7), `test/fixtures/us91-constants.ts` (`PRECEDENCE_SENTENCE`).
+`git diff --name-only HEAD -- src server tools package.json .arch-guard-checksums` lists only `*.spec.ts` files; `bash arch-guard.sh`: `ALL CHECKS PASSED`.
+
+## Full-suite result (real output)
+
+```
+$ npx vitest run --reporter=dot            # npm run test:logic, 2026-10-18T16:35Z
+ Test Files  20 failed | 201 passed (221)
+      Tests  350 failed | 7178 passed | 3 skipped (7531)
+```
+
+Reconciliation against the builder's baseline, to the test (no previously passing test fails):
+286 failing - 2 (F1 and F2 now green) + 22 (F6) + 10 (app.component.operator-notes: T12 4, T13 2, T38 2, T39 2) + 3 (constants.liveliness precedence) + 8 (master liveliness precedence: 7 stores + once) + 2 (task-a.deixis-wording new marker span) + 5 (golden marker exact: 2 + 2 + 1)
++ 14 (CLI) + 2 (faq-pipeline.master-leak, needs T16) = **350**. Passed: 7144 + 2 + 13 (app guards: 1 + 1 + 4 + 7) + 19 (master-leak) - 0 = 7178 (+34). Files: 19 - 2 (F1, F2) + 1 (`image-deixis.spec`, F6) + 1 (`operator-notes-form-state.spec`, red by load) + 1 (`faq-pipeline.master-leak`) = 20.
+`description-metrics.spec.ts` was already red by load and still is (it now holds 61 tests that will be collected when T34 lands).
+
+Failing tests by file (from `vitest --reporter=json`): `task-c.master-reach` 80, `full-description.golden.us91` 69, `measure-description.cli` 30 (16 + 14 new), `constants.liveliness` 27 (24 + 3), `master-system-prompt.liveliness` 24 (16 + 8),
+`app.component.operator-notes` 22 (12 + 10), `image-deixis` 22 (all new, F6), `optimizer.master-reach` 18, `master-system-prompt.no-picture-references` 11, `master-system-prompt.placement` 10, `task-a.user-content.golden` 8 (3 + 5), `constants.expert3d` 6,
+`master-system-prompt.operator-notes` 6, `task-a.deixis-wording` 6 (4 + 2), `master-system-prompt.grounding-lock` 4, `master-system-prompt.video-placement` 3, `faq-pipeline.master-leak` 2, `constants.c3d-override` 2; load failures: `operator-notes-form-state.spec.ts`, `description-metrics.spec.ts`.
+
+## Fixed test defects (F1, F2): green after the fix
+
+```
+$ npx vitest run src/utils/image-placeholder.deixis.spec.ts src/prompts/vision-prepass.no-picture-references.spec.ts
+ Test Files  2 passed (2)
+      Tests  41 passed (41)
+```
+
+F1: the English figure of "takes an optional locale" is built with `cyrillicCheck: false` (the same assertion: English caption judged by the English pattern, Ukrainian caption not). F2: the NFR-12 slice starts at the `{` that opens the JSON example. Both were reported failing by the builder before any edit
+(unsatisfiable); both are now satisfiable AND still assert what they asserted (keys `alt, caption, description, label`; one figcaption warning for `en-GB`).
+
+## New and changed tests: observed failures, and the reason (first failing assertion of each group, from `vitest --reporter=json`)
+
+```
+F6    src/utils/image-deixis.spec.ts (22 new, 86 old green)  :: AssertionError: expected { match: 'на роликах', index: 16 } to be null           (uk "Візок рухається на роликах."; the carrier variant:
+                                                                  expected [ { carrier: 'paragraph', ... } ] to deeply equal [])   -- all eleven sentences, both variants, fail: the detector flags them
+F4    src/app/operator-notes-form-state.spec.ts (28 tests)    :: LOAD  Error: Failed to resolve import "./operator-notes-form-state" ... Does the file exist?     (T40 creates it)
+F4/T12 app.component.operator-notes.spec.ts                   :: AssertionError: expected 'import { Component, signal, inject, c...' to match /readonly operatorNotesState\s*=\s*new OperatorNotesFormState\(\)/
+F4/T13, T38, T39 (same file)                                  :: expected ... to contain 'operatorNotesState.inputPart()' / 'operatorNotesState.restore(item.input.operatorNotes)' / per-case clearPinViolations(...) toEqual([])
+H-FR20PREC constants.liveliness.spec.ts (3)                   :: Error: LIVELINESS_RULES is not exported from src/prompt-core/constants.ts as a string (created by T16)
+H-FR20PREC master-system-prompt.liveliness.spec.ts (8)        :: AssertionError: expected '[ROLE] You are an expert technical co...' to contain 'where a store voice block defines its...'
+H-FR11I3 task-a.deixis-wording.spec.ts (2)                    :: AssertionError: expected '[INPUT DATA]\n[Store Name]: EXPERT3D\...' to contain 'at the end of the paragraph that stat...'
+H-FR11I3 task-a.user-content.golden.spec.ts (5)               :: AssertionError: userContent differs from the golden beyond the FR-11 marker span: expected false to be true
+H-OD10   description-metrics.spec.ts (all)                    :: LOAD  Error: Failed to resolve import "./description-metrics" ... Does the file exist?                  (T34 creates it)
+H-OD10   test/measure-description.cli.spec.ts (14 new)        :: AssertionError: the report did not start: expected '' to be 'v24.15.0'                                  (tools/measure-description.ts does not exist; T35)
+F7       test/faq-pipeline.master-leak.spec.ts (2)            :: Error: LIVELINESS_RULES is not exported from src/prompt-core/constants.ts as a string (created by T16)
+```
+
+The F6 failures are the intended outcome: the builder's detector is wrong (it flags ordinary product sentences, so T26 emits false warnings and T34 / T36 would count false hard violations). **This sends T2/T3 back to a narrowing task.** Every failure is an assertion about missing text, a missing behaviour or the missing module the owner task creates; none is a typo or a broken test.
+
+Green on arrival, by design (guards): in `app.component.operator-notes.spec.ts` 13 of the 23 new tests (T12 old name `operatorNotesForm` absent; T13 no literal `operatorNotes:` key; T39 premise, disjoint slices, other modes untouched, no `seo_gen_form_state` / history; and the 7 slicing-helper self-tests, which test test code);
+19 of the 21 `faq-pipeline.master-leak` tests (the helper catches the original slices, the whole master, every fragment of `NO_IMAGE_DEIXIS_RULE` and each Story literal).
+
+## Satisfiability checks (scratch copies, not part of the repository; each deleted afterwards)
+
+- `operator-notes-form-state.spec.ts` against a throw-away `OperatorNotesFormState` (a `signal` plus the existing leaf module): **28/28**. This also confirms the plan's open check: `signal()` works without an injection context under the logic runner (no `@angular/compiler` import needed).
+- `description-metrics.spec.ts` against a throw-away `measureDescription`: 59/61 first run - the two red tests were the leaf-import check (needs the real file, expected) and one fixture of mine whose elements `textContent` glued together («111222»); fixed in the spec (line breaks between elements). Afterwards the D-9 grouping characters were aligned with the Specification's class (space, U+00A0, U+202F; an earlier test asserted U+2009 as a group space, which the Specification does not list: removed).
+- `image-deixis.spec.ts` including the F6 negatives against a scratch copy of `image-deixis.ts` with minimally narrowed patterns: **108/108**. Hint for the narrowing task: the builder's Portuguese list `'imagens?'` does not match the singular `imagem`; its positive «mostrada na imagem» passes today only through the open `na <any word>` tail, so narrowing that tail needs `'imagem'` added.
+- `test/fixtures/faq-pipeline.ts` (F7): the first attempt (windows over the whole master) failed 21 existing FAQ tests - a FAQ translation prompt legitimately shares master text - and was replaced (strategy, "F7"). Against the OLD helper two probes (a 700-character master fragment at offset 7001, a 300-character fragment of `NO_IMAGE_DEIXIS_RULE`) were not reported; the new helper reports them.
+
+## Type check and runners
+
+```
+$ npx tsc --noEmit
+src/app/operator-notes-form-state.spec.ts(27,40): error TS2307: Cannot find module './operator-notes-form-state' ...     (T40)
+src/utils/description-metrics.spec.ts(32,36): error TS2307: Cannot find module './description-metrics' ...               (T34)
+
+$ npm run test:components
+Application bundle generation failed.
+X [ERROR] TS2307: Cannot find module './operator-notes-form-state' ...   src/app/operator-notes-form-state.spec.ts:27:39
+X [ERROR] TS2307: Cannot find module './description-metrics' ...          src/utils/description-metrics.spec.ts:32:35
+
+$ bash arch-guard.sh      -> ALL CHECKS PASSED
+```
+
+Two diagnostics, both the missing-symbol kind the breakdown allows in later-owner specs (builder baseline: one). **The component runner is now unblocked only when BOTH T34 and T40 land** (the builder's finding F3 named only T34). No component spec executes until then.
+
+## Coverage gaps and deferred tests (what the reconciliation reviewer should expect)
+
+The DEFERRED list is empty except the manual live runs T36 / T42 (H-OD11 answered: standard catalog items, human QA operator, 3 marker + 3 non-marker). Remaining gaps are structural, see the matrix "Coverage statement": no automated test for AC-11 / AC-12 (manual), FR-40 item 3 (no parameter to vary), AC-8 translator / optimizer behaviour (declared residual risk), FR-41 executed through the accepted split rather than `AppComponent.clearAll()` (H-FR41TEST).
+
+## Non-blocking findings for the next stages
+
+- **F6 (blocks T34 and T36 acceptance, not this stage):** T2/T3 need a narrowing task; the 22 new red tests are its tests.
+- **Contracts chosen by TEST_WRITING, no approved artifact fixes them** (strategy, "Contracts chosen"): the four `--notes-*` flag names and their file-path form; six report keys of `measureDescription`. Reconciliation can accept them or send the spec back.
+- **T11 spec** is still unexecuted by `npm run test:components` (runner blocked, above); the builder ran it with a throw-away tsconfig (55 tests green).
+- **F7:** the kept slice `3000..3400` is moved by hunk M6 only (tens of characters) and stays clear of the shared FAQ/master regions; the FAQ specs must be re-run at T31 and in T33.
+- The v1 text is kept below as the record of run 1; its counts and states are superseded by this section and by the matrix "v2 state overlay".
+
+---
+
+# Appendix: run 1 (v1) - kept as the record of the first TEST_WRITING pass (counts and states superseded above)
+
 
 Run: 2026-10-18 (`date -u` at the last command: 2026-10-18T15:09:53Z), branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`,
 HEAD `6546db83ef4005e9d6a57baf51adf0b35df8d3c7`, Node v24.15.0. Nothing was committed; `bash arch-guard.sh --rebaseline` was not run.
