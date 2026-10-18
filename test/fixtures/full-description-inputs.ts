@@ -17,6 +17,11 @@
  *       under FIGURE FORMAT move from `width: fit-content` to `width: max-content`, nothing else.
  * `userContent` of all 12 cases and the 2 translate/* cases stay byte-identical to the pre-Story
  * capture. No input here carries an image marker.
+ *
+ * US-9.1 regenerations (reviewed diffs, never `-u`; each task regenerates only the text it changed):
+ *   (3) T17 (FR-10): block 1 of the 3 doc/* cases only - the FIGURE PLACEMENT paragraph of
+ *       TASK_A_DOC_INSTRUCTION asks for a body paragraph that states a product fact and does not refer to
+ *       the picture. No other case, block or userContent moves.
  */
 import type { ProductInput } from '../../src/app/types';
 import type { HookPattern } from '../../src/prompt-core/hook-pattern';
