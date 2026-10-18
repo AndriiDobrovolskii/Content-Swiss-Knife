@@ -55,11 +55,40 @@ describe('FR-5: the block sits OUTSIDE [IMAGE HANDLING] (the image-markers span 
     expect(END).toBeGreaterThan(START);
   });
 
+  // The string `[NO PICTURE REFERENCES` legitimately occurs more than once: FR-5 puts the HEADING line there, and
+  // FR-7 requires the cross-reference literal `see [NO PICTURE REFERENCES]` in the PLACEMENT rules (also pinned by
+  // master-system-prompt.placement.spec.ts). So uniqueness is asserted on the HEADING (the block's own first line,
+  // at a line start), and every other occurrence must be exactly that FR-7 pointer - nothing else may repeat it.
+  const FR7_POINTER = 'see [NO PICTURE REFERENCES]';
+  const headingLine = () => noImageDeixisRule().split('\n')[0].trim();
+  const headingIndexes = (): number[] => {
+    const heading = headingLine();
+    const out: number[] = [];
+    for (let i = MASTER_SYSTEM_PROMPT.indexOf(heading); i !== -1; i = MASTER_SYSTEM_PROMPT.indexOf(heading, i + 1)) out.push(i);
+    return out;
+  };
+
+  it('the heading line of the constant begins "[NO PICTURE REFERENCES" (premise for the uniqueness checks)', () => {
+    expect(headingLine().startsWith('[NO PICTURE REFERENCES')).toBe(true);
+  });
+
   it('the heading "[NO PICTURE REFERENCES" is not located between the [IMAGE HANDLING] heading and FIGURE FORMAT', () => {
-    const at = MASTER_SYSTEM_PROMPT.indexOf('[NO PICTURE REFERENCES');
+    const at = MASTER_SYSTEM_PROMPT.search(/^\[NO PICTURE REFERENCES/m);
     expect(at, 'the block is absent').toBeGreaterThanOrEqual(0);
     expect(at < START || at >= END, `heading at ${at} is inside the [IMAGE HANDLING] span ${START}..${END}`).toBe(true);
-    expect(MASTER_SYSTEM_PROMPT.indexOf('[NO PICTURE REFERENCES', at + 1), 'the heading occurs twice').toBe(-1);
+  });
+
+  it('the heading line occurs exactly once, at a line start (FR-5), and is the only line-start "[NO PICTURE REFERENCES"', () => {
+    const indexes = headingIndexes();
+    expect(indexes, 'the heading line occurs more or fewer times than once').toHaveLength(1);
+    expect(indexes[0] === 0 || MASTER_SYSTEM_PROMPT[indexes[0] - 1] === '\n', 'the heading is not at a line start').toBe(true);
+    expect(MASTER_SYSTEM_PROMPT.match(/^\[NO PICTURE REFERENCES/gm) ?? [], 'a second block heading').toHaveLength(1);
+  });
+
+  it('every other "[NO PICTURE REFERENCES" occurrence is the FR-7 pointer "see [NO PICTURE REFERENCES]" (the pointer itself is pinned by the placement spec)', () => {
+    const total = MASTER_SYSTEM_PROMPT.split('[NO PICTURE REFERENCES').length - 1;
+    const pointers = collapse(MASTER_SYSTEM_PROMPT).split(FR7_POINTER).length - 1;
+    expect(total, 'an occurrence is neither the heading nor the FR-7 pointer').toBe(1 + pointers);
   });
 
   it('no part of the constant\'s text lies inside the [IMAGE HANDLING] span', () => {
