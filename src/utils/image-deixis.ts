@@ -18,6 +18,10 @@
  * class 3 never matches it. Every pattern uses `(?<!\p{L})` / `(?!\p{L})` boundaries so that «на фото» does
  * not match inside «на фотополімерній».
  *
+ * Precision: the "shown / visible + place" participle patterns end in a picture noun, never in an open
+ * "on|in|auf + any word" tail (that flagged "visible on the display", "displayed in real time"); ambiguous
+ * nouns ("frame", "clip", "ролик", "Bildschirm", "Fotopolymerharz") only match in the narrow forms above.
+ *
  * REVIEW STATUS: the Ukrainian patterns are built to the Specification's required cases (FR-16). The ru, en,
  * pl, de, es and pt lists are drafted from the same construction classes and are UNREVIEWED by a native
  * speaker (OD-7: accepted as built; native review is out of scope for this Story).
@@ -45,27 +49,29 @@ const alt = (words: string[]): string => `(?:${words.join('|')})`;
 // ── uk ───────────────────────────────────────────────────────────────────────────────────────────────
 const UK_PICTURE = alt([
   'зображенн\\p{L}*', 'фото(?:графі\\p{L}*)?', 'знімк\\p{L}*', 'кадр\\p{L}*', 'колаж\\p{L}*', 'картин\\p{L}*',
-  'ілюстраці\\p{L}*', 'рисунк\\p{L}*', 'скріншот\\p{L}*', 'відео(?:ролик\\p{L}*)?', 'ролик\\p{L}*',
+  'ілюстраці\\p{L}*', 'рисунк\\p{L}*', 'скріншот\\p{L}*', 'відео(?:ролик\\p{L}*)?(?!-)',
 ]);
 const UK_SHOW_VERB = alt([
   'показу\\p{L}*', 'демонстру\\p{L}*', 'зображу\\p{L}*', 'ілюстру\\p{L}*', 'відображ\\p{L}*', 'представля\\p{L}*',
 ]);
-const UK_PLACE_WORD = alt(['тут', 'нижче', 'вище', 'на\\s+\\p{L}+']);
+const UK_PLACE_WORD = alt(['тут', 'нижче', 'вище', `на\\s+${UK_PICTURE}`]);
 
 // ── ru ───────────────────────────────────────────────────────────────────────────────────────────────
 const RU_PICTURE = alt([
   'изображени\\p{L}*', 'фото(?:графи\\p{L}*)?', 'снимк\\p{L}*', 'кадр\\p{L}*', 'коллаж\\p{L}*', 'картин\\p{L}*',
-  'иллюстраци\\p{L}*', 'рисунк\\p{L}*', 'скриншот\\p{L}*', 'видео(?:ролик\\p{L}*)?', 'ролик\\p{L}*',
+  'иллюстраци\\p{L}*', 'рисунк\\p{L}*', 'скриншот\\p{L}*', 'видео(?:ролик\\p{L}*)?(?!-)',
 ]);
 const RU_SHOW_VERB = alt([
   'показыва\\p{L}*', 'демонстриру\\p{L}*', 'изобража\\p{L}*', 'иллюстриру\\p{L}*', 'отобража\\p{L}*', 'представля\\p{L}*',
 ]);
 
 // ── en ───────────────────────────────────────────────────────────────────────────────────────────────
+/** Nouns that name a picture after "in/on the". "frame" and "clip" are product parts ("on the frame"). */
 const EN_PICTURE = alt([
-  'images?', 'photos?', 'photographs?', 'pictures?', 'screenshots?', 'frames?', 'collages?', 'illustrations?',
-  'figures?', 'videos?', 'clips?',
+  'images?', 'photos?', 'photographs?', 'pictures?', 'screenshots?', 'collages?', 'illustrations?', 'figures?', 'videos?',
 ]);
+/** Nouns that point at a picture as the subject of a "show" verb or when followed by below/above. */
+const EN_PICTURE_SUBJECT = alt([EN_PICTURE, 'frames', 'clips?']);
 const EN_SHOW_VERB = alt(['shows?', 'depicts?', 'illustrates?', 'displays?', 'presents?', 'demonstrates?']);
 
 // ── pl ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -76,9 +82,10 @@ const PL_PICTURE = alt([
 const PL_SHOW_VERB = alt(['pokazuj\\p{L}*', 'przedstawia\\p{L}*', 'ilustruj\\p{L}*', 'prezentuj\\p{L}*', 'demonstruj\\p{L}*']);
 
 // ── de ───────────────────────────────────────────────────────────────────────────────────────────────
+// Exact inflections, not greedy stems: "Bildschirm" (screen) and "Fotopolymerharz" (resin) are product words.
 const DE_PICTURE = alt([
-  'bild\\p{L}*', 'foto\\p{L}*', 'abbildung\\p{L}*', 'aufnahme\\p{L}*', 'screenshot\\p{L}*', 'grafik\\p{L}*',
-  'video\\p{L}*', 'film\\p{L}*', 'kollage\\p{L}*',
+  'bild(?:e|er|ern|es|s)?', 'fotos?', 'fotografien?', 'abbildungen?', 'aufnahmen?', 'screenshots?', 'grafiken?',
+  'videos?', 'videoclips?', 'films?', 'filme[ns]?', 'kollagen?',
 ]);
 const DE_SHOW_VERB = alt(['zeigt', 'zeigen', 'stellt', 'stellen', 'veranschaulicht', 'veranschaulichen', 'demonstriert']);
 
@@ -91,7 +98,7 @@ const ES_SHOW_VERB = alt(['muestra', 'muestran', 'ilustra', 'ilustran', 'present
 
 // ── pt ───────────────────────────────────────────────────────────────────────────────────────────────
 const PT_PICTURE = alt([
-  'imagens?', 'fotos?', 'fotografias?', 'ilustração', 'ilustrações', 'capturas?', 'vídeos?',
+  'imagem', 'imagens', 'fotos?', 'fotografias?', 'ilustração', 'ilustrações', 'capturas?', 'vídeos?',
   'fotogramas?', 'colagem', 'figura',
 ]);
 const PT_SHOW_VERB = alt(['mostra', 'mostram', 'ilustra', 'ilustram', 'apresenta', 'apresentam', 'exibe', 'exibem']);
@@ -114,21 +121,21 @@ export const DEIXIS_PATTERNS: Record<string, readonly RegExp[]> = {
   ru: [
     re(`${B}(?:на|в)\\s+${RU_PICTURE}${E}`),
     re(`${B}${RU_PICTURE}\\s+(?:\\p{L}+\\s+)?${RU_SHOW_VERB}${E}`),
-    re(`${B}(?:показан\\p{L}*|изображен[оаы]|видно)\\s+(?:здесь|ниже|выше|на\\s+\\p{L}+)${E}`),
+    re(`${B}(?:показан\\p{L}*|изображен[оаы]|видно)\\s+(?:здесь|ниже|выше|на\\s+${RU_PICTURE})${E}`),
     re(`${SENTENCE_START}${B}(?:ниже|выше)\\s+${NOT_MEASURE}\\p{L}`),
     re(`${B}${RU_PICTURE}\\s+(?:ниже|выше)${E}`),
   ],
   en: [
     re(`${B}(?:in|on|at)\\s+the\\s+${EN_PICTURE}${E}`),
-    re(`${B}${EN_PICTURE}\\s+(?:\\p{L}+\\s+)?${EN_SHOW_VERB}${E}`),
-    re(`${B}(?:shown|pictured|depicted|illustrated|displayed|visible|seen)\\s+(?:here|below|above|in\\s+\\p{L}+)${E}`),
+    re(`${B}${EN_PICTURE_SUBJECT}\\s+(?:\\p{L}+\\s+)?${EN_SHOW_VERB}${E}`),
+    re(`${B}(?:shown|pictured|depicted|illustrated|displayed|visible|seen)\\s+(?:here|below|above|in\\s+(?:the|this|these|that)\\s+${EN_PICTURE})${E}`),
     re(`${SENTENCE_START}${B}(?:below|above)\\s*[,:]?\\s+${NOT_MEASURE}\\p{L}`),
-    re(`${B}${EN_PICTURE}\\s+(?:below|above)${E}`),
+    re(`${B}${EN_PICTURE_SUBJECT}\\s+(?:below|above)${E}`),
   ],
   pl: [
     re(`${B}(?:na|w)\\s+${PL_PICTURE}${E}`),
     re(`${B}${PL_PICTURE}\\s+(?:\\p{L}+\\s+)?${PL_SHOW_VERB}${E}`),
-    re(`${B}(?:pokazan\\p{L}*|przedstawion\\p{L}*|widoczn\\p{L}*)\\s+(?:tutaj|poniżej|powyżej|na\\s+\\p{L}+)${E}`),
+    re(`${B}(?:pokazan\\p{L}*|przedstawion\\p{L}*|widoczn\\p{L}*)\\s+(?:tutaj|poniżej|powyżej|na\\s+${PL_PICTURE})${E}`),
     re(`${SENTENCE_START}${B}(?:poniżej|powyżej)\\s+${NOT_MEASURE}\\p{L}`),
     re(`${B}${PL_PICTURE}\\s+(?:poniżej|powyżej)${E}`),
   ],
@@ -143,7 +150,7 @@ export const DEIXIS_PATTERNS: Record<string, readonly RegExp[]> = {
   es: [
     re(`${B}(?:en|con)\\s+(?:la|el|las|los|esta|este)\\s+${ES_PICTURE}${E}`),
     re(`${B}${ES_PICTURE}\\s+(?:\\p{L}+\\s+)?${ES_SHOW_VERB}${E}`),
-    re(`${B}(?:se\\s+(?:ve|ven|muestra|muestran)|mostrad[oa]s?)\\s+(?:aquí|abajo|arriba|en\\s+\\p{L}+)${E}`),
+    re(`${B}(?:se\\s+(?:ve|ven|muestra|muestran)|mostrad[oa]s?)\\s+(?:aquí|abajo|arriba|en\\s+(?:la|el|las|los|esta|este)\\s+${ES_PICTURE})${E}`),
     re(`${SENTENCE_START}${B}(?:abajo|arriba|debajo|a\\s+continuación)\\s*[,:]?\\s+${NOT_MEASURE}\\p{L}`),
     re(`${B}${ES_PICTURE}\\s+(?:de\\s+)?(?:abajo|arriba|siguiente|a\\s+continuación)${E}`),
   ],
@@ -151,7 +158,7 @@ export const DEIXIS_PATTERNS: Record<string, readonly RegExp[]> = {
     re(`${B}(?:na|nesta|nessa|em)\\s+${PT_PICTURE}${E}`),
     re(`${B}(?:no|neste|nesse)\\s+${PT_PICTURE}${E}`),
     re(`${B}${PT_PICTURE}\\s+(?:\\p{L}+\\s+)?${PT_SHOW_VERB}${E}`),
-    re(`${B}(?:mostrad[oa]s?|visível|visíveis)\\s+(?:aqui|abaixo|acima|na\\s+\\p{L}+|no\\s+\\p{L}+)${E}`),
+    re(`${B}(?:mostrad[oa]s?|visível|visíveis)\\s+(?:aqui|abaixo|acima|(?:na|nesta|nessa|em)\\s+${PT_PICTURE}|(?:no|neste|nesse)\\s+${PT_PICTURE})${E}`),
     re(`${SENTENCE_START}${B}(?:abaixo|acima|a\\s+seguir)\\s*[,:]?\\s+${NOT_MEASURE}\\p{L}`),
     re(`${B}${PT_PICTURE}\\s+(?:abaixo|acima|a\\s+seguir)${E}`),
   ],
