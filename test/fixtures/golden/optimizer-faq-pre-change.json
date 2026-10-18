@@ -1,0 +1,1012 @@
+{
+  "_meta": {
+    "base": "6546db83ef4005e9d6a57baf51adf0b35df8d3c7",
+    "baseShort": "6546db8",
+    "capturedFrom": "the commit the Story branch was cut from (read from this header; never git merge-base HEAD main)",
+    "taskAChecksumAtBase": "0421226ccbf10c1f347ee134d2633086a2dbe89284148d053ce4d56ba1c9c89f",
+    "constantsChecksumNote": "constants.ts is not frozen; the D15 spec reads the tree itself",
+    "fixture": "US-9.1 T37 / FR-23 items 4 and 5 / D15"
+  },
+  "optimizer": {
+    "with-name/figures": {
+      "blockCount": 2,
+      "block0Cache": true,
+      "block1": {
+        "sha256": "2f9b94075562dacf63c45aa6c6bd817e338d7eb924ccf934537d48f6b375300e",
+        "length": 7739,
+        "cache": true
+      },
+      "userContent": {
+        "sha256": "e07664839f0d525ebc7f31b4c1441884c8ce55b39416bda65b775c2093853687",
+        "length": 708
+      }
+    },
+    "no-name/figures": {
+      "blockCount": 2,
+      "block0Cache": true,
+      "block1": {
+        "sha256": "2f9b94075562dacf63c45aa6c6bd817e338d7eb924ccf934537d48f6b375300e",
+        "length": 7739,
+        "cache": true
+      },
+      "userContent": {
+        "sha256": "adf1b213305adc6c9006c950cae2048accbb6468ba4acd61e2ffd414e119baac",
+        "length": 669
+      }
+    },
+    "with-name/pointer-sentence": {
+      "blockCount": 2,
+      "block0Cache": true,
+      "block1": {
+        "sha256": "2f9b94075562dacf63c45aa6c6bd817e338d7eb924ccf934537d48f6b375300e",
+        "length": 7739,
+        "cache": true
+      },
+      "userContent": {
+        "sha256": "b9b9bc90267985164aa579a13e5a8962b5cc58f5b455e76b44da733a6e1ecf81",
+        "length": 378
+      }
+    },
+    "no-name/pointer-sentence": {
+      "blockCount": 2,
+      "block0Cache": true,
+      "block1": {
+        "sha256": "2f9b94075562dacf63c45aa6c6bd817e338d7eb924ccf934537d48f6b375300e",
+        "length": 7739,
+        "cache": true
+      },
+      "userContent": {
+        "sha256": "dfd731f2f094a329599cea89144f0dfad6a74e855bfbb0ba085152716e4f0bcf",
+        "length": 352
+      }
+    },
+    "with-name/plain": {
+      "blockCount": 2,
+      "block0Cache": true,
+      "block1": {
+        "sha256": "2f9b94075562dacf63c45aa6c6bd817e338d7eb924ccf934537d48f6b375300e",
+        "length": 7739,
+        "cache": true
+      },
+      "userContent": {
+        "sha256": "a3c9cd3ec4c3493e5dc0423560664fbf297d101c01841b60efd1f7e926a2bafe",
+        "length": 135
+      }
+    },
+    "no-name/plain": {
+      "blockCount": 2,
+      "block0Cache": true,
+      "block1": {
+        "sha256": "2f9b94075562dacf63c45aa6c6bd817e338d7eb924ccf934537d48f6b375300e",
+        "length": 7739,
+        "cache": true
+      },
+      "userContent": {
+        "sha256": "3c3ce8b2d3d33e365603169fd280c850dcfdb2958d05fc4328aafd1521dd2af0",
+        "length": 109
+      }
+    }
+  },
+  "faqVariant": {
+    "3DDevice | European English | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "b73b153a3d0c58f73418f56074ec6a4a591156008a677425f5e03a325c48b34b",
+          "length": 951,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "f096d08929856dc4f56e71ecf7fcbbe597c374a4a8e2d673a3bd9d1d274325ab",
+        "length": 266
+      }
+    },
+    "3DDevice | European English | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "f1953d4dcf0015ce2f56b84805c689d2d56190ed90d8dde9eddf183bb004f19d",
+          "length": 1641,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "f096d08929856dc4f56e71ecf7fcbbe597c374a4a8e2d673a3bd9d1d274325ab",
+        "length": 266
+      }
+    },
+    "3DDevice | European English | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "f1953d4dcf0015ce2f56b84805c689d2d56190ed90d8dde9eddf183bb004f19d",
+          "length": 1641,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "f096d08929856dc4f56e71ecf7fcbbe597c374a4a8e2d673a3bd9d1d274325ab",
+        "length": 266
+      }
+    },
+    "3DDevice | RU | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "9b6e1225268ebf53c440f00377e964da59177a7182ed7742c97610ea2b21a29a",
+          "length": 2546,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "f096d08929856dc4f56e71ecf7fcbbe597c374a4a8e2d673a3bd9d1d274325ab",
+        "length": 266
+      }
+    },
+    "3DDevice | RU | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "e47c2479bcb7c3ec1deeabba43beca3f34c35d75264f1314842218c1f3e9a10d",
+          "length": 2845,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "f096d08929856dc4f56e71ecf7fcbbe597c374a4a8e2d673a3bd9d1d274325ab",
+        "length": 266
+      }
+    },
+    "3DDevice | RU | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "e47c2479bcb7c3ec1deeabba43beca3f34c35d75264f1314842218c1f3e9a10d",
+          "length": 2845,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "f096d08929856dc4f56e71ecf7fcbbe597c374a4a8e2d673a3bd9d1d274325ab",
+        "length": 266
+      }
+    },
+    "3DPrinter | European English | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "b73b153a3d0c58f73418f56074ec6a4a591156008a677425f5e03a325c48b34b",
+          "length": 951,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "81d0623c02c62501778c421bb7cbf9be93c5a30b3b0775e00da0a2b1e7269a27",
+        "length": 267
+      }
+    },
+    "3DPrinter | European English | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "f1953d4dcf0015ce2f56b84805c689d2d56190ed90d8dde9eddf183bb004f19d",
+          "length": 1641,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "81d0623c02c62501778c421bb7cbf9be93c5a30b3b0775e00da0a2b1e7269a27",
+        "length": 267
+      }
+    },
+    "3DPrinter | European English | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "f1953d4dcf0015ce2f56b84805c689d2d56190ed90d8dde9eddf183bb004f19d",
+          "length": 1641,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "81d0623c02c62501778c421bb7cbf9be93c5a30b3b0775e00da0a2b1e7269a27",
+        "length": 267
+      }
+    },
+    "3DPrinter | RU | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "9b6e1225268ebf53c440f00377e964da59177a7182ed7742c97610ea2b21a29a",
+          "length": 2546,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "81d0623c02c62501778c421bb7cbf9be93c5a30b3b0775e00da0a2b1e7269a27",
+        "length": 267
+      }
+    },
+    "3DPrinter | RU | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "e47c2479bcb7c3ec1deeabba43beca3f34c35d75264f1314842218c1f3e9a10d",
+          "length": 2845,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "81d0623c02c62501778c421bb7cbf9be93c5a30b3b0775e00da0a2b1e7269a27",
+        "length": 267
+      }
+    },
+    "3DPrinter | RU | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "e47c2479bcb7c3ec1deeabba43beca3f34c35d75264f1314842218c1f3e9a10d",
+          "length": 2845,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "81d0623c02c62501778c421bb7cbf9be93c5a30b3b0775e00da0a2b1e7269a27",
+        "length": 267
+      }
+    },
+    "3DScanner | European English | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "b73b153a3d0c58f73418f56074ec6a4a591156008a677425f5e03a325c48b34b",
+          "length": 951,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "117596637d0ea4a9cf56224a0a28a084881b6e92e0f3d1aa0502a560847a194c",
+        "length": 267
+      }
+    },
+    "3DScanner | European English | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "f1953d4dcf0015ce2f56b84805c689d2d56190ed90d8dde9eddf183bb004f19d",
+          "length": 1641,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "117596637d0ea4a9cf56224a0a28a084881b6e92e0f3d1aa0502a560847a194c",
+        "length": 267
+      }
+    },
+    "3DScanner | European English | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "f1953d4dcf0015ce2f56b84805c689d2d56190ed90d8dde9eddf183bb004f19d",
+          "length": 1641,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "117596637d0ea4a9cf56224a0a28a084881b6e92e0f3d1aa0502a560847a194c",
+        "length": 267
+      }
+    },
+    "3DScanner | RU | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "9b6e1225268ebf53c440f00377e964da59177a7182ed7742c97610ea2b21a29a",
+          "length": 2546,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "117596637d0ea4a9cf56224a0a28a084881b6e92e0f3d1aa0502a560847a194c",
+        "length": 267
+      }
+    },
+    "3DScanner | RU | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "e47c2479bcb7c3ec1deeabba43beca3f34c35d75264f1314842218c1f3e9a10d",
+          "length": 2845,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "117596637d0ea4a9cf56224a0a28a084881b6e92e0f3d1aa0502a560847a194c",
+        "length": 267
+      }
+    },
+    "3DScanner | RU | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "e47c2479bcb7c3ec1deeabba43beca3f34c35d75264f1314842218c1f3e9a10d",
+          "length": 2845,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "117596637d0ea4a9cf56224a0a28a084881b6e92e0f3d1aa0502a560847a194c",
+        "length": 267
+      }
+    },
+    "Center 3D Print | PL | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "8b06327fd6739cf2bd99b7f6c40e3ebd069a3c5430a71d8eaa9d38859a366a92",
+          "length": 2953,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | PL | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "626a1114a615ad05424621d187e6d874cce02355dabeb8b4cfe24cd90254a191",
+          "length": 3873,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | PL | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "626a1114a615ad05424621d187e6d874cce02355dabeb8b4cfe24cd90254a191",
+          "length": 3873,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | European English | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "3d43cbb83d094eb262c620694e782896486608bd5218866e6163df6c934edd76",
+          "length": 1360,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | European English | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "21eff33c19a419718f907bfe6d11e18f9ecd075b69eae7f35ec004feb68d275f",
+          "length": 2050,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | European English | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "21eff33c19a419718f907bfe6d11e18f9ecd075b69eae7f35ec004feb68d275f",
+          "length": 2050,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | DE | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "b18771cbb8db4b0da2472337daa72c87ccc0179418cb2e766a5dc9cc2475743d",
+          "length": 2953,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | DE | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "8b12c5b2d2aaddf3fda8ad1cd83142374b83c0f02115b70e8d4d299a8ff83c1d",
+          "length": 3264,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | DE | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "8b12c5b2d2aaddf3fda8ad1cd83142374b83c0f02115b70e8d4d299a8ff83c1d",
+          "length": 3264,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | RU | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "5598ec73b9f38e5dc64b63ad15a99c96cc604e9499239b1980af72287417bfa3",
+          "length": 2955,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | RU | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "121f73b0c9397857f9891c93e2a280636507ceb36b3592e5ddb78de01501dd57",
+          "length": 3254,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Center 3D Print | RU | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "121f73b0c9397857f9891c93e2a280636507ceb36b3592e5ddb78de01501dd57",
+          "length": 3254,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "a1498aaf1ccfc7d2c919010873975d840ef1a4f044225895ce50360c4d439cbd",
+        "length": 273
+      }
+    },
+    "Drukarka 3D | PL | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "9818455b06620246f3ff2bd9b52671376c190c6c0d1aee8618b450c0c3bda085",
+          "length": 2544,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "612ec7629eab89f2b240da8a7aa38a32f9098ad97d9c3e8d34b4dec827bbb33e",
+        "length": 269
+      }
+    },
+    "Drukarka 3D | PL | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "960a648db66753ee1e4c40cdbc5d70e3790601c34549d9d5a51abf71e8d63793",
+          "length": 3464,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "612ec7629eab89f2b240da8a7aa38a32f9098ad97d9c3e8d34b4dec827bbb33e",
+        "length": 269
+      }
+    },
+    "Drukarka 3D | PL | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "960a648db66753ee1e4c40cdbc5d70e3790601c34549d9d5a51abf71e8d63793",
+          "length": 3464,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "612ec7629eab89f2b240da8a7aa38a32f9098ad97d9c3e8d34b4dec827bbb33e",
+        "length": 269
+      }
+    },
+    "EXPERT3D | European English | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "1294fe4b2c7a821e3b3995f927aac7068e9907d6319d42698bb6442519c6e7bb",
+          "length": 2982,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d89c17c0bcf3f70a854cd4846e29ca490de610ac02c3a31ee69bc85bd77d888a",
+        "length": 266
+      }
+    },
+    "EXPERT3D | European English | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "aee5b00a0cc67c221bcb6ac950b8f9f57204d9cca013e4ec09332247f6fd7a2e",
+          "length": 3672,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d89c17c0bcf3f70a854cd4846e29ca490de610ac02c3a31ee69bc85bd77d888a",
+        "length": 266
+      }
+    },
+    "EXPERT3D | European English | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "aee5b00a0cc67c221bcb6ac950b8f9f57204d9cca013e4ec09332247f6fd7a2e",
+          "length": 3672,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d89c17c0bcf3f70a854cd4846e29ca490de610ac02c3a31ee69bc85bd77d888a",
+        "length": 266
+      }
+    },
+    "EXPERT3D | ES | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "969fedee8e3e9ed6761310308389db8e237304999a4b2403601f055577aa4d4f",
+          "length": 2749,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d89c17c0bcf3f70a854cd4846e29ca490de610ac02c3a31ee69bc85bd77d888a",
+        "length": 266
+      }
+    },
+    "EXPERT3D | ES | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "b6abfd2dba323dd3d89104b5c6685b4b645966288a2ea7c2fd1cdb9e47d952f6",
+          "length": 3302,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d89c17c0bcf3f70a854cd4846e29ca490de610ac02c3a31ee69bc85bd77d888a",
+        "length": 266
+      }
+    },
+    "EXPERT3D | ES | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "b6abfd2dba323dd3d89104b5c6685b4b645966288a2ea7c2fd1cdb9e47d952f6",
+          "length": 3302,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d89c17c0bcf3f70a854cd4846e29ca490de610ac02c3a31ee69bc85bd77d888a",
+        "length": 266
+      }
+    },
+    "EXPERT3D | PT | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "316a06aca19fed00c57fbdf8d3ef9b3a50c74ec7a740e0d9aad95e9255015d60",
+          "length": 2829,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d89c17c0bcf3f70a854cd4846e29ca490de610ac02c3a31ee69bc85bd77d888a",
+        "length": 266
+      }
+    },
+    "EXPERT3D | PT | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "b4105d8d9d1012056878220c8d93d11c365a1c2ab9a40f8104a65bc170cfe5ce",
+          "length": 3154,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d89c17c0bcf3f70a854cd4846e29ca490de610ac02c3a31ee69bc85bd77d888a",
+        "length": 266
+      }
+    },
+    "EXPERT3D | PT | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "b4105d8d9d1012056878220c8d93d11c365a1c2ab9a40f8104a65bc170cfe5ce",
+          "length": 3154,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d89c17c0bcf3f70a854cd4846e29ca490de610ac02c3a31ee69bc85bd77d888a",
+        "length": 266
+      }
+    },
+    "Expert-3DPrinter | American English | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "2d29f6effbb6878bbea999b149fa89868f9afe9eff908a2c46bceb56f9c76c2b",
+          "length": 3105,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "8763270cf796fb30f6a277473c1522b1c951d15ccaeb2bd25fc0c85946102c7d",
+        "length": 274
+      }
+    },
+    "Expert-3DPrinter | American English | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "f502811bcdccca334a16a191943c1b33e05002e6d501389d6a00d3ea6561880d",
+          "length": 3276,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "8763270cf796fb30f6a277473c1522b1c951d15ccaeb2bd25fc0c85946102c7d",
+        "length": 274
+      }
+    },
+    "Expert-3DPrinter | American English | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "f502811bcdccca334a16a191943c1b33e05002e6d501389d6a00d3ea6561880d",
+          "length": 3276,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "8763270cf796fb30f6a277473c1522b1c951d15ccaeb2bd25fc0c85946102c7d",
+        "length": 274
+      }
+    },
+    "Expert-3DPrinter | American Spanish | faq/no-source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "64439543a17b5a335ac851dde19a0caeee6ba4591eeca408722710013b3ee40d",
+          "length": 3112,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "8763270cf796fb30f6a277473c1522b1c951d15ccaeb2bd25fc0c85946102c7d",
+        "length": 274
+      }
+    },
+    "Expert-3DPrinter | American Spanish | faq/source-locale": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "64439543a17b5a335ac851dde19a0caeee6ba4591eeca408722710013b3ee40d",
+          "length": 3112,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "8763270cf796fb30f6a277473c1522b1c951d15ccaeb2bd25fc0c85946102c7d",
+        "length": 274
+      }
+    },
+    "Expert-3DPrinter | American Spanish | faq/source-locale+localized-name": {
+      "systemBlocks": [
+        {
+          "sha256": "fef7aa5b1eb5c5b60f5b8c2f0e8ba97efe70d51704a4609f5486d2dda6f5e127",
+          "length": 2098,
+          "cache": true
+        },
+        {
+          "sha256": "64439543a17b5a335ac851dde19a0caeee6ba4591eeca408722710013b3ee40d",
+          "length": 3112,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "8763270cf796fb30f6a277473c1522b1c951d15ccaeb2bd25fc0c85946102c7d",
+        "length": 274
+      }
+    }
+  },
+  "translate": {
+    "translate/uk-user": {
+      "systemBlocks": [
+        {
+          "sha256": "151c049905961b4b71d4c72b1e054a490790fa68e671bb106a4b70556978022b",
+          "length": 2655,
+          "cache": true
+        },
+        {
+          "sha256": "1994541d81bf3925cb49f24a6f21d72a0bcd8489375e3dcd05662b889520f938",
+          "length": 10277,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d7d343b0bf175f9424df247be393751ebe31bd7af385827f632d4ed3b1523f3a",
+        "length": 44
+      }
+    },
+    "translate/de-internal": {
+      "systemBlocks": [
+        {
+          "sha256": "151c049905961b4b71d4c72b1e054a490790fa68e671bb106a4b70556978022b",
+          "length": 2655,
+          "cache": true
+        },
+        {
+          "sha256": "238b0e4f3ae0608be6bc87a394494a9ebca0a1d318707422408868f0bdb68e02",
+          "length": 2336,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d7d343b0bf175f9424df247be393751ebe31bd7af385827f632d4ed3b1523f3a",
+        "length": 44
+      }
+    },
+    "translate/pl-user+spare-parts": {
+      "systemBlocks": [
+        {
+          "sha256": "151c049905961b4b71d4c72b1e054a490790fa68e671bb106a4b70556978022b",
+          "length": 2655,
+          "cache": true
+        },
+        {
+          "sha256": "b5c54ccd47795dbb0640150c21011c58e704e8b7faca1effeeb79db7355af1e9",
+          "length": 2800,
+          "cache": true
+        }
+      ],
+      "userContent": {
+        "sha256": "d7d343b0bf175f9424df247be393751ebe31bd7af385827f632d4ed3b1523f3a",
+        "length": 44
+      }
+    }
+  }
+}
