@@ -216,7 +216,8 @@ export function validateVideoCoverage(
       rule: 'video-embed-missing',
       detail:
         `The source description contains a video embed (${e.src}) that is missing from the output. `
-        + 'Keep the iframe with its src copied VERBATIM, introduced by its own lead-in <p>, in '
+        + 'Keep the iframe with its src copied VERBATIM, placed after a body paragraph of its sub-section '
+        + '(no pointer to the video) that states a product fact, in '
         + '§3 FUNCTIONALITY — before §7 Technical Specifications.',
       context,
     }));
