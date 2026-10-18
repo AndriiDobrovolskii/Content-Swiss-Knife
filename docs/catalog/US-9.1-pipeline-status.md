@@ -1,13 +1,13 @@
 ---
 artifact: pipeline_status
 story: US-9.1
-version: 2
+version: 3
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-18T16:16:00Z
-updated_at: 2026-10-18T17:32:00Z
-supersedes: docs/catalog/US-9.1-pipeline-status.md#1
+updated_at: 2026-10-18T20:08:00Z
+supersedes: docs/catalog/US-9.1-pipeline-status.md#2
 inputs_consumed:
   - key: story
     version: 4
@@ -24,23 +24,22 @@ inputs_consumed:
   - key: plan_review
     version: 3
   - key: test_strategy
-    version: 2
+    version: 3
   - key: ac_test_matrix
-    version: 2
+    version: 3
   - key: test_generation_report
-    version: 2
+    version: 3
 open_decisions_blocking: false
 ---
 
-# Pipeline status: US-9.1 (IMPLEMENTATION, round 2, track prompt + angular)
+# Pipeline status: US-9.1 (IMPLEMENTATION, round 3, track prompt + angular)
 
-Branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, Node v24.15.0, round 2 run of 2026-10-18 (UTC, `date -u` 16:48 at start, about 17:30 at the last command).
+Branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, Node v24.15.0, round 3 run of 2026-10-18 (UTC, `date -u` 19:59 at start, 20:07 at the last command).
 BASE (read from the fixture headers, never `git merge-base HEAD main`): `6546db83ef4005e9d6a57baf51adf0b35df8d3c7`; `git merge-base --is-ancestor 6546db8 HEAD` exit 0.
 
-**Result of round 2: PARTIAL, loop-back key `changes_required_tests`.** Every task of the round is done and committed except the master hunk T30 (and the tasks that are serial behind it in
-`master-system-prompt.ts`: T31, T32, then the verification T33). T30 is blocked by a **contradiction between two tests** (finding F8 below): the Specification's FR-7 literal
-`see [NO PICTURE REFERENCES]` and the T27 spec's "the heading occurs twice" check cannot both pass. Nothing was weakened, skipped or regenerated with `-u`; no test file or fixture other than the golden
-(regenerated in its owning tasks) was touched; no push, no PR. T36 and T42 are manual, owner-run (H-OD11); T41 is not built (the Node check passed).
+**Result of round 3: PASS (every task done except the manual T36/T42).** Finding F8 was fixed by TEST_WRITING (test artifacts v3, `master-system-prompt.no-picture-references.spec.ts` 18 tests). T30, T31, T32 are committed
+(one commit each, each with the regenerated golden and the rebaselined checksums); T33 and the re-verification of T37/T20/T1 ran on the final tree. Nothing was weakened, skipped or regenerated with `-u`; no test file was touched;
+no push, no PR. T36 and T42 are manual, owner-run (H-OD11); T41 is not built (the Node check passed).
 
 ## Human decisions in force (verbatim sources: `docs/workflow/history.jsonl`, last events)
 
@@ -77,10 +76,10 @@ BASE (read from the fixture headers, never `git merge-base HEAD main`): `6546db8
 | T27 master M1+M2 `NO_IMAGE_DEIXIS_RULE` + golden (FROZEN, approved) | prompt | DONE | a0e33a5 |
 | T28 master M3 `[VIDEO]` + golden (FROZEN, approved) | prompt | DONE | 3110e94 |
 | T29 master M4 IMAGE GROUNDING LOCK + golden (FROZEN, approved) | prompt | DONE | 18cad1f |
-| T30 master M5 PLACEMENT + golden (FROZEN, approved) | prompt | **BLOCKED: unsatisfiable test (finding F8); not committed, tree restored to T29** | - |
-| T31 master M6 `[Operator Notes]` | prompt | NOT STARTED: serial behind T30 (same file; Reading guide item 6) | - |
-| T32 master M7 `LIVELINESS_RULES` | prompt | NOT STARTED: serial behind T31 | - |
-| T33 consumer checkpoint (verification only) | prompt | NOT STARTED: needs T27..T32 (see "pre-verification" below) | - |
+| T30 master M5 PLACEMENT + golden (FROZEN, approved) | prompt | DONE (round 3; F8 fixed by TEST_WRITING v3) | ecaa2fd |
+| T31 master M6 `[Operator Notes]` + golden (FROZEN, approved) | prompt | DONE (round 3; T21 gate satisfied: 7397081) | 6db2885 |
+| T32 master M7 `LIVELINESS_RULES` + golden (FROZEN, approved) | prompt | DONE (round 3) | d5d207a |
+| T33 consumer checkpoint (verification only) | prompt | VERIFIED (round 3, see below); no commit | - |
 | T36 live acceptance runs | prompt | manual, owner-run (H-OD11) | - |
 | T42 live translation comparison | prompt | manual, owner-run, optional (H-OD11) | - |
 
@@ -125,54 +124,58 @@ RESULT: no hard violation                  (exit 0)
 
 The `.ts` entry loads, the explicit `.ts` imports of the two leaf modules resolve, and `linkedom` parses. `git diff package.json` is empty (no dependency added); no `engines` / `.nvmrc`.
 
-### Pre-verification of T30..T32 and T33 (experiment, not committed)
+### Round 3: T30, T31, T32 and the T33 checkpoint
 
-To find every test problem in one pass, the T30 hunk (the Specification's FR-7 restated bullets, verbatim), T31 (Appendix B) and T32 (import plus `${LIVELINESS_RULES}` after `${SENTENCE_LENGTH_RULES}`) were applied together in the working tree, the golden regenerated and the whole suite run,
-then everything was reverted (`git checkout`; the patch is kept at `C:\Users\works\AppData\Local\Temp\claude\C--Work-Content-Swiss-Knife\148d84a3-5a7e-4963-a223-cc326e5473fd\scratchpad\t30-t31-t32-experiment.patch`):
+Method per task (as in round 2): the hunk is applied exactly as the Specification (FR-7 restated bullets, verbatim) and the plan (Appendix B; import plus `${LIVELINESS_RULES}` after `${SENTENCE_LENGTH_RULES}`) word it; `test/fixtures/golden/full-description-prompts.json`
+regenerated with a throw-away spec (deleted afterwards; no `-u`) in the SAME commit; the golden diff is verified programmatically against `HEAD`; `bash arch-guard.sh --rebaseline` in the same commit; the whole logic suite run before and after and
+compared test by test (a task passes only with zero NEW failing ids); `npx tsc --noEmit`; `bash arch-guard.sh`.
 
-```
- Tests  1 failed | 7616 passed        # the only failure: master-system-prompt.no-picture-references.spec.ts
-                                      #   "the heading "[NO PICTURE REFERENCES" is not located between the [IMAGE HANDLING] heading and FIGURE FORMAT"
-```
+| Task | Commit | Golden delta (block 0 of the same ten cases: `doc/expert3d`, `doc/expert3d+hook`, `doc/c3d`, `html/expert3d`, `html/legacy`, `html/legacy+lang`, `html/c3d+customTemplate`, `c/expert3d-es`, `c/eu-en`, `c/us-uk`) | Suite before -> after | New failures | `master-system-prompt.ts` checksum |
+|---|---|---|---|---|---|
+| T30 | ecaa2fd | one contiguous replacement: the `LEAD-IN` bullet and the `Give lead-in and figcaption separate jobs` bullet become the three FR-7 bullets | 130 -> 110 failed | 0 | `39d1aa50...` -> `f7deb579...` |
+| T31 | 6db2885 | one contiguous replacement spanning the STRICT INPUT SCOPE and INTERNAL RECONCILIATION sentences (Appendix B wording) | 110 -> 72 failed | 0 | -> `448f3ffe...` |
+| T32 | d5d207a | a pure insertion (nothing removed): the `LIVELINESS` block after `${SENTENCE_LENGTH_RULES}` | 72 -> 0 failed | 0 | -> `57d54839...` |
 
-So every other test of T30, T31, T32 is satisfiable and was green with the hunks applied (specs: `master-system-prompt.{placement,operator-notes,liveliness}`, `task-c.master-reach`, `optimizer.master-reach`, `full-description.golden.us91`); F8 is the single obstacle.
+In every golden diff: `translate/uk-user`, `translate/de-internal`, every block 1 and every `userContent` unchanged; the pre-Story `src/prompts/full-description.golden.spec.ts` (10 byte-equal tests) green after each regeneration;
+`faq-pipeline.master-leak.spec.ts` and the FAQ positional slices green (not edited). `git diff --exit-code` over `task-c-description-prompts.json`, `task-c.ts`, `task-translate.ts`, `optimizer.ts`, `simplified-template-blocks.ts` exited 0 after each task.
+The T30 hunk's specs (`master-system-prompt.placement`, `no-picture-references` 18/18, `image-markers`, the pre-Story golden), T31's (`operator-notes`, `task-c`, `optimizer`, `task-a-doc`, `task-translate.simplified`: 140 tests) and T32's
+(`liveliness`, `task-c.master-reach`, `optimizer.master-reach`, `full-description.golden.us91`) are green. The image-markers span bytes are unchanged (its spec is green).
 
-## Verification evidence (real output, final state of round 2)
+**T33 (verification only)**: the consumer specs of the breakdown (`task-c`, `task-c.faq`, `content-orchestrator.faq-standalone`, `optimizer`, `protected-name-precedence`, `image-figure-style.prompt-examples`, `task-c.description-bytes` (T20), `image-markers`,
+`output-integrity-wiring`, `task-translate.simplified`, `task-c.master-reach`, `optimizer.master-reach`, `master-system-prompt.liveliness`, `faq-pipeline.master-leak`): 12 files / 612 tests green; the D15 oracle (`payload-oracle.d15`), `task-a.user-content.golden` and
+`full-description.golden.us91` are part of the whole suite, which is 0 failed. File level: `git diff 6546db8 --exit-code` over `task-b.ts`, `task-c.ts`, `task-translate.ts`, `optimizer.ts`, `simplified-template-blocks.ts`,
+`test/fixtures/golden/task-c-description-prompts.json` exits 0; the `.arch-guard-checksums` entries of `task-b.ts` and `task-c.ts` equal their values at 6546db8; `git diff 489fb4a` (the TEST_WRITING v3 commit) changed only `.arch-guard-checksums`,
+`master-system-prompt.ts` and the golden `full-description-prompts.json` (the other golden fixtures, including the D15 `optimizer-faq-pre-change.json`, are byte-identical). Payload level: the amended Task C guard (T20, 96 cases, block 0 = live master) and the reach specs are green.
+**Declared residual risks that no gate shows** (accepted by the owner): the translation-side behavioural risk (R1a, R1d: the self-scoping sentence of `LIVELINESS_RULES` versus FR-5's `deleted, not reworded`), the optimizer inheritance (R7a: the sentence does not name the
+optimizer's task) and R22 (block 0 of Task C description translation and of the optimizer names `[Operator Notes]` although their `userContent` never carries it).
+**T1 / T37 / T20 re-verified on the final tree**: `payload-oracle.d15`, `task-c.description-bytes`, `task-a.user-content.golden` green in the full run (221 files, 0 failed).
+
+## Verification evidence (real output, final state of round 3)
 
 ```
 $ npx vitest run --reporter=dot                        # npm run test:logic
- Test Files  6 failed | 215 passed (221)
-      Tests  130 failed | 7487 passed | 3 skipped (7620)
-   (round 2 started at 350 failing tests / 20 files; 0 tests entered the failing set in any task; round 1 baseline was 447)
+ Test Files  221 passed (221)
+      Tests  7620 passed | 3 skipped (7623)            # 0 failed; round 3 started at 130 failed / 7490 passed
 
 $ npx tsc --noEmit                                     # npm run lint
 (no output, exit 0)
 
 $ bash arch-guard.sh
-  All frozen files unchanged / ALL CHECKS PASSED
+  ALL CHECKS PASSED
 
 $ npm run test:components
  Test Files  3 passed (3)
-      Tests  55 passed (55)                            # the bundle builds again; includes the OperatorNotesFieldsComponent spec (23 tests)
+      Tests  55 passed (55)
+
+$ git diff 6546db8 --exit-code --stat -- src/prompts/task-b.ts src/prompts/task-c.ts src/prompts/task-translate.ts src/prompts/optimizer.ts src/prompts/simplified-template-blocks.ts test/fixtures/golden/task-c-description-prompts.json
+(no output, exit 0)
 ```
 
-`.arch-guard-checksums` against BASE: only `task-a.ts`, `master-system-prompt.ts`, `output-validator.ts` differ; `task-b.ts` and `task-c.ts` are unchanged. `git diff 6546db8 --exit-code` over `test/fixtures/golden/task-c-description-prompts.json`, `task-b.ts`, `task-c.ts`,
-`task-translate.ts`, `optimizer.ts`, `simplified-template-blocks.ts`: exit 0. `git diff 6546db8 -- package.json vitest.config.ts`: empty. Since the TEST_WRITING commit `165ed35` the only test-side file changed is the regenerated golden `full-description-prompts.json`.
-
-### The 130 remaining failing tests, by file, and what they wait for
-
-| Failing | File | Waits for |
-|---|---|---|
-| 30 / 48 / 12 | `full-description.golden.us91.spec.ts` / `task-c.master-reach.spec.ts` / `optimizer.master-reach.spec.ts` | T30 (partly), T31, T32 |
-| 24 | `master-system-prompt.liveliness.spec.ts` | T32 |
-| 6 | `master-system-prompt.operator-notes.spec.ts` | T31 |
-| 10 | `master-system-prompt.placement.spec.ts` | T30 (blocked, F8) |
-
-30 + 48 + 12 + 24 + 6 + 10 = 130.
+The 3 skipped tests are pre-existing (3 skipped in round 2 as well; none added by this story). `git diff 6546db8 -- package.json vitest.config.ts`: empty. `.arch-guard-checksums` against BASE: only `task-a.ts`, `master-system-prompt.ts`, `output-validator.ts` differ.
 
 ## Findings
 
-- **F8 (T30, blocks it; the loop-back reason; the test, not the code, must change)**: `src/prompt-core/master-system-prompt.no-picture-references.spec.ts`, test "the heading "[NO PICTURE REFERENCES" is not located between the [IMAGE HANDLING] heading and FIGURE FORMAT",
+- **F8 (CLOSED in round 3 by TEST_WRITING v3; originally: T30 blocked, the test, not the code, had to change)**: `src/prompt-core/master-system-prompt.no-picture-references.spec.ts`, test "the heading "[NO PICTURE REFERENCES" is not located between the [IMAGE HANDLING] heading and FIGURE FORMAT",
   ends with `expect(MASTER_SYSTEM_PROMPT.indexOf('[NO PICTURE REFERENCES', at + 1), 'the heading occurs twice').toBe(-1)`. It passes with T27 and fails the moment T30 inserts the Specification's FR-7 literal `see [NO PICTURE REFERENCES]` (FR-7 Assert present,
   normative, confirmed by the owner; also asserted by `master-system-prompt.placement.spec.ts`), because that literal contains the prefix `[NO PICTURE REFERENCES`. Both cannot pass: the master must contain `see [NO PICTURE REFERENCES]` and must not contain the prefix twice.
   The intent of the check is "the block heading is not duplicated". A satisfiable form keys the second search on the heading itself (`'\n[NO PICTURE REFERENCES —'` or `'[NO PICTURE REFERENCES — body'`), or counts occurrences of `\n[NO PICTURE REFERENCES` at a line start. The builder did not
@@ -188,5 +191,4 @@ $ npm run test:components
 
 | Open | Blocks |
 |---|---|
-| F8 test fix (TEST_WRITING) | T30, then T31, T32 (serial, same file), then T33 |
-| T36 / T42 | manual, owner-run (H-OD11); T36 needs the finished master |
+| T36 / T42 | manual, owner-run (H-OD11); T36 needs the finished master, which now exists (HEAD d5d207a plus this status commit) |
