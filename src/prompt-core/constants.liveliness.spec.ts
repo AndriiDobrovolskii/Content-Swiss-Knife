@@ -18,10 +18,10 @@
  * `<h2>`, which are section references and a tag name. It is applied to the liveliness constant, never to the
  * whole master, whose `[SENTENCE LENGTH]` block carries the per-locale bands.
  *
- * DEFERRED (H-FR20PREC, not written here): the precedence sentence `where a store voice block defines its own
- * bullet form, heading form, tone or punctuation limits, that block wins` is a PROPOSED DEFAULT that the
- * Specification labels unconfirmed. Story AC-8 requires the idea, but the exact words are the human's to
- * confirm; a test of the proposed wording would choose the default for them. See the AC matrix, DEFERRED.
+ * H-FR20PREC ANSWERED (owner: "accept the proposed default precedence sentence exactly as written", Specification v5
+ * FR-20): the precedence sentence `where a store voice block defines its own bullet form, heading form, tone or
+ * punctuation limits, that block wins` is now VERBATIM and normative, asserted below (present once, inside the shared
+ * constant; it adds no sentence-length number, so the "no number other than 6" pin still holds).
  *
  * Prose beyond the literals is the builder's (H-OD13). The constant is read through
  * `test/fixtures/us91-constants.ts`: type-clean before T16, each test red on its own.
@@ -29,7 +29,7 @@
 import { describe, it, expect } from 'vitest';
 import { STORE_REGISTRY, EXPERT3D_TOV_BASE_OVERLAY, C3D_TOV_BASE_OVERLAY } from './constants';
 import {
-  livelinessRules, collapse, SELF_SCOPING_STRINGS, SELF_SCOPING_SENTENCE, WATCH_ITEM_FORBIDDEN,
+  livelinessRules, collapse, SELF_SCOPING_STRINGS, SELF_SCOPING_SENTENCE, WATCH_ITEM_FORBIDDEN, PRECEDENCE_SENTENCE,
 } from '../../test/fixtures/us91-constants';
 
 const text = () => collapse(livelinessRules());
@@ -51,6 +51,20 @@ describe('LIVELINESS_RULES - Assert present (FR-20)', () => {
 
   it('names [SENTENCE LENGTH] inside the shared block as the authority for sentence-length numbers', () => {
     expect(text()).toContain('[SENTENCE LENGTH]');
+  });
+});
+
+describe('LIVELINESS_RULES - the precedence sentence, VERBATIM (FR-20, H-FR20PREC answered)', () => {
+  it('contains the precedence sentence exactly as written', () => {
+    expect(text()).toContain(PRECEDENCE_SENTENCE);
+  });
+
+  it('contains it exactly once, inside the one shared constant (not a second copy)', () => {
+    expect(text().split(PRECEDENCE_SENTENCE).length - 1).toBe(1);
+  });
+
+  it('names the four things a store voice block may define for itself: bullet form, heading form, tone, punctuation limits', () => {
+    for (const word of ['bullet form', 'heading form', 'tone', 'punctuation limits']) expect(text()).toContain(word);
   });
 });
 

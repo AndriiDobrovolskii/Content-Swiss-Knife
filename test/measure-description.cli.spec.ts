@@ -7,7 +7,7 @@
  *  - the FIRST line of every report is `process.version` (impact Unknown 18: live-run evidence carries the Node
  *    version that produced it, on any machine; the repository pins no Node version);
  *  - exit code 0 on a clean document; non-zero on a hard violation (any deixis hit, any figure without a
- *    paragraph above it, any two figures in a row);
+ *    paragraph above it, any two figures in a row, any number absent from the input);
  *  - the soft liveliness items are reported and NEVER change the exit status;
  *  - unreadable or empty input makes the script FAIL VISIBLY (non-zero, with an explanation on stderr), not
  *    report zeros (FR-32 failure path);
@@ -18,8 +18,11 @@
  * requires that the SCRIPT ran: the report header is printed (hard violations) or stderr is not a module-load
  * failure (unreadable input).
  *
- * DEFERRED (H-OD10, not written): the exit status for "a number absent from the input" (the D-9 definition is a
- * PROPOSED DEFAULT) and the names of the four `--notes-*` flags (the plan names the family, not the flags).
+ * H-OD10 ANSWERED (owner confirmed D-3, D-4, D-5, D-7 and D-9 as written): the exit status for "a number absent from the
+ * input" (D-9) and the optional input flags are now pinned in the describes at the end of this file. The Specification
+ * names the metrics and the input set (D-10: description required; specs, product name and the four operator-note values
+ * optional) but not the flag names of the notes: those are a CONTRACT CHOSEN BY TEST_WRITING and recorded as such (see the
+ * comment above `NOTES_FLAGS`).
  *
  * The Node check of OD-9 (Node >= 22.18 for native type stripping, else the D12 launcher, task T41) is a step of
  * the BUILDER's task T35: this spec runs the `.ts` entry directly, so it is red on a Node that cannot load it -
@@ -144,5 +147,105 @@ describe('FR-32 failure path: unreadable or empty input fails visibly, it does n
     scriptStarted(r);
     expect(r.status).not.toBe(0);
     expect(r.stderr.trim().length).toBeGreaterThan(0);
+  });
+});
+
+// ── H-OD10 ANSWERED: numbers absent from the input (D-9, D-10, FR-33) and the optional input flags ────────────
+
+/**
+ * CONTRACT CHOSEN BY TEST_WRITING (no approved artifact fixes it; the plan names only "the four `--notes-*` values"):
+ * the four operator-note values are optional FILE flags like `--specs`, named by the kebab-case of their
+ * `operatorNotes` key: --notes-usage-scenarios, --notes-test-results, --notes-previous-generation-comparison,
+ * --notes-limitations. `--name` is an inline string. A builder who prefers other names loops back through TEST_WRITING.
+ */
+const NOTES_FLAGS = [
+  '--notes-usage-scenarios', '--notes-test-results', '--notes-previous-generation-comparison', '--notes-limitations',
+];
+const NUMBER_HTML = `<p>${PLAIN}</p>${FIG(0)}<p>Гравер різав зразок 42 хвилини.</p>`;
+
+describe('FR-33: a number absent from the input is a hard violation (D-9)', () => {
+  it('exits non-zero, after printing the report header, when the generated text has a number the input does not', () => {
+    const r = measure(NUMBER_HTML);
+    expect(firstLine(r.stdout), 'the report did not start').toBe(process.version);
+    expect(r.status).not.toBe(0);
+  });
+
+  it('names the absent number in the report', () => {
+    const r = measure(NUMBER_HTML);
+    expect(firstLine(r.stdout)).toBe(process.version);
+    expect(r.stdout).toMatch(/\b42\b/);
+  });
+
+  it('exits 0 when the same number is in the input description', () => {
+    const r = measure(NUMBER_HTML, `${INPUT_TEXT} Тест тривав 42 хвилини.`);
+    expect(firstLine(r.stdout)).toBe(process.version);
+    expect(r.status).toBe(0);
+  });
+
+  it('compares numbers after normalisation: «1 000,5» in the input equals «1000.5» in the generated text', () => {
+    const html = `<p>${PLAIN}</p>${FIG(0)}<p>Ресурс 1000.5 години.</p>`;
+    const r = measure(html, `${INPUT_TEXT} Ресурс 1 000,5 години.`);
+    expect(firstLine(r.stdout)).toBe(process.version);
+    expect(r.status).toBe(0);
+  });
+
+  it('numbers inside attribute values (src, alt) are not read, so they are never absent numbers', () => {
+    const html = `<p>${PLAIN}</p><figure><img src="photo-2048.jpg" alt="Панель 8812"><figcaption>Панель</figcaption></figure>`;
+    const r = measure(html);
+    expect(firstLine(r.stdout)).toBe(process.version);
+    expect(r.status).toBe(0);
+  });
+});
+
+describe('FR-32 / D-10: every text the script is given forms the input side', () => {
+  it('--specs grounds a number (and without it the same number is absent)', () => {
+    const without = measure(NUMBER_HTML);
+    expect(firstLine(without.stdout)).toBe(process.version);
+    expect(without.status).not.toBe(0);
+    const specs = write('specs-42.txt', 'Тривалість різання: 42 хвилини');
+    const withSpecs = measure(NUMBER_HTML, INPUT_TEXT, ['--specs', specs]);
+    expect(firstLine(withSpecs.stdout)).toBe(process.version);
+    expect(withSpecs.status).toBe(0);
+  });
+
+  it('--name grounds a number in the product name', () => {
+    const r = measure(NUMBER_HTML, INPUT_TEXT, ['--name', 'Різак 42 Pro']);
+    expect(firstLine(r.stdout)).toBe(process.version);
+    expect(r.status).toBe(0);
+  });
+
+  it.each(NOTES_FLAGS)('%s grounds a number given only in that operator note', flag => {
+    const note = write('note-42.txt', 'У тесті зразок різали 42 хвилини');
+    const r = measure(NUMBER_HTML, INPUT_TEXT, [flag, note]);
+    expect(firstLine(r.stdout), 'the report did not start (unknown flag?)').toBe(process.version);
+    expect(r.stderr).not.toMatch(/unknown|unrecognized|unexpected|невідом/i);
+    expect(r.status).toBe(0);
+  });
+
+  it('a number in a note that was NOT passed stays absent (the operator must pass the notes)', () => {
+    const r = measure(NUMBER_HTML);
+    expect(firstLine(r.stdout)).toBe(process.version);
+    expect(r.status).not.toBe(0);
+  });
+
+  it('a missing notes file fails visibly (non-zero, explanation on stderr) instead of being ignored', () => {
+    const r = measure(CLEAN_HTML, INPUT_TEXT, ['--notes-limitations', join(dir, 'no-such-note.txt')]);
+    scriptStarted(r);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe('FR-32: the soft metrics are reported and never change the exit status (D-3 to D-7)', () => {
+  const SOFT_HTML =
+    '<h2>Огляд</h2><p>Це довге речення має більше ніж шість слів.</p>'
+    + '<h2>Перший</h2><p>Коротко. Це довге речення має більше ніж шість слів.</p>' + FIG(0)
+    + '<h2>Другий</h2><p>Ще коротко. Ще раз коротко.</p>';
+
+  it('exits 0 and still prints the header for a document that is clean on the hard criteria', () => {
+    const r = measure(SOFT_HTML);
+    expect(firstLine(r.stdout)).toBe(process.version);
+    expect(r.status).toBe(0);
+    expect(r.stdout.split(LINE_BREAK).length, 'the report has lines besides the version').toBeGreaterThan(1);
   });
 });

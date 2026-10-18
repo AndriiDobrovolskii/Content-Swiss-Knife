@@ -18,7 +18,9 @@
  * Assert present (existing, kept; INVARIANT START unchanged): `"<b>[Product]</b> — [Category] for [use-case],
  * featuring [key specs]."` and `none of them varies the start`.
  *
- * DEFERRED (H-FR20PREC, not written): the precedence sentence is a PROPOSED DEFAULT (see the T16 spec header).
+ * H-FR20PREC ANSWERED (owner accepted the proposed default exactly as written): the precedence sentence
+ * `where a store voice block defines its own bullet form, heading form, tone or punctuation limits, that block wins`
+ * is asserted per store below and once in the master (see the T16 spec header).
  *
  * The FR-20 Assert-absent (`9–17`, `9-17`, `at most two consecutive`, `two consecutive sentences`, no
  * digit-range-plus-`word`, no sentence-length number other than `6`) is applied to the liveliness CONSTANT in
@@ -28,7 +30,7 @@ import { describe, it, expect } from 'vitest';
 import { STORE_REGISTRY } from './constants';
 import { MASTER_SYSTEM_PROMPT } from './master-system-prompt';
 import { buildPromptA } from '../prompts/task-a';
-import { livelinessRules, collapse, SELF_SCOPING_STRINGS, SELF_SCOPING_SENTENCE, WATCH_ITEM_FORBIDDEN } from '../../test/fixtures/us91-constants';
+import { livelinessRules, collapse, SELF_SCOPING_STRINGS, SELF_SCOPING_SENTENCE, WATCH_ITEM_FORBIDDEN, PRECEDENCE_SENTENCE } from '../../test/fixtures/us91-constants';
 import { MASTER, sourceFidelityBullet } from '../../test/fixtures/us91-master';
 
 const FR20_LITERALS = [
@@ -57,6 +59,11 @@ describe.each(Object.keys(STORE_REGISTRY).map(s => [s] as [string]))('FR-20 (T32
     for (const literal of FR20_LITERALS) expect(text, literal).toContain(literal);
   });
 
+  it('systemBlocks[0] carries the precedence sentence VERBATIM (store voice blocks win on bullet form, heading form, tone, punctuation)', () => {
+    const text = collapse(task(store).systemBlocks[0].text);
+    expect(text).toContain(PRECEDENCE_SENTENCE);
+  });
+
   it('systemBlocks[0] carries the three self-scoping strings (category 19, Task A half)', () => {
     const text = collapse(task(store).systemBlocks[0].text);
     for (const literal of SELF_SCOPING_STRINGS) expect(text, literal).toContain(literal);
@@ -68,6 +75,10 @@ describe('FR-20 (T32): the master contains the whole liveliness constant, once, 
     const rules = collapse(livelinessRules());
     expect(MASTER).toContain(rules);
     expect(MASTER.split(rules).length - 1).toBe(1);
+  });
+
+  it('the precedence sentence occurs exactly once in the master', () => {
+    expect(MASTER.split(PRECEDENCE_SENTENCE).length - 1).toBe(1);
   });
 
   it('the full self-scoping sentence occurs exactly once in the master (no second copy, no per-consumer copy)', () => {

@@ -13,9 +13,9 @@
  * The byte-level "nothing else moved" guarantee for the two userContent spans is in
  * `task-a.user-content.golden.spec.ts` (FR-27 Tier B); this file pins the wording.
  *
- * DEFERRED (H-FR11I3): the NEW marker span is the source-analysis wording, a PROPOSED DEFAULT that the
- * Specification labels unconfirmed (FR-11 item 3, "VERBATIM once approved"). It is deliberately NOT asserted
- * here; only the absence of the old span and the preservation of the surrounding marker rules are.
+ * H-FR11I3 ANSWERED (owner: "accept the proposed default marker block wording exactly as written", Specification v5
+ * FR-11 item 3): the NEW marker span is VERBATIM and normative, asserted below next to the absence of the old span and
+ * the preservation of the surrounding marker rules.
  *
  * Gated on H-OD12: no "modify src/prompts/task-a.ts" instruction exists; these tests stay red until it does,
  * and the frozen file is never touched by this stage. If an item is refused the specs written for it stay red
@@ -100,8 +100,14 @@ describe.each(['es/video/one-embed', 'es/video/two-embeds+manifest', 'eu/video/c
 
 // ── T23 (task-a.ts T-A3): buildMarkerBlock ────────────────────────────────────────────────────────────
 
-describe.each(['es/marker/one', 'us/marker/legacy'])('FR-11 item 3 (T23, T-A3): buildMarkerBlock - %s (new wording DEFERRED, H-FR11I3)', name => {
+describe.each(['es/marker/one', 'us/marker/legacy'])('FR-11 item 3 (T23, T-A3): buildMarkerBlock - %s', name => {
   const content = () => buildCase(name).userContent;
+
+  it('Assert present: the new span VERBATIM, exactly once', () => {
+    const span = 'at the end of the paragraph that states the product fact the image belongs to (the paragraph never mentions the picture);';
+    expect(content()).toContain(span);
+    expect(content().split(span).length - 1).toBe(1);
+  });
 
   it('Assert absent: the old span "at the end of the sentence that introduces what the image shows;"', () => {
     expect(content()).not.toContain('at the end of the sentence that introduces what the image shows;');

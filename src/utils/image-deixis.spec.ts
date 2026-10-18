@@ -108,6 +108,41 @@ describe.each(OTHER_LANGUAGES)('findImageDeixis - %s (AC-5: at least 2 positive 
   });
 });
 
+/**
+ * Ordinary product sentences that mention a screen, a display, a frame, a roller, a colour or a resin are NOT picture
+ * references (FR-16: precision; AC-5). The builder's first detector flagged every one of them (`видно на дисплеї`,
+ * `на роликах`, `displayed in real`, `on the frame`, `shown in two`, `auf dem Bildschirm`, `in Fotopolymerharz`,
+ * `se muestra en tiempo`, `visível no ecrã`), because the participle patterns end in an open `на|in|auf + <any word>` tail
+ * and the picture nouns match greedy stems. T34 and T36 count any hit as a HARD violation and T26 emits it as a warning,
+ * so a false positive here is a defect, not a nuisance. These tests are RED against the first detector BY DESIGN: they send
+ * T2/T3 back to a narrowing task. A narrowing that loses one of the positives above (any language) fails the positive tests.
+ */
+const ORDINARY_PRODUCT_SENTENCES: Array<[string, string]> = [
+  ['uk-UA', 'Прогрес друку видно на дисплеї.'],
+  ['uk-UA', 'Результат показано на екрані.'],
+  ['uk-UA', 'Візок рухається на роликах.'],
+  ['uk-UA', 'Принтер працює на відео-кадрах з частотою 30 Гц.'],
+  ['en-GB', 'The scan is displayed in real time.'],
+  ['en-GB', 'The extruder is mounted on the frame.'],
+  ['en-GB', 'The printer is shown in two colours.'],
+  ['de-DE', 'Der Fortschritt wird auf dem Bildschirm angezeigt.'],
+  ['de-DE', 'Gedruckt wird in Fotopolymerharz.'],
+  ['es-ES', 'El escaneo se muestra en tiempo real.'],
+  ['pt-PT', 'O progresso é visível no ecrã.'],
+];
+
+describe('findImageDeixis - ordinary product sentences are not picture references (F6, FR-16 precision)', () => {
+  it.each(ORDINARY_PRODUCT_SENTENCES)('%s returns null for the product sentence %j', (locale, text) => {
+    expect(findImageDeixis(text, locale)).toBeNull();
+  });
+
+  it.each(ORDINARY_PRODUCT_SENTENCES)('%s: the same sentence directly above a figure is not reported on any carrier: %j', (locale, text) => {
+    const html = `<p>${text}</p><figure><img src="a.jpg" alt="Product" decoding="async"><figcaption><b>Product:</b> a part</figcaption></figure>`;
+    expect(collectFigureDeixis(html, locale)).toEqual([]);
+    expect(imageDeixisIssues(dom(html), locale, 'HTML')).toEqual([]);
+  });
+});
+
 describe('findImageDeixis - locale mapping, unknown language, failure path (AC-5, FR-16)', () => {
   it.each(['en-ES', 'en-US', 'en-GB'])('maps %s to the English pattern (primary subtag)', locale => {
     expect(findImageDeixis('The row of three round modules on the back is shown in the image.', locale)).not.toBeNull();

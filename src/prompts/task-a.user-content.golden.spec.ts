@@ -19,11 +19,10 @@
  *    (run facts and, with a hookPattern, the `[§1 HOOK PATTERN]` suffix) equals the golden's remainder, with
  *    and without a hookPattern. GREEN ON ARRIVAL.
  *
- * DEFERRED (H-FR11I3, not written here): the marker NEW span is the source-analysis wording, a PROPOSED
- * DEFAULT that the Specification labels unconfirmed (FR-11 item 3). This spec therefore pins the marker
- * cases WITHOUT naming that wording: everything before and after the old marker span is unchanged, and the
- * old span is gone. The exact-wording assertion (the golden with the old span replaced by the new span) is
- * a test for the human's answer to H-FR11I3 and is deliberately not written. See the AC matrix, DEFERRED.
+ * H-FR11I3 ANSWERED (owner: "accept the proposed default marker block wording exactly as written", Specification v5
+ * FR-11 item 3): the marker NEW span is VERBATIM and normative, so the Tier B marker and video+marker cases also
+ * assert the exact equality "the golden with the old span(s) replaced by the new span(s)". The prefix / suffix /
+ * old-span-absent assertions written before the answer are kept as they were.
  *
  * The cases never pass an `operatorNotes` key in their inputs; the "empty notes" variants below add the key
  * through a cast, so this spec type-checks before `ProductInput.operatorNotes` exists (task breakdown,
@@ -51,8 +50,9 @@ const VIDEO_OLD =
   'Introduce each with its own lead-in <p> in the body language, and place it in §3 FUNCTIONALITY, before §7. The lead-in must not restate the figcaption.';
 const VIDEO_NEW =
   'Place each directly after a body paragraph of its sub-section, written in the body language, that states a product fact and does not refer to the video, and place it in §3 FUNCTIONALITY, before §7. That paragraph must not restate the figcaption.';
-/** FR-11 item 3: the OLD marker span only (the new wording is DEFERRED, H-FR11I3). */
+/** FR-11 item 3: the marker span. The new span is VERBATIM from the Specification (H-FR11I3 answered: accepted as written). */
 const MARKER_OLD = 'at the end of the sentence that introduces what the image shows;';
+const MARKER_NEW = 'at the end of the paragraph that states the product fact the image belongs to (the paragraph never mentions the picture);';
 
 const namesOf = (tier: Tier) => caseNames().filter(n => GOLDEN.cases[n].tier === tier);
 const countOf = (haystack: string, needle: string) => haystack.split(needle).length - 1;
@@ -134,7 +134,18 @@ describe('FR-27 Tier B video (T22, task-a.ts T-A2) - equal to the golden except 
   });
 });
 
-describe('FR-27 Tier B marker (T23, task-a.ts T-A3) - only the FR-11 item 3 span differs (wording not asserted: DEFERRED, H-FR11I3)', () => {
+describe('FR-27 Tier B marker (T23, task-a.ts T-A3) - equal to the golden except the FR-11 item 3 span, exact wording', () => {
+  it.each(namesOf('B-marker'))('%s: userContent equals the golden with the old marker span replaced by the new span', name => {
+    const golden = GOLDEN.cases[name].userContent;
+    expect(countOf(golden, MARKER_OLD), 'premise: the golden holds the old span once').toBe(1);
+    const expected = golden.replace(MARKER_OLD, MARKER_NEW);
+    expect(buildCase(name).userContent === expected, 'userContent differs from the golden beyond the FR-11 marker span').toBe(true);
+  });
+
+  it.each(namesOf('B-marker'))('%s: the new span occurs exactly once', name => {
+    expect(countOf(buildCase(name).userContent, MARKER_NEW)).toBe(1);
+  });
+
   it.each(namesOf('B-marker'))('%s: everything before and after the old marker span is unchanged and the old span is gone', name => {
     const golden = GOLDEN.cases[name].userContent;
     const at = golden.indexOf(MARKER_OLD);
@@ -148,6 +159,11 @@ describe('FR-27 Tier B marker (T23, task-a.ts T-A3) - only the FR-11 item 3 span
 });
 
 describe('FR-27 Tier B video + marker - both spans move, nothing else does', () => {
+  it.each(namesOf('B-both'))('%s: userContent equals the golden with BOTH old spans replaced by the new spans', name => {
+    const expected = GOLDEN.cases[name].userContent.replace(VIDEO_OLD, VIDEO_NEW).replace(MARKER_OLD, MARKER_NEW);
+    expect(buildCase(name).userContent === expected, 'userContent differs from the golden beyond the two FR-11 spans').toBe(true);
+  });
+
   it.each(namesOf('B-both'))('%s: the video span is replaced, the marker span is replaced, the rest is unchanged', name => {
     const afterVideo = GOLDEN.cases[name].userContent.replace(VIDEO_OLD, VIDEO_NEW);
     const at = afterVideo.indexOf(MARKER_OLD);

@@ -79,7 +79,10 @@ describe('FR-4: the phrases already pinned by existing specs are kept (AC-1)', (
 describe('NFR-12: only the instructions of two fields change - the JSON field set and the signature do not', () => {
   it('still advertises exactly the keys caption, label, description and alt', () => {
     const start = PROMPT.indexOf('OUTPUT CONTRACT');
-    const open = PROMPT.indexOf('{', start);
+    // The sentence after "OUTPUT CONTRACT" quotes the characters "{" and "}"; the slice must start at the "{" that OPENS the JSON
+    // example, i.e. a "{" followed by a quoted key and a colon (the quoted "{" is followed by a closing quote, not a key).
+    const open = start + PROMPT.slice(start).search(/\{\s*"[A-Za-z_]+"\s*:/);
+    expect(open, 'the JSON example after OUTPUT CONTRACT was not found').toBeGreaterThan(start);
     const close = PROMPT.indexOf('}', open);
     const keys = Array.from(PROMPT.slice(open, close + 1).matchAll(/"([A-Za-z_]+)"\s*:/g), m => m[1]);
     expect([...keys].sort()).toEqual(['alt', 'caption', 'description', 'label']);

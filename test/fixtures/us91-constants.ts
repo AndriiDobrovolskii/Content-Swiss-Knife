@@ -46,6 +46,13 @@ export const SELF_SCOPING_SENTENCE =
   "These rules govern writing a new description; when the task is to translate an existing text they do not apply, and the source's sentences and their order are kept.";
 
 /**
+ * The FR-20 precedence sentence. Specification v5 labels the wording a PROPOSED DEFAULT; the owner CONFIRMED it exactly as
+ * written (H-FR20PREC, answered after the first TEST_WRITING run), so it is VERBATIM and normative.
+ */
+export const PRECEDENCE_SENTENCE =
+  'where a store voice block defines its own bullet form, heading form, tone or punctuation limits, that block wins';
+
+/**
  * Prose the new master text must NOT contain, because existing watch-item specs scan the master and the
  * Task C / optimizer payloads for it (plan D0.7, R21): task-translate.simplified.spec.ts line 83,
  * task-c.spec.ts lines 271 and 295, image-figure-style.prompt-examples.spec.ts line 57.

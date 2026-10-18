@@ -29,6 +29,7 @@ import { HistoryService } from '../../src/services/history.service';
 import { MASTER_LOCALE, STORE_REGISTRY } from '../../src/prompt-core/constants';
 import { buildPromptFaq } from '../../src/prompts/task-faq';
 import { MASTER_SYSTEM_PROMPT } from '../../src/prompt-core/master-system-prompt';
+import { noImageDeixisRule, livelinessRules } from './us91-constants';
 import type { PromptPayload } from '../../src/prompt-core/payload';
 import type { ProductInput } from '../../src/app/types';
 import {
@@ -100,9 +101,49 @@ export const DESCRIPTION_ONLY_MARKERS = [
   'Technical specifications', "What's in the box", '[Delivery',
 ] as const;
 
-/** The 35 KB description master prompt, or a slice of it, in any system block of the payload. */
-const masterPromptBlocks = (p: PromptPayload): boolean =>
-  [MASTER_SYSTEM_PROMPT, MASTER_SYSTEM_PROMPT.slice(0, 400), MASTER_SYSTEM_PROMPT.slice(3000, 3400)]
+/**
+ * US-9.1 (finding F7). The two positional slices below (0..400, 3000..3400) read the LIVE master and were chosen against the
+ * PRE-Story master. The Story inserts text into that master (FR-5, FR-6..FR-9, FR-20, FR-29), which shifts every later offset, so a
+ * leak of the new paragraphs could sit entirely between or after the two fixed slices. They are KEPT (extend, never narrow:
+ * AGENTS.md section 7.7) and two position-independent checks are ADDED:
+ *  1. windows over the text the Story adds as CONSTANTS (`NO_IMAGE_DEIXIS_RULE`, `LIVELINESS_RULES`, read through
+ *     `us91-constants`, skipped while a constant does not exist yet): any 300+ consecutive characters of either rule in a FAQ
+ *     prompt are caught wherever the master interpolates them;
+ *  2. literals of the Story's other master edits (`US91_MASTER_LITERALS`), as strings.
+ * WHY NOT windows over the whole master: measured, a FAQ translation prompt legitimately shares text with the master (the
+ * NO LEAKED REASONING block, the unit-localisation tables), so whole-master windows are false positives and would fail the
+ * existing FAQ specs. Only text that is NEW in this Story is windowed.
+ */
+const WINDOW = 200;
+const STRIDE = 100;
+const windowsOf = (text: string): string[] => {
+  const out: string[] = [];
+  for (let at = 0; at + WINDOW <= text.length; at += STRIDE) out.push(text.slice(at, at + WINDOW));
+  if (text.length >= WINDOW) out.push(text.slice(text.length - WINDOW));
+  return out;
+};
+const existing = (read: () => string): string[] => { try { return [read()]; } catch { return []; } };
+const storyConstantWindows = (): string[] =>
+  [...existing(noImageDeixisRule), ...existing(livelinessRules)].flatMap(t => [t, ...windowsOf(t)]);
+
+/** Text the Story adds to the master (Specification FR-5, FR-6..FR-9, FR-20, FR-29): none of it may reach a FAQ call. */
+export const US91_MASTER_LITERALS = [
+  '[NO PICTURE REFERENCES',
+  'open each §3 <h2> section with one short sentence',
+  'surface the non-obvious constraint in the paragraph where it matters',
+  'names the task the buyer solves',
+  'where a store voice block defines its own bullet form',
+  'govern writing a new description',
+  "the source's sentences and their order are kept",
+  '[Operator Notes]',
+  'PRECEDING PARAGRAPH',
+  'restricts claims ABOUT THE IMAGE',
+  'Place every embed directly after a body paragraph of its sub-section',
+] as const;
+
+/** The 35 KB description master prompt, a slice of it, or text the Story added to it, in any system block of the payload. */
+export const masterPromptBlocks = (p: PromptPayload): boolean =>
+  [MASTER_SYSTEM_PROMPT, MASTER_SYSTEM_PROMPT.slice(0, 400), MASTER_SYSTEM_PROMPT.slice(3000, 3400), ...storyConstantWindows(), ...US91_MASTER_LITERALS]
     .some(slice => p.systemBlocks.some(b => b.text.includes(slice)));
 
 const allText = (p: PromptPayload): string => `${p.systemBlocks.map(blk => blk.text).join('\n')}\n${p.userContent}`;

@@ -24,8 +24,8 @@
  * RED BY LOAD until T11 creates the component (task breakdown constraint 1). T11 is GATED on T21 (the
  * `task-a.ts` T-A4 approval, H-OD12): a textarea whose text never reaches a prompt must not ship. The
  * application wiring of the component (placement, the eight TRANSLATIONS keys, the state object) is T12 and
- * depends on the unanswered H-FR41TEST; it is pinned only where the Specification fixes it, in
- * `src/app/app.component.operator-notes.spec.ts`.
+ * pinned in `src/app/app.component.operator-notes.spec.ts` (H-FR41TEST answered: the default split), with the state
+ * object's behaviour in `src/app/operator-notes-form-state.spec.ts`.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/angular';

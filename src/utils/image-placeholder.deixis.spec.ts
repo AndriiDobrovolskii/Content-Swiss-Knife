@@ -94,7 +94,13 @@ describe('figureCaptionWarnings emits image-caption-deixis (FR-19)', () => {
   });
 
   it('takes an optional locale: an English caption is judged by the English pattern, a Ukrainian one is not', () => {
-    const english = parts({ visionLabelUk: 'Back panel:', visionDescriptionUk: 'The row of three round modules is shown in the image.' });
+    // cyrillicCheck is OFF for the English figure on purpose: with the check on, `buildFigureParts` discards non-Cyrillic
+    // text and the figcaption holds only the file-name fallback, so no implementation could ever see the English sentence.
+    const english = buildFigureParts(
+      entry({ visionLabelUk: 'Back panel:', visionDescriptionUk: 'The row of three round modules is shown in the image.' }),
+      { cyrillicCheck: false },
+    );
+    expect(english.captionText ?? '', 'the English text must survive buildFigureParts').toContain('shown in the image');
     expect(ruleHits([english], 'en-GB')).toHaveLength(1);
     expect(ruleHits([parts({ visionDescriptionUk: POINTER_DESC })], 'en-GB')).toEqual([]);
   });
