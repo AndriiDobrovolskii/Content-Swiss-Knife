@@ -1102,7 +1102,7 @@ export class ContentOrchestratorService {
                 rule: 'video-embed-restored',
                 detail:
                   `The model omitted the source video embed (${e.src}); it was re-inserted `
-                  + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+                  + 'automatically before §7. Check that it sits with a sensible preceding paragraph.',
                 context: 'HTML (base)',
               })),
               ...(groundingDisabled ? [{
@@ -1503,7 +1503,7 @@ export class ContentOrchestratorService {
                 rule: 'video-embed-restored',
                 detail:
                   `The model omitted the source video embed (${e.src}); it was re-inserted `
-                  + 'automatically before §7. Check that it sits with a sensible lead-in paragraph.',
+                  + 'automatically before §7. Check that it sits with a sensible preceding paragraph.',
                 context: 'HTML (uk-UA)',
               })),
               ...(groundingDisabled ? [{
