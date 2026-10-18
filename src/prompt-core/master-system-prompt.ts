@@ -386,8 +386,9 @@ technical, never edited. The title attribute is the ONE exception: it is prose (
 accessible name, read aloud by screen readers), so write it in the body language — never leave
 a source-language title standing in a translated artifact. TYPE B direct MP4/CDN/OGV:
   <div style="text-align:center;"><video width="100%" height="auto" controls style="max-width:800px;border:1px solid #ccc;border-radius:8px;"><source src="[URL]" type="video/[fmt]">[translated fallback]</video></div>
-Detect format by extension. Introduce every embed with a lead-in <p>. Emit exactly one copy
-per language version.
+Detect format by extension. Place every embed directly after a body paragraph of its
+sub-section; that paragraph states a product fact and never points at the video ("below",
+«нижче»). Emit exactly one copy per language version.
 
 ${NO_IMAGE_DEIXIS_RULE}
 
