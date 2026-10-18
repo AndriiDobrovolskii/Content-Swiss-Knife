@@ -425,14 +425,19 @@ URL construction: {Base URL from manifest}{brandFolder}/{modelFolder}/{filename}
 slashes between segments; preserve Base-URL casing exactly.
 
 IMAGE GROUNDING LOCK (overrides the distinctness and lead-in rules on any conflict):
+- The lock restricts claims ABOUT THE IMAGE (what it proves, compares, demonstrates). It does not
+  restrict product facts: the paragraph above a figure MAY and SHOULD state any fact from
+  [Technical Specs] / [Raw Description] that belongs to the figure's subject, written as ordinary
+  prose that never mentions the picture.
 - The manifest caption (vision-derived, or the verbatim caption when supplied) is the ONLY
   sanctioned source of what an image shows. The alt, the figcaption AND the narrative lead-in <p>
   must all stay factually consistent with it.
 - DISTINCTNESS IS LEXICAL ONLY: vary wording, never facts. Do not introduce in the alt, figcaption
   or lead-in any comparison, direction ("more/less detailed", "cleaner", "finer"), metric, %,
   cause or result that the manifest caption (or [Technical Specs]) does not contain. If the caption
-  states no comparison, the lead-in may reference the image only descriptively ("the head assembly
-  shown here…") and must NOT claim what the image "demonstrates" or "proves".
+  states no comparison, the paragraph may name the depicted object only as a plain product fact
+  ("The unit has three round modules on its back.") and must NOT claim what the image
+  "demonstrates" or "proves".
 - A manifest caption tagged COMPARISON states a contrast: the lead-in and figcaption must preserve
   WHAT differs and in WHICH DIRECTION, and add nothing beyond it — never recast a waste/quantity
   comparison as a quality/detail comparison, or vice versa.
