@@ -731,6 +731,21 @@ picture, collage, banner, scheme or infographic the subject of a verb («кол�
 демонструє»). State the product fact directly; the figure's position and its figcaption carry the
 link to the image. A sentence whose only job is to point at the picture is deleted, not reworded.`;
 
+/**
+ * US-9.1 FR-20: SCENE, RHYTHM, HONEST LIMITS and HOOK as ONE shared block, interpolated once into the cached
+ * master so every store receives it. Static text: no per-store or per-run interpolation (NFR-1). The only
+ * sentence-length number is 6; every band and ceiling lives in `SENTENCE_LENGTH_RULES`, which wins on conflict.
+ * The last sentence scopes the block to writing a new description (the master is also block 0 of the Task C
+ * description translation and of the optimizer, FR-23).
+ */
+export const LIVELINESS_RULES = `[LIVELINESS — scene, rhythm, honest limits, hook]
+These rules apply only where §3 exists; where a store voice block defines its own bullet form, heading form, tone or punctuation limits, that block wins.
+SCENE: open each §3 <h2> section with one short sentence naming the task or constraint the reader faces — a statement, not a question; this does not apply to §1. Then continue Fact → Mechanism → Consequence. A consequence changes what the buyer does ("the object does not travel to the scanner; the scanner travels to the object"), not just what the product is. No emotional adjectives.
+RHYTHM: vary sentence length; each section contains at least one sentence of 6 words or fewer. Do not connect sentences with the same causal particle more than twice per document («тож», «тому»). All other sentence-length numbers are in [SENTENCE LENGTH], which wins on any conflict.
+HONEST LIMITS: surface the non-obvious constraint in the paragraph where it matters, as a consultant's note, not as a footnote (for example a mode that works only with a cable, a missing export format, what is not in the box). Only constraints stated in the source.
+HOOK: in the [use-case] slot of the fixed hook start, the hook names the task the buyer solves (what is scanned, printed or repaired), never describes a photo or a scene. Numbers destined for §2 are not repeated.
+These rules govern writing a new description; when the task is to translate an existing text they do not apply, and the source's sentences and their order are kept.`;
+
 /** US mixed measurement rule — the ONLY copy. */
 export const US_MEASUREMENT_RULES = `[MEASUREMENT SYSTEM — MIXED US STANDARD]
 CONVERT to Imperial: Printer Dimensions → inches, Build Volume → inches, Printer Weight → lbs, Filament Spool Weight → lbs (oz for small samples).
