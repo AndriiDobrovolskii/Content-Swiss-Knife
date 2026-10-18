@@ -1,6 +1,7 @@
 import { SeoResponse } from '../app/types';
 import { LEAKED_PREAMBLE_PATTERN, normalizeForIntegrityCheck, scanForLeakedPreamble } from './llm-output-integrity';
 import { validateSimplifiedTemplateHtml } from './simplified-word-ranges';
+import { imageDeixisIssues } from './image-deixis';
 
 /**
  * Post-generation validation of the hard acceptance criteria from Schema v3.0.
@@ -632,6 +633,8 @@ export function validateGeneratedHtml(
         issues.push({ severity: 'warning', rule: 'figure-missing-figcaption', detail: `<figure> #${i + 1} contains an image but no <figcaption>.`, context });
       }
     });
+    // US-9.1 FR-18: a paragraph that points at the picture, directly above a figure (warning only; reuses `doc`).
+    issues.push(...imageDeixisIssues(doc, locale ?? '', context));
   } catch {
     // DOMParser unavailable (non-browser) — skip the image checks.
   }
