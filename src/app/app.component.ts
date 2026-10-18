@@ -1051,6 +1051,7 @@ export class AppComponent {
     this.specs.set(item.input.specs);
     this.supplementalContent.set(item.input.supplementalContent || '');
     this.customInstructions.set(item.input.customInstructions || '');
+    this.operatorNotesState.restore(item.input.operatorNotes);
     this.orchestrator.content.set(item.output);
     this.showHistory.set(false);
   }
