@@ -1,13 +1,13 @@
 ---
 artifact: pipeline_status
 story: US-9.1
-version: 1
+version: 2
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-18T16:16:00Z
-updated_at: 2026-10-18T16:16:00Z
-supersedes: null
+updated_at: 2026-10-18T17:32:00Z
+supersedes: docs/catalog/US-9.1-pipeline-status.md#1
 inputs_consumed:
   - key: story
     version: 4
@@ -24,203 +24,169 @@ inputs_consumed:
   - key: plan_review
     version: 3
   - key: test_strategy
-    version: 1
+    version: 2
   - key: ac_test_matrix
-    version: 1
+    version: 2
   - key: test_generation_report
-    version: 1
-open_decisions_blocking: true
+    version: 2
+open_decisions_blocking: false
 ---
 
-# Pipeline status: US-9.1 (IMPLEMENTATION, track prompt + angular)
+# Pipeline status: US-9.1 (IMPLEMENTATION, round 2, track prompt + angular)
 
-Branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, started from HEAD `cd8b04f`, Node v24.15.0, run of 2026-10-18 (UTC).
-BASE (read from the fixture headers, never `git merge-base HEAD main`): `6546db83ef4005e9d6a57baf51adf0b35df8d3c7`.
+Branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, Node v24.15.0, round 2 run of 2026-10-18 (UTC, `date -u` 16:48 at start, about 17:30 at the last command).
+BASE (read from the fixture headers, never `git merge-base HEAD main`): `6546db83ef4005e9d6a57baf51adf0b35df8d3c7`; `git merge-base --is-ancestor 6546db8 HEAD` exit 0.
 
-**Result of this run: PARTIAL.** 17 of the 42 tasks are done and committed (plus three verify-only tasks and the baseline-fixtures commit). The rest are
-waiting on an open human answer, on tests that do not exist yet, or are blocked behind T16 and the master-last order of the plan. Nothing was weakened, skipped or regenerated
-with `-u`; no push, no PR.
+**Result of round 2: PARTIAL, loop-back key `changes_required_tests`.** Every task of the round is done and committed except the master hunk T30 (and the tasks that are serial behind it in
+`master-system-prompt.ts`: T31, T32, then the verification T33). T30 is blocked by a **contradiction between two tests** (finding F8 below): the Specification's FR-7 literal
+`see [NO PICTURE REFERENCES]` and the T27 spec's "the heading occurs twice" check cannot both pass. Nothing was weakened, skipped or regenerated with `-u`; no test file or fixture other than the golden
+(regenerated in its owning tasks) was touched; no push, no PR. T36 and T42 are manual, owner-run (H-OD11); T41 is not built (the Node check passed).
 
-## Human decisions in force (verbatim sources: `docs/workflow/history.jsonl`)
+## Human decisions in force (verbatim sources: `docs/workflow/history.jsonl`, last events)
 
-- FROZEN files (AGENTS.md section 9), event 2026-10-18T15:24:23Z, owner, verbatim: `modify src/prompts/task-a.ts, modify src/utils/output-validator.ts,
-  modify src/prompt-core/master-system-prompt.ts`. Scope: this session, US-9.1 hunks only; `task-b.ts` and `task-c.ts` are NOT covered and were never opened.
-  Intent order: `task-a.ts` T-A4 first, then the rest of `task-a.ts`, then `output-validator.ts`, `master-system-prompt.ts` last; one commit per task with
+- FROZEN files (AGENTS.md section 9), owner, verbatim: `modify src/prompts/task-a.ts, modify src/utils/output-validator.ts, modify src/prompt-core/master-system-prompt.ts`; US-9.1 hunks only, this session.
+  NOT covered and never opened: `src/prompts/task-b.ts`, `src/prompts/task-c.ts`. Owner's order: rest of `task-a.ts`, `output-validator.ts` (round 1), `master-system-prompt.ts` last; one commit per task with
   `bash arch-guard.sh --rebaseline` and `.arch-guard-checksums` in the same commit.
-- Event 2026-10-18T15:35:15Z, owner, verbatim: `H-OD13: Copy the needed reference outputs and baseline files from the git-ignored Knowledge/ folder into a
-  permanent, tracked test fixtures directory (e.g., test/fixtures/baseline/) and commit them so CI and tests can access them. The restated Specification text is
-  normative. | H-FR41TEST: Accept the default split. The call-site source-text pins plus OperatorNotesFormState behaviour tests satisfy the requirement. No heavy
-  AppComponent TestBed is needed.`
+- Answered: H-OD13 (restated Specification text normative; baseline fixtures tracked), H-FR41TEST (default split), H-FR20PREC (proposed precedence sentence exactly as written), H-FR11I3 (proposed marker block wording exactly as written),
+  H-OD10 (D-3, D-4, D-5, D-7, D-9 as written), H-OD11 (live runs are MANUAL by the QA operator, 3 marker-built + 3 non-marker products of their choice).
 
 ## Task table
 
 | Task | Track | Status | Commit |
 |---|---|---|---|
-| H-OD13 baseline files (`Knowledge/Issues/4/*` copied verbatim to `test/fixtures/baseline/`) | - | DONE | 964468c |
-| T1 FR-27 `userContent` oracle (verify) | prompt | VERIFIED, no new commit: fixture and spec were committed by TEST_WRITING | 3f9ae29 |
-| T37 D15 digest fixture (verify) | prompt | VERIFIED, no new commit | 3f9ae29 |
-| T20 amended Task C guard (verify) | prompt | VERIFIED, no new commit | 3f9ae29 |
-| T2 `findImageDeixis` + pattern table | angular | DONE | 39ae78b |
-| T3 `collectFigureDeixis` + `imageDeixisIssues` | angular | DONE | 1b132d0 |
-| T4 `image-caption-deixis` in `figureCaptionWarnings` | angular | DONE, one test of its spec is unsatisfiable (finding F1) | dc5f589 |
-| T5 seven `LEAD_IN_TEMPLATES` | angular | DONE | de730c4 |
-| T6 `video-embed-missing` detail | angular | DONE | 40b4f57 |
-| T7 two `video-embed-restored` warnings | angular | DONE | 3be4378 |
-| T8 `OperatorNotes` type + `ProductInput.operatorNotes` | angular | DONE | 28ba099 |
-| T9 `operator-notes` leaf module | prompt | DONE | 1a335c7 |
-| T14 Vision pre-pass FR-1..FR-4 | prompt | DONE, one test of its spec is unsatisfiable (finding F2) | 8dbd980 |
-| T15 `NO_IMAGE_DEIXIS_RULE` constant | prompt | DONE | 48ae4d6 |
-| T17 Doc FIGURE PLACEMENT + golden regeneration | prompt | DONE | dd9c242 |
-| T21 `task-a.ts` T-A4 `[Operator Notes]` (FROZEN, approved) | prompt | DONE | 7397081 |
-| T22 `task-a.ts` T-A2 video block + golden regeneration (FROZEN, approved) | prompt | DONE | 7c8fae9 |
-| T10 `numericFidelitySources` + the four notes | angular | DONE | 46d9a15 |
-| T11 `OperatorNotesFieldsComponent` | angular | DONE (runner caveat, finding F3) | 9176be3 |
-| T25 `output-validator.ts` O1 (FROZEN, approved) | angular | DONE | ff8ad92 |
-| T26 `output-validator.ts` O2 (FROZEN, approved) | angular | DONE | 7958c7f |
-| T16 `LIVELINESS_RULES` | prompt | NOT STARTED: H-FR20PREC open | - |
-| T18 C3D OVERRIDE #5 + golden | prompt | NOT STARTED: serial after T16 (same file; Reading guide item 6) | - |
-| T19 EXPERT3D overlay + golden | prompt | NOT STARTED: serial after T18 | - |
-| T23 `task-a.ts` T-A3 marker block (FROZEN) | prompt | NOT STARTED: H-FR11I3 open | - |
-| T24 `task-a.ts` T-A1 instruction clause (FROZEN) | prompt | NOT STARTED: serial after T23 (same file and golden) | - |
-| T40 `OperatorNotesFormState` | angular | NOT STARTED: its test `operator-notes-form-state.spec.ts` does not exist (TEST_WRITING deferred it) | - |
-| T12 notes state field, placement, labels | angular | NOT STARTED: depends on T40; its state-binding pin is missing; 12 label/placement pins exist and are red | - |
-| T13 `buildGeneratorInput` spreads `inputPart()` | angular | NOT STARTED: depends on T12, T40; the `inputPart()` call-site pin is missing | - |
-| T38 `restoreHistory` calls `restore` | angular | NOT STARTED: depends on T13, T40; no test exists | - |
-| T39 `clearAll` resets both cases | angular | NOT STARTED: depends on T38, T40; no test exists | - |
-| T27..T31 master M1+M2, M3, M4, M5, M6 (FROZEN, approved) | prompt | NOT STARTED: BLOCKED. The breakdown's Group G reads `T27 -> ... -> T32 (after T15/T16/T20/T37 ...; serial; blocked)`, so the group follows T16 (H-FR20PREC); the owner's order also puts the master last. Starting it earlier is a reorder, which is the human's or the planner's decision (Reading guide item 9), not the builder's | - |
-| T32 master M7 `LIVELINESS_RULES` (FROZEN, approved) | prompt | NOT STARTED: BLOCKED, depends on T16 (H-FR20PREC) and T31 | - |
-| T33 consumer checkpoint (verification only) | prompt | NOT STARTED: BLOCKED, needs T27..T32 | - |
-| T34 `description-metrics` | angular | NOT STARTED: H-OD10 open | - |
-| T35 `tools/measure-description.ts` + spawn test | angular | NOT STARTED: depends on T34 | - |
-| T36 live acceptance runs (manual) | prompt | NOT STARTED: H-OD11 open | - |
-| T41 D12 launcher (conditional) | angular | NOT STARTED: only if T35's Node check fails | - |
-| T42 live translation comparison (manual, optional) | prompt | NOT STARTED: H-OD11 open | - |
+| H-OD13 baseline files | - | DONE (round 1) | 964468c |
+| T1, T37, T20 oracles (verify) | prompt | VERIFIED (round 1); re-run round 2: `payload-oracle.d15`, `task-c.description-bytes`, `task-a.user-content.golden` = 3 files / 410 tests green | 3f9ae29 |
+| T2, T3 detector and carriers | angular | DONE (round 1) | 39ae78b, 1b132d0 |
+| T2/T3 narrowing (finding F6) | angular | DONE (round 2) | 3ef0f1a |
+| T4 .. T9, T14, T15, T17 | angular / prompt | DONE (round 1) | dc5f589, de730c4, 40b4f57, 3be4378, 28ba099, 1a335c7, 8dbd980, 48ae4d6, dd9c242 |
+| T21, T22 `task-a.ts` (FROZEN, approved) | prompt | DONE (round 1) | 7397081, 7c8fae9 |
+| T10, T11, T25, T26 | angular | DONE (round 1) | 46d9a15, 9176be3, ff8ad92, 7958c7f |
+| T40 `OperatorNotesFormState` | angular | DONE | 24bee59 |
+| T12 notes field, placement, eight label keys | angular | DONE | 9472ade |
+| T13 `buildGeneratorInput` spreads `inputPart()` | angular | DONE | 6033a80 |
+| T38 `restoreHistory` calls `restore` | angular | DONE | 510604c |
+| T39 `clearAll` resets both cases | angular | DONE | fe29f88 |
+| T16 `LIVELINESS_RULES` | prompt | DONE | 4945ff5 |
+| T18 C3D OVERRIDE #5 + golden | prompt | DONE | 9bbfd50 |
+| T19 EXPERT3D overlay + golden | prompt | DONE | fb0b24b |
+| T23 `task-a.ts` T-A3 marker block (FROZEN, approved) | prompt | DONE | 266cd9c |
+| T24 `task-a.ts` T-A1 figure clause + golden (FROZEN, approved) | prompt | DONE | 87fb3c0 |
+| T34 `description-metrics` | angular | DONE | b7b2ef8 |
+| T35 `tools/measure-description.ts` | angular | DONE; Node check passed (see evidence) | 990cb32 |
+| T41 D12 launcher (conditional) | angular | NOT BUILT: the Node check passed, the task is dropped by its own condition | - |
+| T27 master M1+M2 `NO_IMAGE_DEIXIS_RULE` + golden (FROZEN, approved) | prompt | DONE | a0e33a5 |
+| T28 master M3 `[VIDEO]` + golden (FROZEN, approved) | prompt | DONE | 3110e94 |
+| T29 master M4 IMAGE GROUNDING LOCK + golden (FROZEN, approved) | prompt | DONE | 18cad1f |
+| T30 master M5 PLACEMENT + golden (FROZEN, approved) | prompt | **BLOCKED: unsatisfiable test (finding F8); not committed, tree restored to T29** | - |
+| T31 master M6 `[Operator Notes]` | prompt | NOT STARTED: serial behind T30 (same file; Reading guide item 6) | - |
+| T32 master M7 `LIVELINESS_RULES` | prompt | NOT STARTED: serial behind T31 | - |
+| T33 consumer checkpoint (verification only) | prompt | NOT STARTED: needs T27..T32 (see "pre-verification" below) | - |
+| T36 live acceptance runs | prompt | manual, owner-run (H-OD11) | - |
+| T42 live translation comparison | prompt | manual, owner-run, optional (H-OD11) | - |
 
-## Per-task notes (what was run, what moved)
+## Per-task notes (round 2)
 
-Every task: full `npx vitest run` before and after, compared test by test against a failing-test baseline taken before T2 (447 failing ids: 442 tests
-and 5 load failures). **After every task: zero new failures; the only changes are tests leaving the failing set.** `npx tsc --noEmit` and
-`bash arch-guard.sh` were run after every task.
+Every task: full `npx vitest run --reporter=json` before and after, compared test by test (a task passes only with zero NEW failing ids), `npx tsc --noEmit`, `bash arch-guard.sh`, one commit.
 
-- **T2, T3**: `src/utils/image-deixis.ts` is a leaf (only `import type`). `image-deixis.spec.ts`, `image-deixis.import-cycle.spec.ts` green (89 tests).
-  The uk patterns cover the Specification's required cases; the ru/en/pl/de/es/pt lists are drafted from the same construction classes and labelled
-  unreviewed in the module header (OD-7). Pointer adverbs ("нижче", "below") only match opening a clause or after a picture/video noun, never before a
-  number or sign, so "нижче -10 °C" is not a hit.
-- **T4**: `figureCaptionWarnings(figures, locale = 'uk')`. The plan's default `'uk-UA'` collides with the existing NFR-6 pin in `image-placeholder.spec.ts`
-  (it forbids region-locale literals in the module); the default is the primary subtag `'uk'`, which is what the detector keys on. No test was changed.
-  `image-placeholder-validate.ts` is untouched.
-- **T5, T6, T7**: Appendix E sentences verbatim; the `video-embed-missing` detail and both orchestrator warnings reworded to the Specification's literals.
-- **T9**: byte-exact block pins green (22 tests).
-- **T14**: the Specification's restated `description` and `alt` blocks and the no-inference sentence, verbatim (H-OD13: restated text is normative).
-- **T15**: the Specification's restated FR-5 block, verbatim; `grep -nE "§C[1-6]|CONSUMABLES|TRANSLATE the generic descriptor|reorder it category-first|fit-content"`
-  over the constant returned nothing (exit 1); `full-description.golden`, `task-c.description-bytes`, D15 specs green (210 tests).
-- **T17**: golden regenerated from the builders (a throw-away spec that wrote `JSON.stringify(cases, null, 2)`; it reproduced the committed file byte for byte
-  before the edit and was deleted afterwards). Reviewed diff, by case and block: `doc/expert3d`, `doc/expert3d+hook`, `doc/c3d` block 1 only; the other nine
-  cases unchanged. `full-description-inputs.ts` header gained the first US-9.1 entry (comment only, as the breakdown lists it).
-  `simplified-template-blocks.ts`: no diff.
-- **T21**: two lines in `task-a.ts` (import + interpolation before the image block). `git diff --stat`: 2 insertions, 1 deletion. `task-a.operator-notes.spec.ts`
-  54 tests green; Tier A of the FR-27 oracle stays green. Rebaseline run printed `CHANGED (unauthorized?): src/prompts/task-a.ts` and exited 1 (by design);
-  the following run printed `All frozen files unchanged` / `ALL CHECKS PASSED`, exit 0. `.arch-guard-checksums` diff: only the `task-a.ts` line
-  (`0421226c...` to `5d0e6e37...`).
-- **T22**: one span in `buildVideoBlock`. Golden regenerated; reviewed diff = `userContent` of `doc/expert3d`, `doc/expert3d+hook`, `html/expert3d`, exactly the
-  FR-11 item 2 span. Rebaseline exit 1, clean run exit 0; only the `task-a.ts` checksum line moved (now `d126ab91...`). `task-c-description-prompts.json` unchanged.
-- **T10**: four trimmed note values appended to `numericFidelitySources`; `NUMERIC_SOURCE_FIDELITY_RULES` and `supplementalContent` untouched (the byte pin is green).
-- **T11**: see finding F3.
-- **T25**: one string in `output-validator.ts`; rebaseline exit 1, clean run exit 0; only the `output-validator.ts` line moved (now `a2853212...`, then `3b5f3796...` after T26).
-- **T26**: one import + one call inside the existing `DOMParser` try (`imageDeixisIssues(doc, locale ?? '', context)`); warnings only, no repair-strategy entry. The corpus
-  fixtures and `test/render-*.spec.ts` are unchanged and green (1209 tests across the validator, repair-gate, detector and render specs).
+- **T40**: plain class, `signal` from `@angular/core` and the leaf module only; `signal()` works without an injection context under the logic runner (the spec's first test and 28/28 green). 28 tests.
+- **T12**: field `readonly operatorNotesState = new OperatorNotesFormState()`, `operatorNotesLabels` computed, eight keys `operatorNotes{UsageScenarios,TestResults,PreviousGenerationComparison,Limitations}` in en and uk, the component once in the Generator form after
+  the custom instructions and before the Expert-3DPrinter-hidden image block. T13: one spread line. T38: one statement. T39: one line in each of the two independent `clearAll` cases.
+- **T2/T3 narrowing (F6)**: the open `on|in|auf|en|na + any word` tails of the participle patterns became picture-noun tails; `frame`/`clip` only as subject of a show verb or before below/above (`frames`, `clips?`); `ролик`
+  alone removed and `відео`/`видео` followed by `-` excluded; German picture nouns became exact inflections (no `Bildschirm`, `Fotopolymerharz`); Portuguese gained `imagem`. `image-deixis.spec.ts` 108/108, import-cycle spec green, no positive lost.
+- **T16**: the constant follows the Specification's illustrative block with the owner-confirmed precedence sentence opening the block and the verbatim self-scoping sentence last. `grep -nE "§C[1-6]|CONSUMABLES|TRANSLATE the generic descriptor|reorder it category-first|fit-content"` over the constant: no match (exit 1). `constants.liveliness.spec.ts` and `faq-pipeline.master-leak.spec.ts` green (52 tests).
+- **T18**: one sentence; golden regenerated with a throw-away spec (deleted afterwards, trailing newline added to match the tracked file); reviewed diff: that sentence in the two `c3d` Task A cases (blocks of the C3D overlay), nothing else.
+- **T19**: reviewed diff by case and block: block 2 (the EXPERT3D overlay) of `doc/expert3d`, `doc/expert3d+hook`, `html/expert3d`; the other nine cases unchanged.
+- **T23**: the marker span exactly as the owner accepted it. Rebaseline printed `CHECKS FAILED` once (by design) and the next run `ALL CHECKS PASSED`. **T24**: the clause exactly as the breakdown words it; reviewed golden diff: block 1 of the four `html/*` cases only.
+  `.arch-guard-checksums` `task-a.ts`: `d126ab91...` -> `4b4c8b5d...` (T23) -> `dc98fd7a...` (T24).
+- **T34**: leaf module, `import type` only; parser and collector are parameters. `description-metrics.spec.ts` 61/61. **Calibration cross-check against the Specification's disclosure table** (real CLI output on the tracked baseline files, input `x`):
+  reference `creality-pika-uk-v2.html`: sentences 80, mean 12.61, sigma 5.90, hook 47, "тож"+"Тому" 2, 13 sections, 0 deixis hits; defective `description_uk-UA.html`: 98, 10.92, 4.84, 53, 7, 13 sections. All equal the table.
+- **T35**: see the Node check below. `test/measure-description.cli.spec.ts` 30/30. A bare HTML fragment is wrapped in `<html><body>` before parsing because linkedom keeps top-level fragments out of `body`.
+- **T27, T28, T29**: each golden diff verified programmatically to be a single contiguous insertion or replacement, identical in block 0 of exactly ten cases (`doc/expert3d`, `doc/expert3d+hook`, `doc/c3d`, `html/expert3d`, `html/legacy`, `html/legacy+lang`,
+  `html/c3d+customTemplate`, `c/expert3d-es`, `c/eu-en`, `c/us-uk`); `translate/uk-user`, `translate/de-internal`, every block 1 and every `userContent` unchanged; `git diff --exit-code` over `task-c-description-prompts.json`, `task-c.ts`, `task-translate.ts`,
+  `optimizer.ts`, `simplified-template-blocks.ts` exits 0 after each; zero new failures (the master-scanning watch specs, the amended Task C guard and the FAQ specs stayed green). Checksum of `master-system-prompt.ts`:
+  `75eb4d0b...` -> `05cc22ca...` (T27) -> `d40d8228...` (T28) -> `39d1aa50...` (T29).
 
-## Verification evidence (real output, final state of this run, 2026-10-18T16:15Z)
+### The Node check (T35 steps 1 and 2)
 
 ```
-$ npx vitest run --reporter=dot                       # npm run test:logic
- Test Files  19 failed | 200 passed (219)
-      Tests  286 failed | 7144 passed | 3 skipped (7433)
-   (baseline before T2: 31 failed files | 442 failed tests + 5 load failures; 156 tests and 4 load failures left the failing set; 0 tests entered it)
+$ node --version
+v24.15.0                                   (>= 22.18: native type stripping, no launcher needed; T41 dropped)
+$ node tools/measure-description.ts --html f.html --input f.txt     # one real run on a fixture pair
+v24.15.0
+locale: uk-UA
+HARD
+  deixis hits (paragraph above, figcaption, alt): 0
+  figures without a paragraph above: 0
+  consecutive figures: 0
+  numbers absent from the input: 0
+...
+RESULT: no hard violation                  (exit 0)
+```
 
-$ npx tsc --noEmit                                    # npm run lint
-src/utils/description-metrics.spec.ts(35,36): error TS2307: Cannot find module './description-metrics' ...
-   (one diagnostic, in a spec whose owner task T34 is blocked; baseline had 10 diagnostics)
+The `.ts` entry loads, the explicit `.ts` imports of the two leaf modules resolve, and `linkedom` parses. `git diff package.json` is empty (no dependency added); no `engines` / `.nvmrc`.
+
+### Pre-verification of T30..T32 and T33 (experiment, not committed)
+
+To find every test problem in one pass, the T30 hunk (the Specification's FR-7 restated bullets, verbatim), T31 (Appendix B) and T32 (import plus `${LIVELINESS_RULES}` after `${SENTENCE_LENGTH_RULES}`) were applied together in the working tree, the golden regenerated and the whole suite run,
+then everything was reverted (`git checkout`; the patch is kept at `C:\Users\works\AppData\Local\Temp\claude\C--Work-Content-Swiss-Knife\148d84a3-5a7e-4963-a223-cc326e5473fd\scratchpad\t30-t31-t32-experiment.patch`):
+
+```
+ Tests  1 failed | 7616 passed        # the only failure: master-system-prompt.no-picture-references.spec.ts
+                                      #   "the heading "[NO PICTURE REFERENCES" is not located between the [IMAGE HANDLING] heading and FIGURE FORMAT"
+```
+
+So every other test of T30, T31, T32 is satisfiable and was green with the hunks applied (specs: `master-system-prompt.{placement,operator-notes,liveliness}`, `task-c.master-reach`, `optimizer.master-reach`, `full-description.golden.us91`); F8 is the single obstacle.
+
+## Verification evidence (real output, final state of round 2)
+
+```
+$ npx vitest run --reporter=dot                        # npm run test:logic
+ Test Files  6 failed | 215 passed (221)
+      Tests  130 failed | 7487 passed | 3 skipped (7620)
+   (round 2 started at 350 failing tests / 20 files; 0 tests entered the failing set in any task; round 1 baseline was 447)
+
+$ npx tsc --noEmit                                     # npm run lint
+(no output, exit 0)
 
 $ bash arch-guard.sh
   All frozen files unchanged / ALL CHECKS PASSED
 
 $ npm run test:components
-Application bundle generation failed.
-X [ERROR] TS2307: Cannot find module './description-metrics' ...        (the only diagnostic; baseline had 10)
+ Test Files  3 passed (3)
+      Tests  55 passed (55)                            # the bundle builds again; includes the OperatorNotesFieldsComponent spec (23 tests)
 ```
 
-Oracles (T1, T20, T37): `npx vitest run src/prompts/payload-oracle.d15.spec.ts src/prompts/task-c.description-bytes.spec.ts` = 2 files / 183 tests green.
-`task-a.user-content.golden.spec.ts`: Tier A and the Doc wrapper green; the 3 failing tests left are Tier B marker/video+marker (owner T23).
-`git merge-base --is-ancestor 6546db8 HEAD` exit 0. `git diff 6546db8 --exit-code` over `task-c-description-prompts.json`, `task-b.ts`, `task-c.ts`,
-`task-translate.ts`, `optimizer.ts`, `simplified-template-blocks.ts`, `master-system-prompt.ts`: exit 0 (empty). The T1 and T37 fixtures and their specs are
-byte-identical to commit 3f9ae29. `.arch-guard-checksums` against BASE: only the `task-a.ts` and `output-validator.ts` lines differ; the `task-b.ts`, `task-c.ts` and
-`master-system-prompt.ts` entries are unchanged.
+`.arch-guard-checksums` against BASE: only `task-a.ts`, `master-system-prompt.ts`, `output-validator.ts` differ; `task-b.ts` and `task-c.ts` are unchanged. `git diff 6546db8 --exit-code` over `test/fixtures/golden/task-c-description-prompts.json`, `task-b.ts`, `task-c.ts`,
+`task-translate.ts`, `optimizer.ts`, `simplified-template-blocks.ts`: exit 0. `git diff 6546db8 -- package.json vitest.config.ts`: empty. Since the TEST_WRITING commit `165ed35` the only test-side file changed is the regenerated golden `full-description-prompts.json`.
 
-### The 286 remaining failing tests, by file, and what they wait for
+### The 130 remaining failing tests, by file, and what they wait for
 
 | Failing | File | Waits for |
 |---|---|---|
-| 24 | `constants.liveliness.spec.ts` | T16 (H-FR20PREC) |
-| 2 | `constants.c3d-override.spec.ts` | T18 (serial after T16) |
-| 6 | `constants.expert3d.spec.ts` | T19 (serial after T18) |
-| 4 | `task-a.deixis-wording.spec.ts` (2 marker tests: T23; 2 instruction tests: T24) | T23 (H-FR11I3), T24 |
-| 3 | `task-a.user-content.golden.spec.ts` (Tier B marker and video+marker) | T23 |
-| 11 / 3 / 4 / 10 / 6 / 16 | `master-system-prompt.no-picture-references` (T27) / `.video-placement` (T28) / `.grounding-lock` (T29) / `.placement` (T30) / `.operator-notes` (T31) / `.liveliness` (T32) | T27..T32 (blocked behind T16, H-FR20PREC) |
-| 80 / 18 / 69 | `task-c.master-reach.spec.ts` / `optimizer.master-reach.spec.ts` / `full-description.golden.us91.spec.ts` | T18, T19, T24, T27..T32 |
-| 12 | `app.component.operator-notes.spec.ts` (labels, placement) | T12 (after T40) |
-| 16 | `test/measure-description.cli.spec.ts` | T35 (after T34, H-OD10) |
-| 1 load file | `description-metrics.spec.ts` | T34 (H-OD10) |
-| 1 | `vision-prepass.no-picture-references.spec.ts` NFR-12 key-set test | finding F2 (test defect) |
-| 1 | `image-placeholder.deixis.spec.ts` "takes an optional locale" | finding F1 (test defect) |
+| 30 / 48 / 12 | `full-description.golden.us91.spec.ts` / `task-c.master-reach.spec.ts` / `optimizer.master-reach.spec.ts` | T30 (partly), T31, T32 |
+| 24 | `master-system-prompt.liveliness.spec.ts` | T32 |
+| 6 | `master-system-prompt.operator-notes.spec.ts` | T31 |
+| 10 | `master-system-prompt.placement.spec.ts` | T30 (blocked, F8) |
 
-The 286 failing tests sum to the rows above (24+2+6+4+3+11+3+4+10+6+16+80+18+69+12+16+1+1 = 286).
+30 + 48 + 12 + 24 + 6 + 10 = 130.
 
-## Findings (for TEST_WRITING; the builder does not own tests)
+## Findings
 
-- **F1 (T4)**: `image-placeholder.deixis.spec.ts`, "takes an optional locale: an English caption is judged by the English pattern" builds its English figure with
-  `buildFigureParts(entry({visionLabelUk:'Back panel:', visionDescriptionUk:'The row of three round modules is shown in the image.'}), {cyrillicCheck:true})`.
-  With the check on, `buildFigureParts` discards a non-Cyrillic label and description, so the figcaption holds the file-name fallback ("desk lamp.") and no English
-  text; no implementation of `figureCaptionWarnings` can see the English sentence. The test needs `cyrillicCheck: false` for the English figure. The other 17 tests of the
-  file pass.
-- **F2 (T14)**: `vision-prepass.no-picture-references.spec.ts`, "NFR-12 ... still advertises exactly the keys" slices from the first `{` after `OUTPUT CONTRACT`. That `{` is
-  the quoted `"{"` in the sentence "the first character of your output is "{" and the last is "}"", so the slice is `{" and the last is "}` and yields no keys. It failed at
-  baseline (before any edit) and the prompt line it reads is not part of FR-1..FR-4 (NFR-12 forbids changing the field set). The slice must start at the `{` that opens the JSON
-  example (for example the first `{` followed by a newline). The 16 other tests of the file pass.
-- **F3 (T11, runner)**: `npm run test:components` still fails to bundle, now on one diagnostic (TS2307 for `description-metrics`, owner T34, blocked by H-OD10). Evidence that
-  the new component spec passes: `ng test --ts-config=<throw-away tsconfig that includes only the component specs>` ran 3 files / 55 tests green (the new spec, 23 tests, plus the
-  two existing specs). The throw-away tsconfig was deleted; no spec was moved. The component runner cannot be green until T34 lands.
-- **F4 (tests to be written before T12, T13, T38, T39, T40)**: `OperatorNotesFormState` behaviour spec (clear; restore with notes; restore without notes and `{}`
-  empty the four values; restore-then-clear; empty / whitespace-only values give no `operatorNotes` key; `inputPart()` returns `{}` or `{operatorNotes}`; and the check that
-  `signal()` works without an injection context); T12's binding of the component to `operatorNotesState.values()/set()`; T13's `buildGeneratorInput` contains
-  `operatorNotesState.inputPart()` and writes no literal `operatorNotes:` key; T38's `restoreHistory` contains `operatorNotesState.restore(item.input.operatorNotes)`;
-  T39's two disjoint per-case `clearAll` pins (`case 'generator':` and `case 'ua-generator':` slices) and the slicing-helper self-test on a one-case-only synthetic source.
-- **F5 (T23/T24)**: the two "Assert absent: the old marker span" tests and the Tier B marker equalities are red until T23 is built; they cannot be satisfied without
-  the unconfirmed FR-11 item 3 wording (H-FR11I3), which the builder must not pick.
+- **F8 (T30, blocks it; the loop-back reason; the test, not the code, must change)**: `src/prompt-core/master-system-prompt.no-picture-references.spec.ts`, test "the heading "[NO PICTURE REFERENCES" is not located between the [IMAGE HANDLING] heading and FIGURE FORMAT",
+  ends with `expect(MASTER_SYSTEM_PROMPT.indexOf('[NO PICTURE REFERENCES', at + 1), 'the heading occurs twice').toBe(-1)`. It passes with T27 and fails the moment T30 inserts the Specification's FR-7 literal `see [NO PICTURE REFERENCES]` (FR-7 Assert present,
+  normative, confirmed by the owner; also asserted by `master-system-prompt.placement.spec.ts`), because that literal contains the prefix `[NO PICTURE REFERENCES`. Both cannot pass: the master must contain `see [NO PICTURE REFERENCES]` and must not contain the prefix twice.
+  The intent of the check is "the block heading is not duplicated". A satisfiable form keys the second search on the heading itself (`'\n[NO PICTURE REFERENCES —'` or `'[NO PICTURE REFERENCES — body'`), or counts occurrences of `\n[NO PICTURE REFERENCES` at a line start. The builder did not
+  edit the test and did not commit T30 (committing it would turn a previously green test red, a half-state).
+- F1..F7 of round 1 are closed: F1, F2 (fixed in the specs), F3 (the component runner is green: 55 tests), F4 (T40, T12, T13, T38, T39 built against the new tests), F5 (T23, T24 built), F6 (T2/T3 narrowed), F7 (the `faq-pipeline` fixture and its guard spec were taken on by TEST_WRITING;
+  `faq-pipeline.master-leak.spec.ts` is green with `LIVELINESS_RULES` present).
+- **Known limits of the detector (not covered by any test; for the live runs T36)**: the picture-noun + optional word + show verb pattern (`image sensor displays ...`, `Bild ... zeigt`) can still flag a product sentence whose subject merely begins with a picture noun
+  ("The photo sensor shows the focus"). The F6 sentences are all clean. A hit in a live run is a reported violation, never auto-fixed.
+- The happy-dom stderr line `Failed to load iframe page "https://www.youtube.com/embed/abc123". Iframe page loading is disabled.` printed by `description-metrics.spec.ts` (video-figure test) is a logged DOMException from the test environment; the test passes.
+- `docs/workflow/history.jsonl` and the workflow state files were not touched by this run.
 
-- **F6 (T2/T3, detector precision; blocks T34 and T36)**: probed with `node` on the committed module (type stripping), these ordinary product sentences are HITS:
-  uk-UA «Прогрес друку видно на дисплеї.» (`видно на дисплеї`), «Результат показано на екрані.» (`показано на екрані`), «Візок рухається на роликах.» (`на роликах`),
-  «Принтер працює на відео-кадрах з частотою 30 Гц.» (`на відео`); en-GB "The scan is displayed in real time." (`displayed in real`), "The extruder is mounted on the
-  frame." (`on the frame`), "The printer is shown in two colours." (`shown in two`); de-DE "Der Fortschritt wird auf dem Bildschirm angezeigt." (`auf dem Bildschirm`), "Gedruckt
-  wird in Fotopolymerharz." (`in Fotopolymerharz`); es-ES "El escaneo se muestra en tiempo real." (`se muestra en tiempo`); pt-PT "O progresso é visível no ecrã." (`visível no
-  ecrã`). Misses: «Температура вище 200 °C.» and «на фотополімерній смолі» are correctly not hits. Causes: the open `на\s+\p{L}+` / `in\s+\p{L}+` tails of the
-  participle patterns, ambiguous nouns (`ролик`, `frame`, `clip`) and greedy stems (`bild\p{L}*`, `foto\p{L}*`, `дисплей`-like screens). No failing test exists for any of them, so
-  the patterns were NOT narrowed (AGENTS.md section 5). T26 already emits these as warnings and T34 / T36 count any hit as a hard violation, so TEST_WRITING should add these sentences as
-  negatives (OD-7 asserted the uk precision candidates neither way; these are different, plain false positives) before T34.
-- **F7 (T27..T32, fixture ownership)**: `test/fixtures/faq-pipeline.ts` has positional FAQ-negative slices (`0..400`, `3000..3400`) that read the live master; the test strategy hands
-  their re-verification and extension to the builder during T27..T32, but a fixture is not the builder's to edit. TEST_WRITING should take it on before T27, or T27 will stall.
-- **Notes for the verifier**: T26's hunk is `imageDeixisIssues(doc, locale ?? '', context)` plus a one-line comment (the breakdown's text has `locale`; `locale` is `string | undefined` in
-  `validateGeneratedHtml`). T4 defaults to `'uk'`, not the plan's `'uk-UA'` (see T4 note). T17 edited only the comment header of `full-description-inputs.ts`; that header still says
-  the `userContent` of all 12 cases is byte-identical, which stopped being true with T22 (the fixture's owner should correct it; T22's file list did not include it).
-  `docs/workflow/history.jsonl` is modified in the working tree and was deliberately left uncommitted.
-
-## Open items and what each blocks (nothing was defaulted)
+## Open items
 
 | Open | Blocks |
 |---|---|
-| H-FR20PREC (precedence sentence of `LIVELINESS_RULES`) | T16, then T18, T19 (serial, same file), and the whole Group G (T27..T32, which the breakdown places after T16), then T33 |
-| H-FR11I3 (marker block wording) | T23, then T24 |
-| H-OD10 (metric definitions D-3, D-4, D-5, D-7, D-9 half) | T34, T35, T41; and the whole `npm run test:components` bundle |
-| H-OD11 (products, who runs, marker split) | T36, T42 |
-| Missing tests (F4) | T40, T12, T13, T38, T39 |
-| Plan order, not an answer | Group G (T27..T32) is placed after T16 in the breakdown and the owner wants the master last. If the owner or the planner wants T27..T31 built before T16 exists, that is a reordering decision (Reading guide item 9) to be recorded; no further FROZEN approval is needed for them |
+| F8 test fix (TEST_WRITING) | T30, then T31, T32 (serial, same file), then T33 |
+| T36 / T42 | manual, owner-run (H-OD11); T36 needs the finished master |
