@@ -928,10 +928,18 @@ out". Replace each with a specific fact or number.
   GOOD "±0.02 mm diameter tolerance across all four spools / even colour saturation on 0.2 mm
        details / no manual profile calibration when HEX values match"
 
-Keep the schema's mandated section order and headings — the ToV changes the WORDING and the
-evidence discipline, not the structure. In Applications, every entry states a concrete scenario
-plus what makes THIS product the right tool for it (the differentiator vs alternatives), never
-just the industry name.`;
+Keep the mandated section order (never add, drop or reorder a section) — the ToV changes the
+WORDING and the evidence discipline, not the structure.
+
+APPLICATIONS (§4): each bullet differs in structure and states the mechanism that makes THIS
+product the right tool for its scenario, with a different measurable fact in each (accuracy, time,
+mode, format) — never the same "X: scan does Y; Z does W" frame in every bullet, and never just
+the industry name.
+
+HEADINGS: functional headings are allowed only for §3 <h2> — they say what the section does or
+answers ("The scanner travels to the object"). <h3> stay nominal labels per [HEADING FORM]; at
+most one colon or dash per heading. The rest of [HEADING FORM] (word limit, product name
+placement) still applies.`;
 
 /**
  * EXPERT3D per-locale ToV — European Portuguese (pt-PT). Embedded by the Task C
