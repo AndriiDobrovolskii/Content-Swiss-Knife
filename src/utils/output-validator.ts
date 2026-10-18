@@ -434,7 +434,7 @@ function checkImageManifestCoverage(
         severity: 'error',
         rule: 'image-manifest-missing',
         detail: `Manifest image "${urlFilename}" is absent from the HTML. Insert its <figure> per [IMAGE HANDLING]: ` +
-          `a substantive lead-in <p> directly above it, never adjacent to another <figure>, filename verbatim.`,
+          `a body <p> directly above it (a product fact that does not point at the picture), never adjacent to another <figure>, filename verbatim.`,
         context,
       });
     } else if (count > 1) {
