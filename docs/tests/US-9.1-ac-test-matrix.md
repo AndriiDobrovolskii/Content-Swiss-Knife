@@ -1,12 +1,12 @@
 ---
 artifact: ac_test_matrix
 story: US-9.1
-version: 2
+version: 3
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-18T15:12:00Z
-updated_at: 2026-10-18T16:43:00Z
-supersedes: docs/tests/US-9.1-ac-test-matrix.md#1
+updated_at: 2026-10-18T19:57:00Z
+supersedes: docs/tests/US-9.1-ac-test-matrix.md#2
 inputs_consumed:
   - key: pipeline_status
     version: 1
@@ -23,11 +23,18 @@ inputs_consumed:
   - key: plan_review
     version: 3
   - key: test_strategy
-    version: 2
+    version: 3
 open_decisions_blocking: false
 ---
 
-# AC <-> Test Matrix - US-9.1 (v2, revision run after IMPLEMENTATION loop-back 1 of 3)
+# AC <-> Test Matrix - US-9.1 (v3, narrow revision after IMPLEMENTATION loop-back 2; the v2 text follows)
+
+**v3 (loop-back 2, narrow, F8, 2026-10-18T19:57Z, HEAD `c24d974`)**: only row AC-2 changed - the "heading not between [IMAGE HANDLING] and FIGURE FORMAT" test no longer asserts that the
+prefix `[NO PICTURE REFERENCES` occurs once (FR-7 requires a second occurrence, `see [NO PICTURE REFERENCES]`); it asserts that the heading line occurs exactly once at a line start and that every other occurrence
+is the FR-7 pointer. Three tests added in the same file (premise, heading-once, other-occurrences-are-the-pointer; 15 -> 18 tests). The FR-7 literal stays pinned by
+`master-system-prompt.placement.spec.ts` (AC-2). States unchanged: green at HEAD, and green with the T30/T31/T32 hunks applied.
+
+(v2 header:)
 
 Ids are the Story's `AC-n` (Story v4). Every file named below exists in the repository now (paths relative to the repository root; `src/...` specs run in
 `npm run test:logic`, the one `*.component.spec.ts` in `npm run test:components`). States in v1 were observed at HEAD `6546db8` before any implementation.
@@ -62,7 +69,7 @@ Abbreviations: `golden-A` = `src/prompts/task-a.user-content.golden.spec.ts`; `d
 | AC | Test file | Test | State | Owner |
 |---|---|---|---|---|
 | AC-2 | `src/prompt-core/constants.no-image-deixis.spec.ts` | "NO_IMAGE_DEIXIS_RULE - the FR-5 literals" (begins `[NO PICTURE REFERENCES`; figcaption, alt, «на зображенні», «на фото», «нижче», `deleted, not reworded`); "static text" (no store name / currency / interpolation); "prose constraints from the watch items" | RED | T15 |
-| AC-2 | `src/prompt-core/master-system-prompt.no-picture-references.spec.ts` | "FR-5 ... (M1 + M2)" > master contains the heading, the constant occurs once, the literals sit in the block; "OUTSIDE [IMAGE HANDLING]" > heading not between `\n[IMAGE HANDLING]\n` and `\nFIGURE FORMAT`, no `${` in that span (source); "NFR-1 / D4" > 7 stores x block 0 = master containing the block, first two cached blocks identical across stores | RED (the cache-identity and no-`${` tests guard) | T27 |
+| AC-2 | `src/prompt-core/master-system-prompt.no-picture-references.spec.ts` | "FR-5 ... (M1 + M2)" > master contains the heading, the constant occurs once, the literals sit in the block; "OUTSIDE [IMAGE HANDLING]" > heading (at its line start) not between `\n[IMAGE HANDLING]\n` and `\nFIGURE FORMAT`, heading line occurs exactly once and every other `[NO PICTURE REFERENCES` is the FR-7 pointer, no `${` in that span (source); "NFR-1 / D4" > 7 stores x block 0 = master containing the block, first two cached blocks identical across stores | RED (the cache-identity and no-`${` tests guard) | T27 |
 | AC-2 | `c-reach`, `o-reach` | "T27 / category 16" (16 pairs x 2) and "T27 / category 18" (6 optimizer inputs): block 0 is the live master and contains the constant | RED | T27 |
 | AC-2 (FR-9) | `src/prompt-core/master-system-prompt.video-placement.spec.ts` | "[VIDEO] block contains <Place every embed directly after a body paragraph of its sub-section; never points at the video>"; "Assert absent: Introduce every embed with a lead-in <p>"; existing literals kept; header line untouched | RED / guard | T28 |
 | AC-2 (FR-8, FR-6 `shown here`) | `src/prompt-core/master-system-prompt.grounding-lock.spec.ts` | "the IMAGE GROUNDING LOCK block contains <restricts claims ABOUT THE IMAGE; does not restrict product facts>"; absent `the lead-in may reference the image only descriptively`; absent `shown here` (whole master); rest of the lock and `IMAGE GROUNDING LOCK stands` kept | RED / guard | T29 |

@@ -1,12 +1,12 @@
 ---
 artifact: test_strategy
 story: US-9.1
-version: 2
+version: 3
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-18T15:10:00Z
-updated_at: 2026-10-18T16:43:00Z
-supersedes: docs/tests/US-9.1-test-strategy.md#1
+updated_at: 2026-10-18T19:57:00Z
+supersedes: docs/tests/US-9.1-test-strategy.md#2
 inputs_consumed:
   - key: pipeline_status
     version: 1
@@ -27,7 +27,19 @@ open_decisions_blocking: false
 
 # Test Strategy - US-9.1: no picture references, livelier descriptions (track prompt)
 
-## Revision 2 (this version; TEST_WRITING loop-back 1 of 3 from IMPLEMENTATION, key `changes_required_tests`)
+## Revision 3 (this version; TEST_WRITING loop-back 2, NARROW revision, key `changes_required_tests`, finding F8)
+
+Run on 2026-10-18T19:57Z at HEAD `c24d974`. Tests only; no production file, no FROZEN file, no `--rebaseline`, nothing committed. One spec changed:
+`src/prompt-core/master-system-prompt.no-picture-references.spec.ts` (T27). **F8**: two approved expectations contradicted each other. FR-7 (and
+`master-system-prompt.placement.spec.ts`) require the literal `see [NO PICTURE REFERENCES]` in the master, so the prefix `[NO PICTURE REFERENCES` legitimately occurs
+twice once T30 lands, but the T27 test "heading not between [IMAGE HANDLING] and FIGURE FORMAT" also asserted that the prefix occurs only once (`indexOf(prefix, at + 1) === -1`), which
+T30 turned red. Fix, not a weakening: uniqueness is now asserted on the HEADING (the first line of `NO_IMAGE_DEIXIS_RULE`, taken from the constant) - exactly once, at a line
+start, the only line-start `[NO PICTURE REFERENCES` - and the total count of the prefix must equal 1 + the number of FR-7 pointers, so any third mention still fails. The "heading is outside the
+[IMAGE HANDLING] span" check now locates the heading at its line start. Scan of the other US-9.1 specs for the same defect class (uniqueness on a string that FR-7/FR-9/FR-20 require in more than
+one place): none found; the `split(...).length - 1 === 1` assertions in `constants.liveliness`, `master-system-prompt.liveliness`, `task-a.deixis-wording`, `task-a.user-content.golden` and
+`master-system-prompt.v4` are on whole constants or sentences that occur in one place only, and all passed with the T30/T31/T32 hunks applied (scratch copy).
+
+## Revision 2 (previous version; TEST_WRITING loop-back 1 of 3 from IMPLEMENTATION, key `changes_required_tests`)
 
 Run on 2026-10-18T16:43Z at HEAD `8a7a55b` (17 of the 42 tasks built). Tests and test fixtures only; no production file, no FROZEN file, no `--rebaseline`, nothing committed
 (`docs/workflow/history.jsonl` was already modified in the working tree before this run and is not mine). What changed relative to v1:

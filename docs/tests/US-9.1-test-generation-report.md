@@ -1,12 +1,12 @@
 ---
 artifact: test_generation_report
 story: US-9.1
-version: 2
+version: 3
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-18T15:14:00Z
-updated_at: 2026-10-18T16:44:00Z
-supersedes: docs/tests/US-9.1-test-generation-report.md#1
+updated_at: 2026-10-18T19:57:00Z
+supersedes: docs/tests/US-9.1-test-generation-report.md#2
 inputs_consumed:
   - key: pipeline_status
     version: 1
@@ -23,19 +23,42 @@ inputs_consumed:
   - key: plan_review
     version: 3
   - key: test_strategy
-    version: 2
+    version: 3
   - key: ac_test_matrix
-    version: 2
+    version: 3
 open_decisions_blocking: false
 ---
 
-# Test Generation Report - US-9.1 (v2, revision run: IMPLEMENTATION loop-back 1 of 3, key `changes_required_tests`)
+# Test Generation Report - US-9.1 (v3 adds the F8 section directly below; v2, revision run: IMPLEMENTATION loop-back 1 of 3, key `changes_required_tests`)
 
 Run: `date -u` 2026-10-18T16:21Z at start, 2026-10-18T16:43Z at the last command; branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, HEAD `8a7a55b`, Node v24.15.0.
 Nothing was committed; `bash arch-guard.sh --rebaseline` was not run; no production file, no FROZEN file and no golden/oracle fixture was edited. `docs/workflow/history.jsonl` was already modified
 in the working tree before this run (the owner answers) and is not mine. Builder baseline at the start of this run: `Test Files 19 failed | 200 passed (219)`, `Tests 286 failed | 7144 passed | 3 skipped (7433)`.
 
-## Files changed in this run (tests and test fixtures only)
+## Revision 3 (this version; NARROW loop-back 2, finding F8)
+
+Run: `date -u` 2026-10-18T19:57Z, branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, HEAD `c24d974`. Nothing committed, no `--rebaseline`, no production or FROZEN file edited;
+`bash arch-guard.sh`: ALL CHECKS PASSED; `git status --short` lists only this spec, the three docs/tests artifacts and the two pre-existing workflow files (not mine).
+
+**Defect (F8)**: `master-system-prompt.no-picture-references.spec.ts` asserted `MASTER_SYSTEM_PROMPT.indexOf('[NO PICTURE REFERENCES', at + 1) === -1` ("the heading occurs twice"). FR-7 requires the literal
+`see [NO PICTURE REFERENCES]` (also pinned by `master-system-prompt.placement.spec.ts`), so T30 made the prefix occur twice and turned a green test red; the builder rightly did not commit T30.
+**Fix**: the test now (a) locates the heading at its line start (`/^\[NO PICTURE REFERENCES/m`) and keeps the "outside the [IMAGE HANDLING] span" check; (b) new test: the heading line (first line of
+`NO_IMAGE_DEIXIS_RULE`) occurs exactly once, at a line start, and is the only line-start occurrence; (c) new test: total prefix occurrences = 1 + the FR-7 pointers (collapsed whitespace), so a stray third mention
+fails; (d) new premise test: the constant's first line begins with the prefix. The pointer's presence is deliberately NOT asserted here (it is red-by-design in `master-system-prompt.placement.spec.ts`; asserting it here
+would add a new red at HEAD; a first draft did and was removed after a real run showed it red). Not weaker: the old test allowed zero extra occurrences, the new one allows exactly the FR-7 pointer and nothing else; the heading is additionally forced to a line start.
+
+**Scan for the same defect class**: grep of every US-9.1 spec for uniqueness/occurrence assertions (`split().length - 1`, `indexOf(.., + 1)`, `lastIndexOf`, `matchAll`, "once", "exactly once"). None other asserts uniqueness on a string
+that FR-7, FR-9 or FR-20 require in several places; the remaining ones are on whole constants/sentences present in one place. Fixed: 1 (this one). Listed and left unchanged: `constants.liveliness` and `master-system-prompt.liveliness`
+(precedence and self-scoping sentences), `task-a.deixis-wording`, `task-a.user-content.golden`, `master-system-prompt.v4` (`occurrences` helper).
+
+**Satisfiability (real runs, logic runner, `npx vitest run --reporter=json`)**: scratch `git worktree` of HEAD outside the repo (removed afterwards), `t30-t31-t32-experiment.patch` (hunks T30, T31, T32) applied, the fixed spec copied in, `node_modules` junctioned.
+- `master-system-prompt.no-picture-references.spec.ts`: 18 passed at HEAD (was 15 tests); 0 failures with the patch applied. Also 0 failures with the patch in `placement`, `operator-notes`, `liveliness`, `task-c.master-reach`, `optimizer.master-reach`, `full-description.golden.us91`.
+- Whole suite, repo HEAD + fixed spec: `Tests 131 failed | 7489 passed`; pristine HEAD (control worktree): `130 failed | 7487 passed`. The single extra failure (`test/measure-description.cli.spec.ts` FR-32 `--specs`) was a timeout under the
+  two concurrent vitest processes of this run; rerun alone: 30/30 passed. Failures in the fixed-spec run that are not in the control: none.
+- Whole suite, patched worktree: `41 failed | 7579 passed`; 101 HEAD failures turn green, none of the spec's. Failing only in the patched run: the 10 byte-equal tests of the pre-Story `src/prompts/full-description.golden.spec.ts` (the master bytes change
+  by design; the task breakdown assigns their "regenerated bytes" to the builder at T30-T32 - not a test defect, but the builder must regenerate them in that commit) and one `test/removal.spec.ts` test that passed when rerun alone (load flake).
+
+## Files changed in this run (v2 run) (tests and test fixtures only)
 
 Modified specs: `src/utils/image-placeholder.deixis.spec.ts` (F1), `src/prompts/vision-prepass.no-picture-references.spec.ts` (F2), `src/utils/image-deixis.spec.ts` (F6), `src/app/app.component.operator-notes.spec.ts` (F4: T12, T13, T38, T39),
 `src/prompt-core/constants.liveliness.spec.ts`, `src/prompt-core/master-system-prompt.liveliness.spec.ts` (H-FR20PREC), `src/prompts/task-a.deixis-wording.spec.ts`, `src/prompts/task-a.user-content.golden.spec.ts` (H-FR11I3),
