@@ -5,7 +5,7 @@ slug: no-picture-references-and-livelier-descriptions
 title: Stop generated descriptions from pointing at their pictures and make the uk-UA text less dry (Creality Pika regression)
 track: prompt
 version: 6
-status: DRAFT
+status: ARCHIVED
 owner: so-story-writer
 created_at: 2026-10-17T18:00:00Z
 updated_at: 2026-10-19T14:50:33Z

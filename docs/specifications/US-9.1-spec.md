@@ -2,7 +2,7 @@
 artifact: specification
 story: US-9.1
 version: 8
-status: APPROVED
+status: ARCHIVED
 owner: so-spec-writer
 created_at: 2026-10-17T15:31:09Z
 updated_at: 2026-10-19T15:00:24Z
