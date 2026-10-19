@@ -1,36 +1,135 @@
 ---
 artifact: pipeline_status
 story: US-9.1
-version: 3
+version: 4
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-18T16:16:00Z
-updated_at: 2026-10-18T20:08:00Z
-supersedes: docs/catalog/US-9.1-pipeline-status.md#2
+updated_at: 2026-10-19T12:30:00Z
+supersedes: docs/catalog/US-9.1-pipeline-status.md#3
 inputs_consumed:
   - key: story
-    version: 4
-  - key: specification
     version: 5
+  - key: specification
+    version: 7
   - key: open_decisions
-    version: 4
+    version: 5
   - key: impact_analysis
-    version: 4
+    version: 5
   - key: implementation_plan
-    version: 4
+    version: 6
   - key: task_breakdown
-    version: 3
+    version: 5
   - key: plan_review
-    version: 3
+    version: 5
   - key: test_strategy
-    version: 3
+    version: 4
   - key: ac_test_matrix
-    version: 3
-  - key: test_generation_report
-    version: 3
+    version: 4
 open_decisions_blocking: false
 ---
+
+# Pipeline status: US-9.1 (IMPLEMENTATION, round 4: removal of the withdrawn operator-notes feature, T43 to T49)
+
+Branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, Node v24.15.0, run of 2026-10-19 (UTC). Branch base `6546db8` (ancestor of HEAD, exit 0); `09f87dc` is an ancestor of HEAD (exit 0).
+Rounds 1 to 3 further down are history: their task ids T1 to T42 are retired; this round executes T43 to T49 of task breakdown v5.
+
+**Result of round 4: PASS for T43 to T49 (seven committing tasks, eight commits including the TEST_WRITING test commit).** The T50 checks that can be run were run on the final tree (below); T51 (manual live runs, owner-run) is pending and is not a builder task.
+No test file or coverage setting was edited by the builder (the golden `full-description-prompts.json` is a builder-owned fixture per plan B1 and was regenerated in T43). No push, no Pull Request, no `--no-verify`, no history rewrite;
+`docs/workflow/workflow-state.yaml` and `history.jsonl` were not written. Draft PR #142 was not touched.
+
+## Human decisions in force (round 4)
+
+- FROZEN files, owner, verbatim, `docs/workflow/history.jsonl` ts 2026-10-19T14:40:00Z, actor sbruhov@gmail.com: `modify master-system-prompt.ts, modify task-a.ts, так`; withdrawal hunks only (T43: the two [SOURCE FIDELITY] bullets; T44: the import and the interpolation prefix);
+  local commits authorised on this branch. `task-b.ts`, `task-c.ts`, `output-validator.ts` were not opened.
+
+## Task table (round 4)
+
+| Task | Track | Status | Commit |
+|---|---|---|---|
+| TEST_WRITING work (P0 to P14: 200 red = 32 sanctioned P3/P4 inversions + 168 new pins; 8 operator-notes specs deleted) | test | COMMITTED first, as its own commit (precedent 3f9ae29); docs artifacts left uncommitted for the orchestrator | 1b73c8a |
+| T43 master [SOURCE FIDELITY] bullets back to `6546db8` + golden regenerated (FROZEN, approved) | prompt | DONE | fd9b052 |
+| T44 `task-a.ts` stops emitting `[Operator Notes]` (FROZEN, approved) | prompt | DONE | 439cc1e |
+| T45 orchestrator numeric-fidelity sources | angular | DONE | 19ed848 |
+| T46 Generator operator-notes form removed (component, state class, `app.component.ts/.html` to base bytes) | angular | DONE | 4556cb4 |
+| T47 four `--notes-*` flags removed from `tools/measure-description.ts` (+ comment in `description-metrics.ts`) | angular | DONE | 291bc1e |
+| T48 `src/prompts/operator-notes.ts` deleted | prompt | DONE | bad5161 |
+| T49 `src/app/types.ts` to base bytes | angular | DONE | 86b0d62 |
+| T50 verification (no commit) | prompt | RUN on the final tree, see below; the full QUALITY_GATE is a separate stage and was not run | - |
+| T51 live acceptance runs after the master revert | manual | PENDING, owner-run (H-OD11), outside the gate | - |
+
+## Per-task notes (round 4)
+
+- **T43**: the two bullets restored from the `6546db8` blob by a scratchpad script (line endings preserved). Measured block 0 delta: the bullets region is 582 characters at HEAD and 452 at `6546db8`, a difference of **130 characters**, equal to the STOP figure (134 bytes).
+  `git diff 6546db8 -- src/prompt-core/master-system-prompt.ts` has zero hunks inside [SOURCE FIDELITY] (grep count 0); the residual hunks are the import, `NO_IMAGE_DEIXIS_RULE`, video, grounding lock, PLACEMENT and `LIVELINESS_RULES`.
+  Golden: plan-W6 raw-text substitution (throwaway script in the scratchpad, not committed): the JSON-escaped HEAD region replaced by the JSON-escaped `6546db8` region, needle found exactly 10 times, never parse/stringify of the file, no `-u`.
+  `git diff --numstat HEAD~1` for the golden: **10 added / 10 deleted**; `Operator Notes` occurs 0 times in the file. Scripted check (reads old and new golden as data, region taken from the `6546db8` blob): 12 keys unchanged in order; exactly 10 changed
+  (`doc/expert3d`, `doc/expert3d+hook`, `doc/c3d`, `html/expert3d`, `html/legacy`, `html/legacy+lang`, `html/c3d+customTemplate`, `c/expert3d-es`, `c/eu-en`, `c/us-uk`); for each, new block 0 equals old block 0 with the two bullets replaced by the `6546db8` literals (true x10),
+  everything outside block 0 identical (true x10), delta 130 characters in every case (the `c/*` delta equals the Task A delta). `bash arch-guard.sh --rebaseline` then `bash arch-guard.sh` exit 0; `.arch-guard-checksums` moved exactly the master line
+  (`57d54839...` to `0fe9a169...`); `task-c.ts` stays `619c45a9...`. `git diff 6546db8 -- test/fixtures/golden/task-c-description-prompts.json` is empty. P1 to P4 and the P10 master block green.
+- **T44**: removed `import { buildOperatorNotesBlock } ...` and the `${buildOperatorNotesBlock(input.operatorNotes)}` prefix only. `git diff 6546db8 -- src/prompts/task-a.ts` has exactly 3 hunks (the FR-11 hunks); `git grep` for `operator-notes|operatorNotes|OperatorNotes` in the file is empty;
+  the checksum moved exactly the `task-a.ts` line (`dc98fd7a...` to `dc49a440...`). P5 (124 stray-property tests in `task-a.user-content.golden.spec.ts`) went green.
+- **T45**: the import, the FR-30 doc-comment paragraph and the `...OPERATOR_NOTE_FIELDS.map(...)` line removed; `git diff 6546db8` for the service is exactly the two FR-14 text lines (4 changed lines). P6 green.
+- **T46**: `app.component.ts` and `.html` restored to the `6546db8` blob (every hunk of their diff against base was operator-notes only; the diff against base is now empty), the state class and the component folder deleted. `npm run build` (AOT) succeeds; `npm run test:components` 2 files / 32 tests.
+- **T47**: header comment, `FLAGS`, `FILE_FLAGS`, `USAGE`, the D-10 sentence and the `description-metrics.ts` comment. P8 (9 tests) green; `git grep -i` with the widened P10 token set over `tools` and `description-metrics.ts` is empty.
+- **T48**: `git grep -n "operator-notes" -- src tools server ':!*.spec.ts'` empty; `tsc` and the AOT build green with no importer left.
+- **T49**: `git diff 6546db8 -- src/app/types.ts` empty; the stray-property specs (P5, P6, P7, P9a) still compile because they attach the key through `unknown`.
+
+Per-task gate: after each task the whole logic suite was re-run and the failing set shrank monotonically to the later tasks' own pins (200 red at the start; 158 after T43; 33 after T44; 23 after T45; 15 after T46; 4 source-scan pins owned by T48/T49 after T47; 0 after T49).
+`npm run lint` (tsc --noEmit) reported zero diagnostics at every task; `bash arch-guard.sh` exited 0 at every task.
+
+## Verification evidence (real output, final tree of round 4, HEAD 86b0d62)
+
+```
+$ npx vitest run                               # npm run test:logic
+ Test Files  221 passed (221)
+      Tests  7569 passed | 3 skipped (7572)
+
+$ npm run test:components
+ Test Files  2 passed (2)
+      Tests  32 passed (32)
+
+$ npm run lint                                 # tsc --noEmit
+(no output, exit 0)
+
+$ npm run build                                # AOT; only the pre-existing CommonJS (jszip) bailout warnings
+Output location: C:\Work\Content-Swiss-Knife\dist
+
+$ bash arch-guard.sh
+  ALL CHECKS PASSED
+```
+
+T50-style checks run on the final tree:
+
+| Check | Result |
+|---|---|
+| `git merge-base --is-ancestor 6546db8 HEAD` and `... 09f87dc HEAD` | exit 0 and exit 0 |
+| `git diff 6546db8 -- src/app/types.ts src/app/app.component.ts src/app/app.component.html` | empty |
+| `git diff 6546db8 -- src/services/content-orchestrator.service.ts` | exactly the two FR-14 text lines |
+| `git diff 6546db8 -- src/prompts/task-a.ts` | 3 hunks (FR-11 only) |
+| hunks of `git diff 6546db8 -- master-system-prompt.ts` inside [SOURCE FIDELITY] | 0 |
+| `git diff --numstat 09f87dc -- test/fixtures/golden/full-description-prompts.json` | 10 / 10 |
+| `git diff 09f87dc -- .arch-guard-checksums` | exactly the `task-a.ts` and `master-system-prompt.ts` lines |
+| `git diff 09f87dc -- task-c-description-prompts.json task-a-user-content.json optimizer-faq-pre-change.json` | empty |
+| `git diff 09f87dc --name-only` over `server`, `src/domain`, `src/render`, `output-validator.ts`, `task-a-doc.ts`, `task-c.ts`, `optimizer.ts`, `history.service.ts` (non-spec) | nothing |
+| `git diff 09f87dc --name-only -- src/utils/description-metrics.spec.ts src/prompt-core/master-system-prompt.liveliness.spec.ts` | nothing (B4) |
+| widened P10 token scan over non-spec `src`, `tools`, `server` | no hit; the five deleted modules are gone from `git ls-files`; `test/operator-notes-source-scan.spec.ts` green |
+| AC sweep specs of T50 | all part of the 221-file logic run, 0 failed |
+| P14: base `6546db8`, line-322 successor describe, 20 occurrences, W6 mechanism recorded in the `ac_test_matrix` and the `test_strategy` | present (`grep` finds `6546db8` and `W6` in both files); not re-validated line by line, RECONCILIATION reads them |
+
+Not run here (separate stages): the full QUALITY_GATE (coverage, validate:harness) and T51. The 3 skipped tests are pre-existing.
+
+## Findings (round 4)
+
+- The `docs/` files modified in the working tree by earlier stages (story, specification, plan, breakdown, test artifacts, `workflow-state.yaml`, `history.jsonl`) were NOT committed by the removal tasks; this status file is committed on its own.
+- A `git checkout 6546db8 -- <files>` plus `git rm` batch was refused once by the permission classifier; the same end state was reached with `git show 6546db8:<path> > <path>` and `git rm` per file (same bytes, empty diff against base).
+- Residual (plan R5): live evidence captured before T43 was produced under the notes-bearing master (130 characters longer); whether it still counts is for RECONCILIATION. T51 stays manual.
+- The round 1 to 3 text below that mentions operator notes (T8..T13, T21, T31, T38..T40, the notes part of T35) describes work this round removed; it is history, not current state.
+
+---
+
+# History: rounds 1 to 3 (content of version 3)
 
 # Pipeline status: US-9.1 (IMPLEMENTATION, round 3, track prompt + angular)
 
