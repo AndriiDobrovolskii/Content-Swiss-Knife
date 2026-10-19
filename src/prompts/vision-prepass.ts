@@ -62,6 +62,7 @@ Grounding rules:
   describe the subject qualitatively. This caption is reused downstream as published alt text, so a
   caption with no figure is correct, while a caption carrying a wrong wattage, speed or accuracy
   becomes a factual error on the storefront.
+- State only what is visible; never infer operating modes, compatibility or requirements.
 
 UKRAINIAN FIELDS (${VISION_UK_FIELD_KEYS.join(', ')}):
 Write these three texts directly in Ukrainian, from what is visible in the image. They are NOT
@@ -69,8 +70,17 @@ translated from the English caption and must not follow its wording; do not tran
 each one natively in idiomatic Ukrainian.
 - label: a short, image-specific label that names what THIS image shows, with an uppercase initial
   letter. Never a generic label such as "Фото" or "Зображення" or "Image".
-- description: one sentence that says what the image shows and why it matters on this page.
+- description: one sentence stating the product capability, part or result this image
+  demonstrates, written about the PRODUCT, never about the picture. It never begins with and
+  never contains «На зображенні», «На фото», «На знімку», «На кадрі», «Зображено», «Показано»,
+  «Видно». It never names the medium (банер, колаж, схема, інфографіка, скриншот, кадр) and
+  never makes it the subject of a verb («Колаж показує…», «Схема демонструє…»).
+  Describe the content directly.
+  GOOD: «Сенсорний екран запускає сканування й показує 3D-модель.»
+  BAD:  «На фото сканер має вбудований екран, що показує зручність перегляду.»
 - alt: one sentence for a screen-reader user. It must be different from description, not a copy.
+  Start with the subject noun, never with «Зображення», «Фото» or «Знімок». Write every word in
+  one alphabet: no Latin letters inside Ukrainian words.
 - The number rules above apply to all three: state a number+unit only if it is legible in THIS
   image AND consistent with the known specs; otherwise omit it.
 - If you cannot write one of them reliably, leave that key out rather than guessing.

@@ -1,4 +1,4 @@
-import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES, NO_LEAKED_REASONING_CLAUSE, COLON_CAPITALIZATION_RULE } from './constants';
+import { US_MEASUREMENT_RULES, METRIC_MEASUREMENT_RULES, NUMBER_FORMAT_RULES, SENTENCE_LENGTH_RULES, BRAND_GUARANTEE_EN, PRODUCT_NAME_LOCALIZATION, UNIT_LOCALIZATION_RULES, NO_LEAKED_REASONING_CLAUSE, COLON_CAPITALIZATION_RULE, NO_IMAGE_DEIXIS_RULE, LIVELINESS_RULES } from './constants';
 
 /**
  * STATIC system prompt shared by Task A / B / C and all translations.
@@ -83,6 +83,8 @@ ${UNIT_LOCALIZATION_RULES}
 ${NUMBER_FORMAT_RULES}
 
 ${SENTENCE_LENGTH_RULES}
+
+${LIVELINESS_RULES}
 
 ${PRODUCT_NAME_LOCALIZATION}
 
@@ -386,8 +388,11 @@ technical, never edited. The title attribute is the ONE exception: it is prose (
 accessible name, read aloud by screen readers), so write it in the body language — never leave
 a source-language title standing in a translated artifact. TYPE B direct MP4/CDN/OGV:
   <div style="text-align:center;"><video width="100%" height="auto" controls style="max-width:800px;border:1px solid #ccc;border-radius:8px;"><source src="[URL]" type="video/[fmt]">[translated fallback]</video></div>
-Detect format by extension. Introduce every embed with a lead-in <p>. Emit exactly one copy
-per language version.
+Detect format by extension. Place every embed directly after a body paragraph of its
+sub-section; that paragraph states a product fact and never points at the video ("below",
+«нижче»). Emit exactly one copy per language version.
+
+${NO_IMAGE_DEIXIS_RULE}
 
 [IMAGE HANDLING]
 IMAGE SOURCE OF TRUTH: build the image set exclusively from the [IMAGE MANIFEST] block in
@@ -422,14 +427,19 @@ URL construction: {Base URL from manifest}{brandFolder}/{modelFolder}/{filename}
 slashes between segments; preserve Base-URL casing exactly.
 
 IMAGE GROUNDING LOCK (overrides the distinctness and lead-in rules on any conflict):
+- The lock restricts claims ABOUT THE IMAGE (what it proves, compares, demonstrates). It does not
+  restrict product facts: the paragraph above a figure MAY and SHOULD state any fact from
+  [Technical Specs] / [Raw Description] that belongs to the figure's subject, written as ordinary
+  prose that never mentions the picture.
 - The manifest caption (vision-derived, or the verbatim caption when supplied) is the ONLY
   sanctioned source of what an image shows. The alt, the figcaption AND the narrative lead-in <p>
   must all stay factually consistent with it.
 - DISTINCTNESS IS LEXICAL ONLY: vary wording, never facts. Do not introduce in the alt, figcaption
   or lead-in any comparison, direction ("more/less detailed", "cleaner", "finer"), metric, %,
   cause or result that the manifest caption (or [Technical Specs]) does not contain. If the caption
-  states no comparison, the lead-in may reference the image only descriptively ("the head assembly
-  shown here…") and must NOT claim what the image "demonstrates" or "proves".
+  states no comparison, the paragraph may name the depicted object only as a plain product fact
+  ("The unit has three round modules on its back.") and must NOT claim what the image
+  "demonstrates" or "proves".
 - A manifest caption tagged COMPARISON states a contrast: the lead-in and figcaption must preserve
   WHAT differs and in WHICH DIRECTION, and add nothing beyond it — never recast a waste/quantity
   comparison as a quality/detail comparison, or vice versa.
@@ -447,12 +457,14 @@ descriptive mode (e.g. "high-prec-scan.jpg" → "High-precision scanning demonst
 no comparison the filename does not state.
 
 PLACEMENT — STRICT RULES:
-- LEAD-IN: precede every <figure> with a <p> — a SUBSTANTIVE NARRATIVE SENTENCE that
-  integrates the image into the surrounding text. Write fresh phrasing for each image;
-  where the template "The image below shows…" would appear, weave the image's subject into
-  the ongoing argument instead ("The dual-extruder carriage visible here is what enables…"),
-  staying within the IMAGE GROUNDING LOCK.
-- Give lead-in and figcaption separate jobs: the lead-in is narrative context in the flow,
+- PRECEDING PARAGRAPH: precede every <figure> with a <p> of ordinary body text from the same
+  sub-section. It states a product fact (a spec, a mechanism, a benefit) and reads as if the image
+  did not exist; the figure follows the paragraph that discusses its subject, and the figcaption
+  carries the link to the picture. Stay within the IMAGE GROUNDING LOCK.
+- That paragraph refers to the product, never to the picture: it contains no pointer to the image or
+  the page layout (see [NO PICTURE REFERENCES]). A sentence whose only job is to point at the picture
+  is deleted, not reworded.
+- Give the paragraph and the figcaption separate jobs: the paragraph is narrative context in the flow,
   the figcaption is a short label — write them with different sentences and phrasing.
 - SPACING: separate every pair of <figure> blocks with ≥ 1 paragraph of meaningful body
   text; every <figure> in the document therefore has a narrative <p> directly above it.

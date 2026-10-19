@@ -2,13 +2,16 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: US-8.1
-current_stage: ARCHIVED
-status: ARCHIVED
+story: US-9.1
+current_stage: PR_CREATION
+status: IN_PROGRESS
 pending_human_gate: null
-started_at: 2026-10-14T13:19:41Z
-updated_at: 2026-10-17T14:25:34Z
-stage_attempts: {}
-track: angular
+started_at: 2026-10-17T14:49:04Z
+updated_at: 2026-10-19T15:57:10Z
+stage_attempts:
+  STORY_WRITING: 2
+  SPECIFICATION: 1
+  ARCHITECTURE_PLANNING: 1
+track: prompt
 blockers: []
-note: "Archived. Delivery summary: docs/knowledge/US-8.1-delivery-summary.md. Open follow-ups: AC-22 manual browser check never recorded, OD-13 uk label unconfirmed, OD-17 Generate-guard alert text."
+note: null

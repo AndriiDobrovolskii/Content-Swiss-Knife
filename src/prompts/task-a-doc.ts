@@ -150,8 +150,10 @@ HARD RULES:
   whatever you put in "cta.heading" is discarded.
 
 FIGURE PLACEMENT — no orphan images: every figure Block is immediately preceded by a paragraph
-Block that introduces what the image shows. A figure moved out of §2 carries that obligation with
-it, so place the lead-in paragraph beside it in its new section rather than leaving it behind.
+Block of the same subsection that states a product fact from the source and never refers to the
+picture itself (no «на зображенні», «нижче», «показано», «колаж показує»). A figure moved out of §2
+carries that obligation with it, so place that paragraph beside it in its new section rather than
+leaving it behind. The same holds for every figure's "caption" and "alt".
 
 WORD VOLUMES — writing targets that shape the draft. They are guidance for length, nothing more:
 - §1 hook: 40–85 words.

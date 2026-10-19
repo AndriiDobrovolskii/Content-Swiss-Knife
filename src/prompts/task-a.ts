@@ -26,7 +26,7 @@ LISTS OVER RUN-ON SENTENCES: when body prose would enumerate three or more paral
 one sentence, emit a short lead-in <p> followed by a <ul> with one <li> per item, instead of
 a single long sentence. Applies to §3 and §5 body text only — never to the §1 hook, the §2
 or §7 tables, or the §9 closing. Two items stay inside the sentence. Do not place a <figure>
-directly after a </ul>: an image still needs its own lead-in <p>.`;
+directly after a </ul>: a figure needs a body <p> directly above it, and that <p> never refers to the picture.`;
 
 // ── Image-manifest helper ──────────────────────────────────────────────────
 
@@ -102,7 +102,7 @@ function buildVideoBlock(input: ProductInput): string {
     // delimiters. Only the prompt rendering is affected — never the emitted HTML.
     .map((e, i) => `${i + 1}. ${e.src}${e.title ? ` — source title: "${e.title.replace(/"/g, "'")}"` : ''}`)
     .join('\n');
-  return `\n[VIDEO MANIFEST] — COUNT=${embeds.length}. HARD RULE: the output contains exactly ${embeds.length} <iframe> tag(s) — every src below appears exactly once, copied VERBATIM (never invent, rewrite, shorten, drop, or duplicate an embed). Introduce each with its own lead-in <p> in the body language, and place it in §3 FUNCTIONALITY, before §7. The lead-in must not restate the figcaption. TITLE ATTRIBUTE: the "source title" below is the ORIGINAL-language title, given as input — do NOT copy it through. Write each iframe's title="" in the BODY LANGUAGE: a translation of the source title that keeps its meaning, or, when no source title is given, a short descriptive one. Model names, brand names and numerals stay unchanged:
+  return `\n[VIDEO MANIFEST] — COUNT=${embeds.length}. HARD RULE: the output contains exactly ${embeds.length} <iframe> tag(s) — every src below appears exactly once, copied VERBATIM (never invent, rewrite, shorten, drop, or duplicate an embed). Place each directly after a body paragraph of its sub-section, written in the body language, that states a product fact and does not refer to the video, and place it in §3 FUNCTIONALITY, before §7. That paragraph must not restate the figcaption. TITLE ATTRIBUTE: the "source title" below is the ORIGINAL-language title, given as input — do NOT copy it through. Write each iframe's title="" in the BODY LANGUAGE: a translation of the source title that keeps its meaning, or, when no source title is given, a short descriptive one. Model names, brand names and numerals stay unchanged:
 ${lines}`;
 }
 
@@ -118,7 +118,7 @@ function buildMarkerBlock(input: ProductInput): string {
   const files = preExtractPlaceholders(input.description, input.imageManifest);
   if (files.length === 0) return '';
   const list = files.map((f, i) => `${i + 1}. [${f}]`).join('\n');
-  return `\n[IMAGE MARKERS] — COUNT=${files.length}. HARD RULE: [Raw Description] contains the image marker(s) listed below. Each marker is a text token, not an <img>: the system replaces it with the matching figure after generation. Copy every marker CHARACTER FOR CHARACTER (lowercase, with its square brackets, no spaces), never translated, split, re-cased or wrapped in any markup. Each marker appears EXACTLY ONCE in the output. Place it only inside a prose paragraph in the body language (a <p>, or the text of a paragraph block on the structured path), at the end of the sentence that introduces what the image shows; never in a heading, list item, bullet, table cell, §2, §7, an attribute or a meta field. If a marker's source position is not such a paragraph, move it to the end of the nearest preceding body paragraph IN THE SAME SECTION — never drop it. Expert-3DPrinter still emits 0 <img> tags; the marker is not one.\n${list}`;
+  return `\n[IMAGE MARKERS] — COUNT=${files.length}. HARD RULE: [Raw Description] contains the image marker(s) listed below. Each marker is a text token, not an <img>: the system replaces it with the matching figure after generation. Copy every marker CHARACTER FOR CHARACTER (lowercase, with its square brackets, no spaces), never translated, split, re-cased or wrapped in any markup. Each marker appears EXACTLY ONCE in the output. Place it only inside a prose paragraph in the body language (a <p>, or the text of a paragraph block on the structured path), at the end of the paragraph that states the product fact the image belongs to (the paragraph never mentions the picture); never in a heading, list item, bullet, table cell, §2, §7, an attribute or a meta field. If a marker's source position is not such a paragraph, move it to the end of the nearest preceding body paragraph IN THE SAME SECTION — never drop it. Expert-3DPrinter still emits 0 <img> tags; the marker is not one.\n${list}`;
 }
 
 // ── Main prompt builder ────────────────────────────────────────────────────

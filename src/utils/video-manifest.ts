@@ -103,15 +103,16 @@ export function extractVideoEmbeds(description: string): SourceVideoEmbed[] {
  *
  * Every <figure> needs a narrative <p> above it (CLAUDE.md acceptance criteria), and it must not
  * restate the figcaption — so these describe watching the video, while the figcaption names it.
+ * US-9.1 (FR-15): none of them points at the video (no "below" / «нижче» in any language).
  */
 const LEAD_IN_TEMPLATES: Readonly<Record<string, (product: string) => string>> = {
-  en: p => `See ${p} in action in the video below.`,
-  uk: p => `Як ${p} працює на практиці — дивіться у відео нижче.`,
-  ru: p => `Как ${p} работает на практике — смотрите в видео ниже.`,
-  pl: p => `Zobacz na filmie poniżej, jak ${p} działa w praktyce.`,
-  de: p => `Wie ${p} in der Praxis arbeitet, zeigt das Video unten.`,
-  es: p => `Vea cómo funciona ${p} en la práctica en el vídeo siguiente.`,
-  pt: p => `Veja como ${p} funciona na prática no vídeo abaixo.`,
+  en: p => `See how ${p} works in practice.`,
+  uk: p => `Дивіться, як ${p} працює на практиці.`,
+  ru: p => `Смотрите, как ${p} работает на практике.`,
+  pl: p => `Zobacz, jak ${p} działa w praktyce.`,
+  de: p => `Sehen Sie, wie ${p} in der Praxis arbeitet.`,
+  es: p => `Vea cómo funciona ${p} en la práctica.`,
+  pt: p => `Veja como ${p} funciona na prática.`,
 };
 
 function leadInText(productName: string, locale?: string): string {
@@ -215,7 +216,8 @@ export function validateVideoCoverage(
       rule: 'video-embed-missing',
       detail:
         `The source description contains a video embed (${e.src}) that is missing from the output. `
-        + 'Keep the iframe with its src copied VERBATIM, introduced by its own lead-in <p>, in '
+        + 'Keep the iframe with its src copied VERBATIM, placed after a body paragraph of its sub-section '
+        + '(no pointer to the video) that states a product fact, in '
         + '§3 FUNCTIONALITY — before §7 Technical Specifications.',
       context,
     }));

@@ -718,6 +718,34 @@ boundaries. If a source English sentence would exceed the TARGET band, SPLIT it;
 language is terser, you may MERGE. Re-fit to the target band instead of mirroring English sentence
 structure 1:1 (critical for de-DE and uk-UA/ru-UA).`;
 
+/**
+ * US-9.1 FR-5: no sentence of the body, a figcaption or an alt text refers to the picture or to the page layout.
+ * Static text with no per-store or per-run interpolation (NFR-1), interpolated once into the cached master.
+ */
+export const NO_IMAGE_DEIXIS_RULE = `[NO PICTURE REFERENCES — body, figcaption and alt, all languages]
+No sentence in the body, in a figcaption or in an alt text refers to the picture or to the page
+layout. Never write "on the image/photo/frame/diagram", "below/above" as a pointer, "as shown/seen",
+"pictured", or their equivalents in the output language (uk: «на зображенні», «на фото», «на знімку»,
+«на кадрі», «нижче», «вище», «як видно», «показано», «зображено», «видно на»). Never make the
+picture, collage, banner, scheme or infographic the subject of a verb («колаж показує», «схема
+демонструє»). State the product fact directly; the figure's position and its figcaption carry the
+link to the image. A sentence whose only job is to point at the picture is deleted, not reworded.`;
+
+/**
+ * US-9.1 FR-20: SCENE, RHYTHM, HONEST LIMITS and HOOK as ONE shared block, interpolated once into the cached
+ * master so every store receives it. Static text: no per-store or per-run interpolation (NFR-1). The only
+ * sentence-length number is 6; every band and ceiling lives in `SENTENCE_LENGTH_RULES`, which wins on conflict.
+ * The last sentence scopes the block to writing a new description (the master is also block 0 of the Task C
+ * description translation and of the optimizer, FR-23).
+ */
+export const LIVELINESS_RULES = `[LIVELINESS — scene, rhythm, honest limits, hook]
+These rules apply only where §3 exists; where a store voice block defines its own bullet form, heading form, tone or punctuation limits, that block wins.
+SCENE: open each §3 <h2> section with one short sentence naming the task or constraint the reader faces — a statement, not a question; this does not apply to §1. Then continue Fact → Mechanism → Consequence. A consequence changes what the buyer does ("the object does not travel to the scanner; the scanner travels to the object"), not just what the product is. No emotional adjectives.
+RHYTHM: vary sentence length; each section contains at least one sentence of 6 words or fewer. Do not connect sentences with the same causal particle more than twice per document («тож», «тому»). All other sentence-length numbers are in [SENTENCE LENGTH], which wins on any conflict.
+HONEST LIMITS: surface the non-obvious constraint in the paragraph where it matters, as a consultant's note, not as a footnote (for example a mode that works only with a cable, a missing export format, what is not in the box). Only constraints stated in the source.
+HOOK: in the [use-case] slot of the fixed hook start, the hook names the task the buyer solves (what is scanned, printed or repaired), never describes a photo or a scene. Numbers destined for §2 are not repeated.
+These rules govern writing a new description; when the task is to translate an existing text they do not apply, and the source's sentences and their order are kept.`;
+
 /** US mixed measurement rule — the ONLY copy. */
 export const US_MEASUREMENT_RULES = `[MEASUREMENT SYSTEM — MIXED US STANDARD]
 CONVERT to Imperial: Printer Dimensions → inches, Build Volume → inches, Printer Weight → lbs, Filament Spool Weight → lbs (oz for small samples).
@@ -900,10 +928,18 @@ out". Replace each with a specific fact or number.
   GOOD "±0.02 mm diameter tolerance across all four spools / even colour saturation on 0.2 mm
        details / no manual profile calibration when HEX values match"
 
-Keep the schema's mandated section order and headings — the ToV changes the WORDING and the
-evidence discipline, not the structure. In Applications, every entry states a concrete scenario
-plus what makes THIS product the right tool for it (the differentiator vs alternatives), never
-just the industry name.`;
+Keep the mandated section order (never add, drop or reorder a section) — the ToV changes the
+WORDING and the evidence discipline, not the structure.
+
+APPLICATIONS (§4): each bullet differs in structure and states the mechanism that makes THIS
+product the right tool for its scenario, with a different measurable fact in each (accuracy, time,
+mode, format) — never the same "X: scan does Y; Z does W" frame in every bullet, and never just
+the industry name.
+
+HEADINGS: functional headings are allowed only for §3 <h2> — they say what the section does or
+answers ("The scanner travels to the object"). <h3> stay nominal labels per [HEADING FORM]; at
+most one colon or dash per heading. The rest of [HEADING FORM] (word limit, product name
+placement) still applies.`;
 
 /**
  * EXPERT3D per-locale ToV — European Portuguese (pt-PT). Embedded by the Task C
@@ -1219,8 +1255,8 @@ only. The master rule named on the left is REPLACED by the form on the right:
    en "Why it is worth buying [Product] from Center 3D Print?". Use the target language's natural
    equivalent of "worth" (pl "Dlaczego warto kupić …", uk/ru per the locale overlay).
 5. FIGCAPTION lead-in "<b>LEAD-IN LABEL:</b> description": REPLACED by a verb-led, period-
-   terminated opener ("<b>Prints fine detail. </b>..."). The lead-in must still differ from the
-   alt text and from the preceding lead-in <p>, per the global figure rules.
+   terminated opener ("<b>Prints fine detail. </b>..."). The opener must still differ from the
+   alt text and from the paragraph above the figure, per the global figure rules.
 6. KEY BENEFITS and FUNCTIONALITY bullets: verb-led per SIGNATURE MOVE #1, never noun+colon.
 7. §3 "Recommended H2 order" (the master's five §3 topic templates — "Technology / Operating
    principle", "Construction & hardware", "Software & automation", "Safety",
