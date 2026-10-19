@@ -14,7 +14,8 @@
  * JSON after implementation starts: that would make the oracle assert the implementation back to itself
  * (AGENTS.md section 7.7). This file may be extended only by adding a case and recapturing from BASE.
  *
- * No operator-notes key appears in any input here: the oracle is the "all four textareas empty" contract.
+ * No input here carries an operator-notes property or text (FR-27; the property is not part of `ProductInput` after the
+ * withdrawal, FR-44). Pins that attach a stray property do so in the spec, through `unknown`.
  */
 import type { ProductInput } from '../../src/app/types';
 import type { HookPattern } from '../../src/prompt-core/hook-pattern';

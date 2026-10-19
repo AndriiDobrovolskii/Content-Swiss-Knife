@@ -6,7 +6,7 @@
  * `optimizer.ts` is NOT edited (Q-OPT option 1, decided 2026-10-18). Its `TASK_OPTIMIZE_INSTRUCTION` keeps its
  * own "lead-in" - the figcaption `<b>` label, not a lead-in `<p>` - and is not asserted here. The residual risk
  * that the liveliness rules and the "deleted, not reworded" rule read oddly for a restructuring task (R7a) is
- * declared and no test can show it. One describe per owner task (breakdown constraint 2): T27, T31, T32.
+ * declared and no test can show it. One describe per owner task (breakdown constraint 2): T27, T31 (INVERTED for the operator-notes withdrawal, FR-42), T32.
  * Frozen master hunks are gated on H-OD12; red until then.
  */
 import { describe, it, expect } from 'vitest';
@@ -37,10 +37,12 @@ describe.each(CASES)('T32 / categories 18 and 19: optimizer %s - LIVELINESS_RULE
   });
 });
 
-describe.each(CASES)('T31 / category 9 (R22): optimizer %s - block 0 names [Operator Notes], userContent never carries it', key => {
-  it('the master bullet is in block 0 and the optimizer payload has no notes block', () => {
+// INVERTED by US-9.1 TEST_WRITING (operator-notes withdrawal, FR-42; NFR-9 / NFR-14, AGENTS.md 7.7): block 0 must no longer name an
+// [Operator Notes] block. RED until T43 reverts the master (the sanctioned red window).
+describe.each(CASES)('T31 inverted / category 9 (R22, FR-42): optimizer %s - no block of the payload mentions Operator Notes', key => {
+  it('block 0 (the master) does not name Operator Notes and the optimizer payload has no notes block', () => {
     const built = OPTIMIZER_CASES[key]();
-    expect(built.systemBlocks[0].text).toContain('[Operator Notes]');
+    expect(built.systemBlocks[0].text).not.toContain('Operator Notes');
     expect(built.systemBlocks[1].text).not.toContain('[Operator Notes]');
     expect(built.userContent).not.toContain('[Operator Notes]');
   });

@@ -15,7 +15,8 @@
  *   EXPERT3D video cases' userContent (FR-11 item 2) - T24 html/* block 1 (FR-11 item 1) - T27..T32 block 0 of
  *   the 10 master-embedding cases (doc/*, html/*, c/*) - and the cases that must NOT move.
  * Only Specification literals are asserted (wording latitude beyond them is the builder's, H-OD13). The FROZEN
- * tasks (T22, T24, T27..T32) are gated on H-OD12; red until then. T31 is also gated on T21.
+ * tasks (T22, T24, T27..T32) are gated on H-OD12; red until then. T31 is INVERTED for the operator-notes withdrawal
+ * (FR-42): it pins the reverted wording and is red until T43 (breakdown v5) reverts the master.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -111,9 +112,20 @@ describe('T27 to T32: block 0 of every master-embedding case carries the new mas
     expect(block(name, 0)).not.toContain('SUBSTANTIVE NARRATIVE SENTENCE');
     expect(block(name, 0)).not.toContain('The image below shows');
   });
-  it.each(MASTER_CASES)('%s (T31, gated on T21) source scope', name => {
-    expect(block(name, 0)).toContain('[Operator Notes]');
-    expect(block(name, 0)).not.toContain('three input blocks');
+  // INVERTED by US-9.1 TEST_WRITING (operator-notes withdrawal, FR-42; NFR-9 / NFR-14, AGENTS.md 7.7): the master's two
+  // [SOURCE FIDELITY] bullets are back to the branch-base wording (`6546db8`, task T43, owner-approved STOP). The literals
+  // are written here from the Specification (FR-42), not copied from any output. RED until T43 reverts the master and the
+  // builder regenerates the golden in the same commit (the sanctioned red window).
+  it.each(MASTER_CASES)('%s (T31 inverted, FR-42) source scope names three input blocks and no Operator Notes', name => {
+    for (const literal of [
+      'the provided [Raw Description], [Technical Specs] or [Supplemental Content]',
+      'scan the three input blocks for numbers that describe the SAME quantity',
+    ]) {
+      expect(block(name, 0), literal).toContain(literal);
+    }
+    for (const literal of ['Operator Notes', 'operatorNotes', 'the input blocks you were given']) {
+      expect(block(name, 0), literal).not.toContain(literal);
+    }
   });
   it.each(MASTER_CASES)('%s (T32) liveliness and the self-scoping sentence', name => {
     for (const literal of ['govern writing a new description', 'when the task is to translate an existing text they do not apply', "the source's sentences and their order are kept"]) {

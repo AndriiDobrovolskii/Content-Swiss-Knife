@@ -126,7 +126,7 @@ const existing = (read: () => string): string[] => { try { return [read()]; } ca
 const storyConstantWindows = (): string[] =>
   [...existing(noImageDeixisRule), ...existing(livelinessRules)].flatMap(t => [t, ...windowsOf(t)]);
 
-/** Text the Story adds to the master (Specification FR-5, FR-6..FR-9, FR-20, FR-29): none of it may reach a FAQ call. */
+/** Text the Story adds to the master (Specification FR-5, FR-6..FR-9, FR-20; FR-29 was withdrawn, `[Operator Notes]` is no longer in the master): none of it may reach a FAQ call. */
 export const US91_MASTER_LITERALS = [
   '[NO PICTURE REFERENCES',
   'open each §3 <h2> section with one short sentence',
@@ -135,7 +135,6 @@ export const US91_MASTER_LITERALS = [
   'where a store voice block defines its own bullet form',
   'govern writing a new description',
   "the source's sentences and their order are kept",
-  '[Operator Notes]',
   'PRECEDING PARAGRAPH',
   'restricts claims ABOUT THE IMAGE',
   'Place every embed directly after a body paragraph of its sub-section',

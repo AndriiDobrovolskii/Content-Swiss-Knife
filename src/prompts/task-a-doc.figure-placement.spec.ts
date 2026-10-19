@@ -12,15 +12,16 @@
  * The restated block is ILLUSTRATIVE (H-OD13: prose beyond the literals is the builder's).
  *
  * OD-19 (1b), decided by the owner on 2026-10-18 ("(1b) no"): the Doc instructions - `TASK_A_DOC_INSTRUCTION`
- * and the simplified Doc instructions - do NOT mention the `[Operator Notes]` block. The model sees it in
- * `userContent` only (carried by the `buildPromptADoc` byte prefix); the only prompt text that names it is the
- * master bullet (FR-29, T31). GREEN ON ARRIVAL, stays green; the FR-10 edit must add no such string.
+ * and the simplified Doc instructions - do NOT mention the `[Operator Notes]` block. The block was withdrawn with the
+ * operator-notes feature (Story v5), and this absence-shaped assertion stays true. GREEN ON ARRIVAL, stays green. The former
+ * stray-property-through-a-cast case was removed (task breakdown P0): FR-44 item 2 now covers the payloads in
+ * `task-a.user-content.golden.spec.ts`.
  *
  * The simplified Doc templates ("a paragraph block that introduces it", `simplified-template-blocks.ts`) are
  * NOT part of this requirement (Q-SIMPL "no", decided 2026-10-18) and are not asserted either way here.
  */
 import { describe, it, expect } from 'vitest';
-import { TASK_A_DOC_INSTRUCTION, buildPromptADoc } from './task-a-doc';
+import { TASK_A_DOC_INSTRUCTION } from './task-a-doc';
 import { buildSimplifiedDocInstruction } from './simplified-template-blocks';
 import { SIMPLIFIED_TEMPLATE_IDS } from '../prompt-core/simplified-templates';
 import { collapse } from '../../test/fixtures/us91-constants';
@@ -54,12 +55,4 @@ describe('OD-19 (1b): the Doc instructions do not mention [Operator Notes] (gree
     expect(buildSimplifiedDocInstruction(id)).not.toContain('Operator Notes');
   });
 
-  it('the instruction block of buildPromptADoc (systemBlocks[1]) does not, even for an input that carries notes', () => {
-    const input = {
-      website: { name: 'EXPERT3D', group: 'ES', url: 'https://x.example' }, name: 'Ortur H20', description: 'Laser engraver.', specs: '',
-      operatorNotes: { testResults: 'Printed 40 parts' },
-    } as unknown as Parameters<typeof buildPromptADoc>[0];
-    expect(buildPromptADoc(input).systemBlocks[1].text).toBe(TASK_A_DOC_INSTRUCTION);
-    expect(buildPromptADoc(input).systemBlocks[1].text).not.toContain('Operator Notes');
-  });
 });

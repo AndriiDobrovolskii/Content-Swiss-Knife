@@ -83,7 +83,7 @@ describe('the helper catches the text the Story adds to the master by literal (p
     expect(reported(`Some FAQ rule. ${literal} and more.`)).toBe(true);
   });
 
-  it('the literals list holds the FR-5, FR-6, FR-8, FR-9, FR-20 and FR-29 anchors, so nobody silently shortens it', () => {
+  it('the literals list holds the FR-5, FR-6, FR-8, FR-9 and FR-20 anchors (FR-29 was withdrawn, so the Operator Notes literal left the list), so nobody silently shortens it', () => {
     expect(US91_MASTER_LITERALS).toEqual(expect.arrayContaining([
       '[NO PICTURE REFERENCES',
       'PRECEDING PARAGRAPH',
@@ -91,8 +91,7 @@ describe('the helper catches the text the Story adds to the master by literal (p
       'Place every embed directly after a body paragraph of its sub-section',
       'where a store voice block defines its own bullet form',
       "the source's sentences and their order are kept",
-      '[Operator Notes]',
     ]));
-    expect(US91_MASTER_LITERALS.length).toBeGreaterThanOrEqual(11);
+    expect(US91_MASTER_LITERALS.length).toBeGreaterThanOrEqual(10);
   });
 });

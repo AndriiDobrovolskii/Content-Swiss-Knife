@@ -11,7 +11,7 @@
  *
  * ONE DESCRIBE PER OWNER (task breakdown constraint 2), so no describe stays red for a reason a later task owns:
  *   - T27 `NO_IMAGE_DEIXIS_RULE` reach (owner: the master hunk M1+M2),
- *   - T31 R22 `[Operator Notes]` named in block 0 although `userContent` never carries it (master hunk M6),
+ *   - T31 R22 INVERTED (FR-42, operator-notes withdrawal): block 0 must NOT name `Operator Notes` (red until T43 reverts hunk M6),
  *   - T32 `LIVELINESS_RULES` reach and the three self-scoping strings (master hunk M7),
  *   - stay-green: the FAQ variant and `buildTranslatePrompt` carry none of it; `task-c.ts` / `task-translate.ts`
  *     are read as TEXT and name none of the new constants (one interpolation reaches every payload; no
@@ -55,10 +55,13 @@ describe.each(PAIRS)('T32 / categories 16 and 19: Task C description translation
   });
 });
 
-describe('T31 / category 9 (R22): block 0 of Task C description translation names [Operator Notes] while its userContent never carries it', () => {
+// INVERTED by US-9.1 TEST_WRITING (operator-notes withdrawal, FR-42; NFR-9 / NFR-14, AGENTS.md 7.7): the master no longer names an
+// [Operator Notes] block, so block 0 of the description translation must not contain it either; block 1 and userContent still do not.
+// RED until T43 reverts the master (the sanctioned red window).
+describe('T31 inverted / category 9 (R22, FR-42): no block of Task C description translation mentions Operator Notes', () => {
   it.each(PAIRS)('%s', (_label, p) => {
     const built = description(p, true);
-    expect(built.systemBlocks[0].text, 'the master bullet that names the block is missing').toContain('[Operator Notes]');
+    expect(built.systemBlocks[0].text, 'block 0 (the master) still names Operator Notes').not.toContain('Operator Notes');
     expect(built.systemBlocks[1].text).not.toContain('[Operator Notes]');
     expect(built.userContent).not.toContain('[Operator Notes]');
   });

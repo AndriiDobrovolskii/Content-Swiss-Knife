@@ -1,17 +1,15 @@
 /**
  * task-a.user-content.golden.spec.ts - US-9.1 FR-27 / AC-9 / D14: the `userContent` byte oracle.
  *
- * "An empty `operatorNotes` leaves `userContent` byte-identical to the pre-change golden." "Today's" is a
+ * "Today's" `userContent` is a
  * golden captured from the commit the Story branch was cut from, BEFORE any edit to `task-a.ts`
  * (`test/fixtures/golden/task-a-user-content.json`, header `_meta.base`). It holds `userContent` only (plus
  * the Doc-wrapper remainder), so later master / instruction edits can never invalidate it, and it is never
  * regenerated to make a test pass (AGENTS.md section 7.7).
  *
  * TIERS (Specification FR-27, confirmed by the owner, OD-18):
- *  - Tier A (strict): no video embed and no matched marker. With `operatorNotes` empty by FR-25's rule
- *    (undefined, {}, four empty strings, four whitespace-only strings) `buildPromptA(...).userContent`
- *    equals the golden byte for byte. GREEN ON ARRIVAL and after every task (T21 adds the notes block,
- *    which is the empty string for an empty `operatorNotes`).
+ *  - Tier A (strict): no video embed and no matched marker. `buildPromptA(...).userContent`
+ *    equals the golden byte for byte. GREEN ON ARRIVAL and after every task.
  *  - Tier B (equal except the FR-11 spans): the input has a video embed, a matched marker, or both. The
  *    expected text is the golden with the FR-11 OLD span replaced by the NEW span. RED until the owner task
  *    of the span lands: the video span is T22 (task-a.ts T-A2), the marker span is T23 (task-a.ts T-A3).
@@ -24,9 +22,10 @@
  * assert the exact equality "the golden with the old span(s) replaced by the new span(s)". The prefix / suffix /
  * old-span-absent assertions written before the answer are kept as they were.
  *
- * The cases never pass an `operatorNotes` key in their inputs; the "empty notes" variants below add the key
- * through a cast, so this spec type-checks before `ProductInput.operatorNotes` exists (task breakdown,
- * constraint 1).
+ * US-9.1 operator-notes WITHDRAWAL (Story v5, Specification v7; task breakdown P0 / P5): the former "empty
+ * notes" block (`withNotes` cast helper and `EMPTY_NOTES`) was removed with the feature it served. Its job is taken
+ * over by the FR-44 item 2 block at the end of this file (a stray `operatorNotes` property is inert, and no input
+ * of the set yields an `[Operator Notes]` block). The Tier A / Tier B body above is unchanged (FR-27).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -35,7 +34,7 @@ import { buildPromptA } from './task-a';
 import { buildPromptADoc } from './task-a-doc';
 import type { ProductInput } from '../app/types';
 import {
-  USER_CONTENT_CASES, caseNames, buildCase, buildDocCase, docBaseInput, type Tier,
+  USER_CONTENT_CASES, caseNames, buildCase, buildDocCase, docBaseInput, ORACLE_HOOK, type Tier,
 } from '../../test/fixtures/task-a-user-content-inputs';
 
 interface GoldenCase { tier: Tier; userContent: string; docRemainder: { noHook: string; withHook: string } }
@@ -56,17 +55,6 @@ const MARKER_NEW = 'at the end of the paragraph that states the product fact the
 
 const namesOf = (tier: Tier) => caseNames().filter(n => GOLDEN.cases[n].tier === tier);
 const countOf = (haystack: string, needle: string) => haystack.split(needle).length - 1;
-
-/** Adds the key through a cast: `ProductInput.operatorNotes` does not exist until T8. */
-const withNotes = (input: ProductInput, notes: unknown): ProductInput => ({ ...input, operatorNotes: notes } as unknown as ProductInput);
-
-const EMPTY_NOTES: Array<[string, unknown]> = [
-  ['undefined', undefined],
-  ['{}', {}],
-  ['four empty strings', { usageScenarios: '', testResults: '', previousGenerationComparison: '', limitations: '' }],
-  ['four whitespace-only strings', { usageScenarios: ' ', testResults: '\n', previousGenerationComparison: '\t ', limitations: '  \n ' }],
-  ['one empty key', { testResults: '' }],
-];
 
 describe('FR-27 oracle - the fixture is a pre-change capture and covers the input set (D14, OD-18)', () => {
   it('the header names a 40-hex BASE commit and the task-a.ts checksum recorded at that commit', () => {
@@ -109,14 +97,6 @@ describe('FR-27 oracle - the fixture is a pre-change capture and covers the inpu
 describe('FR-27 Tier A - userContent is byte-equal to the pre-change golden (green on arrival, stays green)', () => {
   it.each(namesOf('A'))('%s: buildPromptA(...).userContent equals the golden', name => {
     expect(buildCase(name).userContent === GOLDEN.cases[name].userContent, 'userContent differs from the golden').toBe(true);
-  });
-
-  describe.each(EMPTY_NOTES)('operatorNotes = %s (empty by the FR-25 rule)', (_label, notes) => {
-    it.each(namesOf('A'))('%s: userContent still equals the golden', name => {
-      const c = USER_CONTENT_CASES[name];
-      const built = buildPromptA(withNotes(c.input, notes), c.override).userContent;
-      expect(built === GOLDEN.cases[name].userContent, 'an empty operatorNotes changed userContent').toBe(true);
-    });
   });
 });
 
@@ -198,6 +178,65 @@ describe('FR-27 Doc wrapper - the remainder after the base userContent equals th
     for (const name of caseNames()) {
       expect(buildDocCase(name, true).userContent).toBe(buildDocCase(name, true).userContent);
       expect(JSON.stringify(buildPromptADoc(USER_CONTENT_CASES[name].input))).toBe(JSON.stringify(buildPromptADoc(USER_CONTENT_CASES[name].input)));
+    }
+  });
+});
+
+// ── FR-44 item 2 (task breakdown P5; owner task T44): the withdrawn [Operator Notes] block is gone from userContent ───────────
+//
+// Written from the Specification (FR-44 item 2), not from the plan's proposed code:
+//  (a) for every input of the FR-27 set, `userContent` of `buildPromptA` and of `buildPromptADoc` (with and without a
+//      `hookPattern`) holds no `[Operator Notes]` block;
+//  (b) an input that carries a stray, NON-EMPTY `operatorNotes` property (what a browser that ran the withdrawn feature may
+//      still hold in a stored history entry) gives a payload byte-identical to the same input without the property.
+// The stray property is attached through `unknown` and a `Record<string, unknown>` (never a typed literal), so this block
+// compiles BOTH while `ProductInput.operatorNotes` still exists AND after T49 removes it (an uncast literal would fail the tsc
+// excess-property check that `npm run lint` runs over test/**). Block (b) is RED until T44 removes the `[Operator Notes]`
+// emission from the FROZEN `task-a.ts`; block (a) is green on arrival for inputs without notes and stays so.
+
+const STRAY_VALUES: Array<[string, unknown]> = [
+  ['four non-empty strings', {
+    usageScenarios: 'STRAY-NOTE-7731: prototyping brackets',
+    testResults: 'STRAY-NOTE-7731: printed 40 parts at 0.2 mm',
+    previousGenerationComparison: 'STRAY-NOTE-7731: quieter than the previous model',
+    limitations: 'STRAY-NOTE-7731: cable required',
+  }],
+  ['one non-empty key', { limitations: 'STRAY-NOTE-7731: cable required' }],
+];
+
+/** Attaches a stray `operatorNotes` through `unknown`: compiles before and after `ProductInput.operatorNotes` is removed (T49). */
+const withStrayNotes = (input: ProductInput, value: unknown): ProductInput => {
+  const loose: Record<string, unknown> = { ...input, operatorNotes: value };
+  return loose as unknown as ProductInput;
+};
+
+describe('FR-44 item 2 (a): no input of the FR-27 set yields an [Operator Notes] block in userContent', () => {
+  it.each(caseNames())('%s: buildPromptA', name => {
+    expect(buildCase(name).userContent).not.toContain('[Operator Notes]');
+  });
+  it.each(caseNames())('%s: buildPromptADoc without a hookPattern', name => {
+    expect(buildDocCase(name, false).userContent).not.toContain('[Operator Notes]');
+  });
+  it.each(caseNames())('%s: buildPromptADoc with a hookPattern', name => {
+    expect(buildDocCase(name, true).userContent).not.toContain('[Operator Notes]');
+  });
+});
+
+describe.each(STRAY_VALUES)('FR-44 item 2 (b): a stray operatorNotes property (%s) changes no payload', (_label, value) => {
+  it.each(caseNames())('%s: buildPromptA payload is byte-identical to the payload without the property', name => {
+    const c = USER_CONTENT_CASES[name];
+    const withProp = buildPromptA(withStrayNotes(c.input, value), c.override);
+    expect(withProp.userContent).not.toContain('STRAY-NOTE-7731');
+    expect(JSON.stringify(withProp) === JSON.stringify(buildPromptA(c.input, c.override)), 'a stray operatorNotes reached the payload').toBe(true);
+  });
+
+  it.each(caseNames())('%s: buildPromptADoc payload (without and with a hookPattern) is byte-identical to the payload without the property', name => {
+    const c = USER_CONTENT_CASES[name];
+    for (const withHook of [false, true]) {
+      const hookPattern = withHook ? ORACLE_HOOK : undefined;
+      const withProp = buildPromptADoc(withStrayNotes(c.input, value), c.override, hookPattern);
+      expect(withProp.userContent, `hook=${withHook}`).not.toContain('STRAY-NOTE-7731');
+      expect(JSON.stringify(withProp) === JSON.stringify(buildDocCase(name, withHook)), `a stray operatorNotes reached the Doc payload (hook=${withHook})`).toBe(true);
     }
   });
 });

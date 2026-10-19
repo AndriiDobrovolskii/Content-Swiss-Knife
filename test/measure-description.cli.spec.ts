@@ -20,9 +20,10 @@
  *
  * H-OD10 ANSWERED (owner confirmed D-3, D-4, D-5, D-7 and D-9 as written): the exit status for "a number absent from the
  * input" (D-9) and the optional input flags are now pinned in the describes at the end of this file. The Specification
- * names the metrics and the input set (D-10: description required; specs, product name and the four operator-note values
- * optional) but not the flag names of the notes: those are a CONTRACT CHOSEN BY TEST_WRITING and recorded as such (see the
- * comment above `NOTES_FLAGS`).
+ * names the metrics and the input set (D-10: the description required; specs and product name optional).
+ * US-9.1 operator-notes WITHDRAWAL (Story v5, Specification v7 FR-44 item 5; task breakdown P0 / P8): the four `--notes-*`
+ * options are no longer accepted. The three tests that exercised them were removed with the feature, and the rejection
+ * test at the end of this file (RED until T47 removes the flags from the script) replaces them.
  *
  * The Node check of OD-9 (Node >= 22.18 for native type stripping, else the D12 launcher, task T41) is a step of
  * the BUILDER's task T35: this spec runs the `.ts` entry directly, so it is red on a Node that cannot load it -
@@ -152,15 +153,6 @@ describe('FR-32 failure path: unreadable or empty input fails visibly, it does n
 
 // ── H-OD10 ANSWERED: numbers absent from the input (D-9, D-10, FR-33) and the optional input flags ────────────
 
-/**
- * CONTRACT CHOSEN BY TEST_WRITING (no approved artifact fixes it; the plan names only "the four `--notes-*` values"):
- * the four operator-note values are optional FILE flags like `--specs`, named by the kebab-case of their
- * `operatorNotes` key: --notes-usage-scenarios, --notes-test-results, --notes-previous-generation-comparison,
- * --notes-limitations. `--name` is an inline string. A builder who prefers other names loops back through TEST_WRITING.
- */
-const NOTES_FLAGS = [
-  '--notes-usage-scenarios', '--notes-test-results', '--notes-previous-generation-comparison', '--notes-limitations',
-];
 const NUMBER_HTML = `<p>${PLAIN}</p>${FIG(0)}<p>Гравер різав зразок 42 хвилини.</p>`;
 
 describe('FR-33: a number absent from the input is a hard violation (D-9)', () => {
@@ -214,25 +206,46 @@ describe('FR-32 / D-10: every text the script is given forms the input side', ()
     expect(r.status).toBe(0);
   });
 
-  it.each(NOTES_FLAGS)('%s grounds a number given only in that operator note', flag => {
+});
+
+// ── FR-44 item 5 (task breakdown P8; owner task T47): the withdrawn --notes-* options are rejected ─────────────────────────
+//
+// Written from the Specification (PROPOSED DEFAULT of FR-44 item 5): the four options are not accepted; an unknown option makes
+// the script exit with status 2, write `unknown argument "<flag>"` followed by the usage text to stderr, read no file and print
+// no report on stdout; the usage text names none of the four options. The four names are literals HERE on purpose: this is the
+// absence pin (the source-scan spec excludes spec files because they carry the literals). The input of every run is otherwise
+// valid (`--html` and `--input` exist and are clean), so a rejection can only be on account of the flag.
+const WITHDRAWN_NOTES_FLAGS = [
+  '--notes-usage-scenarios', '--notes-test-results', '--notes-previous-generation-comparison', '--notes-limitations',
+];
+
+describe('FR-44 item 5: the four withdrawn --notes-* options are rejected as unknown arguments', () => {
+  it.each(WITHDRAWN_NOTES_FLAGS)('%s with a valid --html and --input exits 2 with `unknown argument` and prints no report', flag => {
     const note = write('note-42.txt', 'У тесті зразок різали 42 хвилини');
-    const r = measure(NUMBER_HTML, INPUT_TEXT, [flag, note]);
-    expect(firstLine(r.stdout), 'the report did not start (unknown flag?)').toBe(process.version);
-    expect(r.stderr).not.toMatch(/unknown|unrecognized|unexpected|невідом/i);
-    expect(r.status).toBe(0);
+    const r = measure(CLEAN_HTML, INPUT_TEXT, [flag, note]);
+    scriptStarted(r);
+    expect(r.error).toBeUndefined();
+    expect(r.status, 'the withdrawn flag was accepted').toBe(2);
+    expect(r.stderr).toContain(`unknown argument "${flag}"`);
+    expect(r.stdout, 'a report was printed although the flag is unknown').toBe('');
   });
 
-  it('a number in a note that was NOT passed stays absent (the operator must pass the notes)', () => {
-    const r = measure(NUMBER_HTML);
-    expect(firstLine(r.stdout)).toBe(process.version);
-    expect(r.status).not.toBe(0);
+  it.each(WITHDRAWN_NOTES_FLAGS)('%s: the usage text that follows the error lists none of the four option names', flag => {
+    const r = measure(CLEAN_HTML, INPUT_TEXT, [flag, write('note-7.txt', 'text')]);
+    scriptStarted(r);
+    const [errorLine, ...usageLines] = r.stderr.split(LINE_BREAK);
+    expect(errorLine).toContain(`unknown argument "${flag}"`);
+    const usage = usageLines.join(' ');
+    expect(usage, 'the usage text was not printed after the error').toContain('--html');
+    for (const name of WITHDRAWN_NOTES_FLAGS) expect(usage, `the usage text still lists ${name}`).not.toContain(name);
   });
 
-  it('a missing notes file fails visibly (non-zero, explanation on stderr) instead of being ignored', () => {
+  it('a withdrawn flag whose file does not exist is rejected as an unknown argument, not as an unreadable file (no file is read)', () => {
     const r = measure(CLEAN_HTML, INPUT_TEXT, ['--notes-limitations', join(dir, 'no-such-note.txt')]);
     scriptStarted(r);
-    expect(r.status).not.toBe(0);
-    expect(r.stderr.trim().length).toBeGreaterThan(0);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain('unknown argument "--notes-limitations"');
+    expect(r.stderr).not.toMatch(/cannot read/);
   });
 });
 
