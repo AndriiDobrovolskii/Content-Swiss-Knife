@@ -4,7 +4,6 @@ import { getStore, isExpert3dStore, isCenter3dPrintStore, EXPERT3D_TOV_BASE_OVER
 import { PromptPayload } from '../prompt-core/payload';
 import { isSimplifiedTemplateId } from '../prompt-core/simplified-templates';
 import { buildSimplifiedHtmlOverlay } from './simplified-template-blocks';
-import { buildOperatorNotesBlock } from './operator-notes';
 import { productShort } from '../prompt-core/product-name-core';
 import { extractVideoEmbeds } from '../utils/video-manifest';
 import { preExtractPlaceholders } from '../utils/image-placeholder';
@@ -165,7 +164,7 @@ export function buildPromptA(input: ProductInput, baseLanguageOverride?: string)
 [Official Brand]: ${resolveOfficialBrand(input.name, input.website.name) ?? 'None — do not claim official representation for this product'}
 ${buildDeliveryRegionBlock(input.website.name, MASTER_LOCALE)}
 [Supplemental Content]: ${input.supplementalContent || 'None provided.'}
-${buildOperatorNotesBlock(input.operatorNotes)}${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input)}${buildMarkerBlock(input)}${template}${custom}${simplifiedOverlay}
+${buildImageBlock(input, store.imageBaseUrl)}${buildVideoBlock(input)}${buildMarkerBlock(input)}${template}${custom}${simplifiedOverlay}
 
 Generate the description in ${baseLanguage}. Primary keyword "${input.name}" appears ~1× per section in BODY PROSE only — headings are excluded from that count and follow [HEADING FORM], which forbids the full name outright except at the two blessed positions it names.`;
 
