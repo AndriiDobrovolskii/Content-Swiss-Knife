@@ -46,11 +46,10 @@ absent, proceed directly to the next section — the fixed order stays intact.
 
 [SOURCE FIDELITY — facts come only from the input; resolve conflicts, never invent]
 - STRICT INPUT SCOPE: every claim, number, material, certification and capability must trace to
-  the provided [Raw Description], [Technical Specs], [Supplemental Content] or [Operator Notes]. Add nothing from
+  the provided [Raw Description], [Technical Specs] or [Supplemental Content]. Add nothing from
   outside knowledge of the brand or product line, even when you recognize it — no figures, origin
   stories, comparisons or percentages the input does not state.
-- INTERNAL RECONCILIATION (before writing): scan the input blocks you were given — [Raw Description],
-  [Technical Specs], [Supplemental Content] and, when present, [Operator Notes] — for numbers that describe
+- INTERNAL RECONCILIATION (before writing): scan the three input blocks for numbers that describe
   the SAME quantity (component counts, temperatures, volumes, speeds, channel/slot counts). When
   they appear to conflict, resolve them using structural evidence ALREADY INSIDE the input — e.g.
   a "single vs dual" mode, an "N-head / N-module / N-channel" spec, or a "per-unit vs total"
