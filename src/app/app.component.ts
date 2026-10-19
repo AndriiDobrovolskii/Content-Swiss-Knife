@@ -19,8 +19,6 @@ import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { HtmlEditorComponent } from './components/html-editor/html-editor.component';
 import { ModelSettingsComponent } from './components/model-settings/model-settings.component';
 import { ContentTemplateSelectComponent } from './components/content-template-select/content-template-select.component';
-import { OperatorNotesFieldsComponent } from './components/operator-notes-fields/operator-notes-fields.component';
-import { OperatorNotesFormState } from './operator-notes-form-state';
 import { TEMPLATE_LABELS } from './content-template-labels';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
 import { FeedbackContextService } from '../services/feedback-context.service';
@@ -151,10 +149,6 @@ const TRANSLATIONS = {
     placeholderSupplemental: 'Paste FAQs here...',
     customInstructions: 'Custom Instructions (Optional)',
     placeholderInstructions: 'e.g., "Write in a more casual tone", "Focus on durability for industrial use."',
-    operatorNotesUsageScenarios: 'Usage scenarios (optional)',
-    operatorNotesTestResults: 'Test results (optional)',
-    operatorNotesPreviousGenerationComparison: 'Comparison with the previous generation (optional)',
-    operatorNotesLimitations: 'Limitations (optional)',
     imgSelectImages: 'Select Images',
     imgDropZone: 'Drag & Drop or Click to Upload',
     imgFormat: 'Format',
@@ -329,10 +323,6 @@ const TRANSLATIONS = {
     placeholderSupplemental: 'Вставте FAQ сюди...',
     customInstructions: 'Додаткові інструкції (Опціонально)',
     placeholderInstructions: 'напр., "Писати в більш неформальному стилі", "Зосередитись на міцності для промислового використання."',
-    operatorNotesUsageScenarios: 'Сценарії використання (необов\'язково)',
-    operatorNotesTestResults: 'Результати тестів (необов\'язково)',
-    operatorNotesPreviousGenerationComparison: 'Порівняння з попереднім поколінням (необов\'язково)',
-    operatorNotesLimitations: 'Обмеження (необов\'язково)',
     imgSelectImages: 'Обрати зображення',
     imgDropZone: 'Перетягніть або натисніть',
     imgFormat: 'Формат',
@@ -414,7 +404,7 @@ const TOOL_LABEL: Record<AppMode, string> = {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent, ModelSettingsComponent, ContentTemplateSelectComponent, OperatorNotesFieldsComponent],
+  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent, ModelSettingsComponent, ContentTemplateSelectComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent {
@@ -459,17 +449,6 @@ export class AppComponent {
   specs = signal<string>('');
   supplementalContent = signal<string>('');
   customInstructions = signal<string>('');
-  // The four optional operator notes of the Generator form (US-9.1 FR-24). A plain class, no DI.
-  readonly operatorNotesState = new OperatorNotesFormState();
-  operatorNotesLabels = computed(() => {
-    const l = this.uiLabels();
-    return {
-      usageScenarios: l.operatorNotesUsageScenarios,
-      testResults: l.operatorNotesTestResults,
-      previousGenerationComparison: l.operatorNotesPreviousGenerationComparison,
-      limitations: l.operatorNotesLimitations,
-    };
-  });
   generatorUseThinking = signal<boolean>(true); // Default to true as per original behavior
 
   // --- TEMPLATE STATE ---
@@ -923,7 +902,6 @@ export class AppComponent {
       specs: this.specs(),
       supplementalContent: this.supplementalContent(),
       customInstructions: this.customInstructions(),
-      ...this.operatorNotesState.inputPart(),
       templateId: this.selectedTemplateId() || undefined,
       includeFunctionality: this.selectedTemplateId() === 'accessories' ? this.includeAccessoriesFunctionality() : undefined,
       customTemplate: Object.keys(this.customTemplate()).length > 0 ? this.customTemplate() : undefined,
@@ -1051,7 +1029,6 @@ export class AppComponent {
     this.specs.set(item.input.specs);
     this.supplementalContent.set(item.input.supplementalContent || '');
     this.customInstructions.set(item.input.customInstructions || '');
-    this.operatorNotesState.restore(item.input.operatorNotes);
     this.orchestrator.content.set(item.output);
     this.showHistory.set(false);
   }
@@ -1090,7 +1067,6 @@ export class AppComponent {
         this.specs.set('');
         this.supplementalContent.set('');
         this.customInstructions.set('');
-        this.operatorNotesState.clear();
         this.activeTab.set('html');
         this.clearGenImgManifest();
         this.orchestrator.content.update(c => ({
@@ -1112,7 +1088,6 @@ export class AppComponent {
         this.specs.set('');
         this.supplementalContent.set('');
         this.customInstructions.set('');
-        this.operatorNotesState.clear();
         this.activeTab.set('html');
         this.clearGenImgManifest();
         this.orchestrator.content.update(c => ({
