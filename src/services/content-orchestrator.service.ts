@@ -40,7 +40,6 @@ import { validateProductNameConsistency, validateProductNameH1SlugAgreement } fr
 import { validateSlugs } from '../utils/slug-validator';
 import { buildPromptA } from '../prompts/task-a';
 import { buildPromptADoc } from '../prompts/task-a-doc';
-import { OPERATOR_NOTE_FIELDS } from '../prompts/operator-notes';
 // FR-14 — the service layer is the only one that sees input.name and input.website BEFORE the
 // prompt payload is built, which is where the Specification puts this choice. A HookPattern VALUE
 // crosses into the service; the instruction STRING stays inside task-a-doc.ts, so AGENTS.md §3
@@ -371,17 +370,12 @@ export class ContentOrchestratorService {
    * and ignores unit spelling, and digits survive translation unchanged, so the untranslated
    * source is the better choice here — it is always available, including on the runs where
    * grounding is disabled.
-   *
-   * US-9.1 FR-30: the four operator-note values are sanctioned sources too (the master's STRICT INPUT SCOPE
-   * names [Operator Notes]), so a number the operator typed is grounded. NUMERIC_SOURCE_FIDELITY_RULES and the
-   * supplementalContent asymmetry are deliberately not changed (OD-20(2)).
    */
   private numericFidelitySources(input: ProductInput, manifest?: ImageManifestEntry[]): string {
     return [
       input.specs,
       input.description,
       input.name,
-      ...OPERATOR_NOTE_FIELDS.map(({ key }) => input.operatorNotes?.[key]?.trim()),
       // US-5.1 FR-21: the native-Ukrainian Vision texts a marker figure is built from are sanctioned
       // sources too, so a number legible in the image and recorded there is grounded in the figure text.
       ...(manifest ?? []).flatMap(e => [
