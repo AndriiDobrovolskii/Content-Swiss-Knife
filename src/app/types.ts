@@ -38,25 +38,12 @@ export interface ImageManifestEntry {
   status: 'pending' | 'analyzing' | 'done' | 'error';
 }
 
-/**
- * Optional free-text facts the operator supplies for one generation (US-9.1 FR-25). Every key is optional; an
- * object whose values are all empty or whitespace-only counts as absent (see `normalizeOperatorNotes`).
- */
-export interface OperatorNotes {
-  usageScenarios?: string;
-  testResults?: string;
-  previousGenerationComparison?: string;
-  limitations?: string;
-}
-
 export interface ProductInput {
   website: WebsiteOption;
   name: string;
   description: string;
   specs: string;
   supplementalContent?: string;
-  /** US-9.1 FR-25: operator-supplied facts, sent to Task A as an `[Operator Notes]` block. Absent when empty. */
-  operatorNotes?: OperatorNotes;
   customInstructions?: string;
   templateId?: string;
   /** Accessories template only: include paragraph §3 (Functionality). Ignored for every other template (US-2.2 FR-9). */
