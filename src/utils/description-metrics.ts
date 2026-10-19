@@ -37,7 +37,7 @@ export interface MeasureDeps {
 export interface MeasureInput {
   /** The generated HTML. */
   html: string;
-  /** Every text the script was given (description, specs, product name, operator notes): the input side of D-9. */
+  /** Every text the script was given (description, specs, product name): the input side of D-9. */
   inputTexts: string[];
   locale: string;
 }

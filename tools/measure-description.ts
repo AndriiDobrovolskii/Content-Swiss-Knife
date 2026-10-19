@@ -5,13 +5,11 @@
  *
  * Run (Node >= 22.18 strips the types natively; no runner and no new dependency):
  *   node tools/measure-description.ts --html generated.html --input description.txt \
- *        [--specs specs.txt] [--name "Product name"] [--locale uk-UA] \
- *        [--notes-usage-scenarios f.txt] [--notes-test-results f.txt] \
- *        [--notes-previous-generation-comparison f.txt] [--notes-limitations f.txt]
+ *        [--specs specs.txt] [--name "Product name"] [--locale uk-UA]
  *
  * The first line of every report is `process.version`, so evidence of a live run carries the Node version that
  * produced it. Every text the script is given forms the input side of the "number absent from the input" check
- * (D-10): pass the description, the specs and, when they were filled, the operator notes.
+ * (D-10): pass the description, the specs and the product name.
  *
  * Exit status: 0 when no hard criterion is violated (any deixis hit, any figure without a paragraph above, any two
  * figures in a row, any number absent from the input); 1 on a hard violation; 2 when the input cannot be read or
@@ -31,17 +29,12 @@ const FLAGS: Record<string, string> = {
   '--specs': 'specs',
   '--name': 'name',
   '--locale': 'locale',
-  '--notes-usage-scenarios': 'notesUsageScenarios',
-  '--notes-test-results': 'notesTestResults',
-  '--notes-previous-generation-comparison': 'notesPreviousGenerationComparison',
-  '--notes-limitations': 'notesLimitations',
 };
 /** Flags whose value is a file path (every flag except the inline `--name` and `--locale`). */
-const FILE_FLAGS = new Set(['html', 'input', 'specs', 'notesUsageScenarios', 'notesTestResults', 'notesPreviousGenerationComparison', 'notesLimitations']);
+const FILE_FLAGS = new Set(['html', 'input', 'specs']);
 
 const USAGE = 'Usage: node tools/measure-description.ts --html <file> --input <file> [--specs <file>] [--name <text>] '
-  + '[--locale <locale>] [--notes-usage-scenarios <file>] [--notes-test-results <file>] '
-  + '[--notes-previous-generation-comparison <file>] [--notes-limitations <file>]';
+  + '[--locale <locale>]';
 
 function fail(message: string): never {
   process.stderr.write(`measure-description: ${message}\n`);
