@@ -2,7 +2,7 @@
 artifact: plan_review
 story: US-9.1
 version: 6
-status: APPROVED
+status: ARCHIVED
 owner: so-plan-reviewer
 created_at: 2026-10-19T12:30:00Z
 updated_at: 2026-10-19T15:19:00Z

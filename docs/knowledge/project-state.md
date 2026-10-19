@@ -115,3 +115,20 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Open items: the AC-22 manual browser layout check was never recorded; OD-13 (uk label default), OD-12/OD-16 (panels above
   the result, blank area on a no-FAQ run), OD-17 (Generate-guard alert still lists Original Description); security N-1..N-3;
   no live-model run; AC-21..AC-24 and AC-26 are source-text pins, not rendered DOM.
+
+## US-9.1 — no picture references in generated descriptions, livelier uk-UA text (archived 2026-10-19T19:37:30Z)
+- The master prompt carries a `[NO PICTURE REFERENCES` rule (`NO_IMAGE_DEIXIS_RULE`) and a shared `LIVELINESS_RULES` block
+  (SCENE, RHYTHM, HONEST LIMITS, HOOK; a store's voice block wins; it governs new descriptions, not translations). The Vision
+  pre-pass asks for product facts, the seven video lead-in templates are pointer-free, and Doc / HTML figure placement asks for a
+  preceding fact paragraph.
+- New detector `src/utils/image-deixis.ts` (seven base languages) feeds `validateGeneratedHtml` (`image-deixis`) and
+  `figureCaptionWarnings` (`image-caption-deixis`), both at `warning`. New `tools/measure-description.ts` +
+  `src/utils/description-metrics.ts` compute the acceptance metrics.
+- The four operator-note Generator fields were built and withdrawn by the owner (Story v5); the net diff has none of that code,
+  pinned by absence specs.
+- FROZEN `task-a.ts`, `master-system-prompt.ts`, `output-validator.ts` edited under recorded section 9 grants, each commit with
+  `.arch-guard-checksums` re-baselined.
+- Delivered by PR #142, merge commit `2d5bb70`. Summary: `docs/knowledge/US-9.1-delivery-summary.md`.
+- Open items: AC-11 / AC-12 (live-run acceptance) were WAIVED by the owner (Story v6) and never measured; no live output was
+  inspected (security L-1); the FROZEN-approval event in `history.jsonl` has an estimated timestamp; OD-10 D-3..D-5 / D-7 / D-9,
+  OD-13, OD-15 deferred; legacy `operatorNotes` keys remain inert in `localStorage`.

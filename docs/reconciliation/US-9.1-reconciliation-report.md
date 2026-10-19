@@ -2,7 +2,7 @@
 artifact: reconciliation_report
 story: US-9.1
 version: 4
-status: APPROVED
+status: ARCHIVED
 owner: so-reconciliation-reviewer
 stage: RECONCILIATION
 created_at: 2026-10-19T12:48:07Z

@@ -1,14 +1,14 @@
 # Identity of the active User Story. Written by so-orchestrator only.
 # Schema: docs/workflow/state-schema.md
 version: 1
-active_story: US-9.1
-story_path: docs/stories/US-9.1-no-picture-references-and-livelier-descriptions.md
+active_story: null
+story_path: null
 source:
   type: local_only
   repository: null
   issue_number: null
   issue_url: null
-activated_at: 2026-10-17T14:49:04Z
-activated_by: sbruhov@gmail.com
-status: IN_PROGRESS
+activated_at: null
+activated_by: null
+status: NOT_STARTED
 note: null

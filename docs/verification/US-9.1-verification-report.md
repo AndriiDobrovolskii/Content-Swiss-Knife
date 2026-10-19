@@ -2,7 +2,7 @@
 artifact: verification_report
 story: US-9.1
 version: 3
-status: APPROVED
+status: ARCHIVED
 owner: so-implementation-verifier
 stage: IMPLEMENTATION_VERIFICATION
 created_at: 2026-10-19T15:45:00Z
