@@ -1,290 +1,174 @@
 ---
 artifact: test_generation_report
 story: US-9.1
-version: 3
+version: 5
 status: DRAFT
 owner: so-test-writer
 created_at: 2026-10-18T15:14:00Z
-updated_at: 2026-10-18T19:57:00Z
-supersedes: docs/tests/US-9.1-test-generation-report.md#2
+updated_at: 2026-10-19T18:30:00Z
+supersedes: docs/tests/US-9.1-test-generation-report.md#4
 inputs_consumed:
-  - key: pipeline_status
-    version: 1
   - key: story
-    version: 4
+    version: 6
   - key: specification
-    version: 5
+    version: 8
   - key: impact_analysis
-    version: 4
+    version: 6
   - key: implementation_plan
-    version: 4
+    version: 7
   - key: task_breakdown
-    version: 3
+    version: 6
   - key: plan_review
-    version: 3
+    version: 6
   - key: test_strategy
-    version: 3
+    version: 5
   - key: ac_test_matrix
-    version: 3
+    version: 5
 open_decisions_blocking: false
 ---
 
-# Test Generation Report - US-9.1 (v3 adds the F8 section directly below; v2, revision run: IMPLEMENTATION loop-back 1 of 3, key `changes_required_tests`)
+# Test Generation Report - US-9.1 (v5: records refresh; v4 content kept as the TEST_WRITING history)
 
-Run: `date -u` 2026-10-18T16:21Z at start, 2026-10-18T16:43Z at the last command; branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, HEAD `8a7a55b`, Node v24.15.0.
-Nothing was committed; `bash arch-guard.sh --rebaseline` was not run; no production file, no FROZEN file and no golden/oracle fixture was edited. `docs/workflow/history.jsonl` was already modified
-in the working tree before this run (the owner answers) and is not mine. Builder baseline at the start of this run: `Test Files 19 failed | 200 passed (219)`, `Tests 286 failed | 7144 passed | 3 skipped (7433)`.
+## v5 (RECORDS-REFRESH, 2026-10-19, HEAD `313f727`): what is true now
 
-## Revision 3 (this version; NARROW loop-back 2, finding F8)
+No test, source file, fixture or golden was written, edited, deleted or moved by v5; only the three `docs/tests/US-9.1-*` artifacts were rewritten, and nothing was committed. The tests of the removal are committed (`1b73c8a`) and the builder landed T43 to T49 (`fd9b052`, `439cc1e`, `19ed848`, `4556cb4`, `291bc1e`, `bad5161`, `86b0d62`). Everything below this section is the v4 run (HEAD `09f87dc`), kept as history: its "failing" and "red" statements describe that moment, **not** the current state.
 
-Run: `date -u` 2026-10-18T19:57Z, branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, HEAD `c24d974`. Nothing committed, no `--rebaseline`, no production or FROZEN file edited;
-`bash arch-guard.sh`: ALL CHECKS PASSED; `git status --short` lists only this spec, the three docs/tests artifacts and the two pre-existing workflow files (not mine).
-
-**Defect (F8)**: `master-system-prompt.no-picture-references.spec.ts` asserted `MASTER_SYSTEM_PROMPT.indexOf('[NO PICTURE REFERENCES', at + 1) === -1` ("the heading occurs twice"). FR-7 requires the literal
-`see [NO PICTURE REFERENCES]` (also pinned by `master-system-prompt.placement.spec.ts`), so T30 made the prefix occur twice and turned a green test red; the builder rightly did not commit T30.
-**Fix**: the test now (a) locates the heading at its line start (`/^\[NO PICTURE REFERENCES/m`) and keeps the "outside the [IMAGE HANDLING] span" check; (b) new test: the heading line (first line of
-`NO_IMAGE_DEIXIS_RULE`) occurs exactly once, at a line start, and is the only line-start occurrence; (c) new test: total prefix occurrences = 1 + the FR-7 pointers (collapsed whitespace), so a stray third mention
-fails; (d) new premise test: the constant's first line begins with the prefix. The pointer's presence is deliberately NOT asserted here (it is red-by-design in `master-system-prompt.placement.spec.ts`; asserting it here
-would add a new red at HEAD; a first draft did and was removed after a real run showed it red). Not weaker: the old test allowed zero extra occurrences, the new one allows exactly the FR-7 pointer and nothing else; the heading is additionally forced to a line start.
-
-**Scan for the same defect class**: grep of every US-9.1 spec for uniqueness/occurrence assertions (`split().length - 1`, `indexOf(.., + 1)`, `lastIndexOf`, `matchAll`, "once", "exactly once"). None other asserts uniqueness on a string
-that FR-7, FR-9 or FR-20 require in several places; the remaining ones are on whole constants/sentences present in one place. Fixed: 1 (this one). Listed and left unchanged: `constants.liveliness` and `master-system-prompt.liveliness`
-(precedence and self-scoping sentences), `task-a.deixis-wording`, `task-a.user-content.golden`, `master-system-prompt.v4` (`occurrences` helper).
-
-**Satisfiability (real runs, logic runner, `npx vitest run --reporter=json`)**: scratch `git worktree` of HEAD outside the repo (removed afterwards), `t30-t31-t32-experiment.patch` (hunks T30, T31, T32) applied, the fixed spec copied in, `node_modules` junctioned.
-- `master-system-prompt.no-picture-references.spec.ts`: 18 passed at HEAD (was 15 tests); 0 failures with the patch applied. Also 0 failures with the patch in `placement`, `operator-notes`, `liveliness`, `task-c.master-reach`, `optimizer.master-reach`, `full-description.golden.us91`.
-- Whole suite, repo HEAD + fixed spec: `Tests 131 failed | 7489 passed`; pristine HEAD (control worktree): `130 failed | 7487 passed`. The single extra failure (`test/measure-description.cli.spec.ts` FR-32 `--specs`) was a timeout under the
-  two concurrent vitest processes of this run; rerun alone: 30/30 passed. Failures in the fixed-spec run that are not in the control: none.
-- Whole suite, patched worktree: `41 failed | 7579 passed`; 101 HEAD failures turn green, none of the spec's. Failing only in the patched run: the 10 byte-equal tests of the pre-Story `src/prompts/full-description.golden.spec.ts` (the master bytes change
-  by design; the task breakdown assigns their "regenerated bytes" to the builder at T30-T32 - not a test defect, but the builder must regenerate them in that commit) and one `test/removal.spec.ts` test that passed when rerun alone (load flake).
-
-## Files changed in this run (v2 run) (tests and test fixtures only)
-
-Modified specs: `src/utils/image-placeholder.deixis.spec.ts` (F1), `src/prompts/vision-prepass.no-picture-references.spec.ts` (F2), `src/utils/image-deixis.spec.ts` (F6), `src/app/app.component.operator-notes.spec.ts` (F4: T12, T13, T38, T39),
-`src/prompt-core/constants.liveliness.spec.ts`, `src/prompt-core/master-system-prompt.liveliness.spec.ts` (H-FR20PREC), `src/prompts/task-a.deixis-wording.spec.ts`, `src/prompts/task-a.user-content.golden.spec.ts` (H-FR11I3),
-`src/utils/description-metrics.spec.ts`, `test/measure-description.cli.spec.ts` (H-OD10), `src/app/components/operator-notes-fields/operator-notes-fields.component.spec.ts` (comment only).
-New: `src/app/operator-notes-form-state.spec.ts` (T40), `test/faq-pipeline.master-leak.spec.ts` (F7 guard). Modified fixtures: `test/fixtures/faq-pipeline.ts` (F7), `test/fixtures/us91-constants.ts` (`PRECEDENCE_SENTENCE`).
-`git diff --name-only HEAD -- src server tools package.json .arch-guard-checksums` lists only `*.spec.ts` files; `bash arch-guard.sh`: `ALL CHECKS PASSED`.
-
-## Full-suite result (real output)
+Real output of the read-only confirmations run for v5 (no file written; `git status --short` shows `docs/**` only, as at the start):
 
 ```
-$ npx vitest run --reporter=dot            # npm run test:logic, 2026-10-18T16:35Z
- Test Files  20 failed | 201 passed (221)
-      Tests  350 failed | 7178 passed | 3 skipped (7531)
+npx vitest run                         -> Test Files  221 passed (221)
+                                          Tests  7569 passed | 3 skipped (7572)         (0 failed)
+npm run test:components                -> Test Files  2 passed (2)
+                                          Tests  32 passed (32)
+npx vitest run --reporter=json <the 10 files that were red in v4>
+                                       -> 611 passed, 0 failed, 611 total
+   per file (passed / total): task-a.user-content.golden 324/324; task-c.master-reach 84/84; full-description.golden.us91 83/83; optimizer.master-reach 19/19;
+   measure-description.cli 33/33; stray-operator-notes 27/27; operator-notes-source-scan 26/26; source-scope 6/6; golden.fr43-oracle 5/5; app.component.no-operator-notes 4/4
 ```
 
-Reconciliation against the builder's baseline, to the test (no previously passing test fails):
-286 failing - 2 (F1 and F2 now green) + 22 (F6) + 10 (app.component.operator-notes: T12 4, T13 2, T38 2, T39 2) + 3 (constants.liveliness precedence) + 8 (master liveliness precedence: 7 stores + once) + 2 (task-a.deixis-wording new marker span) + 5 (golden marker exact: 2 + 2 + 1)
-+ 14 (CLI) + 2 (faq-pipeline.master-leak, needs T16) = **350**. Passed: 7144 + 2 + 13 (app guards: 1 + 1 + 4 + 7) + 19 (master-leak) - 0 = 7178 (+34). Files: 19 - 2 (F1, F2) + 1 (`image-deixis.spec`, F6) + 1 (`operator-notes-form-state.spec`, red by load) + 1 (`faq-pipeline.master-leak`) = 20.
-`description-metrics.spec.ts` was already red by load and still is (it now holds 61 tests that will be collected when T34 lands).
+So the 200 failing tests of v4 (32 of them inverted existing tests) are all green, and the totals equal the SIMULATION figures of v4 (221 files / 7569 passed / 3 skipped / 0 failed): the builder's end state matches the simulated one. The sanctioned red window closed with T43.
 
-Failing tests by file (from `vitest --reporter=json`): `task-c.master-reach` 80, `full-description.golden.us91` 69, `measure-description.cli` 30 (16 + 14 new), `constants.liveliness` 27 (24 + 3), `master-system-prompt.liveliness` 24 (16 + 8),
-`app.component.operator-notes` 22 (12 + 10), `image-deixis` 22 (all new, F6), `optimizer.master-reach` 18, `master-system-prompt.no-picture-references` 11, `master-system-prompt.placement` 10, `task-a.user-content.golden` 8 (3 + 5), `constants.expert3d` 6,
-`master-system-prompt.operator-notes` 6, `task-a.deixis-wording` 6 (4 + 2), `master-system-prompt.grounding-lock` 4, `master-system-prompt.video-placement` 3, `faq-pipeline.master-leak` 2, `constants.c3d-override` 2; load failures: `operator-notes-form-state.spec.ts`, `description-metrics.spec.ts`.
+**AC-11 and AC-12 are WAIVED by the owner (Story v6, Specification v8; history event `ts` 2026-10-19T14:50:23Z) and were not measured.** No test was written for them, none is claimed, and no coverage is invented. The matrix rows say "WAIVED (owner, Story v6, 2026-10-19; not measured)" with no test file, no "green" and no "built" (OD-27 PROPOSED DEFAULT, accepted at the spec gate); RECONCILIATION reports them as non-blocking findings. T51 is SUPERSEDED (breakdown v6). The v4 gap line about "evidence captured before the master revert" (plan R5) is moot: no live evidence exists.
 
-## Fixed test defects (F1, F2): green after the fix
-
-```
-$ npx vitest run src/utils/image-placeholder.deixis.spec.ts src/prompts/vision-prepass.no-picture-references.spec.ts
- Test Files  2 passed (2)
-      Tests  41 passed (41)
-```
-
-F1: the English figure of "takes an optional locale" is built with `cyrillicCheck: false` (the same assertion: English caption judged by the English pattern, Ukrainian caption not). F2: the NFR-12 slice starts at the `{` that opens the JSON example. Both were reported failing by the builder before any edit
-(unsatisfiable); both are now satisfiable AND still assert what they asserted (keys `alt, caption, description, label`; one figcaption warning for `en-GB`).
-
-## New and changed tests: observed failures, and the reason (first failing assertion of each group, from `vitest --reporter=json`)
-
-```
-F6    src/utils/image-deixis.spec.ts (22 new, 86 old green)  :: AssertionError: expected { match: 'на роликах', index: 16 } to be null           (uk "Візок рухається на роликах."; the carrier variant:
-                                                                  expected [ { carrier: 'paragraph', ... } ] to deeply equal [])   -- all eleven sentences, both variants, fail: the detector flags them
-F4    src/app/operator-notes-form-state.spec.ts (28 tests)    :: LOAD  Error: Failed to resolve import "./operator-notes-form-state" ... Does the file exist?     (T40 creates it)
-F4/T12 app.component.operator-notes.spec.ts                   :: AssertionError: expected 'import { Component, signal, inject, c...' to match /readonly operatorNotesState\s*=\s*new OperatorNotesFormState\(\)/
-F4/T13, T38, T39 (same file)                                  :: expected ... to contain 'operatorNotesState.inputPart()' / 'operatorNotesState.restore(item.input.operatorNotes)' / per-case clearPinViolations(...) toEqual([])
-H-FR20PREC constants.liveliness.spec.ts (3)                   :: Error: LIVELINESS_RULES is not exported from src/prompt-core/constants.ts as a string (created by T16)
-H-FR20PREC master-system-prompt.liveliness.spec.ts (8)        :: AssertionError: expected '[ROLE] You are an expert technical co...' to contain 'where a store voice block defines its...'
-H-FR11I3 task-a.deixis-wording.spec.ts (2)                    :: AssertionError: expected '[INPUT DATA]\n[Store Name]: EXPERT3D\...' to contain 'at the end of the paragraph that stat...'
-H-FR11I3 task-a.user-content.golden.spec.ts (5)               :: AssertionError: userContent differs from the golden beyond the FR-11 marker span: expected false to be true
-H-OD10   description-metrics.spec.ts (all)                    :: LOAD  Error: Failed to resolve import "./description-metrics" ... Does the file exist?                  (T34 creates it)
-H-OD10   test/measure-description.cli.spec.ts (14 new)        :: AssertionError: the report did not start: expected '' to be 'v24.15.0'                                  (tools/measure-description.ts does not exist; T35)
-F7       test/faq-pipeline.master-leak.spec.ts (2)            :: Error: LIVELINESS_RULES is not exported from src/prompt-core/constants.ts as a string (created by T16)
-```
-
-The F6 failures are the intended outcome: the builder's detector is wrong (it flags ordinary product sentences, so T26 emits false warnings and T34 / T36 would count false hard violations). **This sends T2/T3 back to a narrowing task.** Every failure is an assertion about missing text, a missing behaviour or the missing module the owner task creates; none is a typo or a broken test.
-
-Green on arrival, by design (guards): in `app.component.operator-notes.spec.ts` 13 of the 23 new tests (T12 old name `operatorNotesForm` absent; T13 no literal `operatorNotes:` key; T39 premise, disjoint slices, other modes untouched, no `seo_gen_form_state` / history; and the 7 slicing-helper self-tests, which test test code);
-19 of the 21 `faq-pipeline.master-leak` tests (the helper catches the original slices, the whole master, every fragment of `NO_IMAGE_DEIXIS_RULE` and each Story literal).
-
-## Satisfiability checks (scratch copies, not part of the repository; each deleted afterwards)
-
-- `operator-notes-form-state.spec.ts` against a throw-away `OperatorNotesFormState` (a `signal` plus the existing leaf module): **28/28**. This also confirms the plan's open check: `signal()` works without an injection context under the logic runner (no `@angular/compiler` import needed).
-- `description-metrics.spec.ts` against a throw-away `measureDescription`: 59/61 first run - the two red tests were the leaf-import check (needs the real file, expected) and one fixture of mine whose elements `textContent` glued together («111222»); fixed in the spec (line breaks between elements). Afterwards the D-9 grouping characters were aligned with the Specification's class (space, U+00A0, U+202F; an earlier test asserted U+2009 as a group space, which the Specification does not list: removed).
-- `image-deixis.spec.ts` including the F6 negatives against a scratch copy of `image-deixis.ts` with minimally narrowed patterns: **108/108**. Hint for the narrowing task: the builder's Portuguese list `'imagens?'` does not match the singular `imagem`; its positive «mostrada na imagem» passes today only through the open `na <any word>` tail, so narrowing that tail needs `'imagem'` added.
-- `test/fixtures/faq-pipeline.ts` (F7): the first attempt (windows over the whole master) failed 21 existing FAQ tests - a FAQ translation prompt legitimately shares master text - and was replaced (strategy, "F7"). Against the OLD helper two probes (a 700-character master fragment at offset 7001, a 300-character fragment of `NO_IMAGE_DEIXIS_RULE`) were not reported; the new helper reports them.
-
-## Type check and runners
-
-```
-$ npx tsc --noEmit
-src/app/operator-notes-form-state.spec.ts(27,40): error TS2307: Cannot find module './operator-notes-form-state' ...     (T40)
-src/utils/description-metrics.spec.ts(32,36): error TS2307: Cannot find module './description-metrics' ...               (T34)
-
-$ npm run test:components
-Application bundle generation failed.
-X [ERROR] TS2307: Cannot find module './operator-notes-form-state' ...   src/app/operator-notes-form-state.spec.ts:27:39
-X [ERROR] TS2307: Cannot find module './description-metrics' ...          src/utils/description-metrics.spec.ts:32:35
-
-$ bash arch-guard.sh      -> ALL CHECKS PASSED
-```
-
-Two diagnostics, both the missing-symbol kind the breakdown allows in later-owner specs (builder baseline: one). **The component runner is now unblocked only when BOTH T34 and T40 land** (the builder's finding F3 named only T34). No component spec executes until then.
-
-## Coverage gaps and deferred tests (what the reconciliation reviewer should expect)
-
-The DEFERRED list is empty except the manual live runs T36 / T42 (H-OD11 answered: standard catalog items, human QA operator, 3 marker + 3 non-marker). Remaining gaps are structural, see the matrix "Coverage statement": no automated test for AC-11 / AC-12 (manual), FR-40 item 3 (no parameter to vary), AC-8 translator / optimizer behaviour (declared residual risk), FR-41 executed through the accepted split rather than `AppComponent.clearAll()` (H-FR41TEST).
-
-## Non-blocking findings for the next stages
-
-- **F6 (blocks T34 and T36 acceptance, not this stage):** T2/T3 need a narrowing task; the 22 new red tests are its tests.
-- **Contracts chosen by TEST_WRITING, no approved artifact fixes them** (strategy, "Contracts chosen"): the four `--notes-*` flag names and their file-path form; six report keys of `measureDescription`. Reconciliation can accept them or send the spec back.
-- **T11 spec** is still unexecuted by `npm run test:components` (runner blocked, above); the builder ran it with a throw-away tsconfig (55 tests green).
-- **F7:** the kept slice `3000..3400` is moved by hunk M6 only (tens of characters) and stays clear of the shared FAQ/master regions; the FAQ specs must be re-run at T31 and in T33.
-- The v1 text is kept below as the record of run 1; its counts and states are superseded by this section and by the matrix "v2 state overlay".
+The four corrected Specification readings (P14) are carried unchanged in the strategy and the matrix; the evidence section below is as taken at HEAD `09f87dc`.
 
 ---
 
-# Appendix: run 1 (v1) - kept as the record of the first TEST_WRITING pass (counts and states superseded above)
+(v4 report follows, unchanged except where marked.)
 
+v3 of this report (and of the strategy and matrix) described the additive operator-notes feature and is stale for it. This report is for the TEST_WRITING run of 2026-10-19 against HEAD `09f87dc`
+(branch base `6546db8`), following task breakdown v5 handles P0 to P14 and nothing else (owner scope: "the whole feature, nothing extra"). Real output below was produced in that v4 run.
 
-Run: 2026-10-18 (`date -u` at the last command: 2026-10-18T15:09:53Z), branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`,
-HEAD `6546db83ef4005e9d6a57baf51adf0b35df8d3c7`, Node v24.15.0. Nothing was committed; `bash arch-guard.sh --rebaseline` was not run.
+## What this run changed (tests, test fixtures, artifacts only)
 
-## Files changed (tests and test fixtures only)
+No `src/` production file, no FROZEN file, no `.arch-guard-checksums`, no golden JSON was touched: `git status --short -- src ':!*.spec.ts' test/fixtures/golden .arch-guard-checksums` lists nothing, and `bash arch-guard.sh` exits 0.
+Nothing was committed or staged (the 8 deletions are working-tree deletions).
 
-`git diff --name-only HEAD -- src server tools package.json .arch-guard-checksums` lists exactly one file, the guard T20 amends:
-`src/prompts/task-c.description-bytes.spec.ts`. `git status --porcelain -- src server tools package.json .arch-guard-checksums` lists, besides it, only new
-`*.spec.ts` files and the new directory `src/app/components/operator-notes-fields/` (which holds only its spec). No FROZEN file was edited.
+| Kind | Files |
+|---|---|
+| Deleted (P0, 7 logic + 1 component) | `src/prompts/operator-notes.spec.ts`, `src/prompts/task-a.operator-notes.spec.ts`, `src/prompt-core/master-system-prompt.operator-notes.spec.ts`, `src/services/content-orchestrator.operator-notes.spec.ts`, `src/services/history.service.operator-notes.spec.ts`, `src/app/app.component.operator-notes.spec.ts`, `src/app/operator-notes-form-state.spec.ts`, `src/app/components/operator-notes-fields/operator-notes-fields.component.spec.ts` |
+| Inverted EXISTING tests (P3, P4: the sanctioned red) | `src/prompts/full-description.golden.us91.spec.ts` (T31), `src/prompts/task-c.master-reach.spec.ts` (R22), `src/prompts/optimizer.master-reach.spec.ts` |
+| Edited (P0, P5, P8, P12) | `src/prompts/task-a.user-content.golden.spec.ts`, `src/prompts/task-a-doc.figure-placement.spec.ts`, `test/measure-description.cli.spec.ts`, `test/faq-pipeline.master-leak.spec.ts`, `test/fixtures/faq-pipeline.ts`, `test/fixtures/task-a-user-content-inputs.ts` (comment) |
+| New | `src/prompt-core/master-system-prompt.source-scope.spec.ts` (P1), `src/prompts/full-description.golden.fr43-oracle.spec.ts` (P2), `src/services/content-orchestrator.stray-operator-notes.spec.ts` (P6, P7), `src/services/history.service.legacy-entry.spec.ts` (P9a), `src/app/app.component.no-operator-notes.spec.ts` (P9b), `test/operator-notes-source-scan.spec.ts` (P10), `src/prompt-core/constants.numeric-source-rules.spec.ts` (P11) |
+| Artifacts | `docs/tests/US-9.1-test-strategy.md`, `docs/tests/US-9.1-ac-test-matrix.md`, this report (all v4, DRAFT, same paths) |
+| NOT touched (B4) | `src/utils/description-metrics.spec.ts`, `src/prompt-core/master-system-prompt.liveliness.spec.ts` |
 
-**New logic specs (34)** - `src/prompts/`: `task-a.user-content.golden`, `payload-oracle.d15`, `vision-prepass.no-picture-references`, `task-a-doc.figure-placement`,
-`task-a.deixis-wording`, `task-a.operator-notes`, `operator-notes`, `task-c.master-reach`, `optimizer.master-reach`, `full-description.golden.us91`;
-`src/prompt-core/`: `constants.no-image-deixis`, `constants.liveliness`, `constants.c3d-override`, `constants.expert3d`, `master-system-prompt.no-picture-references`,
-`.video-placement`, `.grounding-lock`, `.placement`, `.operator-notes`, `.liveliness`; `src/utils/`: `image-deixis`, `image-deixis.import-cycle`,
-`image-placeholder.deixis`, `video-manifest.pointer-free`, `video-manifest.deixis`, `output-validator.image-manifest-wording`, `output-validator.image-deixis`,
-`structural-parity.sentence-blind`, `description-metrics`; `src/services/`: `content-orchestrator.deixis-messages`, `content-orchestrator.operator-notes`,
-`history.service.operator-notes`; `src/app/`: `app.component.operator-notes`; `test/`: `measure-description.cli`.
-**New component spec (1)** - `src/app/components/operator-notes-fields/operator-notes-fields.component.spec.ts`.
-**New fixtures and helpers (not specs)** - `test/fixtures/golden/task-a-user-content.json`, `test/fixtures/golden/optimizer-faq-pre-change.json`,
-`test/fixtures/task-a-user-content-inputs.ts`, `test/fixtures/optimizer-faq-pre-change-inputs.ts`, `test/fixtures/task-c-description-guard.ts`,
-`test/fixtures/us91-constants.ts`, `test/fixtures/us91-master.ts`.
-**Amended (1)** - `src/prompts/task-c.description-bytes.spec.ts` (T20, see the strategy). Existing goldens were NOT regenerated; no `-u` was used.
+## Baseline: a clean pre-change run (real output)
 
-## Baseline before any test was added (real output)
-
-`npx vitest run` on the unmodified tree: `Test Files 185 passed (185)`, `Tests 6380 passed | 3 skipped (6383)`. `npx tsc --noEmit`: exit 0.
-
-## After TEST_WRITING (real output)
+An earlier baseline attempt in this run was discarded: edits were applied while it was running, so its 11 failures were my own inversions and a syntax slip of mine. The baseline below was taken in a separate throwaway
+`git worktree` checked out at `09f87dc` (clean, `git status` empty; `node_modules` junctioned), so it cannot be contaminated.
 
 ```
-$ npx vitest run --reporter=dot            # npm run test:logic
- Test Files  31 failed | 188 passed (219)
-      Tests  442 failed | 6869 passed | 3 skipped (7314)
+npx tsc --noEmit                      -> exit 0, no output
+npx vitest run                        -> Test Files  221 passed (221)
+                                         Tests  7620 passed | 3 skipped (7623)
+npm run test:components               -> Test Files  3 passed (3)
+                                         Tests  55 passed (55)
+bash arch-guard.sh                    -> exit 0
 ```
 
-- 219 - 185 = 34 new spec files; 31 are red, 3 are green on arrival (`payload-oracle.d15`, `history.service.operator-notes`, `structural-parity.sentence-blind`)
-  and the amended `task-c.description-bytes` is green too. **Every one of the 31 failing files is new** (the list below); no pre-existing spec fails.
-- 7314 - 6383 = 931 new test cases net (the amended guard went from 100 to 108): 442 red, 489 green on arrival (guards, characterization pins, the byte oracles
-  of Tier A and the Doc wrapper, the absence pins). Five logic specs (`image-deixis`, `image-deixis.import-cycle`, `video-manifest.deixis`, `operator-notes`,
-  `description-metrics`) collect zero tests because their module does not exist (red by load, breakdown constraint 1); their further test cases appear once T2, T9 and T34 land. The component spec is counted separately below.
-
-### Failures are for the right reason - first failing test of every red file (from `vitest --reporter=json`)
+## After the v4 run (real output, working tree at the time; HISTORICAL: this is the red state, superseded by the v5 section above)
 
 ```
-test/measure-description.cli.spec.ts (16/16) :: the first line of stdout is process.version, for a clean run :: AssertionError: expected '' to be 'v24.15.0'
-                                       (negative cases:  AssertionError: the script itself did not run ... Error: Cannot find module '...\tools\measure-description.ts')
-src/prompt-core/constants.c3d-override.spec.ts (2/6) :: Assert absent: the old lead-in comparison :: AssertionError: expected '[CENTER 3D PRINT BRAND VOICE ...' not to contain 'The lead-in must still differ from th...'
-src/prompt-core/constants.expert3d.spec.ts (6/24) :: contains the literal "states the mechanism that makes THIS product the ... :: AssertionError: expected '[EXPERT3D BRAND VOICE ...' to contain 'states the mechanism that makes THIS ...'
-src/prompt-core/constants.liveliness.spec.ts (24/28) :: contains the literal "open each §3 <h2> section ..." :: Error: LIVELINESS_RULES is not exported from src/prompt-core/constants.ts as a string (created by T16)
-src/prompt-core/constants.no-image-deixis.spec.ts (9/9) :: is exported from constants.ts as a string ... :: Error: NO_IMAGE_DEIXIS_RULE is not exported from src/prompt-core/constants.ts as a string (created by T15)
-src/prompt-core/master-system-prompt.grounding-lock.spec.ts (4/8) :: the IMAGE GROUNDING LOCK block contains "restricts claims ABOUT THE IMAGE" :: AssertionError: expected 'IMAGE GROUNDING LOCK (overrides the d...' to contain 'restricts claims ABOUT THE IMAGE'
-src/prompt-core/master-system-prompt.liveliness.spec.ts (16/20) :: systemBlocks[0] is the master and carries the SCENE, RHYTHM ... :: AssertionError: open each §3 <h2> section with one short sentence ...: expected '[ROLE] You are an expert technical co...' to con...
-src/prompt-core/master-system-prompt.no-picture-references.spec.ts (11/15) :: MASTER_SYSTEM_PROMPT contains a block whose heading begins "[NO PICTUR... :: AssertionError: expected '[ROLE]\nYou are an expert technical c...' to contain '[NO PICTURE REFERENCES'
-src/prompt-core/master-system-prompt.operator-notes.spec.ts (6/16) :: contains [Operator Notes] :: AssertionError: expected '- STRICT INPUT SCOPE: every claim, nu...' to contain '[Operator Notes]'
-src/prompt-core/master-system-prompt.placement.spec.ts (10/14) :: the PLACEMENT block contains the literal "PRECEDING PARAGRAPH" :: AssertionError: expected 'PLACEMENT — STRICT RULES: - LEAD-IN: ...' to contain 'PRECEDING PARAGRAPH'
-src/prompt-core/master-system-prompt.video-placement.spec.ts (3/8) :: the [VIDEO] block contains the literal "Place every embed directly aft... :: AssertionError: expected '[VIDEO] MANDATORY WHEN PRESENT: if [R...' to contain 'Place every embed directly after a bo...'
-src/prompts/full-description.golden.us91.spec.ts (75/83) :: doc/expert3d :: AssertionError: expected 'TASK A — GENERATE THE BASE-LANGUAGE D...' to contain 'states a product fact from the source'
-src/prompts/optimizer.master-reach.spec.ts (18/19) :: block 0 is the live master and carries the constant ... :: AssertionError: expected '[ROLE]\nYou are an expert technical c...' to contain '[NO PICTURE REFERENCES'
-src/prompts/task-a-doc.figure-placement.spec.ts (5/11) :: contains the literal "states a product fact from the source" :: AssertionError: expected 'TASK A — GENERATE THE BASE-LANGUAGE D...' to contain 'states a product fact from the source'
-src/prompts/task-a.deixis-wording.spec.ts (20/33) :: Assert present: "a figure needs a body <p> directly above it, and that <p> never refers to the picture" :: AssertionError: expected 'TASK A — GENERATE BASE-LANGUAGE HTML ...' to contain 'a figure needs a body <p> directly ab...'
-src/prompts/task-a.operator-notes.spec.ts (54/58) :: all four filled: userContent equals the no-notes userContent with the block inserted at the FR-26 offset ... :: AssertionError: userContent differs from "no-notes userContent + block at the FR-26 offset": expected false to be true
-src/prompts/task-a.user-content.golden.spec.ts (11/222) :: es/video/one-embed: userContent equals the golden with the old video span ... :: AssertionError: userContent differs from the golden beyond the FR-11 video span: expected false to be true
-src/prompts/task-c.master-reach.spec.ts (80/84) :: (opts: false) block 0 equals the live master and contains [NO PICTURE ... :: AssertionError: expected '[ROLE]\nYou are an expert technical c...' to contain '[NO PICTURE REFERENCES'
-src/prompts/vision-prepass.no-picture-references.spec.ts (17/23) :: the UKRAINIAN FIELDS block states "never begins with and never contains" :: AssertionError: expected 'UKRAINIAN FIELDS (label, description,...' to contain 'never begins with and never contains'
-src/app/app.component.operator-notes.spec.ts (12/17) :: English label "Usage scenarios (optional)" :: AssertionError: label missing from app.component.ts: expected false to be true
-src/services/content-orchestrator.deixis-messages.spec.ts (2/3) :: generateUaContent: the HTML (uk-UA) warning says "sensible preceding paragraph" ... :: AssertionError: expected 'The model omitted the source video em...' not to contain 'sensible lead-in paragraph'
-src/services/content-orchestrator.operator-notes.spec.ts (4/53) :: a number that appears ONLY in the usageScenarios note passes the alt/figcaption gate :: AssertionError: expected [ { severity: 'error', ...(3) } ] to deeply equal []
-src/utils/image-placeholder.deixis.spec.ts (13/18) :: emits one warning-level finding for a caption description that points at the picture :: AssertionError: expected [] to have a length of 1 but got +0
-src/utils/output-validator.image-deixis.spec.ts (4/12) :: emits exactly one warning for a pointer paragraph directly above a figure ... :: AssertionError: expected [] to have a length of 1 but got +0
-src/utils/output-validator.image-manifest-wording.spec.ts (2/6) :: Assert absent: "a substantive lead-in <p> directly above it" :: AssertionError: expected 'Manifest image "b.jpg" is absent from...' not to contain 'a substantive lead-in <p> directly ab...'
-src/utils/video-manifest.pointer-free.spec.ts (18/31) :: uk (uk-UA): none of the AC-4 words appears ... :: AssertionError: pointer word(s) in the rendered template: "Як Ortur Laser Master 3 працює на практиці — дивіться у відео нижче.": expected [ 'нижче' ] to deeply equal []
-src/prompts/operator-notes.spec.ts            :: LOAD :: Failed to resolve import "./operator-notes" ... Does the file exist?        (T9)
-src/utils/description-metrics.spec.ts         :: LOAD :: Failed to resolve import "./description-metrics" ...                      (T34)
-src/utils/image-deixis.spec.ts                :: LOAD :: Failed to resolve import "./image-deixis" ...                              (T2/T3)
-src/utils/image-deixis.import-cycle.spec.ts   :: LOAD :: Failed to resolve import "./image-deixis" ...                              (T2)
-src/utils/video-manifest.deixis.spec.ts       :: LOAD :: Failed to resolve import "./image-deixis" ...                              (T2, then T5)
+npx tsc --noEmit                      -> exit 0, no output (spec files compile after the deletions and the new files)
+npx vitest run                        -> Test Files  10 failed | 211 passed (221)
+                                         Tests  200 failed | 7369 passed | 3 skipped (7572)
+npm run test:components               -> Test Files  2 passed (2)
+                                         Tests  32 passed (32)      (the deleted component spec had 23 of the 55)
+bash arch-guard.sh                    -> exit 0
 ```
 
-None of these is "cannot find module" for a module the test should not need: the five LOAD files import exactly the module their owner task creates; every other red
-test fails on an assertion about the missing text, block or behaviour. Green-on-arrival counts of the red files are guards that must stay green (matrix, "guard").
+Test count reconciles: 7623 - 223 (deleted logic tests: 22 + 58 + 16 + 53 + 6 + 40 + 28) - 120 (`EMPTY_NOTES` block) - 6 (CLI notes tests) - 1 (figure-placement case) - 1 (master-leak literal) + 217 (P5) + 9 (P8) + 74 (new files) = 7572.
 
-### Green on arrival, by design
+### The 200 failing tests of the v4 run, file by file (HISTORICAL red set at HEAD `09f87dc`; no other test turned red then; all 200 are green at HEAD `313f727`)
 
-`src/prompts/payload-oracle.d15.spec.ts` 75/75, `src/prompts/task-c.description-bytes.spec.ts` 108/108, `src/services/history.service.operator-notes.spec.ts` 6/6,
-`src/utils/structural-parity.sentence-blind.spec.ts` 5/5; and inside red files: Tier A and Doc-wrapper of `task-a.user-content.golden` (211/222), FR-28 isolation and FR-40 payload
-equality of `content-orchestrator.operator-notes` (49/53), the FR-28 / FR-31.3 guards of `app.component.operator-notes` (5/17), the absence pins of the constants and master specs.
+| File | Failing | Why (first failing assertion, real) | Kind | Owner |
+|---|---|---|---|---|
+| `src/prompts/task-a.user-content.golden.spec.ts` | 124 | `AssertionError: expected '[INPUT DATA]\n[Store Name]: EXPERT3D\n...' not to contain 'STRAY-NOTE-7731'` (and the `hook=false` form for the Doc payload); 2 stray values x 31 inputs x (`buildPromptA`, `buildPromptADoc`) | NEW (P5 b) | T44 |
+| `test/operator-notes-source-scan.spec.ts` | 15 | `expected [ ... ] to deeply equal []` listing the hit lines (109 at HEAD); `src/prompts/operator-notes.ts still exists: expected true to be false` | NEW (P10) | T43..T49 |
+| `src/prompts/task-c.master-reach.spec.ts` | 16 | the R22 describe, 16 pairs: block 0 (the master) still names `Operator Notes` | **INVERTED existing (P4)** | T43 |
+| `src/prompts/full-description.golden.us91.spec.ts` | 10 | `AssertionError: the provided [Raw Description], [Technical Specs] or [Supplemental Content]: expected '[ROLE] You are an expert technical co...' to contain '...'` for each of the ten cases | **INVERTED existing (P3)** | T43 |
+| `test/measure-description.cli.spec.ts` | 9 | `AssertionError: the withdrawn flag was accepted: expected +0 to be 2`; usage text still lists the four names; missing-file flag reported as unreadable | NEW (P8) | T47 |
+| `src/services/content-orchestrator.stray-operator-notes.spec.ts` | 9 | `the stray value grounded the number: expected 0 to be greater than 0`; `expected '\| Power \| 20 W \|\nLaser engraver with...\nПротестовано на 777 Вт' to be '\| Power \| 20 W \|\nLaser engraver with...'` | NEW (P6) | T45 |
+| `src/prompts/optimizer.master-reach.spec.ts` | 6 | the R22 describe, 6 inputs: block 0 still names `Operator Notes` | **INVERTED existing (P4)** | T43 |
+| `src/prompt-core/master-system-prompt.source-scope.spec.ts` | 5 of 6 | the two FR-42 literals missing from the master; `Operator Notes`, `the input blocks you were given` and the case-insensitive form present | NEW (P1) | T43 |
+| `src/prompts/full-description.golden.fr43-oracle.spec.ts` | 4 of 5 | literals missing from block 0 of the ten cases; `the golden still holds Operator Notes: expected true to be false` | NEW (P2) | T43 |
+| `src/app/app.component.no-operator-notes.spec.ts` | 2 of 4 | `expected 'restoreHistory(item: HistoryItem) {...' not to match /operator[ _-]?notes?/i` (and for `buildGeneratorInput`) | NEW (P9b) | T46 |
 
-## Type check (`npx tsc --noEmit`)
+Sum: 124 + 15 + 16 + 10 + 9 + 9 + 6 + 5 + 4 + 2 = 200. Existing tests turned red: **32** (P3 10 + P4 16 + 6), all three the sanctioned inversions. The other 168 are new pins. No failure is "cannot find module" or a syntax error: each is an assertion on the removed state.
+The sanctioned red window is the one the plan states for the human (plan "For the human at HUMAN_PLAN_APPROVAL", breakdown F3): the TEST_WRITING commit turns these pre-existing tests red until T43 reverts the master.
+
+### Green on arrival, by design (guards that must stay green T43 to T49)
+
+`golden-A` FR-44 item 2 (a) 93 tests and the unchanged FR-27 oracle (Tier A 24, Tier B 8 + 6 + 2, Doc remainder 63, premise 4); `stray` item 4.2 (P7) 16 tests and the item 4.1 controls 2; `legacy` (P9a) 4; `app-absent` premise 2; `constants.numeric-source-rules` (P11) 2; `master-leak` (P12) 20; `figure-placement` 10; source-scan premise 3 + 8 per-file existence premises.
+
+## Satisfiability and P13 re-verification (v4; scratch worktree, removed afterwards; confirmed by the real build at HEAD `313f727`: 221 files / 7569 passed / 3 skipped / 0 failed)
+
+A throwaway `git worktree` at `09f87dc` (node_modules junctioned) had the builder's end state SIMULATED: reverse of `6db2885` (master) and `7397081` (`task-a.ts`) applied with `git apply -R`; `types.ts`, `app.component.ts`, `app.component.html` checked out from `6546db8`; the four non-spec files deleted;
+the orchestrator, `tools/measure-description.ts` and `description-metrics.ts` edited as T45 / T47 describe; the golden produced by the plan's W6 raw-text substitution (the JSON-escaped HEAD region occurred exactly 10 times; region 1095 to 965 characters, the plan's measured figure). The new tests were copied in.
 
 ```
-src/app/components/operator-notes-fields/operator-notes-fields.component.spec.ts  TS2307  (T11)
-src/prompts/operator-notes.spec.ts                                                TS2307  (T9)
-src/utils/description-metrics.spec.ts                                             TS2307 x2 (T34)
-src/utils/image-deixis.import-cycle.spec.ts                                       TS2307 x3 (T2)
-src/utils/image-deixis.spec.ts                                                    TS2307, TS2339 (the TS2339 is a consequence of the unresolved import)
-src/utils/video-manifest.deixis.spec.ts                                           TS2307  (T2)
+npx tsc --noEmit                      -> exit 0, no output   (the cast-through-unknown pins compile with ProductInput.operatorNotes REMOVED)
+git grep -n -i -E <widened token set> -- src tools server ':!*.spec.ts'   -> (no hits)
+npx vitest run                        -> Test Files  221 passed (221)
+                                         Tests  7569 passed | 3 skipped (7572)
 ```
 
-Only the missing-symbol kinds the breakdown allows, only in the later-owner specs; zero diagnostics in any non-spec file and in any other spec.
+So every new / inverted pin is satisfiable by the plan's design, and the surviving specs the breakdown lists for P13 (`master-leak` and the FAQ specs with the `masterPromptBlocks` windows, `task-c.description-bytes`, `payload-oracle.d15`, `master-system-prompt.image-markers`, `task-a.spec`, `task-a-doc.spec`, `app.component.template-wiring` / `faq-layout` / `export-guard`, the full-description byte-equality golden spec, `golden-A` Tier A / B) are green against the reverted master. Nothing from the simulation was copied into the repository. The junction was removed with `cmd /c rmdir` before `git worktree remove`; the main `node_modules` was verified intact afterwards (467 entries before and after, `vitest` present, components runner re-run green).
 
-## Component runner
+The baseline and the simulation are different runs of the same 221 files: 7623 tests (baseline) and 7572 (simulation and after) differ by exactly the deletions and additions above.
 
-`npm run test:components` with all specs present: `Application bundle generation failed`, 10 TS2307/TS2339 errors from the specs above (re-counted from the last build before the final spec fixes it printed 11, one of which, a TS2554, was since fixed); **no component spec executes** (the Angular
-`unit-test` builder type-checks every spec of the tsconfig). With the six files above held aside in the scratchpad (restored afterwards; `git status` confirms all present):
-`Test Files 2 passed (2) / Tests 32 passed (32)`, i.e. the two pre-existing component specs are healthy. The new component spec cannot run until T11 creates the component, and
-`npm test` (both runners) cannot be green until T2, T9, T11 and T34 exist. This is the state US-8.1 was in, and the breakdown's constraint 1 anticipates it.
+## Evidence for the P14 readings (real output; the readings themselves are in the strategy and the matrix)
 
-## Architecture gate
-
-`bash arch-guard.sh`: `All frozen files unchanged`, `ALL CHECKS PASSED` (run after the last file was written).
-
-## Satisfiability checks (not part of the repository)
-
-`src/utils/image-deixis.spec.ts` was run in the scratchpad against a naive throw-away regex implementation: first run 83/86, which exposed four defects in the SPECS themselves
-(a table row where the intervening figure legitimately has the pointer paragraph above it; a parser helper created after `DOMParser` was stubbed away; two helpers whose default
-parameter swallowed an explicit `undefined`), all fixed; second run 86/86. `src/prompts/operator-notes.spec.ts` against a reference leaf module: 22/22. The metrics, CLI and component
-specs were not checked this way.
+```
+git merge-base HEAD origin/main                                      -> 6546db83ef4005e9d6a57baf51adf0b35df8d3c7
+git merge-base HEAD main                                             -> 120dcbc0d42b3160078cacb682dd00cc48157ca3
+git merge-base --is-ancestor 6546db8 HEAD                            -> exit 0
+sed -n 322p src/services/content-orchestrator.simplified.spec.ts     -> describe('R6 (human resolution) — FAQ artifact: data-driven, one uk-UA master translated into all store languages, any template', () => {
+git show HEAD:test/fixtures/golden/full-description-prompts.json | grep -o "\[Operator Notes\]" | wc -l   -> 20
+git show HEAD:test/fixtures/golden/full-description-prompts.json | grep -c "\[Operator Notes\]"            -> 10
+git ls-files | grep -i golden        -> 3 specs + full-description-prompts.json, optimizer-faq-pre-change.json, task-a-user-content.json, task-c-description-prompts.json
+grep -n -i golden package.json       -> (no output: no golden script)
+git show 6546db8:src/prompt-core/master-system-prompt.ts (collapsed)   -> contains both FR-42 literals; contains none of Operator Notes / operatorNotes / "the input blocks you were given"
+git grep -c -i -E <widened token set> 6546db8 -- src tools server ':!*.spec.ts'                            -> (no output: zero hits at the branch base)
+```
 
 ## Coverage gaps and deferred tests (what the reconciliation reviewer should expect)
 
-See the matrix, "Coverage statement", and the strategy, "DEFERRED". In short: FR-41, FR-31 items 2/4/5 and the FR-25 form side have no test (H-FR41TEST); the FR-20 precedence sentence
-(H-FR20PREC) and the FR-11 item 3 marker wording (H-FR11I3) are not asserted; AC-10's D-3, D-4, D-5, D-7, D-9 and the "number absent" exit are not asserted (H-OD10); AC-11 and AC-12
-are live-run criteria (T36, H-OD11). No default of any unanswered question was assumed.
+- **AC-11 and AC-12 are WAIVED by the owner (Story v6; not measured) and have no test.** The v4 wording ("no automated test by nature (T51, manual, outside the gate)") is withdrawn: T51 is superseded and no run will be performed under this breakdown. The script (AC-10) exists and is tested as an instrument, but is not evidence for the waived criteria. The soft items of AC-12 are not evidenced by any recorded run; the manual fact review rests on the owner's statement. RECONCILIATION reports these as non-blocking findings.
+- FR-44 item 3 "not shown, not sent" is proven by absence of the reading code (P9b), not by executing `restoreHistory` (no `AppComponent` spec; plan R9, accepted).
+- The effect of the master revert on Task C and optimizer payloads is pinned only by the golden `c/*` cases and the P3 / P4 inversions: `task-c.description-bytes` and `payload-oracle.d15` cannot see it (plan R4).
+- The corpus (`test/fixtures/corpus/`) is untouched; nothing in it carries notes text. No new fixture was invented: the stray-property pins reuse the FR-27 input set and the `faq-pipeline` / `protected-name` harnesses.
 
-## Observations for later stages
+## Non-blocking findings for the next stages
 
-- The `faq-pipeline.ts` positional slices (`0..400`, `3000..3400`) could not be re-verified against a master that has not changed; builder tasks T27..T32 and T33 must re-verify they still
-  discriminate and extend them, never narrow them. `task-c.master-reach.spec.ts` and `payload-oracle.d15.spec.ts` give an offset-independent check meanwhile.
-- `FR-16` vs breakdown T2 on «на фотополімерній смолі» (see the strategy): the spec follows the breakdown.
-- The component spec assumes the plan's D9 input names (`values`, `labels` keyed by the four notes keys, `valuesChange`); the metrics spec assumes `measureDescription` and four report keys.
-  Both are listed in the strategy under "Contracts chosen by TEST_WRITING".
-- The FR-23 item-1 absence pin (plan-review N19) is in `constants.expert3d.spec.ts`; N17, N21, N22 are applied as described in the strategy.
+0. **(v5) AC-11 and AC-12 are WAIVED and unmeasured** (owner, Story v6, history `ts` 2026-10-19T14:50:23Z). Under the OD-27 PROPOSED DEFAULT, RECONCILIATION should record them as waived and unmeasured in its own non-blocking findings and never as passed; the Pull Request "how verified" line should say the same (OD-32 default). The matrix holds no test or run for them.
+
+1. **P11's "move cited in its commit"** (plan W7, R11): `1b73c8a`'s message names the relocated `NUMERIC_SOURCE_FIDELITY_RULES` byte pin and the deletion of the eight dedicated specs (W7); it does not name the source and target files. RECONCILIATION may rule whether that citation suffices. (v4 said this was the committer's job; the commit now exists.)
+2. **Two guards of the deleted orchestrator spec are not carried over, because plan W7 relocates only the byte pin and P0 says do exactly that.** The deleted file also held (a) OD-20(2) "a number that appears only in `supplementalContent` is NOT grounded by it" (`sourcesFor({ supplementalContent: 'Q: how strong? A: 40 Вт.' })` still reports `alt-numeric-not-grounded`), and (b) "whitespace-only notes and an empty object do not start the FAQ". (a) tests a surviving behaviour of `numericFidelitySources` (it never included `supplementalContent`), independent of notes; (b) is notes-only. RECONCILIATION may rule under NFR-14 whether (a) needed relocating; adding it is a small test-writer change if the human wants it.
+3. **The golden pin P2 and the surviving `full-description.golden.spec.ts` are consistent only if the builder moves master and golden together in T43** (the golden spec asserts byte equality with the live master and stays green until then). Verified in the simulation.
+4. **Plan files list says "5 modules"; there are four non-spec files** (plan-review N2); the scan lists the four paths and the folder.
+5. **Source-scan token (1) is broad on purpose** (`operator[ _-]?notes?`, case-insensitive, prose included); it is zero at `6546db8`. A future legitimate use of the phrase "operator notes" in non-spec source would fail the scan and should be discussed, not silenced.
+6. **Header comments of several surviving specs still use the `T31` / `T21` task ids of the retired v3 breakdown** (e.g. `full-description.golden.us91.spec.ts` describe titles). They are history; v5 ids T43 to T51 are used in every new or rewritten comment.
+7. **P9a deviation** (real constructor with `effect` mocked instead of `Object.create`) and the **P6 stray-value text** are explained in the strategy ("Deviations").
+8. **The `masterPromptBlocks` windows** (`slice(0,400)`, `slice(3000,3400)`) are green against the simulated reverted master and still read verbatim master text; none was narrowed.

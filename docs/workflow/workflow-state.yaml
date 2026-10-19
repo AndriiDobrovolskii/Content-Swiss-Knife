@@ -3,14 +3,15 @@
 # Schema: docs/workflow/state-schema.md
 version: 1
 story: US-9.1
-current_stage: RECONCILIATION
-status: BLOCKED
+current_stage: PR_CREATION
+status: IN_PROGRESS
 pending_human_gate: null
 started_at: 2026-10-17T14:49:04Z
-updated_at: 2026-10-18T20:29:56Z
-stage_attempts: {}
+updated_at: 2026-10-19T15:57:10Z
+stage_attempts:
+  STORY_WRITING: 2
+  SPECIFICATION: 1
+  ARCHITECTURE_PLANNING: 1
 track: prompt
-blockers:
-  - "AC-11: live-run structural acceptance has no evidence (manual T36, owner-run): 0 deixis hits, 0 figures without a paragraph above, 0 consecutive figures on 6 runs."
-  - "AC-12: hard half (0 numbers absent from the input) and soft half (>= 2 of 3) have no live-run evidence; the operator fact review is not done."
+blockers: []
 note: null

@@ -4,11 +4,11 @@ story: US-9.1
 slug: no-picture-references-and-livelier-descriptions
 title: Stop generated descriptions from pointing at their pictures and make the uk-UA text less dry (Creality Pika regression)
 track: prompt
-version: 4
+version: 6
 status: DRAFT
 owner: so-story-writer
 created_at: 2026-10-17T18:00:00Z
-updated_at: 2026-10-17T19:33:15Z
+updated_at: 2026-10-19T14:50:33Z
 ---
 
 # US-9.1 — No picture references, livelier descriptions
@@ -64,9 +64,10 @@ detector (FR-9), a test list and Creality Pika acceptance numbers. This Story ad
 its requirements source; the Specification stage turns it into numbered requirements.
 
 **Operator decisions (2026-10-17):** the liveliness rules apply to **all ToV blocks** (resolved as
-shared master-prompt rules plus per-block additions); FR-16 (new input fields) is **in scope**. Q1–Q6
-raised at Story creation were answered the same day, checked against `src`, and are recorded under
-"Resolved decisions". Q1 was later superseded by the owner's decision OD-1 (see "Amendment").
+shared master-prompt rules plus per-block additions). The original FR-16 (new input fields) was in scope
+and was **withdrawn by the owner on 2026-10-19** (see "Amendment", v5). Q1–Q6 raised at Story creation
+were answered the same day, checked against `src`, and are recorded under "Resolved decisions". Q1 was
+superseded by OD-1 and then withdrawn with the fields.
 
 ## Scope
 
@@ -74,14 +75,15 @@ raised at Story creation were answered the same day, checked against `src`, and 
 |---|---|
 | **Stores** | All stores in `STORE_REGISTRY` (every profile / ToV block) |
 | **Locales** | uk-UA master; the picture-reference ban applies to every output language. A uk-UA change fans out to every translated language |
-| **Surface** | `src/prompt-core/constants.ts`, `src/prompt-core/master-system-prompt.ts`, `src/prompts/vision-prepass.ts`, `src/prompts/task-a.ts`, `src/prompts/task-a-doc.ts`, `src/utils/video-manifest.ts`, `src/utils/output-validator.ts`, `src/utils/image-placeholder.ts`, new `src/utils/image-deixis.ts`, `src/services/content-orchestrator.service.ts` (two warning texts; `numericFidelitySources` is extended to cover the new operator notes), `EXPERT3D_TOV_BASE_OVERLAY` (FR-14, FR-15), the Generator input form in `src/app` (four optional textareas, FR-16), a new optional `ProductInput.operatorNotes` (structured object with four keys; the file that declares `ProductInput` is to be confirmed at impact analysis), the `STRICT INPUT SCOPE` text (extended to name the operator notes as an allowed source) and a new measurement script `tools/measure-description.ts`. `runFaqPipeline`, `src/utils/faq-form.ts` and the translation prompts (`task-c.ts`, `task-translate.ts`) are not touched |
-| **Touches FROZEN files?** | **YES** (AGENTS.md §9 stop): `src/prompts/task-a.ts`, `src/prompt-core/master-system-prompt.ts`, `src/utils/output-validator.ts`. `task-a.ts` is a FROZEN file and, under decision OD-1, is changed for two reasons (the existing lead-in wording in AC-3 and the new `[Operator Notes]` block in AC-9). No per-file approval has been given; the Story defers the explicit approval to the plan gate, where it is required for each file, and `bash arch-guard.sh --rebaseline` runs in the same commit. The master prompt change also invalidates the prompt cache once for all stores |
+| **Surface** | `src/prompt-core/constants.ts`, `src/prompt-core/master-system-prompt.ts`, `src/prompts/vision-prepass.ts`, `src/prompts/task-a.ts`, `src/prompts/task-a-doc.ts`, `src/utils/video-manifest.ts`, `src/utils/output-validator.ts`, `src/utils/image-placeholder.ts`, new `src/utils/image-deixis.ts`, `src/services/content-orchestrator.service.ts` (two warning texts), `EXPERT3D_TOV_BASE_OVERLAY` (FR-14, FR-15) and a new measurement script `tools/measure-description.ts`. The Generator input form, `ProductInput`, `numericFidelitySources` and the `STRICT INPUT SCOPE` text are **not** touched (the operator-notes fields were withdrawn in v5). `runFaqPipeline`, `src/utils/faq-form.ts` and the translation prompts (`task-c.ts`, `task-translate.ts`) are not touched |
+| **Touches FROZEN files?** | **YES** (AGENTS.md §9 stop): `src/prompts/task-a.ts`, `src/prompt-core/master-system-prompt.ts`, `src/utils/output-validator.ts`. `task-a.ts` is a FROZEN file and is changed for one reason (the existing lead-in wording in AC-3). Per-file approvals are on record in `docs/workflow/history.jsonl`: on 2026-10-18T15:24:23Z the owner gave one explicit instruction for each of the three FROZEN files (`modify src/prompts/task-a.ts, modify src/utils/output-validator.ts, modify src/prompt-core/master-system-prompt.ts`), and on 2026-10-19 the owner instructed `modify master-system-prompt.ts, modify task-a.ts, так` for the operator-notes withdrawal hunks. `bash arch-guard.sh --rebaseline` runs in the same commit as each FROZEN-file change. The master prompt change also invalidates the prompt cache once for all stores |
 | **Touches generated HTML?** | Yes — AGENTS.md §4: every `<figure>` keeps a `<p>` directly above it (the §4 "lead-in" bullets), the lead-in must not duplicate the `<figcaption>`, `alt` must not duplicate the `<figcaption>`, first-image/lazy rules, video `<figure>`/`<figcaption>` rules. These must not regress |
 
 ## Acceptance criteria
 
-Deterministic criteria (AC-1 – AC-9) are unit-testable. AC-10 – AC-12 are measured on a live
-Creality Pika run and cannot be pinned by a prompt test (spec §6 risks).
+Deterministic criteria (AC-1 – AC-8) are unit-testable. AC-9 is withdrawn (v5). AC-10 – AC-12 were to be measured on a live
+Creality Pika run and cannot be pinned by a prompt test (spec §6 risks). AC-11 and AC-12 are WAIVED in v6 (see
+the waiver notes under each and "Amendment", v6); AC-10 (the script) stays in scope.
 
 - **AC-1:** The Vision pre-pass prompt instructs that `description` never begins with and never
   contains «На зображенні», «На фото», «На знімку», «На кадрі», «Зображено», «Показано», «Видно»,
@@ -125,17 +127,10 @@ Creality Pika run and cannot be pinned by a prompt test (spec §6 risks).
   sentences. Each ToV
   block keeps its own tone limits (EXPERT3D: emotionally neutral, no excitement, no exclamation marks;
   C3D: calm, zero exclamation marks, at most 1 em-dash per 400 words).
-- **AC-9:** The Generator form has four optional textareas (usage scenarios, test results, comparison
-  with the previous generation, limitations). Their content is carried by a new optional
-  `ProductInput.operatorNotes`, a structured object with four keys, and **not** by `supplementalContent`
-  (which is the only FAQ trigger in the Generator). `task-a.ts` emits an `[Operator Notes]` block from it;
-  an empty `operatorNotes` object leaves `userContent` byte-identical to today's, and with all four
-  textareas empty the output is byte-identical to today's. Filling only these textareas does not make
-  `supplementalContent` non-empty and does not trigger the FAQ. `STRICT INPUT SCOPE` and
-  `numericFidelitySources` are extended to cover the operator notes, so a number that appears only in
-  these fields passes `numericFidelitySources`. `runFaqPipeline` and `faq-form.ts` are unchanged. The
-  fields are not persisted to `seo_gen_form_state`. Key names, label text and join order are left to the
-  Specification.
+- **AC-9:** **Withdrawn in v5 (2026-10-19, owner decision).** The four optional Generator textareas, the
+  `ProductInput.operatorNotes` carrier, the `[Operator Notes]` block and the related changes to
+  `STRICT INPUT SCOPE` and `numericFidelitySources` are not part of this Story. The number AC-9 is kept
+  so that AC-10 – AC-12 are not renumbered.
 - **AC-10:** `tools/measure-description.ts` takes a generated HTML and the input description, reuses
   `collectFigureDeixis`, and reports: deixis hits (three carriers), figures without a paragraph above,
   consecutive figures, numbers absent from the input, «тож» + «Тому» count, sentences ≤ 6 words per §3
@@ -145,6 +140,11 @@ Creality Pika run and cannot be pinned by a prompt test (spec §6 risks).
   Center 3D Print product, one product from a store with no ToV block (3DDevice) — 0 deixis hits in the
   paragraph above each figure, each figcaption and each `alt` (Creality Pika baseline: 35), no figure
   without a paragraph above it, no two figures in a row.
+  > **WAIVED (v6, 2026-10-19, owner decision).** The hard script criteria of AC-11 are waived for this
+  > delivery by the owner, on the basis of the owner's manual testing. They are NOT measured: no
+  > `tools/measure-description.ts` output, no product list and no run count exists. The headline outcome (0
+  > picture references) is accepted on the owner's word, not on script evidence. The criterion text above is
+  > kept unchanged so the intent stays readable.
 - **AC-12:** Hard (script): 0 numbers absent from the input on the same runs. Soft (reported, not
   blocking, reviewed by the operator): three items, of which at least 2 of 3 must hold — (1) «тож» +
   «Тому» count ≤ 2; (2) mean sentence length ≥ 12 **and** σ ≥ 5.5, counted as one item; (3) the hook
@@ -152,6 +152,12 @@ Creality Pika run and cannot be pinned by a prompt test (spec §6 risks).
   §3 section is reported with no threshold. Manual (operator):
   no fact absent from the input, reviewed from the list of sentences containing numbers and proper
   names that the input lacks.
+  > **WAIVED (v6, 2026-10-19, owner decision).** The hard script criterion of AC-12 (0 numbers absent from
+  > the input) is waived for this delivery by the owner, on the basis of the owner's manual testing. It is
+  > NOT measured: no `tools/measure-description.ts` output, no product list and no run count exists. The
+  > headline outcome (0 invented numbers) is accepted on the owner's word, not on script evidence. The soft
+  > and manual items above are likewise not evidenced by any recorded run. The criterion text above is kept
+  > unchanged so the intent stays readable.
 
 ## Out of scope
 
@@ -162,7 +168,8 @@ Creality Pika run and cannot be pinned by a prompt test (spec §6 risks).
 - Re-analysing images already marked `done` in the current session. Vision results live only in the
   in-memory `genImgManifest` signal (blob URLs, not persisted), so a fresh upload after reload is
   analysed with the new prompt; a forced re-run of `done` entries is not required.
-- Persisting the new FR-16 fields in `seo_gen_form_state`; changing the FAQ form's `supplementalContent`.
+- Any new Generator input field for operator-supplied facts (usage scenarios, test results, comparison with
+  the previous generation, limitations), and any change to the FAQ form's `supplementalContent`.
 - Native-speaker review of the pl/de/es/pt deixis patterns; it is a precondition for promoting
   `image-deixis` to `error`, not for this delivery.
 - Editing AGENTS.md §4 (carried verbatim).
@@ -174,11 +181,12 @@ against `src` (`task-a.ts:166` `[Supplemental Content]`, `numericFidelitySources
 `content-orchestrator.service.ts`, the ToV overlays in `constants.ts`, `genImgManifest` in
 `app.component.ts`). Each is reflected in the acceptance criteria above.
 
-- **Q1 (input fields) — superseded by OD-1, 2026-10-17:** the original answer was "no new
+- **Q1 (input fields) — superseded by OD-1, 2026-10-17, and withdrawn with the fields, 2026-10-19 (v5):** the original answer was "no new
   `ProductInput` field; the four textareas feed the existing `supplementalContent`; `task-a.ts` is not
   changed for this". The owner replaced it with decision OD-1 (resolved (b)), see "Amendment". The four
   fields now travel in a new optional `ProductInput.operatorNotes`, `task-a.ts` (FROZEN) emits an
-  `[Operator Notes]` block, and `STRICT INPUT SCOPE` and `numericFidelitySources` are extended. → AC-9.
+  `[Operator Notes]` block, and `STRICT INPUT SCOPE` and `numericFidelitySources` are extended. → AC-9
+  (withdrawn in v5).
 - **Q2 (ToV blocks):** shared FR-10/11/12/13 in the master prompt; FR-14/15 only in the EXPERT3D
   overlay; C3D already covers them; translation prompts untouched; the store voice block wins on
   conflict. → AC-8.
@@ -251,12 +259,70 @@ necessarily receive the new master text.
 Specification change the decision mentions (the self-scoping sentence in `LIVELINESS_RULES`) belongs to the
 Specification stage and is not made by this Story amendment.
 
+### v5 — 2026-10-19T07:25:00Z — decided by the owner (human operator, sbruhov@gmail.com)
+
+**What changed:** the operator-notes feature is withdrawn. AC-9 is replaced by a withdrawal stub; the Scope
+table (Surface and FROZEN-file rows), Context, Out of scope, Q1 and Open questions are updated to match. No
+other criterion changed. `task-a.ts` stays in scope for the AC-3 wording only; `master-system-prompt.ts`
+stays in scope for the other rules.
+
+**Why:** the owner decided the four fields (usage scenarios, test results, comparison with the previous
+generation, limitations) are not needed.
+
+**Recorded decision (2026-10-19, `docs/workflow/history.jsonl`, last event, actor sbruhov@gmail.com), original text:**
+
+> досліди можливість безпечного видалення цих полів. вони не потрібні
+>
+> modify для task-a.ts та master-system-prompt.ts, шлях 1
+
+English rendering:
+
+> Investigate whether these fields can be removed safely. They are not needed.
+>
+> Modify task-a.ts and master-system-prompt.ts, path 1 (amend US-9.1 on its branch).
+
+**Consequence:** the Specification is revised (FR-24 – FR-31, FR-40, FR-41 withdrawn) and passes SPEC_REVIEW
+and HUMAN_SPEC_APPROVAL again; plan, task breakdown, tests and reports are then reconciled with it.
+
+### v6 — 2026-10-19T14:50:33Z — decided by the owner (human operator, sbruhov@gmail.com) at the AC-11/AC-12 reconciliation blocker
+
+**What changed:** only the acceptance status of AC-11 and AC-12. Their criterion text (thresholds, the three
+products, the hard/soft split) is unchanged; each now carries a marked waiver note: the hard script
+criteria are WAIVED for this delivery by the owner on the basis of the owner's manual testing, and are NOT
+measured. The sentence introducing the acceptance criteria and the "Touches FROZEN files?" row of the Scope
+table were also corrected (the row said no per-file approval had been given; the approvals on record in
+`docs/workflow/history.jsonl` are 2026-10-18T15:24:23Z for the three FROZEN files and 2026-10-19 for the
+operator-notes withdrawal hunks of `master-system-prompt.ts` and `task-a.ts`). AC-1 – AC-10 text, Scope
+(other rows), Out of scope and the Q entries are untouched. AC-10 (`tools/measure-description.ts`) stays in
+scope.
+
+**Why:** the live-run criteria could not be met as written. The owner found the 6-run measurement (three
+products, two runs each) too hard and tested generation manually instead. No `measure-description.ts`
+output, product list or run count exists, so the headline outcome of the Story (0 picture references, 0
+invented numbers) is **unmeasured**; it is accepted on the owner's word, not on script evidence.
+`so-reconciliation-reviewer` returned BLOCKED (reconciliation_report v3) because the earlier owner
+statement was neither script evidence nor an explicit waiver.
+
+**Recorded decision (2026-10-19, `docs/workflow/history.jsonl`, last event, actor sbruhov@gmail.com), verbatim:**
+
+> Waive the AC-11/AC-12 hard script criteria for US-9.1; accepted on my manual testing
+
+Owner context (previous owner event in the same file, 2026-10-19T14:42:16Z), original text:
+
+> Це дуже важко. Я зробив простіше. Було проведено тестування генерації товарів. Все працює так як треба.
+
+English rendering:
+
+> This is very hard. I did it a simpler way. Product generation testing was carried out. Everything works as it should.
+
+**Consequence:** the Specification (FR-34, FR-35, OD-11), the `ac_test_matrix` and the reconciliation report
+must be revised to the waiver and re-reviewed; the Specification v7 approval does not cover this change.
+Until then the AC-11/AC-12 rows cannot be reconciled as measured. The delivery ships with the headline
+outcome unmeasured and accepted on the owner's word.
+
 ## Open questions
 
-None blocking at Story level. The decision above does not state the following, and they are left open for
-the clarifier and the Specification rather than assumed here: the four key names of `operatorNotes`, the
-label text of the `[Operator Notes]` block and of its four entries, the order in which the entries are
-joined, and where in `userContent` the block is placed.
+None.
 
 ## References
 

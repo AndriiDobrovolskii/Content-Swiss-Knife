@@ -1,29 +1,165 @@
 ---
 artifact: clarification_report
 story: US-9.1
-version: 4
+version: 6
 status: DRAFT
 owner: so-clarifier
 created_at: 2026-10-17T15:12:00Z
-updated_at: 2026-10-18T10:09:20Z
-supersedes: docs/evidence/US-9.1-clarification-report.md#3
+updated_at: 2026-10-19T14:55:00Z
+supersedes: docs/evidence/US-9.1-clarification-report.md#5
 inputs_consumed:
   - key: story
-    version: 4
+    version: 6
   - key: specification
-    version: 4
-  - key: impact_analysis
-    version: 3
-  - key: implementation_plan
-    version: 3
-  - key: plan_review
-    version: 2
+    version: 7
   - key: open_decisions
-    version: 4
+    version: 5
+  - key: clarification_report
+    version: 5
 open_decisions_blocking: false
 ---
 
-# US-9.1 - Clarification Report (v4)
+# US-9.1 - Clarification Report (v6)
+
+## v6 revision (2026-10-19T14:55:00Z): the AC-11/AC-12 hard script criteria are waived
+
+Re-run of clarification against **Story v6** (DRAFT). The owner decided on 2026-10-19 to waive the AC-11/AC-12 hard script criteria
+on the basis of the owner's manual testing (Story v6 "Amendment"; `docs/workflow/history.jsonl` `ts` 2026-10-19T14:50:23Z, actor
+sbruhov@gmail.com, verbatim "Waive the AC-11/AC-12 hard script criteria for US-9.1; accepted on my manual testing"; context event
+14:42:16Z: "Це дуже важко. Я зробив простіше. Було проведено тестування генерації товарів. Все працює так як треба."). The criterion
+text of AC-11 and AC-12 is unchanged and marked WAIVED; the "Touches FROZEN files?" sentence was corrected; AC-1 to AC-10 and every
+other Story section are untouched; AC-10 (`tools/measure-description.ts`) stays in scope. **Nothing was measured**: no script output,
+no product list, no run count. This stage records the effect and answered nothing. The Open Decisions log is
+`docs/decisions/US-9.1-open-decisions.md` (v6).
+
+**What is clear now (checked against the sources).**
+
+- **Actor, trigger, value, track** unchanged (bug Story, track `prompt`, Creality Pika regression). The headline outcome (0 picture
+  references, 0 invented numbers) is now **unmeasured and accepted on the owner's word**; the Story says so in its own words.
+- **Store and locale scope** unchanged and explicit: all seven `STORE_REGISTRY` keys (re-read this run: 3DDevice, 3DPrinter,
+  3DScanner, Center 3D Print, Drukarka 3D, EXPERT3D, Expert-3DPrinter); uk-UA is the master and a change there fans out; the ban
+  applies to every output language. The waiver adds no store, locale or currency, and no code or prompt text. The only change is that
+  the live check of the uk-UA master (AC-11/AC-12, three acceptance products) no longer exists as an acceptance criterion, so the
+  other six base languages rest on the `image-deixis` warning and the owner's testing (OD-15, unchanged).
+- **Acceptance criteria.** AC-1 to AC-8 and AC-10 remain substring, behaviour or script-measured and falsifiable; AC-9 is the
+  withdrawal stub. AC-11 and AC-12 are **falsifiable in principle and deliberately not falsified**: the criterion text is kept, the
+  status is WAIVED. That is explicit in the Story and is not an ambiguity; what a waived, unmeasured criterion means for the
+  Specification, the matrix and RECONCILIATION is (OD-26, OD-27).
+- **Generated-HTML impact** (AGENTS.md section 4) unchanged: `<p>` directly above every `<figure>`, lead-in not duplicating the
+  `<figcaption>`, `alt` not duplicating the `<figcaption>`, first-image / lazy rules, video `<figure>` / `<figcaption>`. These are
+  still pinned by the unit-level tests; the live structural check of them (AC-11 "no figure without a paragraph above, no two figures
+  in a row") is the part that is waived.
+- **FROZEN files (section 9).** Unchanged: `task-a.ts`, `master-system-prompt.ts`, `output-validator.ts`. The Story's FROZEN row now
+  agrees with the recorded approvals (2026-10-18T15:24:23Z, three files; 2026-10-19, withdrawal hunks), which closes the v5 "Story
+  discrepancy". The waiver edits no file. `bash arch-guard.sh` was run read-only this run: all checks passed.
+- **Generation invariants.** Spec-count parity (`input.specs` untouched), figure / figcaption structure, video survival: unchanged
+  and covered by unit tests; the live confirmation is waived.
+- **Dependencies.** US-5.1 and US-8.1 are archived. `test/render-reconciliation.report.md` section 3 and section 5 concern the Doc
+  renderer's post-processing and corpus; the waiver changes no transform and adds no blocker there.
+
+**Open Decisions, by effect of the waiver.**
+
+- **Moot by waiver (history kept, no answer invented, source = the owner decision):** **OD-11** as a whole (inputs, repeats, evidence,
+  who runs, failure trigger), and the **live-run parts** of **OD-10** (the use of D-9 / D-10 as the AC-12 hard acceptance on live
+  runs) and **OD-14** (the "35" baseline comparison on live runs). All earlier resolutions of these ODs stay recorded.
+- **Not moot, and why:** the definitions D-3 to D-5, D-7, D-9 of OD-10 are what the AC-10 script computes and the script stays in
+  scope, so they stay open as recorded; OD-9 (Node >= 22.18) likewise. Observation only, entries unedited: OD-6 (its "acceptance runs
+  use Full description" clause has no live consumer now), OD-13 (rest) and OD-15 (strengthened: no live check of any output language).
+  OD-12 and OD-25 are unaffected.
+- **New, non-blocking, each with a PROPOSED DEFAULT that is a proposal only:** OD-26 (what FR-34 / FR-35 say for a waived criterion),
+  OD-27 (the matrix rows AC-11 / AC-12 and how RECONCILIATION treats WAIVED; the current rows read green / built with no test),
+  OD-28 (whether AC-12's soft and manual items are also waived: the waiver note names only the hard criterion, then says the soft and
+  manual items are "likewise not evidenced"), OD-29 (what the waiver covers: which build, which products, whether a non-marker figure
+  run happened, and whether it lapses on a later prompt change), OD-30 (whether `tools/measure-description.ts` and its tests stay
+  unchanged; AC-10's text names the now-waived thresholds), OD-31 (whether the AC-8 translator / optimizer residual needs any live
+  check), OD-32 (T51 and plan risk R5, and how the unmeasured outcome is stated in the reconciliation report and the Pull Request,
+  AGENTS.md section 13).
+- **Carried forward unchanged and still open:** OD-10 (D-3 to D-5, D-7, D-9), OD-13 (rest), OD-15, plus the v5 OD-21 to OD-25 as
+  recorded. The observation in the v5 note about 2026-10-18 owner events bearing on OD-10, OD-11 and OD-13 stands for OD-10 and OD-13;
+  for OD-11 it is now moot.
+- **Stale downstream artifacts.** Spec v7 (APPROVED) FR-34 / FR-35 and its OD-11 row, `ac_test_matrix` v4 (AC-11 / AC-12 rows) and
+  `reconciliation_report` v3 (BLOCKED on these rows) are stale against Story v6; the Story states that the v7 approval does not cover
+  the change and that they must be revised and re-reviewed. The plan / task breakdown (T51, risk R5) are affected only as OD-32 says;
+  the impact analysis, the other test artifacts and the implementation, gate, verification and security reports are not affected in
+  substance (no code or prompt change). Not an Open Decision; the pipeline re-runs those stages.
+
+**Verdict: Ready for Specification.** No Open Decision is `blocking: true`; `open_decisions_blocking` stays `false`. The seven new
+Open Decisions (OD-26 to OD-32) are non-blocking; OD-26, OD-27 and OD-28 fix the wording the revised Specification, the matrix and the
+reconciliation report will carry, so the owner should answer them before the Specification is re-approved. The v5, v4, v3 and v2 text
+below is retained for the record; where it describes the live-run criteria as measured, the v6 status table in the open-decisions file
+prevails.
+
+Verification checklist (v6): [x] both artifacts written; [x] every ambiguity resolved with a cited source or logged; [x] each new Open
+Decision states question, evidence, impact, `blocking`; [x] locale scope examined (uk-UA fan-out; non-uk-UA verification, OD-15);
+[x] stores checked against `STORE_REGISTRY`; [x] section 4 criteria named; [x] FROZEN status addressed; [x] still-open decisions
+carried forward, none dropped; [x] no earlier resolution changed; [x] verdict stated.
+
+---
+
+## v5 revision (2026-10-19T08:10:00Z): the operator-note fields are withdrawn
+
+Re-run of clarification against **Story v5** (DRAFT). The owner decided on 2026-10-19 to withdraw the four operator-note Generator
+fields (Story v5 "Amendment"; `docs/workflow/history.jsonl` `ts` 2026-10-19T07:50:00Z, actor sbruhov@gmail.com, verbatim "досліди
+можливість безпечного видалення цих полів. вони не потрібні" and "modify для task-a.ts та master-system-prompt.ts, шлях 1").
+Story v5: AC-9 is a withdrawal stub; `ProductInput.operatorNotes`, the `[Operator Notes]` block and the `STRICT INPUT SCOPE` /
+`numericFidelitySources` extensions are out; AC-1 to AC-8 and AC-10 to AC-12 are unchanged. This stage records the effect and
+answered nothing. The Open Decisions log is `docs/decisions/US-9.1-open-decisions.md` (v5).
+
+**What is clear now (checked against the sources).**
+
+- **Actor, trigger, value, track** unchanged (bug Story, track `prompt`, Creality Pika regression).
+- **Store and locale scope** unchanged and explicit: all seven `STORE_REGISTRY` keys (the acceptance stores EXPERT3D, Center 3D
+  Print, 3DDevice exist in it; no currency named); uk-UA is the master and a change there fans out; the ban applies to every output
+  language. The withdrawal adds no store, locale or currency. With the fields gone, the uk-UA master task has no extra input at
+  all, so the locale fan-out concern that the notes added (OD-19) disappears.
+- **Acceptance criteria.** AC-1 to AC-8 and AC-10 to AC-12 are substring, behaviour or script-measured and falsifiable; AC-9 is an
+  explicit stub (the number is kept so AC-10 to AC-12 are not renumbered), so nothing in it needs testing.
+- **Generated-HTML impact** (AGENTS.md section 4): unchanged and named by the Story: a `<p>` directly above every `<figure>`, lead-in
+  not duplicating the `<figcaption>`, `alt` not duplicating the `<figcaption>`, first-image / lazy rules, video `<figure>` /
+  `<figcaption>`. The withdrawal removes the only input-side change; nothing in it touches these criteria.
+- **FROZEN files (section 9).** Story v5 Scope still lists `task-a.ts`, `master-system-prompt.ts` and `output-validator.ts`;
+  `task-a.ts` is edited for FR-11 (AC-3) only. By-name approvals are recorded (OD-12 v5): `task-a.ts` and `master-system-prompt.ts`
+  on 2026-10-19; `output-validator.ts` on 2026-10-18 (hunks committed: 7958c7f, ff8ad92). `task-b.ts` and `task-c.ts` are not touched.
+- **Generation invariants.** Spec-count parity (`input.specs` is untouched), figure / figcaption structure and video survival are
+  the invariants at risk and the Story names them. The master change still invalidates the prompt cache for every store once.
+- **Dependencies.** US-5.1 and US-8.1 are archived; US-8.1's FAQ trigger no longer matters to this Story (OD-1 moot).
+- **Registry and renderer cross-checks (this run).** `STORE_REGISTRY` has seven keys (3DDevice, 3DPrinter, 3DScanner, Center 3D
+  Print, Drukarka 3D, EXPERT3D, Expert-3DPrinter); their locales (uk-UA, ru-UA, en-GB, pl-PL, de-DE, en-ES, es-ES, pt-PT, en-US,
+  es-MX) reduce to the seven base languages of AC-5. `test/render-reconciliation.report.md` section 3 (transform dispositions) and
+  section 5 (open gaps, PR-3 blocked) concern the Doc renderer's post-processing and corpus; the withdrawal changes no transform
+  and adds no blocker there.
+
+**Open Decisions, by effect of the withdrawal.**
+
+- **Moot by withdrawal (history kept, no answer invented):** OD-1, OD-2, OD-16, OD-17, OD-19, OD-20 (1)(2). Notes part only: OD-18
+  (the recorded resolution and the FR-11 two-tier golden stand), OD-20 (3) / the D-10 half of OD-10 (the owner's "script input set
+  as D-10" stands, minus the notes), and the notes parts of OD-12.
+- **OD-12 updated:** by-name FROZEN approvals now on record for all three files (see above); its scope question is the new OD-25.
+- **New, non-blocking, each with a PROPOSED DEFAULT that is a proposal only:** OD-21 (what the master `STRICT INPUT SCOPE` /
+  `INTERNAL RECONCILIATION` text reverts to: byte-identical to `main`, or a count-free neutral wording without the notes), OD-22
+  (golden `full-description-prompts.json`, block 0 of ten cases, and the other fixtures that carry the notes shape: regenerate, how
+  verified), OD-23 (how the removal is delivered on an already-pushed branch with open draft PR #142, the meaning of "path 1", and
+  browser history entries that carry `operatorNotes`), OD-24 (tests of the withdrawn feature: delete or keep, absence pins),
+  OD-25 (scope and lifetime of the 2026-10-19 FROZEN instruction).
+- **Carried forward unchanged and still open:** OD-10 (D-3 to D-5, D-7, D-9), OD-11 (residue), OD-13 (rest), OD-15.
+  Observation only: later owner events of 2026-10-18 in `history.jsonl` (15:24:23Z, 15:35:15Z, 16:24:34Z, 16:26:23Z) appear to
+  answer parts of OD-10, OD-11 and OD-13. They were not applied (the instruction for this run was to leave every other Open Decision
+  as recorded); see the v5 note in the open-decisions file. A record-only revision can apply them.
+- **Story discrepancy (reported, not corrected).** Story v5 Scope "Touches FROZEN files?" still says no per-file approval has
+  been given; the history records the approvals above. It changes no requirement.
+- **Stale downstream artifacts.** Spec v6 is DRAFT and consistent with this log; the impact analysis, plan, task breakdown, test
+  artifacts and the implementation, gate, verification, security and reconciliation reports were produced against Story v4 and are
+  stale against Story v5. Not an Open Decision; the pipeline re-runs those stages.
+
+**Verdict: Ready for Specification.** No Open Decision is `blocking: true`; `open_decisions_blocking` stays `false`. The five new
+Open Decisions (OD-21 to OD-25) are non-blocking; OD-21 and OD-25 should be answered by the owner before the plan gate because
+they fix the text of a FROZEN edit and the authority for it. The v4, v3 and v2 text below is retained for the record; where it
+describes the operator notes, the v5 status table in the open-decisions file prevails.
+
+Verification checklist (v5): [x] both artifacts written; [x] every ambiguity resolved with a cited source or logged; [x] each new
+Open Decision states question, evidence, impact, `blocking`; [x] locale scope examined (uk-UA fan-out); [x] stores checked against
+`STORE_REGISTRY`; [x] section 4 criteria named; [x] FROZEN status addressed; [x] still-open decisions carried forward; [x] verdict
+stated.
 
 ## v4 revision (2026-10-18T10:09:20Z): plan-gate answers recorded
 

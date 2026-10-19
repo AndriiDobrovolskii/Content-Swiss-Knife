@@ -1,41 +1,42 @@
 ---
 artifact: pipeline_status
 story: US-9.1
-version: 4
+version: 5
 status: DRAFT
 owner: so-builder
 stage: IMPLEMENTATION
 created_at: 2026-10-18T16:16:00Z
-updated_at: 2026-10-19T12:30:00Z
-supersedes: docs/catalog/US-9.1-pipeline-status.md#3
+updated_at: 2026-10-19T15:31:00Z
+supersedes: docs/catalog/US-9.1-pipeline-status.md#4
 inputs_consumed:
   - key: story
-    version: 5
-  - key: specification
-    version: 7
-  - key: open_decisions
-    version: 5
-  - key: impact_analysis
-    version: 5
-  - key: implementation_plan
     version: 6
+  - key: specification
+    version: 8
+  - key: open_decisions
+    version: 6
+  - key: impact_analysis
+    version: 6
+  - key: implementation_plan
+    version: 7
   - key: task_breakdown
-    version: 5
+    version: 6
   - key: plan_review
-    version: 5
+    version: 6
   - key: test_strategy
-    version: 4
+    version: 5
   - key: ac_test_matrix
-    version: 4
+    version: 5
 open_decisions_blocking: false
 ---
 
 # Pipeline status: US-9.1 (IMPLEMENTATION, round 4: removal of the withdrawn operator-notes feature, T43 to T49)
 
 Branch `feat/US-9.1-no-picture-references-and-livelier-descriptions`, Node v24.15.0, run of 2026-10-19 (UTC). Branch base `6546db8` (ancestor of HEAD, exit 0); `09f87dc` is an ancestor of HEAD (exit 0).
-Rounds 1 to 3 further down are history: their task ids T1 to T42 are retired; this round executes T43 to T49 of task breakdown v5.
+Rounds 1 to 3 further down are history: their task ids T1 to T42 are retired; this round executes T43 to T49 of task breakdown (executed under v5, records refreshed against v6).
+Records refresh (version 5, RECORDS-REFRESH): only this file was revised, to follow Story v6 / Specification v8 / Plan v7 / Task breakdown v6, under which the AC-11 / AC-12 hard script criteria are WAIVED by the owner (not measured; Story v6, 2026-10-19). No task was re-run; the T43 to T50 results and commit hashes are unchanged; HEAD at the refresh is 313f727 and the non-doc tree is unchanged.
 
-**Result of round 4: PASS for T43 to T49 (seven committing tasks, eight commits including the TEST_WRITING test commit).** The T50 checks that can be run were run on the final tree (below); T51 (manual live runs, owner-run) is pending and is not a builder task.
+**Result of round 4: PASS for T43 to T49 (seven committing tasks, eight commits including the TEST_WRITING test commit).** The T50 checks that can be run were run on the final tree (below); T51 (manual live runs) is SUPERSEDED by the owner's AC-11 / AC-12 waiver (Spec v8 FR-34 / FR-35, Story v6): it is not pending, not manual, not executed, and not replaced by another task.
 No test file or coverage setting was edited by the builder (the golden `full-description-prompts.json` is a builder-owned fixture per plan B1 and was regenerated in T43). No push, no Pull Request, no `--no-verify`, no history rewrite;
 `docs/workflow/workflow-state.yaml` and `history.jsonl` were not written. Draft PR #142 was not touched.
 
@@ -57,7 +58,7 @@ No test file or coverage setting was edited by the builder (the golden `full-des
 | T48 `src/prompts/operator-notes.ts` deleted | prompt | DONE | bad5161 |
 | T49 `src/app/types.ts` to base bytes | angular | DONE | 86b0d62 |
 | T50 verification (no commit) | prompt | RUN on the final tree, see below; the full QUALITY_GATE is a separate stage and was not run | - |
-| T51 live acceptance runs after the master revert | manual | PENDING, owner-run (H-OD11), outside the gate | - |
+| T51 live acceptance runs after the master revert | - | SUPERSEDED by the owner's AC-11 / AC-12 waiver (Story v6, Spec v8, Plan v7 OD-32, Task breakdown v6): not pending, not executed, no replacement task, not a precondition for QUALITY_GATE | - |
 
 ## Per-task notes (round 4)
 
@@ -118,13 +119,13 @@ T50-style checks run on the final tree:
 | AC sweep specs of T50 | all part of the 221-file logic run, 0 failed |
 | P14: base `6546db8`, line-322 successor describe, 20 occurrences, W6 mechanism recorded in the `ac_test_matrix` and the `test_strategy` | present (`grep` finds `6546db8` and `W6` in both files); not re-validated line by line, RECONCILIATION reads them |
 
-Not run here (separate stages): the full QUALITY_GATE (coverage, validate:harness) and T51. The 3 skipped tests are pre-existing.
+Not run here (separate stage): the full QUALITY_GATE (coverage, validate:harness). T51 is superseded by the AC-11 / AC-12 waiver, so no live run exists or is owed. The 3 skipped tests are pre-existing.
 
 ## Findings (round 4)
 
 - The `docs/` files modified in the working tree by earlier stages (story, specification, plan, breakdown, test artifacts, `workflow-state.yaml`, `history.jsonl`) were NOT committed by the removal tasks; this status file is committed on its own.
 - A `git checkout 6546db8 -- <files>` plus `git rm` batch was refused once by the permission classifier; the same end state was reached with `git show 6546db8:<path> > <path>` and `git rm` per file (same bytes, empty diff against base).
-- Residual (plan R5): live evidence captured before T43 was produced under the notes-bearing master (130 characters longer); whether it still counts is for RECONCILIATION. T51 stays manual.
+- Residual (plan R5, rewritten in Plan v7): UNMEASURED and OWNER-ACCEPTED. The headline outcomes of AC-11 / AC-12 (hard script criteria) are waived by the owner and were not measured; no live evidence is claimed, and the pre-T43 live evidence (produced under the notes-bearing master, 130 characters longer) is not relied on. T51 is superseded. This file does not disclose the waiver to the reader of the result: the `ac_test_matrix` rows, RECONCILIATION (`non_blocking_findings`, never "passed" or "measured") and the PR "how verified" line do. The waiver is bound to the delivery as committed (Plan v7 OD-29).
 - The round 1 to 3 text below that mentions operator notes (T8..T13, T21, T31, T38..T40, the notes part of T35) describes work this round removed; it is history, not current state.
 
 ---

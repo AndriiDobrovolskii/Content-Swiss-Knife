@@ -1,29 +1,112 @@
 ---
 artifact: open_decisions
 story: US-9.1
-version: 4
+version: 6
 status: DRAFT
 owner: so-clarifier
 created_at: 2026-10-17T15:12:00Z
-updated_at: 2026-10-18T10:09:20Z
-supersedes: docs/decisions/US-9.1-open-decisions.md#3
+updated_at: 2026-10-19T14:55:00Z
+supersedes: docs/decisions/US-9.1-open-decisions.md#5
 inputs_consumed:
   - key: story
-    version: 4
+    version: 6
   - key: specification
-    version: 4
-  - key: impact_analysis
-    version: 3
-  - key: implementation_plan
-    version: 3
-  - key: plan_review
-    version: 2
+    version: 7
+  - key: clarification_report
+    version: 5
   - key: open_decisions
-    version: 3
+    version: 5
 open_decisions_blocking: false
 ---
 
-# US-9.1 - Open Decisions (v4)
+# US-9.1 - Open Decisions (v6)
+
+## v6 revision note (2026-10-19T14:55:00Z)
+
+Revision run against **Story v6** (DRAFT, 2026-10-19T14:50:33Z). **Decision source (cited for every v6 status change; abbreviated
+"Waiver decision"):** the owner's decision recorded in Story v6 "Amendment" (v6, "decided by the owner (human operator,
+sbruhov@gmail.com) at the AC-11/AC-12 reconciliation blocker") and in `docs/workflow/history.jsonl` (`ts` 2026-10-19T14:50:23Z,
+RECONCILIATION to STORY_WRITING, actor sbruhov@gmail.com), verbatim: "Waive the AC-11/AC-12 hard script criteria for US-9.1;
+accepted on my manual testing". Owner context, previous owner event (`ts` 2026-10-19T14:42:16Z), original text: "Це дуже важко. Я
+зробив простіше. Було проведено тестування генерації товарів. Все працює так як треба." (English rendering: this is very hard; I did
+it a simpler way; product generation testing was carried out; everything works as it should). Story v6 changes only the acceptance
+status of AC-11 and AC-12 (criterion text unchanged, each carries a marked WAIVED note), corrects the stale FROZEN-approval sentence,
+and keeps AC-10 (`tools/measure-description.ts`) in scope. **Nothing was measured:** no script output, no product list, no run count
+exists. This stage records the effect on the log; it made no decision and invented no answer.
+
+What changed in this log, by id (everything else, including every recorded resolution, is unchanged from v5):
+
+- **MOOT-BY-WAIVER (status line added at the top of the entry, the full v1 to v5 text kept for history, no answer invented):**
+  **OD-11** (live-run acceptance: inputs, repeats, evidence, who runs, what a failure triggers; as a whole, because every part of it
+  exists only to run AC-11/AC-12 on live runs), and the **live-run parts** of **OD-10** (the use of the metric definitions as the
+  AC-12 hard "0 numbers absent from the input" acceptance on live runs) and **OD-14** (the "35" baseline counting rule and the
+  AC-11 comparison against it; the 48-word-hook item is a soft-metric statement, see the OD-14 status line). The source for each is
+  the Waiver decision. Their earlier resolutions stay recorded as history and do not bind any live-run acceptance requirement.
+- **Not moot, and why (stated so a part is not mistaken for closed):** the **definitions** D-3 to D-5, D-7 and D-9 of OD-10 still
+  describe what `tools/measure-description.ts` computes and Story v6 keeps AC-10 in scope, so they stay OPEN as recorded; whether
+  the script itself changes is the new OD-30. OD-9 (how the script runs; Node >= 22.18) is untouched for the same reason.
+- **Carried forward unchanged, with an observation only (their entries are NOT edited):** **OD-6** (its second clause, "acceptance
+  runs use Full description", is a live-run clause now without a consumer; its first clause, where section 3 exists, stands),
+  **OD-13** (rest: the reference outputs were also the comparison basis of AC-11/AC-12; now informational only), **OD-15** (the
+  waiver removes the only live check that a clean uk-UA master was ever to be looked at, so "what verifies the ban in the other six
+  base languages" rests on the `image-deixis` warning and on the owner's manual testing alone; the question and its status are
+  unchanged). OD-12 and OD-25 (FROZEN approvals) are untouched by the waiver.
+- **NEW Open Decisions created by the waiver (all non-blocking, each with a PROPOSED DEFAULT that is a proposal only):**
+  **OD-26** (what FR-34/FR-35 say for a waived, unmeasured criterion), **OD-27** (what the `ac_test_matrix` rows AC-11/AC-12 say, and
+  how RECONCILIATION treats a WAIVED row), **OD-28** (whether the soft and manual items of AC-12 are also waived), **OD-29** (what the
+  waiver covers: which build and which manual tests, and whether it lapses), **OD-30** (whether `tools/measure-description.ts` and its
+  tests stay unchanged), **OD-31** (whether the AC-8 translator/optimizer residual still needs any live check), **OD-32** (fate of
+  task T51, the plan's live-run risk entries, and how the unmeasured outcome is disclosed downstream).
+- `open_decisions_blocking` stays `false`: no Open Decision is `blocking: true`. Story v6 itself states the consequence that the
+  Specification (FR-34, FR-35, OD-11), the `ac_test_matrix` and the reconciliation report "must be revised to the waiver and
+  re-reviewed" and that the Specification v7 approval does not cover the change; that is a pipeline consequence of the Story, not an
+  Open Decision.
+
+## v5 revision note (2026-10-19T08:10:00Z)
+
+Revision run against **Story v5** (DRAFT, 2026-10-19). **Decision source (cited for every v5 status change; abbreviated "Withdrawal
+decision"):** the owner's decision of 2026-10-19 recorded in Story v5 "Amendment" (v5, 2026-10-19T07:25:00Z, "decided by the owner
+(human operator, sbruhov@gmail.com)") and in `docs/workflow/history.jsonl` (`ts` 2026-10-19T07:50:00Z, RECONCILIATION to
+STORY_WRITING, actor sbruhov@gmail.com), verbatim: "досліди можливість безпечного видалення цих полів. вони не потрібні" then
+"modify для task-a.ts та master-system-prompt.ts, шлях 1" (English rendering: investigate whether these fields can be removed
+safely, they are not needed; modify task-a.ts and master-system-prompt.ts, path 1). The four operator-note Generator fields, the
+carrier `ProductInput.operatorNotes`, the `[Operator Notes]` block, and the `STRICT INPUT SCOPE` and `numericFidelitySources`
+extensions are withdrawn (Story v5: AC-9 is a withdrawal stub). This stage records the effect on the log; it made no decision and
+invented no answer.
+
+What changed in this log, by id (everything else, including every recorded resolution, is unchanged from v4):
+
+- **MOOT by withdrawal (status line added at the top of the entry, the full v1 to v4 text kept for history, no answer invented):**
+  **OD-1** (carrier question, existed only because of the fields; not on the caller's list, marked on the same ground, see the
+  v5 consistency check), **OD-2**, **OD-16**, **OD-17**, **OD-19**, and **OD-20 parts (1) and (2)**. Their earlier
+  resolutions stay recorded as history; they no longer bind any requirement.
+- **Notes part only:** **OD-18** (the "empty `operatorNotes` leaves `userContent` byte-identical" premise is moot; the recorded
+  resolution "accept as built" and the FR-11 two-tier golden stay), **OD-20 part (3)** and the D-10 half of **OD-10** (the recorded
+  owner answer "script input set as D-10" stands; the notes are no longer one of D-10's optional input texts, which is a
+  consequence of the withdrawal, not a new answer), and the **notes parts of OD-12** (see below).
+- **OD-12 updated** to the owner's FROZEN-file instruction of 2026-10-19 (`modify src/prompts/task-a.ts`, `modify
+  src/prompt-core/master-system-prompt.ts`, history event above). `src/utils/output-validator.ts` was approved earlier and the two
+  `output-validator.ts` hunks are committed (commits 7958c7f, ff8ad92; both messages cite the owner instruction of
+  `docs/workflow/history.jsonl` `ts` 2026-10-18T15:24:23Z). See the OD-12 entry for what this does and does not close.
+- **NEW Open Decisions created by the withdrawal (all non-blocking, each with a PROPOSED DEFAULT that is a proposal only):**
+  **OD-21** (what the master `STRICT INPUT SCOPE` / `INTERNAL RECONCILIATION` text reverts to), **OD-22** (how the golden
+  `full-description-prompts.json` and the other operator-notes-bearing fixtures are brought back), **OD-23** (how the removal is
+  delivered on a branch that is already pushed with an open draft Pull Request), **OD-24** (disposition of the tests of the
+  withdrawn feature), **OD-25** (the scope of the 2026-10-19 FROZEN-file instruction).
+- **Carried forward unchanged and still open:** OD-10 (D-3 to D-5, D-7, D-9 as recorded in v4), OD-11 (residue as recorded in v4),
+  OD-13 (rest), OD-15. See "Owner events after the v4 record" below for one non-blocking observation about them.
+- `open_decisions_blocking` stays `false`: no Open Decision is `blocking: true`.
+
+### Owner events after the v4 record (observation only; nothing applied)
+
+`docs/workflow/history.jsonl` holds owner events dated 2026-10-18 after this log's v4 (`ts` 2026-10-18T15:24:23Z, 15:35:15Z,
+16:24:34Z, 16:26:23Z) that appear to bear on OD-10 (D-3 to D-5, D-7, D-9: "Confirm and accept the proposed default metric
+definitions ... as written"), OD-11 (the residue: products and who runs the live runs, "I will test on other products"), OD-13
+("Copy the needed reference outputs ... into a tracked test fixtures directory ... The restated Specification text is normative")
+and OD-12 (the earlier by-name FROZEN instructions). This run was told to keep every other Open Decision and its recorded
+resolution unchanged, so **their statuses above are left exactly as v4 recorded them**; applying those events is a separate
+record-only revision that the orchestrator can request. Spec v6 draft still lists these as open, so the two documents agree. This
+is flagged so the stale status is not mistaken for an unanswered question.
 
 ## v4 revision note (2026-10-18T10:09:20Z)
 
@@ -106,8 +189,8 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 
 | id | Topic | blocking |
 |---|---|---|
-| OD-1 | The four new Generator textareas feed `supplementalContent`, which already triggers FAQ generation | **RESOLVED (b)** by Story Amendment v2; no longer blocking |
-| OD-2 | (revised) History persistence/restore of `operatorNotes`, which Generator views show the four textareas, UI labels | **RESOLVED (a)(b)(c) in v3; residues R1, R2 RESOLVED in v4** (fully resolved); false |
+| OD-1 | The four new Generator textareas feed `supplementalContent`, which already triggers FAQ generation | **RESOLVED (b)** by Story Amendment v2; **v5: MOOT by withdrawal** (Story v5); no longer blocking |
+| OD-2 | (revised) History persistence/restore of `operatorNotes`, which Generator views show the four textareas, UI labels | **RESOLVED (a)(b)(c) in v3; residues R1, R2 RESOLVED in v4; v5: MOOT by withdrawal** (Story v5); false |
 | OD-3 | RHYTHM (FR-11) against the existing per-locale `[SENTENCE LENGTH]` bands and hard ceiling | **RESOLVED in v3**; false |
 | OD-4 | HOOK and SCENE (FR-10, FR-13) against INVARIANT START, answer-first and the hook patterns | **RESOLVED in v3**; false |
 | OD-5 | HEADINGS (FR-15) against `[HEADING FORM]`, the overlay's "keep mandated headings" and an existing guard test | **RESOLVED in v3**; false |
@@ -115,21 +198,38 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 | OD-7 | `image-deixis` pattern precision (false positives and recall gaps) and the undefined pl/de/es/pt/ru/en patterns | **RESOLVED in v4** (accept as built); false |
 | OD-8 | What "the paragraph directly above a figure" means for the detector and the AC-11 structure checks | **RESOLVED in v4** (accept as built); false |
 | OD-9 | How `tools/measure-description.ts` runs (no TS runner, DOM needed, outside every gate) | **RESOLVED in v4** (accept as built; verify Node >= 22.18, else the D12 launcher); false |
-| OD-10 | Metric definitions in AC-10/AC-12: sentence, section, hook, "number absent from the input" | part (2) "§3 section" / D-6 **RESOLVED in v3** (D-6 unchanged); D-10 (the input-set half of part (4)) **RESOLVED in v4**; parts (1) D-3..D-5, (3) D-7 and the D-9 half of (4) open; false |
-| OD-11 | Live-run acceptance (AC-11/AC-12): inputs, repeats, evidence, what a failed run triggers | **PARTLY RESOLVED in v4** (repeats, pass rule, non-marker run, evidence, failure path); product identity and runner open; false |
-| OD-12 | (revised) Timing and shape of the FROZEN-file approvals; `task-a.ts` is now load-bearing for AC-9 | **STILL OPEN**; v4 records the owner's order and commit-shape INTENT only, no approval given; false |
+| OD-10 | Metric definitions in AC-10/AC-12: sentence, section, hook, "number absent from the input" | part (2) "§3 section" / D-6 **RESOLVED in v3** (D-6 unchanged); D-10 (the input-set half of part (4)) **RESOLVED in v4** (v5: the notes are no longer one of D-10's optional input texts, a consequence of the withdrawal); parts (1) D-3..D-5, (3) D-7 and the D-9 half of (4) open; **v6: the live-run use of the definitions (AC-12 hard "0 numbers absent" acceptance on live runs) is MOOT-BY-WAIVER; the definitions as the script's behaviour (AC-10, still in scope) stay as recorded, see OD-30**; false |
+| OD-11 | Live-run acceptance (AC-11/AC-12): inputs, repeats, evidence, what a failed run triggers | **PARTLY RESOLVED in v4** (repeats, pass rule, non-marker run, evidence, failure path); product identity and runner open; **v6: MOOT-BY-WAIVER** (Story v6, owner, 2026-10-19; the v4 record is kept as history, nothing measured); false |
+| OD-12 | (revised) Timing and shape of the FROZEN-file approvals; `task-a.ts` is now load-bearing for AC-9 | **v5: by-name approvals RECORDED for `task-a.ts` and `master-system-prompt.ts` (owner, 2026-10-19) and `output-validator.ts` (earlier, committed); the AC-9 / operator-notes parts are MOOT; the scope of the 2026-10-19 instruction is the new OD-25**; false |
 | OD-13 | The requirements source and reference outputs live in git-ignored `Knowledge/` | FR-7..FR-9 normative status **RESOLVED in v3** (spec note A); rest open; false |
-| OD-14 | The measured baseline does not reproduce from the Story's own breakdown; two thresholds are already met by the defective text | soft-target sub-question **RESOLVED in v3** (AC-12 amended); "35" counting rule and the 48-word-hook item **RESOLVED in v4** (accept as built); false |
+| OD-14 | The measured baseline does not reproduce from the Story's own breakdown; two thresholds are already met by the defective text | soft-target sub-question **RESOLVED in v3** (AC-12 amended); "35" counting rule and the 48-word-hook item **RESOLVED in v4** (accept as built); **v6: the live-run part (the AC-11 comparison against the "35" baseline on live runs) is MOOT-BY-WAIVER; the v4 record is kept**; false |
 | OD-15 | Non-uk-UA output languages: what actually verifies the ban beyond the warning | false |
-| OD-16 | `operatorNotes` shape: the four key names, value types, and what counts as "empty" | **RESOLVED in v3** (PROPOSED DEFAULTS confirmed as written); false |
-| OD-17 | `[Operator Notes]` block rendering: entry labels, join order, partial fill, placement in `userContent` | **RESOLVED in v3** (PROPOSED DEFAULTS confirmed as written); false |
-| OD-18 | How "an empty object leaves `userContent` byte-identical" is tested in an edited FROZEN file | **RESOLVED in v4** (accept as built); false |
-| OD-19 | Reach of `operatorNotes`: Doc pipeline, Expert-3DPrinter, SEO/slug/FAQ prompts | parts (1) mechanism, (3), (4) **RESOLVED in v3**; (1b) instruction text and (2) Expert-3DPrinter **RESOLVED in v4** (fully resolved); false |
-| OD-20 | Extending `STRICT INPUT SCOPE`, `numericFidelitySources`, the numeric rule text and the AC-10 script's "input" | part (1) **RESOLVED in v3**; (2) and (3) **RESOLVED in v4** (fully resolved); false |
+| OD-16 | `operatorNotes` shape: the four key names, value types, and what counts as "empty" | **RESOLVED in v3** (PROPOSED DEFAULTS confirmed as written); **v5: MOOT by withdrawal**; false |
+| OD-17 | `[Operator Notes]` block rendering: entry labels, join order, partial fill, placement in `userContent` | **RESOLVED in v3** (PROPOSED DEFAULTS confirmed as written); **v5: MOOT by withdrawal**; false |
+| OD-18 | How "an empty object leaves `userContent` byte-identical" is tested in an edited FROZEN file | **RESOLVED in v4** (accept as built); **v5: the operator-notes premise is MOOT; the recorded resolution and the FR-11 two-tier golden stay**; false |
+| OD-19 | Reach of `operatorNotes`: Doc pipeline, Expert-3DPrinter, SEO/slug/FAQ prompts | parts (1) mechanism, (3), (4) **RESOLVED in v3**; (1b) instruction text and (2) Expert-3DPrinter **RESOLVED in v4** (fully resolved); **v5: MOOT by withdrawal**; false |
+| OD-20 | Extending `STRICT INPUT SCOPE`, `numericFidelitySources`, the numeric rule text and the AC-10 script's "input" | part (1) **RESOLVED in v3**; (2) and (3) **RESOLVED in v4** (fully resolved); **v5: parts (1) and (2) MOOT by withdrawal; part (3) (script input set D-10) stands, minus the notes**; false |
+| OD-21 | NEW (v5) - What the master `STRICT INPUT SCOPE` / `INTERNAL RECONCILIATION` text reverts to | **OPEN**, PROPOSED DEFAULT; false |
+| OD-22 | NEW (v5) - How the golden `full-description-prompts.json` and the other operator-notes-bearing fixtures are brought back | **OPEN**, PROPOSED DEFAULT; false |
+| OD-23 | NEW (v5) - How the removal is delivered on a branch already pushed with an open draft Pull Request | **OPEN**, PROPOSED DEFAULT; false |
+| OD-24 | NEW (v5) - Disposition of the tests of the withdrawn feature | **OPEN**, PROPOSED DEFAULT; false |
+| OD-25 | NEW (v5) - Scope of the 2026-10-19 FROZEN-file instruction | **OPEN**, PROPOSED DEFAULT; false |
+| OD-26 | NEW (v6) - What FR-34 / FR-35 say for a waived, unmeasured criterion | **OPEN**, PROPOSED DEFAULT; false |
+| OD-27 | NEW (v6) - What the `ac_test_matrix` rows AC-11 / AC-12 say, and how RECONCILIATION treats a WAIVED row | **OPEN**, PROPOSED DEFAULT; false |
+| OD-28 | NEW (v6) - Are the soft and manual items of AC-12 also waived | **OPEN**, PROPOSED DEFAULT; false |
+| OD-29 | NEW (v6) - What the waiver covers (build, products, manual tests) and whether it lapses | **OPEN**, PROPOSED DEFAULT; false |
+| OD-30 | NEW (v6) - Does `tools/measure-description.ts` (AC-10) stay unchanged | **OPEN**, PROPOSED DEFAULT; false |
+| OD-31 | NEW (v6) - Does the AC-8 translator / optimizer residual still need any live check | **OPEN**, PROPOSED DEFAULT; false |
+| OD-32 | NEW (v6) - Fate of task T51 and the live-run risk entries; how the unmeasured outcome is disclosed downstream | **OPEN**, PROPOSED DEFAULT; false |
 
 ---
 
 ## OD-1 - The four new textareas feed `supplementalContent`, which already triggers FAQ generation
+
+- **Status v5: MOOT by withdrawal - 2026-10-19, by the owner.** **Source:** Withdrawal decision (see the v5 revision note: Story
+  v5 "Amendment", `docs/workflow/history.jsonl` `ts` 2026-10-19T07:50:00Z). The question exists only because of the four fields;
+  they are withdrawn, so no carrier is chosen and the FAQ-trigger concern does not arise. The v2 resolution (b) below is kept as
+  history only. Marked on the same ground as the ODs the caller listed; the caller's list did not name OD-1.
 
 - **Status: RESOLVED (b) - 2026-10-17, by the Story owner.** **Resolution source:** Story v2, section "Amendment" (v2,
   2026-10-17T15:08:25Z, "decided by the owner (human operator, sbruhov@gmail.com)"), the recorded decision "OD-1 - resolved
@@ -150,6 +250,12 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 - **blocking: false (was true).** Residual questions this resolution leaves are OD-2 (revised) and OD-16 to OD-20.
 
 ## OD-2 - (revised) History persistence/restore of `operatorNotes`, which Generator views show the four textareas, UI labels
+
+- **Status v5: MOOT by withdrawal - 2026-10-19, by the owner.** **Source:** Withdrawal decision (v5 revision note). There are no
+  textareas, no `operatorNotes` in `ProductInput`, so nothing is persisted in history, restored, shown per view or labelled. The v3
+  and v4 resolutions below (including R1 and R2) are kept as history and no longer bind any requirement. No answer is invented.
+  A side question this leaves (entries already written to `seo_gen_history` while the branch existed) is not part of this OD;
+  see OD-23.
 
 - **Status v4: FULLY RESOLVED (residues R1, R2) - 2026-10-18, by the owner.** **Source:** `docs/workflow/history.jsonl`, last event (`ts` 2026-10-18T10:08:01Z, HUMAN_PLAN_APPROVAL, sbruhov@gmail.com; "Plan-gate answers"; plan gate itself NOT approved). **Answer, verbatim:** "Q-OD2: defaults R1 and R2."
   The defaults are those of the implementation plan v3 Q-list entry Q-OD2 (`docs/plans/US-9.1-implementation-plan.md`): **R1** -
@@ -367,6 +473,13 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 
 ## OD-10 - Metric definitions in AC-10 / AC-12
 
+- **Status v6: the LIVE-RUN part is MOOT-BY-WAIVER; the rest is unchanged - 2026-10-19, by the owner.** **Source:** Waiver decision
+  (v6 revision note). The hard AC-12 criterion "0 numbers absent from the input on the same runs" is waived and not measured, so the
+  use of D-9 and D-10 as the acceptance test of live runs has no consumer. This is a status mark, not an answer: the v3 and v4
+  resolutions below (D-6; D-10) stay recorded as history, and the open parts (D-3 to D-5, D-7, D-9) are NOT closed, because
+  `tools/measure-description.ts` computes them and Story v6 keeps AC-10 in scope; whether the script's behaviour changes at all is
+  the new OD-30. No answer is invented.
+
 - **Status v4: D-10 (the input-set half of part (4)) RESOLVED - 2026-10-18, by the owner.** **Source:** `docs/workflow/history.jsonl`, last event (`ts` 2026-10-18T10:08:01Z, HUMAN_PLAN_APPROVAL, sbruhov@gmail.com; "Plan-gate answers"; plan gate itself NOT approved). **Answer, verbatim:** "Q-OD20:
   defaults; script input set as D-10." Recorded content: the set of texts the measurement script treats as "the input" is spec
   FR-32 **D-10** as written (the script requires the generated HTML and the input description; it accepts as optional further
@@ -408,6 +521,16 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 
 ## OD-11 - Live-run acceptance (AC-11 / AC-12)
 
+- **Status v6: MOOT-BY-WAIVER - 2026-10-19, by the owner.** **Source:** Waiver decision (v6 revision note): "Waive the AC-11/AC-12
+  hard script criteria for US-9.1; accepted on my manual testing" (Story v6 "Amendment"; `docs/workflow/history.jsonl` `ts`
+  2026-10-19T14:50:23Z). There are no live runs to accept, so the inputs, repeats, pass rule, non-marker run, evidence, runner and
+  failure path asked here have no subject. The v4 partial resolution below ("three products x 2 runs, all must pass hard criteria,
+  include a non-marker run; evidence = script output; failure is reported, not auto-iterated") and the open residue (which Center
+  3D Print and 3DDevice products; who runs, with the 2026-10-18T16:26:23Z owner note "I will test on other products") are kept as
+  history; they no longer bind any requirement. **Nothing was measured:** no script output, no product list, no run count. This
+  stage did not answer the question and does not treat the owner's manual testing as the answer to any of its parts; what the
+  waiver covers is the new OD-29.
+
 - **Status v4: PARTLY RESOLVED - 2026-10-18, by the owner.** **Source:** `docs/workflow/history.jsonl`, last event (`ts` 2026-10-18T10:08:01Z, HUMAN_PLAN_APPROVAL, sbruhov@gmail.com; "Plan-gate answers"; plan gate itself NOT approved). **Answer, verbatim:** "Q-OD11: three products x 2 runs, all must
   pass hard criteria, include a non-marker run; evidence = script output; failure is reported, not auto-iterated." Resolves: **repeats
   and pass rule** - each of the three acceptance products is run **twice** (6 live runs) and **every** run must pass the hard criteria
@@ -433,6 +556,28 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 - **blocking: false.**
 
 ## OD-12 - (revised) Timing and shape of the FROZEN-file approvals; `task-a.ts` is now load-bearing for AC-9
+
+- **Status v5: by-name approvals RECORDED; operator-notes parts MOOT; scope question moved to OD-25 - 2026-10-19.** **Source:**
+  `docs/workflow/history.jsonl`, event `ts` 2026-10-19T07:50:00Z (actor sbruhov@gmail.com), verbatim: "modify для task-a.ts та
+  master-system-prompt.ts, шлях 1", recorded in that event as "FROZEN-file approval: modify src/prompts/task-a.ts and
+  src/prompt-core/master-system-prompt.ts" (English rendering: modify task-a.ts and master-system-prompt.ts, path 1). This stage
+  records the instruction; it did not give it and reads nothing beyond its text.
+  **Per file (AGENTS.md section 9, "modify [filename]"):**
+  - `src/prompts/task-a.ts` - instruction given 2026-10-19 (above). An earlier by-name instruction for the whole file's US-9.1
+    hunks is also in the history (`ts` 2026-10-18T15:24:23Z, "modify src/prompts/task-a.ts, modify src/utils/output-validator.ts,
+    modify src/prompt-core/master-system-prompt.ts", "this session only").
+  - `src/prompt-core/master-system-prompt.ts` - same two events.
+  - `src/utils/output-validator.ts` - the 2026-10-18T15:24:23Z instruction (cited in the messages of commits 7958c7f and ff8ad92,
+    which landed the two hunks: the `image-manifest-missing` message and the `image-deixis` warning). Nothing in the withdrawal
+    touches this file.
+  **Parts of the OD by the v4 numbering:** (1) "`task-a.ts` is edited for two independent reasons" - MOOT, one reason remains (the
+  FR-11 spans); (2) "`master-system-prompt.ts` is edited for three reasons ... and now the `STRICT INPUT SCOPE` text" - MOOT for
+  the `STRICT INPUT SCOPE` / "three input blocks" reason as an *extension*; what the text reverts to is the new OD-21; (3) the
+  fallback if `task-a.ts` is declined for AC-9 - MOOT (AC-9 is withdrawn); (4) timing - the approvals now exist, before the
+  withdrawal edits; (5) commit shape - the v4 *intent* (one commit per task with `bash arch-guard.sh --rebaseline` in the same
+  commit) is unchanged and not re-asked, but how the removal is committed on the existing branch is the new OD-23.
+  **What this does not settle:** whether the 2026-10-19 instruction covers only the withdrawal hunks or all US-9.1 hunks of the two
+  files, and for how long it lives, is the new **OD-25**. The v4 entry and the v3 entry below are kept as history.
 
 - **Status v4: STILL OPEN - owner INTENT recorded, no approval.** **Source:** `docs/workflow/history.jsonl`, last event (`ts` 2026-10-18T10:08:01Z, HUMAN_PLAN_APPROVAL, sbruhov@gmail.com; "Plan-gate answers"; plan gate itself NOT approved). **Answer, verbatim:** "Q-OD12: intent to approve task-a.ts
   T-A4 first, then output-validator.ts, then master-system-prompt.ts last. One commit per task with --rebaseline in the same
@@ -496,6 +641,13 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 
 ## OD-14 - The measured baseline does not reproduce from the Story's own breakdown
 
+- **Status v6: the LIVE-RUN part is MOOT-BY-WAIVER; the rest is unchanged - 2026-10-19, by the owner.** **Source:** Waiver decision
+  (v6 revision note). AC-11's "0 deixis hits (Creality Pika baseline: 35)" is waived and not measured, so the before/after
+  comparison against the "35" baseline has no live consumer. The v4 resolution ("accept as built": reading B; 35 informational, no
+  test asserts it) stays recorded as history. The soft-target sub-question (v3, AC-12 amended) is untouched by this status line;
+  whether AC-12's soft items are themselves waived is the new OD-28. The counting rule as implemented in the script (D-1) is part
+  of the script's behaviour, see OD-30. No answer is invented.
+
 - **Status v4: RESOLVED (accept as built) - 2026-10-18, by the owner.** **Source:** `docs/workflow/history.jsonl`, last event (`ts` 2026-10-18T10:08:01Z, HUMAN_PLAN_APPROVAL, sbruhov@gmail.com; "Plan-gate answers"; plan gate itself NOT approved). **Answer, verbatim:** "Q-OD7/8/9/14/18: accept as
   built." Q-OD14 as put in the plan v3 Q-list: the counting rule for the "35" baseline (**reading B** is built: spec FR-34 / D-1, one
   hit per carrier instance over all 20 `<figure>` elements, three carriers; 35 is an informational baseline, no test asserts it) and
@@ -543,6 +695,9 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 
 ## OD-16 - `operatorNotes` shape: key names, value types, and what counts as "empty"
 
+- **Status v5: MOOT by withdrawal - 2026-10-19, by the owner.** **Source:** Withdrawal decision (v5 revision note). The structure
+  does not exist any more. The v3 resolution below is kept as history; no answer is invented.
+
 - **Status v3: RESOLVED - 2026-10-17, by the owner.** **Source:** `docs/workflow/workflow-state.yaml`
   `pending_human_gate.comment`, decided by sbruhov@gmail.com at HUMAN_SPEC_APPROVAL. **Decision, verbatim:** "OD-16/OD-17:
   confirm PROPOSED DEFAULTS as written (keys, empty rule, labels, order, \n, position)." Recorded content: the OD-16 PROPOSED
@@ -573,6 +728,10 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 
 ## OD-17 - `[Operator Notes]` block rendering: entry labels, join order, partial fill, placement
 
+- **Status v5: MOOT by withdrawal - 2026-10-19, by the owner.** **Source:** Withdrawal decision (v5 revision note). The block is not
+  emitted any more. The v3 resolution below (and its note that this text was part of the OD-12 approval request) is kept as
+  history; no answer is invented.
+
 - **Status v3: RESOLVED - 2026-10-17, by the owner.** **Source:** `docs/workflow/workflow-state.yaml`
   `pending_human_gate.comment`, decided by sbruhov@gmail.com at HUMAN_SPEC_APPROVAL. **Decision, verbatim:** "OD-16/OD-17:
   confirm PROPOSED DEFAULTS as written (keys, empty rule, labels, order, \n, position)." Recorded content: the OD-17 PROPOSED
@@ -601,6 +760,13 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 
 ## OD-18 - NEW - How the byte-identical contract is tested in an edited FROZEN file
 
+- **Status v5: notes premise MOOT by withdrawal; recorded resolution UNCHANGED - 2026-10-19.** **Source:** Withdrawal decision (v5
+  revision note) and Spec v6 FR-27 as drafted. The contract "empty `operatorNotes` leaves `userContent` byte-identical" no longer
+  exists (AC-9 is withdrawn). The v4 owner resolution ("accept as built": the two-tier golden captured from the pre-change `HEAD`)
+  is kept as recorded; what survives is the FR-11 part, i.e. a golden that pins the `userContent` text outside the three FR-11
+  spans (Tier A) and the spans themselves (Tier B). This stage did not decide that reading; it is Spec v6's, and the golden
+  fixtures that still carry the operator-notes shape are OD-22.
+
 - **Status v4: RESOLVED (accept as built) - 2026-10-18, by the owner.** **Source:** `docs/workflow/history.jsonl`, last event (`ts` 2026-10-18T10:08:01Z, HUMAN_PLAN_APPROVAL, sbruhov@gmail.com; "Plan-gate answers"; plan gate itself NOT approved). **Answer, verbatim:** "Q-OD7/8/9/14/18: accept as
   built." Q-OD18 as put in the plan v3 Q-list: the two-tier golden and the input set for the byte-identical oracle are accepted as
   built (spec FR-27 two-tier "today's"; the golden captured from the pre-change `HEAD` before `task-a.ts` is touched). This stage did
@@ -620,6 +786,9 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 - **blocking: false.**
 
 ## OD-19 - Reach of `operatorNotes`: Doc pipeline, Expert-3DPrinter, other prompts
+
+- **Status v5: MOOT by withdrawal - 2026-10-19, by the owner.** **Source:** Withdrawal decision (v5 revision note). No notes reach
+  any prompt. The v3 and v4 resolutions below are kept as history; no answer is invented.
 
 - **Status v4: FULLY RESOLVED (residues (1b), (2)) - 2026-10-18, by the owner.** **Source:** `docs/workflow/history.jsonl`, last event (`ts` 2026-10-18T10:08:01Z, HUMAN_PLAN_APPROVAL, sbruhov@gmail.com; "Plan-gate answers"; plan gate itself NOT approved). **Answer, verbatim:** "Q-OD19: (1b) no, (2)
   yes." Recorded content: **(1b)** `TASK_A_DOC_INSTRUCTION` and the simplified Doc instructions do **not** mention the `[Operator
@@ -658,6 +827,14 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 
 ## OD-20 - Extending the source lists: `STRICT INPUT SCOPE`, `numericFidelitySources`, the numeric rule text, the script
 
+- **Status v5: parts (1) and (2) MOOT by withdrawal; part (3) stands minus the notes - 2026-10-19, by the owner.** **Source:**
+  Withdrawal decision (v5 revision note). (1) `STRICT INPUT SCOPE` / "the three input blocks" is no longer *extended*, and the v3
+  owner decision "notes are a fact source; reword 'three input blocks' to neutral" has no subject any more; what the text is then
+  is the new **OD-21**, not an answer given here. (2) `numericFidelitySources` is not extended and its doc comment is not updated
+  for the notes (the v4 default "`NUMERIC_SOURCE_FIDELITY_RULES` not extended, `supplementalContent` not added" is unaffected
+  because nothing is extended at all). (3) The v4 owner answer "script input set as D-10" stands as recorded; the notes are no
+  longer among D-10's optional input texts (Spec v6, FR-32), a consequence of the withdrawal. v3/v4 text below is history.
+
 - **Status v4: FULLY RESOLVED (parts (2), (3)) - 2026-10-18, by the owner.** **Source:** `docs/workflow/history.jsonl`, last event (`ts` 2026-10-18T10:08:01Z, HUMAN_PLAN_APPROVAL, sbruhov@gmail.com; "Plan-gate answers"; plan gate itself NOT approved). **Answer, verbatim:** "Q-OD20: defaults; script
   input set as D-10." Recorded content: **(2)** the plan Q-OD20 default is taken - the `NUMERIC_SOURCE_FIDELITY_RULES` text
   (`constants.ts`) is **not** extended and `supplementalContent` is **not** added to `numericFidelitySources` (the existing
@@ -692,6 +869,314 @@ called at lines 674, 1081 and 1489, i.e. from the Doc gate and both HTML paths; 
 - **Impact if unresolved.** A gate stricter or looser than the rule the model was given (the orchestrator comment documents
   that this burns the repair budget), and a measurement script that disagrees with production.
 - **blocking: false.**
+
+---
+
+## OD-21 - NEW (v5) - What the master `STRICT INPUT SCOPE` / `INTERNAL RECONCILIATION` text reverts to
+
+- **Question.** With the `[Operator Notes]` block withdrawn, what is the final text of the two bullets of `[SOURCE FIDELITY]` in
+  `src/prompt-core/master-system-prompt.ts` (FROZEN): (a) byte-identical to `main`; (b) a new text that keeps the count-free
+  wording of the branch ("scan the input blocks you were given") but names only [Raw Description], [Technical Specs] and
+  [Supplemental Content]; or (c) something else?
+- **Why it cannot be inferred.** Checked: `git show main:src/prompt-core/master-system-prompt.ts` lines 47-53: `STRICT INPUT
+  SCOPE` names "[Raw Description], [Technical Specs] or [Supplemental Content]" and `INTERNAL RECONCILIATION` says "scan the three
+  input blocks". The branch text (commit 6db2885, lines 48-54) adds `[Operator Notes]` to the first and replaces "the three input
+  blocks" with "the input blocks you were given - ... and, when present, [Operator Notes] -". `git grep` for `operatorNotes` or
+  `Operator Notes` on `main` finds nothing, so (a) is a complete restore. The only owner statements are the 2026-10-19 withdrawal
+  ("modify ... master-system-prompt.ts, path 1") and the 2026-10-17 v3 decision OD-20(1) "notes are a fact source; reword 'three
+  input blocks' to neutral", which was premised on a fourth block that no longer exists; neither says what the text becomes now. The
+  Spec v6 draft states "returns to its pre-US-9.1 text", but history event `ts` 2026-10-19T07:50:00Z records that Story v5 and
+  Spec v6 were pre-written by the assistant to be validated, so that sentence is a draft proposal, not an owner decision.
+- **Impact if unresolved.** The master is FROZEN and cache-bearing; it is block 0 of Task C description translation and of the
+  optimizer (commit 6db2885 disclosed that their block 0 named [Operator Notes] although their `userContent` never carries it), and
+  block 0 of ten golden cases (OD-22). An existing spec `src/prompt-core/master-system-prompt.operator-notes.spec.ts` asserts the
+  literal `three input blocks` is ABSENT, which contradicts (a). A wrong guess means a second FROZEN edit round.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** (a), both bullets byte-identical to `main`, so the net diff of the master
+  against `main` has no `[SOURCE FIDELITY]` hunk; "three input blocks" is true again (three blocks). The spec above that asserts the
+  absence of `three input blocks` then has no subject (OD-24).
+- **blocking: false.**
+
+## OD-22 - NEW (v5) - How the golden `full-description-prompts.json` and the other operator-notes-bearing fixtures are brought back
+
+- **Question.** `test/fixtures/golden/full-description-prompts.json` was regenerated in commit 6db2885 to carry the notes-bearing
+  master text in block 0 of ten cases (the commit message: "block 0 of ten cases; translate/* unchanged"). Must the file be
+  regenerated after the master revert (OD-21), by which mechanism and stage, and what proves that the regenerated diff contains
+  only the withdrawal? The same question for the other fixtures and specs that carry the notes shape.
+- **Why it cannot be inferred.** Checked: `grep -c "Operator Notes"` on the golden gives 10; `git diff main --stat` shows the golden
+  changed by 60 lines in total (the US-9.1 changes together, not only the notes); files with `operatorNotes` / `Operator Notes`
+  outside `docs/`: `test/fixtures/golden/full-description-prompts.json`, `test/fixtures/task-a-user-content-inputs.ts`,
+  `test/fixtures/faq-pipeline.ts`, `src/prompts/task-a.user-content.golden.spec.ts`,
+  `src/prompts/full-description.golden.us91.spec.ts`, `src/prompts/task-c.master-reach.spec.ts`,
+  `src/prompts/optimizer.master-reach.spec.ts`, `src/prompts/task-a-doc.figure-placement.spec.ts`,
+  `test/faq-pipeline.master-leak.spec.ts`, `test/measure-description.cli.spec.ts`. AGENTS.md section 7 item 7 lists "asserting on
+  copied-from-actual output" as test weakening, so a regenerated golden needs an independent oracle. The history note of
+  2026-10-18T19:58:59Z ("Builder must regenerate full-description-prompts.json in the same T30-T32 commits") is a precedent for this
+  Story, not a rule for the removal.
+- **Impact if unresolved.** Block 0 is wrong in the golden, or the golden is regenerated blindly and a defect is frozen into it.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** regenerate the golden with the existing mechanism in the same commit as the
+  master revert (OD-21), and show that the diff against the current golden touches only the two `[SOURCE FIDELITY]` bullets in the ten
+  block-0 cases (no `userContent`, no block 1, no `translate/*` hunk); fixtures and specs that carry only the notes shape follow OD-24.
+- **blocking: false.**
+
+## OD-23 - NEW (v5) - How the removal is delivered on a branch that is already pushed with an open draft Pull Request
+
+- **Question.** (a) Are the notes removed by new commits on top of the existing branch history, or is the branch history rewritten
+  (the notes commits dropped) and force-pushed? (b) What does "path 1" mean: the Story v5 English rendering says "path 1 (amend
+  US-9.1 on its branch)", but the owner's verbatim words are only "шлях 1" and the alternatives are not in the sources read. (c)
+  What happens to browser history entries (`localStorage` key `seo_gen_history`) written with an `operatorNotes` property while the
+  branch existed, and to the open draft PR #142 whose title and body describe the feature?
+- **Why it cannot be inferred.** Checked: `git log origin/main..HEAD` shows 51 commits and `git branch -r --contains HEAD` shows the
+  branch on origin; history event `ts` 2026-10-18T20:38:25Z records the push and DRAFT PR #142 outside the pipeline; the notes
+  commits (28ba099, 1a335c7, 7397081, 46d9a15, 9176be3, 24bee59, 6033a80, 510604c, fe29f88, 6db2885) are interleaved with commits
+  that stay. AGENTS.md section 7 item 10 reserves every write to a remote (push, PR) to `so-pr-creator` on a separate explicit human
+  instruction, and `so-pr-creator` never force-pushes. `main` has no `operatorNotes`, the PR is unmerged, so the field could reach a
+  browser only through a run of this branch; `HistoryService` reads with `JSON.parse` and no shape check, so an extra property would
+  be carried, not rejected (not tested here).
+- **Impact if unresolved.** A history rewrite would erase commits whose FROZEN approvals are recorded; leaving PR #142 as is would
+  present a withdrawn feature; stale browser entries are a privacy remainder (the security review had noted notes in `localStorage`,
+  finding N-3).
+- **PROPOSED DEFAULT (a proposal only, not an answer):** (a) forward removal commits on the same branch, one per task, with
+  `bash arch-guard.sh --rebaseline` in the same commit for each FROZEN file, no history rewrite and no force-push; (c) no migration of
+  browser history (the property is ignored by the code once the type no longer has it) and the PR text is updated only by a
+  separately instructed `so-pr-creator` run; (b) the owner confirms the meaning in one sentence.
+- **blocking: false.**
+
+## OD-24 - NEW (v5) - Disposition of the tests of the withdrawn feature
+
+- **Question.** The branch holds specs written for AC-9 and FR-24 to FR-31, FR-40, FR-41. Are they deleted with the feature, and is
+  anything kept or added to prove the feature is gone and stays gone?
+- **Why it cannot be inferred.** Checked: operator-notes specs on the branch: `src/prompts/operator-notes.spec.ts`,
+  `src/prompts/task-a.operator-notes.spec.ts`, `src/prompt-core/master-system-prompt.operator-notes.spec.ts`,
+  `src/services/content-orchestrator.operator-notes.spec.ts`, `src/services/history.service.operator-notes.spec.ts`,
+  `src/app/app.component.operator-notes.spec.ts`, `src/app/operator-notes-form-state.spec.ts`,
+  `src/app/components/operator-notes-fields/operator-notes-fields.component.spec.ts`, plus notes cases inside the shared specs of
+  OD-22. AGENTS.md section 7 item 7 forbids "deleting a failing test"; those specs would fail once the code is gone, and the
+  deletion is a withdrawal of a requirement, not of a defect, but nothing in the sources says that the owner's decision authorises
+  the deletion. `so-builder` does not modify tests, so the owning stage matters. Spec v6 stubs the FRs and rewords only FR-27.
+- **Impact if unresolved.** Either orphan specs fail the gate, or they are deleted without a recorded authority; and nothing stops
+  the feature returning silently through the master text or `userContent`.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** the TEST_WRITING stage removes exactly the tests of the withdrawn
+  requirements, each deletion traced to a withdrawn FR stub of Spec v6, and adds absence pins (the master contains no `Operator
+  Notes`; `userContent` contains no `[Operator Notes]`; the FR-27 Tier A / Tier B golden stays); no test of a surviving requirement
+  is touched.
+- **blocking: false.**
+
+## OD-25 - NEW (v5) - Scope and lifetime of the 2026-10-19 FROZEN-file instruction
+
+- **Question.** AGENTS.md section 9 requires "modify [filename]" for that file "in the current session". The 2026-10-19 instruction
+  names `src/prompts/task-a.ts` and `src/prompt-core/master-system-prompt.ts`. Does it cover (i) only the removal of the notes
+  hunks (the `buildOperatorNotesBlock` import and call in `task-a.ts`; the two `[SOURCE FIDELITY]` bullets, see OD-21), (ii) the
+  removal plus any other hunk the revised Specification needs in those files, or (iii) all US-9.1 hunks of both files again? And in
+  which session do the edits happen, given the instruction was given before the Specification, plan and tests are re-approved?
+- **Why it cannot be inferred.** Checked: `docs/workflow/history.jsonl`, `ts` 2026-10-19T07:50:00Z: the verbatim words carry no scope
+  or session statement, and the same note says "no code is edited until HUMAN_SPEC_APPROVAL, plan, and tests are re-done"; the
+  earlier instruction of `ts` 2026-10-18T15:24:23Z says "Scope: this session only; US-9.1 hunks only", and the owner re-stated the
+  authorisation at 15:35:15Z and 16:24:34Z, which the orchestrator relied on when it checked the "grant liveness" finding F1 (history
+  event `ts` 2026-10-18T20:19:04Z). Other US-9.1 hunks of the two files are already committed under the earlier grant (`task-a.ts`:
+  87fb3c0, 7c8fae9; `master-system-prompt.ts`: a0e33a5, 3110e94, 18cad1f, ecaa2fd, d5d207a); only 7397081 (`task-a.ts`) and 6db2885
+  (master) are notes commits. The withdrawal does not undo the others.
+- **Impact if unresolved.** The implementation stage may reach the section 9 stop with a hunk the instruction does not clearly cover,
+  or may treat a stale grant as live.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** (i) the 2026-10-19 instruction covers the withdrawal hunks only; the
+  Specification stage lists the exact hunks as the approval-request text; and the owner re-states the instruction in the session
+  that edits, as was done on 2026-10-18.
+- **blocking: false.**
+
+---
+
+## OD-26 - NEW (v6) - What FR-34 / FR-35 say for a waived, unmeasured criterion
+
+- **Question.** Story v6 leaves the AC-11/AC-12 criterion text unchanged and marks it WAIVED. Spec v7 (APPROVED) FR-34 (structural
+  acceptance on 3 products x 2 runs, hard) and FR-35 (hard numbers, soft liveliness, manual fact review) are written as
+  requirements that must be met by a live run. In the revised Specification, do FR-34/FR-35 (a) keep their text and gain a marked
+  WAIVED note citing the owner decision, (b) stay as a non-binding procedure "applicable if the live runs are ever performed", (c)
+  be removed or stubbed (the way the withdrawn FR-24 to FR-31 were stubbed), or (d) something else? And what happens to their
+  sub-parts: the run rules and failure path (OD-11, now MOOT-BY-WAIVER), the coverage note (spec note H: FR-5 alone reaches
+  model-authored figcaptions and `alt`), and the traceability rows of AC-11/AC-12?
+- **Why it cannot be inferred.** Checked: Story v6 "Amendment" (it says only that FR-34, FR-35 and OD-11 "must be revised to the
+  waiver and re-reviewed"; it does not say how); `grep -i waiv` over `docs/workflow/*.md`, `docs/workflow/*.yaml`, `AGENTS.md`,
+  and the `so-reconciliation-reviewer`, `so-spec-writer`, `so-test-writer` skills finds no waiver vocabulary, status or procedure
+  (the only hit, `AGENTS.md` line 515, is the section 10 spec waiver for harness files); the Story precedent for withdrawn text is
+  a stub that keeps the number (AC-9), which is a withdrawal, not a waiver of a criterion whose text is kept "so the intent stays
+  readable".
+- **Impact if unresolved.** The Specification writer would invent the wording; a requirement left reading as "must be measured" next
+  to a Story that waives it makes the Specification contradict the Story, and a removed requirement loses the intent the owner asked
+  to keep. Spec v7's approval does not cover the change (Story v6), so the choice is re-reviewed and re-approved at
+  HUMAN_SPEC_APPROVAL.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** (a), with (b) as the meaning: FR-34 and FR-35 keep their text unchanged,
+  each begins with a marked note "WAIVED for this delivery by the owner, Story v6, history.jsonl `ts` 2026-10-19T14:50:23Z; not
+  measured", the run rules / failure path / coverage note stay as the procedure that applies if the runs are performed, and the
+  traceability matrix marks AC-11/AC-12 "waived, unmeasured" instead of dropping them.
+- **blocking: false.**
+
+## OD-27 - NEW (v6) - What the `ac_test_matrix` rows AC-11 / AC-12 say, and how RECONCILIATION treats a WAIVED row
+
+- **Question.** (a) What do the AC-11 and AC-12 rows of `docs/tests/US-9.1-ac-test-matrix.md` carry in their test-file, state and
+  evidence cells for a criterion that is waived and has no test and no measurement? (b) What does RECONCILIATION do with a WAIVED
+  row: count it as satisfied-by-waiver with a disclosure, report it as a non-blocking finding, or keep the verdict BLOCKED until a
+  different artifact exists? (c) Does the waiver change anything for the other rows (AC-1 to AC-10 are unchanged by Story v6)?
+- **Why it cannot be inferred.** Checked: the matrix v4 (breakdown v5) rows for AC-11 and AC-12 read test file `-`, state "green
+  (committed; guard, stays green; observed in this run)", disposition "built (guard)"; they cite no test and no run, so that state
+  text does not describe a waived, unmeasured criterion and would mislead a reader of the report; `docs/workflow/history.jsonl`
+  records two reconciliation results (`ts` 2026-10-19T12:49:31Z v2 BLOCKED, 14:43:55Z v3 BLOCKED), the second stating that the
+  owner's statement "is neither script evidence nor a recorded waiver" and that an explicit owner waiver, "preferably as Story v6
+  amendment", unblocks; nothing in `artifact-lifecycle.md`, `artifact-paths.yaml` or the reviewer skill defines a WAIVED state or
+  what the reviewer does with one.
+- **Impact if unresolved.** The matrix and the reconciliation report either keep a false "green/built" claim for two rows nobody
+  measured, or the next RECONCILIATION run re-blocks on a point the owner already decided; the Pull Request (OD-32) would then
+  inherit the same ambiguity.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** (a) the AC-11 and AC-12 rows state "WAIVED (owner, Story v6, 2026-10-19;
+  not measured)", test file `-`, and cite the history event instead of any test or run; (b) RECONCILIATION records them as waived
+  and unmeasured, lists them in `non_blocking_findings`, and does not report them as passed or as measured; (c) no other row changes.
+- **blocking: false.**
+
+## OD-28 - NEW (v6) - Are the soft and manual items of AC-12 also waived
+
+- **Question.** The AC-12 waiver note names "the hard script criterion of AC-12 (0 numbers absent from the input)" as waived, then
+  says "the soft and manual items above are likewise not evidenced by any recorded run". Are the soft items (2 of 3 of: «тож» +
+  «Тому» <= 2; mean >= 12 and sigma >= 5.5; the hook names the buyer's task) and the manual operator review (no fact absent from the
+  input) (a) waived with the hard criterion, (b) not waived and still required, with the owner's manual testing standing in as the
+  only, unevidenced, review, or (c) not waived and deferred to a later live run?
+- **Why it cannot be inferred.** Checked: the AC-12 waiver note wording above, Story v6 "Amendment" ("only the acceptance status of
+  AC-11 and AC-12"; "the hard script criteria ... are WAIVED"), and the owner's verbatim words ("Waive the AC-11/AC-12 hard script
+  criteria"), which name only the hard criteria; the Story's phrase "likewise not evidenced" states a fact (no evidence) and does not
+  say whether the absence of evidence is acceptable for these items. By their own text the soft items are "reported, not blocking",
+  so a miss never blocked; the manual item is "reviewed by the operator", which the owner's statement may or may not be.
+- **Impact if unresolved.** RECONCILIATION cannot decide whether the manual fact review (the only check of invented facts that is not
+  a number) is an open gap or accepted; the Specification cannot word the soft and manual parts of FR-35.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** (b) read narrowly as the owner's words: only the hard script criteria of
+  AC-11 and AC-12 are waived; the soft items remain non-blocking and are recorded as "not evidenced", the manual review is recorded
+  as covered by the owner's statement and not as evidence; the owner confirms or widens this in one sentence.
+- **blocking: false.**
+
+## OD-29 - NEW (v6) - What the waiver covers (build, products, manual tests) and whether it lapses
+
+- **Question.** The waiver is "accepted on my manual testing", with the owner's context "product generation testing was carried out.
+  Everything works as it should" (14:42:16Z) and no product list, run count or script output. (a) Against which prompt state was
+  that testing done (the final prompt after the master revert and `task-a.ts` removal hunks, or an earlier state)? (b) Which stores,
+  templates and languages did it cover, and did it include a run with non-marker (model-authored) figures (spec note H: the case
+  that FR-5 alone must cover)? (c) Does the waiver lapse if a prompt-bearing file changes after 2026-10-19T14:50:23Z (for example a
+  further FROZEN edit), or if the owner later performs the live runs and one fails: is the waiver then void, or does a failed run
+  only have to be reported?
+- **Why it cannot be inferred.** Checked: Story v6 "Amendment" ("No `measure-description.ts` output, product list or run count
+  exists"); `docs/workflow/history.jsonl` events of 14:42:16Z and 14:50:23Z (no products, no commit, no time of the testing); the
+  event of `ts` 2026-10-18T16:26:23Z in which the owner said the live runs would use "other products" chosen by the operator; plan
+  risk R5 (evidence captured before the master revert used a different master, 130 more characters). The last implementation commits
+  in the log, `313f727` and the FROZEN rebaselines cited by the verification event of `ts` 2026-10-19T12:41:12Z, precede the waiver,
+  but nothing links the manual testing to a commit.
+- **Impact if unresolved.** The headline outcome (0 picture references, 0 invented numbers) is accepted on the owner's word with no
+  recorded scope; a later prompt change could silently void the basis of the waiver, and RECONCILIATION and the Pull Request cannot
+  say what exactly was accepted.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** the waiver is recorded as covering the delivery as committed at the time of
+  the owner's decision, with no product list demanded and no retro-fitted claim of coverage; any later change to a prompt-bearing file
+  of this Story needs the owner to restate the waiver; a later live run that fails is reported with its output (the OD-11 v4
+  failure-path wording is kept as history) and does not by itself void the waiver; the owner confirms (a) and (b) in one sentence.
+- **blocking: false.**
+
+## OD-30 - NEW (v6) - Does `tools/measure-description.ts` (AC-10) stay unchanged
+
+- **Question.** Story v6 keeps AC-10 in scope and unchanged. The AC-10 text ends "It exits non-zero when a hard threshold is
+  violated (AC-11 hard items, AC-12 numbers)", i.e. it names two criteria that are now waived. Does the script, `src/utils/
+  description-metrics.ts`, and their tests (`description-metrics.spec.ts`, `test/measure-description.cli.spec.ts`) stay exactly as
+  built, including the non-zero exit on a hard violation and the header/doc comments that refer to AC-11/AC-12? And is the script
+  still a delivered operator tool (usable for any later live run) rather than dead code, and does the OD-9 condition (verify Node
+  >= 22.18, else the D12 launcher) still apply to it?
+- **Why it cannot be inferred.** Checked: Story v6 AC-10 text and the sentence "AC-10 (`tools/measure-description.ts`) stays in
+  scope"; `git log` of `tools/measure-description.ts` (990cb32 added it; 291bc1e removed the four `--notes-*` flags; nothing since)
+  and `git diff --stat main -- tools src/utils/description-metrics.ts` (the script and `description-metrics.ts` are on the branch,
+  117 and 262 lines); the matrix rows for AC-10 are green and cite real specs. The Story does not say whether "stays in scope"
+  means "stays unchanged".
+- **Impact if unresolved.** A specification writer might either strip or reword threshold behaviour that tests pin, or leave comments
+  that describe a waived criterion as a live gate; the script's remaining definitions D-3 to D-5, D-7, D-9 (OD-10, still open) have
+  an unresolved purpose if the script is never run for acceptance.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** the script, the metrics module, their tests and the AC-10 criterion text
+  are unchanged by the waiver; the thresholds stay implemented (the criterion text is kept "so the intent stays readable"); the OD-9
+  verification condition and the open OD-10 definitions are carried as recorded.
+- **blocking: false.**
+
+## OD-31 - NEW (v6) - Does the AC-8 translator / optimizer residual still need any live check
+
+- **Question.** AC-8 accepts a declared residual: description-translation prompts (Task C) and the optimizer inherit the new master
+  through `systemBlocks[0]`, a translator that adds, splits or drops a sentence inside a `<p>` is invisible to
+  `validateStructuralParity`, and the optimizer keeps its own "`<b>` lead-in" instruction (plan R1a, R7a; spec note G). Does the
+  waiver of AC-11/AC-12 change what is required of that residual: still no live check required, the optional live translation
+  comparison of Q-TRANS kept optional, or a live check now needed because the only live evidence is the owner's unscripted manual
+  testing?
+- **Why it cannot be inferred.** Checked: spec v7 note G ("the only evidence would be an opt-in live comparison outside the gate (not
+  required by any requirement here)"); the Q-TRANS answer recorded in the plan-level answers of this log ("options (1)+(3);
+  optional live translation comparison for Creality Pika outside the gate"); AC-11/AC-12 never covered a translated language (a
+  uk-UA run, see OD-15), so the waiver removes no check of translation that existed; the owner's statement does not say whether the
+  manual testing included a translated language or the optimizer.
+- **Impact if unresolved.** RECONCILIATION and the Pull Request cannot tell whether "AC-8 residual" is a closed, a declared or an
+  open item once the live criteria are waived.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** unchanged by the waiver: the residual stays declared, the Q-TRANS optional
+  live comparison stays optional and outside the gate, and no new requirement or check is created; the unverified state of
+  translated output is disclosed together with OD-15 and OD-32.
+- **blocking: false.**
+
+## OD-32 - NEW (v6) - Fate of task T51 and the live-run risk entries; how the unmeasured outcome is disclosed downstream
+
+- **Question.** (a) Task T51 of `docs/plans/US-9.1-task-breakdown.md` ("Re-run the live acceptance runs after the master revert
+  (manual, owner-run, outside the gate)", dependent on the human QA operator, H-OD11) and the plan risk R5 exist only for AC-11/AC-12:
+  are they retired, kept as an optional owner action, or left as an unfulfilled task? (b) AGENTS.md section 13 requires the Pull
+  Request to state "how the acceptance criteria were verified": must the PR description, the reconciliation report and the
+  `ac_test_matrix` state explicitly that the headline outcome is unmeasured and accepted on the owner's word? (c) Is the unmeasured
+  status a known limitation recorded anywhere persistent besides these artifacts?
+- **Why it cannot be inferred.** Checked: task breakdown v5 T51 ("Not a precondition for QUALITY_GATE"; "Whether pre-revert evidence
+  still counts is left to RECONCILIATION"); plan risk R5; `AGENTS.md` lines 534-541 (the PR states which phase was closed and how
+  the acceptance criteria were verified); Story v6 ("The delivery ships with the headline outcome unmeasured and accepted on the
+  owner's word"), which states the fact but gives the downstream stages no instruction.
+- **Impact if unresolved.** The plan and breakdown keep a manual task that can never complete, so the pipeline's status reads as
+  unfinished or the task is silently dropped; the PR may describe verification that did not occur.
+- **PROPOSED DEFAULT (a proposal only, not an answer):** (a) T51 and R5 are marked superseded by the owner's waiver, citing Story v6,
+  with no new task; (b) the unmeasured, owner-accepted status is stated verbatim in the reconciliation report, the matrix and the
+  PR "how verified" line, using the Story v6 sentence; (c) no new persistent record.
+- **blocking: false.**
+
+---
+
+## Consistency check of the v6 revision (waiver; OD-26 to OD-32 raised)
+
+- **Story v6 vs this log.** Story v6 changes only the acceptance status of AC-11 and AC-12 and the stale "Touches FROZEN files?"
+  sentence; AC-1 to AC-10, Scope (other rows), Out of scope and the Q entries are untouched. The FROZEN row now matches the
+  approvals recorded in OD-12 (2026-10-18T15:24:23Z for three files, 2026-10-19 for the withdrawal hunks), so the v5 "Story
+  discrepancy" note is closed by the Story; OD-25 (scope and lifetime of the 2026-10-19 instruction) is not touched by it.
+- **Recorded resolutions.** No resolution of any earlier Open Decision was changed or removed. OD-10, OD-11 and OD-14 gained a v6
+  status line marking only their live-run parts MOOT-BY-WAIVER; all v1 to v5 text is intact. OD-6, OD-13, OD-15 are unedited (their
+  live-run relevance is noted in the v6 revision note only).
+- **Source discipline.** Every v6 status change cites the Waiver decision (Story v6 "Amendment" and `history.jsonl` 14:50:23Z). The
+  owner's manual-testing statement (14:42:16Z) is cited as context, not as an answer to any part of OD-10, OD-11 or OD-14, and is
+  not treated as evidence: nothing was measured.
+- **Spec v7 (APPROVED), matrix v4 and reconciliation v3 vs Story v6.** FR-34 and FR-35 are written as hard live-run requirements,
+  the matrix AC-11 / AC-12 rows read green / built (guard) with no test, and reconciliation v3 is BLOCKED on exactly these rows; all
+  are stale against Story v6 (the Story says so). That is the pipeline's consequence, resolved through OD-26, OD-27, not an
+  additional Open Decision. The impact analysis, plan, task breakdown (T51, R5), test strategy and the implementation, gate,
+  verification and security reports are otherwise unaffected in substance: the waiver changes no code and no prompt text.
+- **Checked unchanged this run.** `STORE_REGISTRY` has the same seven keys; `bash arch-guard.sh` read-only: all checks passed; no
+  store, locale or currency was added by the waiver.
+- **Timestamp (non-blocking).** The system clock read 2026-10-19T14:53Z; the last history event is 14:51:35Z; this revision uses
+  14:55:00Z so artifact times stay monotonic.
+
+---
+
+## Consistency check of the v5 revision (withdrawal; no further Open Decision raised)
+
+- **Story v5 vs this log.** Story v5 AC-9 is a withdrawal stub, the Scope Surface row excludes the Generator input form,
+  `ProductInput`, `numericFidelitySources` and the `STRICT INPUT SCOPE` text, Out of scope bars any new Generator input field, and
+  Resolved decisions Q1 is "withdrawn with the fields". All of this agrees with marking OD-1, OD-2, OD-16, OD-17, OD-19 and OD-20
+  (1)(2) moot. OD-1 was not on the caller's list; it is marked because Story v5 itself says Q1 was withdrawn with the fields and
+  OD-1 is the question behind Q1.
+- **Story v5 discrepancy (reported, not corrected; the Story is not edited by this stage).** The Scope row "Touches FROZEN files?"
+  still says "No per-file approval has been given; the Story defers the explicit approval to the plan gate". The history records
+  by-name approvals on 2026-10-18T15:24:23Z (three files) and 2026-10-19T07:50:00Z (two files). The statement is stale; it does not
+  change any requirement.
+- **Spec v6 draft vs this log.** Spec v6 (DRAFT) marks OD-2, OD-16, OD-17, OD-19, OD-20 (1)(2) moot and OD-12 given for two files;
+  this agrees. Its sentence that the master "returns to its pre-US-9.1 text" is the proposal recorded as OD-21's default.
+- **Stale downstream artifacts.** Everything produced against Story v4 / Spec v5 (impact analysis, plan, task breakdown, test
+  artifacts, implementation / gate / verification / security / reconciliation reports) is stale against Story v5. Not an Open
+  Decision; the orchestrator re-runs those stages. The security review findings N-1 to N-3 concerned the withdrawn notes.
+- **Timestamp (non-blocking).** The system clock read 2026-10-19T07:28Z at this run, earlier than the last history event
+  (08:05:00Z); this revision uses 08:10:00Z so artifact times stay monotonic.
 
 ---
 
