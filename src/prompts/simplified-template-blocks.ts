@@ -123,9 +123,11 @@ const DOC_MEDIA_AND_PROSE_RULES = `HARD RULES:
   shape lists, and every figure block immediately after a paragraph block that introduces it.
 - WHEN THERE IS NO VIDEO CONTENT (no [VIDEO MANIFEST] section below), you MUST still emit
   "videos": [] — an empty array. Do NOT omit the "videos" key and do NOT write "videos": null.
+- A video's "caption" is ALWAYS "" — leave it as an empty string for every entry in "videos". The
+  renderer writes the localized caption itself; you have no source material for one, so never invent it.
 - PROSE FIELDS ADMIT <b> and <strong> AND NOTHING ELSE. No <p>, <ul>, <a>, <em>, no entities, no
   Markdown. Reserve <strong> for brands / main model / core USPs; use <b> for inline scannability.
-  The prose fields are exactly: "hook", "why", every Block "text", "items[].text", every "caption".
+  The prose fields are exactly: "hook", "why", every Block "text", "items[].text", every figure "caption".
 - PLAIN-TEXT FIELDS ADMIT NO TAGS AT ALL — not even <b>, and no Markdown "**".
   They are: every "heading", "title", "label", "value", "scenario", "alt", "lead", "localizedName".
   Writing "<b>Транспортування:</b>" into a "lead" does NOT produce bold text — the renderer already

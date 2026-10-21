@@ -269,3 +269,14 @@ describe('TASK_A_DOC_INSTRUCTION — localizedName states the protected-name rul
     );
   });
 });
+
+describe('TASK_A_DOC_INSTRUCTION — the video caption is renderer-owned', () => {
+  it('tells the model to leave every video caption empty', () => {
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/video's "caption" is ALWAYS ""/);
+  });
+
+  it('does not list video captions among the prose fields the model must write', () => {
+    expect(TASK_A_DOC_INSTRUCTION).toMatch(/every figure "caption"/);
+    expect(TASK_A_DOC_INSTRUCTION).not.toMatch(/items\[\]\.text", every "caption"/);
+  });
+});

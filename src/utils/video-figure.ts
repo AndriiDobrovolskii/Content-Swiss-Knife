@@ -28,45 +28,14 @@ const FIGURE_STYLE = 'width: 100%; max-width: 1140px; margin: 0 auto 20px; aspec
 const FIGCAPTION_STYLE = 'text-align: center; font-size: 14px; color: #666; margin-top: 10px;';
 
 /**
- * Figcaption template per language, keyed by the BCP47 PRIMARY SUBTAG.
- *
- * This caption used to be hardcoded English and was emitted into the uk-UA master, which two
- * places in the repo already recorded as a defect: description-doc.ts notes that real artifacts
- * carry the target-language form ("Відеоогляд …"), and test/render-reconciliation.report.md logs
- * the same divergence between the renderer and this file.
- *
- * Keyed on the primary subtag, not the full locale, so en-GB/en-US/en-ES and es-ES/es-MX each
- * resolve without enumerating every region. An unmapped language falls back to English — the
- * previous behaviour exactly, so no locale can regress into a missing caption.
- *
- * Every form places the product name last and uninflected: product names are Latin brand strings
- * that stay nominative, which keeps the templates grammatical without case handling.
- */
-const FIGCAPTION_TEMPLATES: Readonly<Record<string, (product: string) => string>> = {
-  en: p => `Video review of ${p}`,
-  uk: p => `Відеоогляд ${p}`,
-  ru: p => `Видеообзор ${p}`,
-  pl: p => `Recenzja wideo ${p}`,
-  de: p => `Video-Review zu ${p}`,
-  es: p => `Vídeo-reseña de ${p}`,
-  pt: p => `Análise em vídeo de ${p}`,
-};
-
-/** The figcaption text for one product in one locale. Exported for the spec. */
-export function videoFigcaption(productName: string, locale?: string): string {
-  const lang = (locale ?? '').toLowerCase().split('-')[0];
-  return (FIGCAPTION_TEMPLATES[lang] ?? FIGCAPTION_TEMPLATES['en'])(productName);
-}
-
-/**
  * Re-exported so existing callers and tests keep their import path.
  *
- * The map itself moved to video-title.ts because render-description.ts needs it and this module
+ * The maps themselves moved to video-title.ts because render-description.ts needs them and this module
  * calls `new DOMParser()` — importing it from the renderer would break that module's zero-DOM
  * guarantee for the sake of a lookup table. See video-title.ts.
  */
-export { videoFallbackTitle } from './video-title';
-import { videoFallbackTitle } from './video-title';
+export { videoFallbackTitle, videoFigcaption } from './video-title';
+import { videoFallbackTitle, videoFigcaption } from './video-title';
 
 /**
  * Is this iframe a YouTube/Vimeo video embed (as opposed to a map or a widget)?

@@ -876,3 +876,49 @@ describe('renderVideo — the iframe title can never be empty', () => {
     expect(code).not.toMatch(/DOMParser|XMLSerializer|\bdocument\./);
   });
 });
+
+/**
+ * VIDEO FIGCAPTION FALLBACK — the Doc path used to ask the model for a caption it had no material
+ * for; the HTML path wrote it from videoFigcaption(). The renderer now owns the empty case.
+ */
+describe('renderVideo — the figcaption can never be empty', () => {
+  function docWithCaption(caption: string): ProductDescriptionDoc {
+    const d = docWithVideo();
+    d.videos[0].caption = caption;
+    return d;
+  }
+  const figcaptionOf = (html: string, marker = 'youtube') =>
+    new RegExp(`<iframe[^>]*${marker}[^>]*></iframe><figcaption[^>]*>([^<]*)</figcaption>`).exec(html)?.[1];
+
+  it('uses the model-authored caption when there is one', () => {
+    expect(render(docWithCaption('Власний підпис'))).toContain('>Власний підпис</figcaption>');
+  });
+
+  it('falls back to the localized template for an empty caption', () => {
+    const html = render(docWithCaption(''));
+    expect(html).not.toMatch(/<figcaption[^>]*><\/figcaption>/);
+    expect(html).toContain('>Відеоогляд xTool M1 Ultra</figcaption>');
+  });
+
+  it('falls back for a whitespace-only caption too', () => {
+    expect(render(docWithCaption('   '))).toContain('>Відеоогляд xTool M1 Ultra</figcaption>');
+  });
+
+  it('picks the template language from the document locale, English for an unmapped one', () => {
+    const pl = docWithCaption('');
+    pl.locale = 'pl-PL';
+    expect(render(pl)).toContain('>Recenzja wideo xTool M1 Ultra</figcaption>');
+
+    const ja = docWithCaption('');
+    ja.locale = 'ja-JP';
+    expect(render(ja)).toContain('>Video review of xTool M1 Ultra</figcaption>');
+  });
+
+  it('keeps the figcaption distinct from the iframe title (assistive tech reads both)', () => {
+    const d = docWithCaption('');
+    d.videos[0].title = '';
+    const html = render(d);
+    expect(html).toContain('title="Відео: xTool M1 Ultra"');
+    expect(figcaptionOf(html, 'embed')).toBe('Відеоогляд xTool M1 Ultra');
+  });
+});

@@ -29,7 +29,7 @@ import { getRenderRules } from '../prompt-core/store-render-rules';
 import { ensureRel0 } from '../utils/video-url';
 // From video-title.ts, NOT video-figure.ts: that module calls new DOMParser(), and this one
 // must stay DOM-free so the BFF can share it. See this file's header.
-import { videoFallbackTitle } from '../utils/video-title';
+import { videoFallbackTitle, videoFigcaption } from '../utils/video-title';
 
 export interface RenderContext {
   /** From STORE_REGISTRY.imageBaseUrl. */
@@ -159,15 +159,20 @@ export function renderFigure(f: Figure, position: number, ctx: RenderContext): s
  * an iframe is an accessibility regression NO validator rule catches, so the renderer makes one
  * impossible by construction. restoreMissingVideos — which repairs a dropped embed with no model
  * involved — is the other caller that keeps the fallback alive once wrapVideoFigures is deleted.
+ *
+ * CAPTION — the same pattern. The model has no material for a video caption, so an empty or
+ * whitespace-only one is filled with the localized template ("Відеоогляд {product}"), as the HTML
+ * path's videoFigcaption() did. A caption the model did write is rendered as written.
  */
 function renderVideo(v: VideoEmbed, doc: ProductDescriptionDoc): string {
   const title = v.title.trim() || videoFallbackTitle(doc.localizedName, doc.locale);
+  const caption = v.caption.trim() || videoFigcaption(doc.localizedName, doc.locale);
   return (
     `<figure style="${VIDEO_FIGURE_STYLE}">` +
     `<iframe src="${esc(ensureRel0(v.src))}" style="${IFRAME_STYLE}" title="${esc(title)}"` +
     ` loading="lazy" allow="${VIDEO_ALLOW_VALUE}"` +
     ` referrerpolicy="${VIDEO_REFERRERPOLICY_VALUE}" allowfullscreen=""></iframe>` +
-    `<figcaption style="${VIDEO_FIGCAPTION_STYLE}">${prose(v.caption)}</figcaption>` +
+    `<figcaption style="${VIDEO_FIGCAPTION_STYLE}">${prose(caption)}</figcaption>` +
     `</figure>`
   );
 }
