@@ -22,6 +22,10 @@
  *   (3) T17 (FR-10): block 1 of the 3 doc/* cases only - the FIGURE PLACEMENT paragraph of
  *       TASK_A_DOC_INSTRUCTION asks for a body paragraph that states a product fact and does not refer to
  *       the picture. No other case, block or userContent moves.
+ *
+ * Video-caption regeneration (reviewed diff, never `-u`): block 1 of the 3 doc/* cases only - the Doc
+ * prompt tells the model to leave every video "caption" empty (the renderer writes it) and lists only
+ * figure captions among the prose fields. No other case, block or userContent moves.
  */
 import type { ProductInput } from '../../src/app/types';
 import type { HookPattern } from '../../src/prompt-core/hook-pattern';

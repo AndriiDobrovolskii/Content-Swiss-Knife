@@ -111,9 +111,9 @@ export interface VideoEmbed {
   title: string;
   /**
    * Localized caption. Real artifacts carry the target-language form ("Відеоогляд …").
-   * video-figure.ts now localizes its template too (FIGCAPTION_TEMPLATES), so the two no longer
-   * disagree about language — this stays `Prose` because a model-authored caption can describe
-   * what the video actually shows, which a per-language template cannot.
+   * `''` means "renderer, fill it": the model has no material for a video caption, so the prompt
+   * tells it to leave this empty and renderVideo writes the localized template (videoFigcaption in
+   * video-title.ts). A non-empty value is still rendered as written, and still has to be valid `Prose`.
    */
   caption: Prose;
 }

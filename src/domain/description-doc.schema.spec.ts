@@ -245,3 +245,38 @@ describe('videos tolerates a missing or null manifest', () => {
     expect(ProductDescriptionDocSchema.parse(doc).videos).toEqual([]);
   });
 });
+
+/**
+ * The video figcaption is renderer-owned (render-description.ts falls back to the localized
+ * template), so a model that leaves `caption` empty must NOT cost a repair attempt. Observed: every
+ * attempt returned `"caption": ""`, the repair budget ran out, and the whole uk-UA generation threw.
+ */
+describe('videos[].caption is optional', () => {
+  const withVideo = (caption: unknown): ProductDescriptionDoc => {
+    const doc = validDoc();
+    doc.videos = [{ src: 'https://www.youtube.com/embed/abc', title: 'T', caption }] as ProductDescriptionDoc['videos'];
+    doc.functionality![0].blocks.push({ kind: 'video', ref: 0 });
+    return doc;
+  };
+
+  it('accepts an empty caption and keeps it as ""', () => {
+    const doc = withVideo('');
+    expect(errorsFor(doc)).toEqual([]);
+    expect(ProductDescriptionDocSchema.parse(doc).videos[0].caption).toBe('');
+  });
+
+  it('accepts an omitted caption and normalises it to ""', () => {
+    const doc = withVideo(undefined);
+    delete (doc.videos[0] as { caption?: unknown }).caption;
+    expect(errorsFor(doc)).toEqual([]);
+    expect(ProductDescriptionDocSchema.parse(doc).videos[0].caption).toBe('');
+  });
+
+  it('still accepts a non-empty caption unchanged', () => {
+    expect(ProductDescriptionDocSchema.parse(withVideo('Огляд <b>X</b>')).videos[0].caption).toBe('Огляд <b>X</b>');
+  });
+
+  it('still rejects a non-empty caption carrying a forbidden tag', () => {
+    expect(errorsFor(withVideo('Огляд <em>X</em>')).join('\n')).toMatch(/only <b> and <strong>/i);
+  });
+});

@@ -233,7 +233,16 @@ export const ProductDescriptionDocSchema = z.object({
   // NOT `.default([])`: zod v3's `.default()` only substitutes for `undefined`, not an explicit
   // `null` — a model that writes "videos": null would still fail `doc.videos.length` in the
   // superRefine below. The transform normalizes both nullish values to [] uniformly.
-  videos: z.array(z.object({ src: NonEmpty, title: NonEmpty, caption: Prose }))
+  //
+  // `caption` is renderer-owned: the model has no material for it (the manifest carries only src and
+  // a source-language title), and every attempt that left it "" used to exhaust the repair budget
+  // and abort the generation. An empty one is now accepted and normalised to ''; renderVideo fills
+  // the localized template, exactly as the HTML path's videoFigcaption() did.
+  videos: z.array(z.object({
+    src: NonEmpty,
+    title: NonEmpty,
+    caption: z.union([Prose, z.literal('')]).nullish().transform(c => c ?? ''),
+  }))
     .nullish()
     .transform(v => v ?? []),
 })
