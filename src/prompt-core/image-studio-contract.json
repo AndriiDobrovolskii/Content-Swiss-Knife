@@ -1,0 +1,18 @@
+{
+  "errorCodes": {
+    "CONTENT_LENGTH_REQUIRED": 411,
+    "REQUEST_BODY_TOO_LARGE": 413,
+    "PROTECTED_HISTORY_EXCEEDS_LIMIT": 413,
+    "FILE_MISSING": 410,
+    "RATE_LIMIT_EXCEEDED": 429,
+    "GEMINI_KEY_MISSING": 501,
+    "UNSUPPORTED_IMAGE_TYPE": 415,
+    "INVALID_REQUEST": 400,
+    "EMPTY_RESPONSE": 502,
+    "PRICE_NOT_CONFIGURED": 500,
+    "UPSTREAM_RETRIES_EXHAUSTED": null
+  },
+  "aspectRatios": ["1:1", "4:3", "3:4", "4:5", "16:9", "9:16"],
+  "resolutions": ["1K", "2K", "4K"],
+  "responseKinds": ["images", "text", "safety"]
+}
