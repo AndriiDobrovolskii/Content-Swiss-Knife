@@ -1,5 +1,3 @@
-import express from 'express';
-import cors from 'cors';
 import { config } from 'dotenv';
 import { resolveRequest as resolveLlmRequest, slotFor } from './llm-request.js';
 import { SerperRetrieval } from './retrieval/serper.js';
@@ -10,7 +8,8 @@ import { describeError } from './utils/describe-error.js';
 import { formatCallStart, formatCallDone, formatCallError } from './utils/call-log.js';
 import { formatBuild, readBuild } from './utils/build-info.js';
 import { warmProviders } from './providers/factory.js';
-import { resolveAllowedOrigins, corsOriginPolicy } from './cors-policy.js';
+import { resolveAllowedOrigins } from './cors-policy.js';
+import { createApp } from './app.js';
 
 config();
 
@@ -27,13 +26,11 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-const app = express();
+// CORS, the image body limit and the 50 MB parsers are composed in ./app.js (their order is the
+// contract); the routes below are registered on the returned app, after those parsers, as before.
+const app = createApp({ allowedOrigins: resolveAllowedOrigins(process.env.ALLOWED_ORIGINS) });
 const PORT = process.env.PORT || 3001;
 const LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
-
-app.use(cors({ origin: corsOriginPolicy(resolveAllowedOrigins(process.env.ALLOWED_ORIGINS)) }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const serper = new SerperRetrieval(process.env.SERPER_API_KEY);
 
