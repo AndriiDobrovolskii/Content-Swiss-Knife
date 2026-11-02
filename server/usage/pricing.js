@@ -1,3 +1,5 @@
+import { findImageModel } from '../providers/model-support.js';
+
 // $ per 1M tokens, per Claude model. Update here when Anthropic changes prices —
 // past usage_log rows keep the cost computed at insert time, so this only affects new rows.
 const DEFAULT_PRICES = {
@@ -65,7 +67,47 @@ function getPrices(model, now = new Date()) {
   return FALLBACK_PRICE;
 }
 
+// --- Image Studio (US-10.1, FR-70, DD-12) ---------------------------------------------------------
+// Image models are billed per returned NON-thought image, not per token, so their prices live in a
+// table of their own, keyed by the EXACT catalogue model id. They are deliberately absent from
+// DEFAULT_PRICES: the image path never calls getPrices(), so it can never reach the substring loop
+// or FALLBACK_PRICE (which would silently bill an image at a text-token rate).
+//
+// $ per generated image. Source: V-5 of docs/evidence/US-10.1-pre-implementation-checks.md
+// (Gemini Developer API image tier pricing, recorded 2026-11-01). Update here and in the catalogue
+// together; test/image-studio/image-model-consistency.spec.ts fails until the two agree.
+const IMAGE_PRICES = {
+  'gemini-3.1-flash-image': 0.03,
+  'gemini-3.1-pro-image-preview': 0.06,
+};
+
+// Thrown when an image model has no per-image price. The generate handler maps it to a 500
+// PRICE_NOT_CONFIGURED before any usage row is written (FR-26 precedence, FR-70).
+class PriceNotConfiguredError extends Error {
+  constructor(modelId) {
+    super(`No per-image price configured for model "${modelId}"`);
+    this.name = 'PriceNotConfiguredError';
+    this.modelId = modelId;
+  }
+}
+
+// Exact key only: a near-miss or unknown id throws instead of matching by substring.
+function getImagePrice(modelId) {
+  if (typeof modelId === 'string' && Object.hasOwn(IMAGE_PRICES, modelId)) return IMAGE_PRICES[modelId];
+  throw new PriceNotConfiguredError(modelId);
+}
+
+// `nonThoughtImageCount` is the classifier's imageCount (thought images are already excluded, FR-84).
+function computeImageCost(modelId, nonThoughtImageCount) {
+  const unit = getImagePrice(modelId);
+  return unit * nonThoughtImageCount;
+}
+
 function computeCost(model, usage) {
+  // An image model is never priced by tokens; the catalogue `modalities` is the only list of them.
+  if (findImageModel(model)) {
+    throw new Error(`computeCost cannot price image model "${model}"; use computeImageCost`);
+  }
   const p = getPrices(model);
   const M = 1_000_000;
   const inTok = usage.inputTokens || 0;
@@ -75,4 +117,4 @@ function computeCost(model, usage) {
   return (inTok * p.in + outTok * p.out + cwTok * p.cw + crTok * p.cr) / M;
 }
 
-export { DEFAULT_PRICES, getPrices, computeCost };
+export { DEFAULT_PRICES, getPrices, computeCost, IMAGE_PRICES, getImagePrice, computeImageCost, PriceNotConfiguredError };
