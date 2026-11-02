@@ -22,7 +22,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/angular';
 import { ImageStudioComponent } from './image-studio.component';
 import {
-  renderStudio, byName, t, LABELS, MODEL_LABEL, textOf, png, fileOf, imagesBody, expectGenerate, flushGenerate, collectUploads,
+  renderStudio, observeMutations, byName, t, LABELS, MODEL_LABEL, textOf, png, fileOf, imagesBody, expectGenerate, flushGenerate, collectUploads,
   GENERATE_URL, type Harness, type Lang,
 } from '../../../../test/image-studio/helpers/studio-render';
 import { makeSession, toBase64, makeRaster, decodeRaster } from '../../../../test/image-studio/helpers/fakes';
@@ -38,11 +38,10 @@ function watchStatus() {
   const el = screen.getByRole('status');
   const seen: string[] = [];
   let last = textOf(el);
-  const mo = new MutationObserver(() => {
+  const mo = observeMutations(el, () => {
     const cur = textOf(el);
     if (cur !== last) { seen.push(cur); last = cur; }
-  });
-  mo.observe(el, { childList: true, characterData: true, subtree: true });
+  }, { childList: true, characterData: true, subtree: true });
   return { announcements: () => seen.filter((s) => s !== ''), now: () => textOf(el), stop: () => mo.disconnect() };
 }
 

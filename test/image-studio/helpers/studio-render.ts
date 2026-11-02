@@ -22,7 +22,7 @@
 import { vi, expect } from 'vitest';
 import { render, screen } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, DeferBlockBehavior } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController, TestRequest } from '@angular/common/http/testing';
 import type { Type } from '@angular/core';
@@ -60,6 +60,13 @@ export interface RenderOptions {
   inputs?: Record<string, unknown>;
   /** For hosts that have no `lang` input (AppComponent): do not pass one. */
   noLangInput?: boolean;
+  /**
+   * testing-library's `render()` defaults to `DeferBlockBehavior.Manual`, under which a template `@defer` block never leaves its
+   * initial state. A host that mounts the studio through the production `@defer (on immediate)` (AppComponent, plan P-7 / DD-25)
+   * must pass `DeferBlockBehavior.Playthrough` so the lazy branch loads as it does in the browser. Left undefined for the
+   * studio components themselves (they have no `@defer`), so their renders are unchanged.
+   */
+  deferBlockBehavior?: DeferBlockBehavior;
 }
 
 export async function renderStudio<T>(component: Type<T>, opts: RenderOptions = {}) {
@@ -77,6 +84,7 @@ export async function renderStudio<T>(component: Type<T>, opts: RenderOptions = 
   for (const s of opts.sessions ?? []) sessionStore.seed(s, opts.sentBytes?.[s.meta.id]);
 
   const view = await render(component, {
+    ...(opts.deferBlockBehavior === undefined ? {} : { deferBlockBehavior: opts.deferBlockBehavior }),
     inputs: { ...(opts.noLangInput ? {} : { lang }), ...(opts.inputs ?? {}) } as never,
     providers: [
       provideHttpClient(), provideHttpClientTesting(),
@@ -124,6 +132,23 @@ export async function renderStudio<T>(component: Type<T>, opts: RenderOptions = 
   };
 
   return { view, store, http, user, clock, scheduler, ids, alerts, confirmPort, clipboard, save, codec, sessionStore, setLang, settle, lang };
+}
+
+/**
+ * A MutationObserver that keeps reporting. happy-dom 20.x registers the observer's internal report callback only through a
+ * `WeakRef` (MutationObserverListener constructor), and nothing else holds that arrow function, so after ANY garbage
+ * collection the observer silently stops delivering records (proven with `node --expose-gc`: a write made after `gc()` is
+ * never reported). A test that counts mutations is therefore GC-timing dependent. This helper calls `observe()` with the
+ * global `WeakRef` temporarily replaced by a strong holder, which pins the callback for the life of the observer;
+ * `disconnect()` behaves as usual.
+ */
+export function observeMutations(target: Node, callback: MutationCallback, init: MutationObserverInit): MutationObserver {
+  const mo = new MutationObserver(callback);
+  const RealWeakRef = globalThis.WeakRef;
+  class StrongRef<V extends object> { constructor(private readonly v: V) {} deref() { return this.v; } }
+  (globalThis as unknown as { WeakRef: unknown }).WeakRef = StrongRef;
+  try { mo.observe(target, init); } finally { (globalThis as unknown as { WeakRef: unknown }).WeakRef = RealWeakRef; }
+  return mo;
 }
 
 export type Harness = Awaited<ReturnType<typeof renderStudio>>;
