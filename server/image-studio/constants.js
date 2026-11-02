@@ -50,3 +50,11 @@ export const IMAGE_TOKEN_ESTIMATE = Object.freeze({
   source:
     'Human-supplied estimate recorded in V-7 (about 258 tokens per image part); unverified against live countTokens in this repository.',
 });
+
+/**
+ * FR-17, V-2: the upstream HTTP statuses that can mean "the uploaded file's URI expired or is gone". Only the
+ * 404 class is recorded (an expired `file_uri` answers 404 with a body naming `files/...`). The recogniser
+ * (file-missing.js) combines this with the request and message conditions; a status outside the set is never
+ * a missing file, and an unrelated 404 (a model that is not found) is told apart by the message.
+ */
+export const FILE_MISSING_STATUSES = Object.freeze([404]);
