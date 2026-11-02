@@ -25,8 +25,23 @@ const ORIGIN = 'https://shop.example';
 const HOUR = 3_600_000;
 
 let server: http.Server | null = null;
+/**
+ * One shared keep-alive agent for every request of a test (created in boot(), destroyed in afterEach).
+ * WHY NOT `agent: false`: on Node v24.15.0 / Windows, opening many short-lived loopback connections (this file used to open
+ * about 280 `agent: false` ones) kills the vitest fork worker with exit code 0xC0000409 at a per-connection probability
+ * (about 5-10% of runs: "Worker exited unexpectedly"). It reproduces with a bare http server and no repository code; with a
+ * keep-alive agent it did not. This is a Node runtime fault, not a defect of createApp or of these tests: the shared agent only
+ * lowers the connection count, it does not change what any test asserts (the limiter keys on the client IP, all loopback).
+ * Do not revert to `agent: false` without re-running this file in parallel (see docs/tests/US-10.1-test-generation-report.md v8).
+ */
+let agent: http.Agent | null = null;
 afterEach(async () => {
-  if (server) await new Promise<void>((r) => server!.close(() => r()));
+  agent?.destroy(); // drop pooled sockets first so server.close() cannot wait on an idle keep-alive connection
+  agent = null;
+  if (server) {
+    server.closeAllConnections();
+    await new Promise<void>((r) => server!.close(() => r()));
+  }
   server = null;
 });
 
@@ -46,6 +61,7 @@ async function boot() {
     log: () => undefined,
   });
   server = http.createServer(app);
+  agent = new http.Agent({ keepAlive: true });
   await new Promise<void>((r) => server!.listen(0, '127.0.0.1', () => r()));
   return { port: (server!.address() as AddressInfo).port, clock, gemini, insertUsage };
 }
@@ -57,7 +73,7 @@ function post(port: number, path: string, payload: unknown, opts: { xff?: string
     const headers: Record<string, string | number> = { Origin: ORIGIN, 'Content-Type': 'application/json' };
     headers['Content-Length'] = opts.declareLength ?? Buffer.byteLength(text);
     if (opts.xff) headers['X-Forwarded-For'] = opts.xff;
-    const req = http.request({ host: '127.0.0.1', port, method: 'POST', path, headers, agent: false }, (res) => {
+    const req = http.request({ host: '127.0.0.1', port, method: 'POST', path, headers, agent: agent! }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => {

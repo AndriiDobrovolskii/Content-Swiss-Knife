@@ -28,8 +28,23 @@ const ORIGIN = 'https://shop.example';
 const MB = 1024 * 1024;
 
 let server: http.Server | null = null;
+/**
+ * One shared keep-alive agent for every request of a test (created in boot(), destroyed in afterEach).
+ * WHY NOT `agent: false`: on Node v24.15.0 / Windows, many short-lived loopback connections kill the vitest fork worker
+ * with exit code 0xC0000409 at a per-connection probability ("Worker exited unexpectedly"). It reproduces with a bare http
+ * server and no repository code; with a keep-alive agent it did not. It is a Node runtime fault, not a defect of createApp or
+ * of these tests; the shared agent only lowers the connection count and changes no assertion. The header-only provocation
+ * (`declareLength`) still ends with `req.destroy()`, which destroys that socket, so a rejected request never poisons the pool.
+ * Do not revert to `agent: false` without re-running this file in parallel (see docs/tests/US-10.1-test-generation-report.md v8).
+ */
+let agent: http.Agent | null = null;
 afterEach(async () => {
-  if (server) await new Promise<void>((r) => server!.close(() => r()));
+  agent?.destroy(); // drop pooled sockets first so server.close() cannot wait on an idle keep-alive connection
+  agent = null;
+  if (server) {
+    server.closeAllConnections();
+    await new Promise<void>((r) => server!.close(() => r()));
+  }
   server = null;
 });
 
@@ -48,6 +63,7 @@ async function boot(extra: Record<string, unknown> = {}) {
     ...extra,
   });
   server = http.createServer(app);
+  agent = new http.Agent({ keepAlive: true });
   await new Promise<void>((r) => server!.listen(0, '127.0.0.1', () => r()));
   return { app, port: (server!.address() as AddressInfo).port };
 }
@@ -66,7 +82,7 @@ function call(
     if (body !== undefined || declareLength !== undefined) headers['Content-Type'] = 'application/json';
     if (declareLength !== undefined) headers['Content-Length'] = declareLength;
     else if (body !== undefined && !chunked) headers['Content-Length'] = Buffer.byteLength(body);
-    const req = http.request({ host: '127.0.0.1', port, method, path, headers, agent: false }, (res) => {
+    const req = http.request({ host: '127.0.0.1', port, method, path, headers, agent: agent! }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
