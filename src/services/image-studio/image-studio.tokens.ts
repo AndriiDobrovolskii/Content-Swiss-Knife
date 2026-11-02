@@ -6,12 +6,14 @@ import {
   createBrowserAlertPort, createBrowserClipboardPort, createBrowserClock, createBrowserConfirmPort,
   createBrowserIdSource, createBrowserSavePort, createBrowserScheduler,
 } from './browser-ports';
+import { createBrowserImageCodec } from './browser-image-codec';
+import { IndexedDbSessionStore } from './indexeddb-session-store';
 
 /**
  * Injection tokens for the Image Studio ports (US-10.1 DD-15, NFR-14). The ports whose real adapter is a one-line
  * browser delegation carry a root factory default, so the production app needs no provider list; tests provide
- * in-memory fakes through the same tokens. The session store and the image codec have no default here: their
- * adapters are bound where the root store is defined.
+ * in-memory fakes through the same tokens. The IndexedDB session store and the canvas codec are bound the same way;
+ * both adapters touch their browser API only inside their methods, so creating them at injection time is safe.
  *
  * The UI language is not a token: it is the `lang` input of the studio components, handed to the store.
  */
@@ -50,8 +52,14 @@ export const SAVE_PORT = new InjectionToken<SavePort>('IMAGE_STUDIO_SAVE', {
   factory: () => createBrowserSavePort(),
 });
 
-/** The persistence port. No default here; the IndexedDB adapter is bound with the root store. */
-export const SESSION_STORE_PORT = new InjectionToken<SessionStorePort>('IMAGE_STUDIO_SESSION_STORE');
+/** The persistence port: the IndexedDB adapter. */
+export const SESSION_STORE_PORT = new InjectionToken<SessionStorePort>('IMAGE_STUDIO_SESSION_STORE', {
+  providedIn: 'root',
+  factory: () => new IndexedDbSessionStore(),
+});
 
-/** The image codec port. No default here; the canvas codec is bound with the root store. */
-export const IMAGE_CODEC_PORT = new InjectionToken<ImageCodec>('IMAGE_STUDIO_IMAGE_CODEC');
+/** The image codec port: the canvas codec. */
+export const IMAGE_CODEC_PORT = new InjectionToken<ImageCodec>('IMAGE_STUDIO_IMAGE_CODEC', {
+  providedIn: 'root',
+  factory: () => createBrowserImageCodec(),
+});
