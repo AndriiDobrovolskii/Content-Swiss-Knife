@@ -7,8 +7,8 @@ current_stage: PR_CREATION
 status: IN_PROGRESS
 pending_human_gate: null
 started_at: 2026-11-01T08:09:46Z
-updated_at: 2026-11-02T23:00:00Z
+updated_at: 2026-11-02T23:55:00Z
 stage_attempts: {}
 track: angular
 blockers: []
-note: "PR_PREPARATION PASS: pr_summary v1 DRAFT drafted (docs/pr/US-10.1-pr-summary.md). PR_CREATION is NOT run: it pushes the branch and opens a real Pull Request and needs a separate explicit human instruction (AGENTS.md 10). BLOCKING PRE-CONDITION flagged by the preparer: three guard specs (test/security.spec.ts = the only proof of AC-41, test/image-studio-architecture.spec.ts, src/app/components/dashboard/dashboard.component.spec.ts) and every US-10.1 document are untracked, so a PR from the branch as committed would not contain them. .tmp.driveupload/ must not be committed. Local main is stale (1b444e2, 194 behind origin/main 7118f7a); the branch is 50 commits ahead of origin/main."
+note: "pr_summary v2 (DRAFT) refreshed for HEAD b5185c0 (guard specs 8f7f17e and Story documents b5185c0 are now committed). PR_CREATION runs on the human's explicit instruction 'створи PR для US-10.1' (after the human chose: commit first, then PR). .tmp.driveupload/ stays out."
