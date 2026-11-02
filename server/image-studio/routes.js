@@ -8,7 +8,10 @@
  * `gemini` whatever LLM_PROVIDER says (FR-6). Rule 2: no retrieval.
  */
 import { resolveProvider } from '../providers/factory.js';
-import { createUploadHandler } from './handlers.js';
+import { computeImageCost } from '../usage/pricing.js';
+import { RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS } from './constants.js';
+import { createGenerateHandler, createUploadHandler } from './handlers.js';
+import { createRateLimiter } from './rate-limiter.js';
 
 /** A wait that ends early, with an AbortError, when `signal` aborts (the retry loop's backoff, FR-21). */
 export function abortableSleep(ms, signal) {
@@ -29,6 +32,17 @@ export function abortableSleep(ms, signal) {
   });
 }
 
+/**
+ * The default usage writer. `usage/store.js` opens the SQLite file when it is imported, so it is loaded on
+ * the first write rather than when this module is imported: importing `server/app.js` (and so this
+ * module) must stay free of side effects. The handler awaits the result, so a failed write is still caught
+ * and logged there (FR-69).
+ */
+async function insertUsageLazily(row) {
+  const { insertUsage } = await import('../usage/store.js');
+  insertUsage(row);
+}
+
 /** The production dependencies of the handlers. */
 function defaultDeps() {
   return {
@@ -36,6 +50,8 @@ function defaultDeps() {
     hasGeminiKey: () => Boolean(process.env.GEMINI_API_KEY),
     now: () => Date.now(),
     sleep: abortableSleep,
+    insertUsage: insertUsageLazily,
+    price: computeImageCost,
     log: (...args) => console.log(...args),
   };
 }
@@ -46,5 +62,8 @@ function defaultDeps() {
  */
 export function mountImageStudioRoutes(app, overrides = {}) {
   const deps = { ...defaultDeps(), ...overrides };
+  // One limiter per mounted app: the counters live in this process only (FR-67).
+  deps.limiter ??= createRateLimiter({ limit: RATE_LIMIT_MAX, windowMs: RATE_LIMIT_WINDOW_MS, now: deps.now });
   app.post('/api/image-studio/upload', createUploadHandler(deps));
+  app.post('/api/image-studio/generate', createGenerateHandler(deps));
 }

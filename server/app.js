@@ -13,21 +13,29 @@
  *   3. image body limit    - `/api/image-studio` only, BEFORE the global parser: a tighter cap on the
  *                            image routes without touching any other route.
  *   4. `express.json` and `express.urlencoded` at 50 MB - unchanged for every existing route.
- *   5. `mountImageRoutes(app)`, then `registerRoutes(app)` - routes are registered after the parsers.
+ *   5. image routes, then `registerRoutes(app)` - routes are registered after the parsers. The image routes
+ *      come from the `mountImageRoutes(app)` override when given; otherwise the real ones are mounted with the
+ *      handler dependencies this function received (DD-4).
  */
 import express from 'express';
 import cors from 'cors';
 import { corsOriginPolicy } from './cors-policy.js';
 import { imageBodyLimit } from './image-studio/body-limit.js';
+import { mountImageStudioRoutes } from './image-studio/routes.js';
+
+/** The handler dependencies `createApp` forwards to the real image routes (only those actually supplied). */
+const HANDLER_DEP_KEYS = ['getGemini', 'hasGeminiKey', 'now', 'sleep', 'insertUsage', 'price', 'log', 'limiter'];
 
 /**
  * @param {object} deps
  * @param {string[]} deps.allowedOrigins exact-match CORS allow-list (see `resolveAllowedOrigins`)
- * @param {(app: import('express').Express) => void} [deps.mountImageRoutes] mounts the image routes
+ * @param {(app: import('express').Express) => void} [deps.mountImageRoutes] overrides the default image-route mount
+ * @param {object} [deps.getGemini] handler dependencies (see `mountImageStudioRoutes`); absent ones use its defaults
  * @param {(app: import('express').Express) => void} [deps.registerRoutes] registers the remaining routes
  * @returns {import('express').Express}
  */
-export function createApp({ allowedOrigins, mountImageRoutes, registerRoutes } = {}) {
+export function createApp(deps = {}) {
+  const { allowedOrigins, mountImageRoutes, registerRoutes } = deps;
   const app = express();
 
   app.set('trust proxy', 1);
@@ -36,7 +44,13 @@ export function createApp({ allowedOrigins, mountImageRoutes, registerRoutes } =
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-  if (typeof mountImageRoutes === 'function') mountImageRoutes(app);
+  if (typeof mountImageRoutes === 'function') {
+    mountImageRoutes(app);
+  } else {
+    const handlerDeps = {};
+    for (const key of HANDLER_DEP_KEYS) if (deps[key] !== undefined) handlerDeps[key] = deps[key];
+    mountImageStudioRoutes(app, handlerDeps);
+  }
   if (typeof registerRoutes === 'function') registerRoutes(app);
 
   return app;

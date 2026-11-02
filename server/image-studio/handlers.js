@@ -16,10 +16,16 @@
  * Node also emits 'close' on the request once its body is read, so the abort is keyed on the response.
  */
 import { describeError } from '../utils/describe-error.js';
+import { findImageModel } from '../providers/model-support.js';
+import { PriceNotConfiguredError } from '../usage/pricing.js';
+import { classifyResponse } from './classify-response.js';
 import { ImageStudioError } from './errors.js';
+import { isFileMissing } from './file-missing.js';
 import { detectImageType } from './magic-bytes.js';
-import { parseUploadRequest } from './request-schema.js';
+import { parseGenerateRequest, parseUploadRequest } from './request-schema.js';
 import { runWithRetry } from './retry-loop.js';
+import { trimRequest } from './trim.js';
+import { buildUsageRow } from './usage-row.js';
 
 /** The fixed text for an upstream failure that has no closed code of its own (SD-2). */
 export const FIXED_API_ERROR = 'Помилка API';
@@ -110,6 +116,124 @@ export function createUploadHandler(deps) {
       res.status(200).json({ fileUri: file.uri, mimeType });
     } catch (error) {
       answerError(res, error, { signal, log, route: 'upload' });
+    }
+  };
+}
+
+/** True when any part of any turn is a Files API reference (FR-17 condition 1). */
+function carriesFileUri(turns) {
+  return turns.some((turn) => turn.parts.some((part) => part !== null && typeof part === 'object' && 'fileData' in part));
+}
+
+/** A turn as Gemini receives it: role and parts only. The BFF turn id is not Gemini's (FR-35). */
+function toContent(turn) {
+  return { role: turn.role, parts: turn.parts };
+}
+
+/**
+ * POST /api/image-studio/generate. Order (FR-27), the first failing check answers and later steps neither run
+ * nor count: body validation 400 -> key check 501 -> size trim and byte test 413 -> token trim and token
+ * test 413 -> the ATOMIC limiter step 429 -> Gemini generate under the retry loop -> classification ->
+ * price -> usage row -> response.
+ *
+ * `deps.limiter.tryConsume(ip)` is called exactly once, outside the retry loop (DD-8); `deps.price(modelId,
+ * nonThoughtImageCount)` throws PriceNotConfiguredError for an unpriced model; `deps.insertUsage(row)` writes
+ * the one usage row, whose failure is logged and never changes the 200.
+ */
+export function createGenerateHandler(deps) {
+  const { getGemini, hasGeminiKey, sleep, limiter, insertUsage, price, log } = deps;
+  return async function generateHandler(req, res) {
+    const controller = new AbortController();
+    const { signal } = controller;
+    abortOnEarlyClose(res, controller);
+    try {
+      const request = parseGenerateRequest(req.body);
+      if (!hasGeminiKey()) throw new ImageStudioError('GEMINI_KEY_MISSING');
+
+      const { model, aspectRatio, resolution, presetId } = request;
+      const gemini = getGemini();
+      const newTurn = { id: request.newTurn.id, role: 'user', parts: request.newTurn.parts };
+
+      // Size trim, then token trim (k + 1 counts, each under the retry loop, FR-40). A count that fails after
+      // its retries ends the action: no generate call, no limiter step, no row.
+      const countTokens = async (turn) => {
+        const answer = await runWithRetry(
+          () => logged(log, 'generate', () => gemini.countTokens({ model, contents: [toContent(turn)], signal })),
+          { sleep, signal },
+        );
+        return answer.totalTokens;
+      };
+      const trimmed = await trimRequest({
+        history: request.history,
+        newTurn,
+        inputTokenLimit: findImageModel(model).inputTokenLimit,
+        countTokens,
+      });
+      const { trimmedTurnIds } = trimmed;
+
+      // The atomic limiter step: one unit per request, outside the retry loop (FR-66, FR-68).
+      const gate = limiter.tryConsume(req.ip);
+      if (!gate.allowed) {
+        res.set('Retry-After', String(gate.retryAfterSeconds));
+        throw new ImageStudioError('RATE_LIMIT_EXCEEDED');
+      }
+
+      const contents = [...trimmed.history, newTurn].map(toContent);
+      const requestCarriedFileUri = carriesFileUri(contents);
+      let response;
+      try {
+        response = await runWithRetry(
+          () => logged(log, 'generate', () => gemini.generateImage({ model, contents, aspectRatio, resolution, signal })),
+          { sleep, signal },
+        );
+      } catch (error) {
+        if (!signal.aborted && isFileMissing({ requestCarriedFileUri, status: error?.status, message: String(error?.message ?? '') })) {
+          throw new ImageStudioError('FILE_MISSING');
+        }
+        throw error;
+      }
+      if (signal.aborted) return;
+
+      const result = classifyResponse(response);
+      if (result.class === 'safety') {
+        res.status(200).json({ kind: 'safety', reason: result.reason, trimmedTurnIds });
+        return;
+      }
+      if (result.class === 'text') {
+        res.status(200).json({ kind: 'text', text: result.text, trimmedTurnIds });
+        return;
+      }
+      if (result.class === 'failed') throw new ImageStudioError('EMPTY_RESPONSE');
+
+      // Class 2 (images). A missing price outranks the success (FR-26 precedence): no row, no cost.
+      let costUsd;
+      try {
+        costUsd = price(model, result.imageCount);
+      } catch (error) {
+        if (error instanceof PriceNotConfiguredError) {
+          log(`[ImageStudio] generate: no per-image price configured for model ${model}`);
+          throw new ImageStudioError('PRICE_NOT_CONFIGURED');
+        }
+        throw error;
+      }
+
+      const row = buildUsageRow({ model, presetId, resolution, usageMetadata: response?.usageMetadata, costUsd });
+      try {
+        await insertUsage(row);
+      } catch (error) {
+        // Persistence must never fail the generation response (FR-69).
+        log(`[ImageStudio] generate: failed to record usage: ${redact(describeError(error))}`);
+      }
+
+      res.status(200).json({
+        kind: 'images',
+        parts: result.parts,
+        costUsd,
+        usage: { inputTokens: row.inputTokens, outputTokens: row.outputTokens },
+        trimmedTurnIds,
+      });
+    } catch (error) {
+      answerError(res, error, { signal, log, route: 'generate' });
     }
   };
 }
