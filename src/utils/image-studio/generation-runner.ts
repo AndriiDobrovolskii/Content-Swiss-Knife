@@ -1,7 +1,7 @@
 import { buildGenerateRequest, type BuildInput, type GenerateRequest } from './request-builder';
 import { dispatchError } from './error-dispatch';
 import type { Announcer, Clock, Part, Scheduler, StoredSession, UiLanguage } from './ports';
-import { parseGenerateResponse, type GenerateResponse } from './schemas';
+import { parseGenerateResponse, UploadResponseSchema, type GenerateResponse } from './schemas';
 import { studioText } from './studio-texts';
 import type { ImageHttpResult } from '../../services/image-studio/http-abort';
 
@@ -73,6 +73,33 @@ function requestTurnIdCount(request: GenerateRequest): number {
   return request.history.length + 1;
 }
 
+/** Base64 of a byte array, built in slices so a multi-megabyte image does not overflow the call stack. */
+function toBase64(bytes: Uint8Array): string {
+  const SLICE = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += SLICE) binary += String.fromCharCode(...bytes.subarray(i, i + SLICE));
+  return btoa(binary);
+}
+
+/** The distinct file_uris of the request: the history in order, then the new turn. */
+function collectFileUris(request: GenerateRequest): string[] {
+  const seen = new Set<string>();
+  const turns = [...request.history, request.newTurn];
+  for (const turn of turns) for (const part of turn.parts) if (part.fileData) seen.add(part.fileData.fileUri);
+  return [...seen];
+}
+
+/** A copy of the request with each mapped file_uri replaced; mime types and every other field are unchanged. */
+function replaceFileUris(request: GenerateRequest, mapping: Record<string, string>): GenerateRequest {
+  const copy = structuredClone(request);
+  for (const turn of [...copy.history, copy.newTurn]) {
+    for (const part of turn.parts) {
+      if (part.fileData && mapping[part.fileData.fileUri]) part.fileData = { ...part.fileData, fileUri: mapping[part.fileData.fileUri] };
+    }
+  }
+  return copy;
+}
+
 export function createGenerationRunner(deps: RunnerDeps): GenerationRunner {
   return {
     async run(input: RunInput, cancelSignal?: AbortSignal): Promise<RunOutcome> {
@@ -125,8 +152,8 @@ export function createGenerationRunner(deps: RunnerDeps): GenerationRunner {
           });
         };
 
-        const succeed = async (body: unknown): Promise<void> => {
-          const parsed = parseGenerateResponse(body, requestTurnIdCount(request));
+        const succeed = async (sent: GenerateRequest, body: unknown): Promise<void> => {
+          const parsed = parseGenerateResponse(body, requestTurnIdCount(sent));
           if (parsed.ok === false) {
             finish({ type: 'failed', textId: 'T-12', retry: false, restore: true });
             return;
@@ -141,23 +168,80 @@ export function createGenerationRunner(deps: RunnerDeps): GenerationRunner {
             const created = response.parts.filter(isVersionPart).length;
             const highest = input.snapshot.meta.nextVersionNumber + created - 1;
             finish(
-              { type: 'images', sessionId: input.sessionId, request, response },
+              { type: 'images', sessionId: input.sessionId, request: sent, response },
               studioText('T-17', deps.uiLanguage(), { N: highest }),
             );
             return;
           }
-          finish({ type: response.kind, sessionId: input.sessionId, request, response });
+          finish({ type: response.kind, sessionId: input.sessionId, request: sent, response });
+        };
+
+        /**
+         * The FILE_MISSING recovery (FR-17, SD-4): inside the same action and the same deadline, re-upload every
+         * file_uri of the history and the new turn from the stored SENT bytes (no second re-encode), persist the
+         * mapping and repeat the generate call once. Any URI without stored bytes ends in T-10 before the first upload.
+         */
+        const recover = async (sent: GenerateRequest): Promise<void> => {
+          const uris = collectFileUris(sent);
+          const stored: Array<{ uri: string; bytes: Uint8Array }> = [];
+          for (const uri of uris) {
+            const record = await deps.store.getSentBytes(input.sessionId, uri);
+            if (finished) return;
+            if (!record) {
+              finish({ type: 'failed', textId: 'T-10', retry: false, restore: true });
+              return;
+            }
+            stored.push({ uri, bytes: record.bytes });
+          }
+          if (stored.length === 0) {
+            finish({ type: 'failed', textId: 'T-10', retry: false, restore: true });
+            return;
+          }
+
+          const mapping: Record<string, string> = {};
+          for (const { uri, bytes } of stored) {
+            const uploaded = await deps.uploadImage({ data: toBase64(bytes) }, controller.signal);
+            if (finished) return;
+            if (uploaded.ok === false) {
+              fail(uploaded as Extract<ImageHttpResult, { ok: false }>);
+              return;
+            }
+            const reply = UploadResponseSchema.safeParse((uploaded as Extract<ImageHttpResult, { ok: true }>).body);
+            if (!reply.success) {
+              finish({ type: 'failed', textId: 'T-12', retry: false, restore: true });
+              return;
+            }
+            mapping[uri] = reply.data.fileUri;
+          }
+
+          await deps.store.remapFileUris(input.sessionId, mapping);
+          if (finished) return;
+          const repeated = replaceFileUris(sent, mapping);
+          const result = await deps.generateImage(repeated, controller.signal);
+          await handle(repeated, result, true);
+        };
+
+        const handle = async (sent: GenerateRequest, result: ImageHttpResult, isRepeat: boolean): Promise<void> => {
+          if (finished) return;
+          if (result.ok === false) {
+            const failed = result as Extract<ImageHttpResult, { ok: false }>;
+            if (dispatchError({ status: failed.status, errorField: failed.errorField }).reupload) {
+              // 410 + FILE_MISSING together. The first one runs the recovery round, a second one ends the action.
+              if (isRepeat) finish({ type: 'failed', textId: 'T-10', retry: false, restore: true });
+              else await recover(sent);
+              return;
+            }
+            fail(failed);
+            return;
+          }
+          await succeed(sent, (result as Extract<ImageHttpResult, { ok: true }>).body);
         };
 
         deps
           .generateImage(request, controller.signal)
-          .then(async (result) => {
-            if (finished) return;
-            if (result.ok === false) fail(result as Extract<ImageHttpResult, { ok: false }>);
-            else await succeed((result as Extract<ImageHttpResult, { ok: true }>).body);
-          })
+          .then((result) => handle(request, result, false))
           .catch(() => {
-            // A rejection is an unexpected transport failure: a failed turn the user may retry.
+            // A rejection is an unexpected failure: a failed turn the user may retry.
             finish({ type: 'failed', textId: 'T-7', retry: true, restore: true });
           });
       });
