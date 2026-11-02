@@ -5,6 +5,7 @@ import { retryTransport } from './http-retry';
 import { LlmProvider } from './providers/llm-provider.interface';
 import { PromptPayload, UsageMeta } from '../prompt-core/payload';
 import { ModelSettingsService } from './model-settings.service';
+import { ImageHttpResult, runAbortable } from './image-studio/http-abort';
 
 function toPayload(input: PromptPayload | string): PromptPayload {
   if (typeof input === 'string') return { systemBlocks: [], userContent: input };
@@ -100,5 +101,27 @@ export class LlmService implements LlmProvider {
   async extractFromPdf(base64Data: string): Promise<string> {
     const { result } = await this.post<{ result: string }>('/llm/pdf', { base64Data });
     return result;
+  }
+
+  /**
+   * One Image Studio call, deliberately NOT routed through `post()`: no model-settings snapshot is merged into
+   * the body (the studio has its own model choice) and the caller decides whether the transport is retried.
+   * Failures come back normalised; an abort unsubscribes the in-flight request (US-10.1 DD-18).
+   */
+  private postOnce(path: string, body: Record<string, unknown>, retry: boolean, signal?: AbortSignal): Promise<ImageHttpResult> {
+    return runAbortable(() => {
+      const request = this.http.post<unknown>(path, body);
+      return retry ? request.pipe(retryTransport()) : request;
+    }, signal);
+  }
+
+  /** A generation is paid, so it is never retried (FR-85): one post, however it fails. */
+  generateImage(request: Record<string, unknown>, signal?: AbortSignal): Promise<ImageHttpResult> {
+    return this.postOnce('/api/image-studio/generate', request, false, signal);
+  }
+
+  /** An upload is not a paid generation, so a call that never reached the server is retried (SD-31). */
+  uploadImageFile(request: Record<string, unknown>, signal?: AbortSignal): Promise<ImageHttpResult> {
+    return this.postOnce('/api/image-studio/upload', request, true, signal);
   }
 }
