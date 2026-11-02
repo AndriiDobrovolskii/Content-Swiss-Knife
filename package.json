@@ -81,6 +81,9 @@
   },
   "overrides": {
     "node-domexception": "^2.0.2",
-    "fetch-blob": "^4.0.0"
+    "fetch-blob": "^4.0.0",
+    "cheerio": {
+      "undici": "7.24.4"
+    }
   }
 }
