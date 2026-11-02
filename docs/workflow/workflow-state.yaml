@@ -2,13 +2,13 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: US-10.1
-current_stage: PR_CREATION
-status: IN_PROGRESS
+story: null
+current_stage: ARCHIVED
+status: ARCHIVED
 pending_human_gate: null
 started_at: 2026-11-01T08:09:46Z
-updated_at: 2026-11-02T23:55:00Z
+updated_at: 2026-11-02T16:58:06Z
 stage_attempts: {}
 track: angular
 blockers: []
-note: "pr_summary v2 (DRAFT) refreshed for HEAD b5185c0 (guard specs 8f7f17e and Story documents b5185c0 are now committed). PR_CREATION runs on the human's explicit instruction 'створи PR для US-10.1' (after the human chose: commit first, then PR). .tmp.driveupload/ stays out."
+note: "Archived. Delivery summary: docs/knowledge/US-10.1-delivery-summary.md. Open follow-ups: security N-1/N-2/N-4 (anonymous-reachable, recommended before merge), N-3, N-5, F-8; undici 7.24.4 pin and unknown production Node; no live smoke for generate/countTokens/FILE_MISSING/model ids/prices; RC-3 fake-only IndexedDB/canvas; W-1/W-2; Node 24.15.0 Windows worker fault mitigated, not fixed."
