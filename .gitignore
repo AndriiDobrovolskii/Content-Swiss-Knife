@@ -51,3 +51,6 @@ data/*.db-*
 
 # Generated coverage report — reproducible from `npm run test:coverage`
 coverage/
+
+# Build output written by test/security.spec.ts (the bundle scan, FR-65) - reproducible
+.test-dist/
