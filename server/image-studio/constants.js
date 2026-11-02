@@ -31,8 +31,9 @@ export const COUNT_TOKENS_CONCURRENCY = 4;
 export const HEADROOM_BYTES = 1024 * 1024;
 
 /**
- * Per-call upstream timeout, applied through `httpOptions.timeout` on every Gemini image call
- * (DD-6, SD-30). It is deliberately far below the constructor's 20-minute client floor, which exists
+ * Per-call upstream timeout of every Gemini image call (DD-6, SD-30). `generateImage` and `countTokens`
+ * apply it through `httpOptions.timeout`; `uploadFile` cannot (the SDK's `files.upload` answers 404 when
+ * `config.httpOptions` is set), so the provider enforces it itself with a timer around the SDK call. It is deliberately far below the constructor's 20-minute client floor, which exists
  * for Doc generation and must not govern an image call. The Specification delegates the number; this is
  * a builder choice, kept under the client's 120 s deadline so one stuck attempt ends before it. The
  * total time across retries is bounded by the client abort (FR-21, SD-30), not by this value. No second
