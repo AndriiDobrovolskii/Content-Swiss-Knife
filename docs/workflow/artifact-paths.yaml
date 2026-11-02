@@ -53,6 +53,22 @@ artifacts:
     pattern: docs/decisions/{story_id}-open-decisions.md
     owner: so-clarifier
 
+  # --- Evidence -------------------------------------------------------------
+  # Recorded facts about the outside world that a Specification or plan rests on: vendor API
+  # behaviour, platform networking, browser runtime limits (for example the Image Studio
+  # "V-1..V-10" pre-implementation checks). It is a lifecycle artifact like any other: a file
+  # of this type MUST carry the artifact-schema.md front matter (artifact: evidence, story,
+  # version, status, owner, created_at, updated_at, supersedes, inputs_consumed), and each
+  # recorded check MUST name its method, the tool and runtime versions, the date, who ran it,
+  # and the raw output or a pointer to it. An evidence file without front matter or without
+  # raw output proves nothing and is not cited as independent evidence. Humans may write it
+  # (`external_ok`); a different `{slug}` per file, never the clarification report's name.
+  evidence:
+    pattern: docs/evidence/{story_id}-{slug}-evidence.md
+    owner: so-planner
+    external_ok: true
+    routed: false
+
   # --- Specification --------------------------------------------------------
   specification:
     pattern: docs/specifications/{story_id}-spec.md

@@ -324,6 +324,16 @@ green is a §7.7 violation.
 
 ---
 
+### Loopback HTTP tests
+
+A spec that boots the real `createApp` on `127.0.0.1` and drives it with `node:http` must use
+**one shared keep-alive `http.Agent`** per test (created in the test's boot helper, destroyed
+in `afterEach` before the server is closed). Never open many short-lived connections with
+`agent: false`: on Node `v24.15.0` / Windows a bare `http` server hit by such clients kills the
+vitest fork worker (exit `0xC0000409`, "Worker exited unexpectedly") with a per-connection
+probability — about 10% for a 280-connection spec — and no repository code is involved. The
+shared agent mitigates this; it does not fix the runtime.
+
 ## 6. Definition of Done
 
 Do not report a task complete until all of these are verified **with real command output**:
@@ -345,6 +355,17 @@ Do not report a task complete until all of these are verified **with real comman
    Specification and AC ↔ test matrix reflect what was actually built.
 8. **Harness intact** — if `docs/workflow/` or any `so-*` skill was touched,
    `npm run validate:harness` exits 0 with zero errors.
+9. **Live smoke for new vendor calls** — a change that adds or modifies a call into a third-party
+   SDK or HTTP API (anything under `server/providers/`, including a new method on an existing
+   provider) is not done on mocks alone. Run **one real call** against the vendor from the
+   running server path (the real route, not a unit test), record the real response shape and
+   status in the story's pipeline status, and delete anything the call created. A mock proves
+   only that the code matches the test's belief about the vendor; the Image Studio upload
+   shipped green with two live defects (`files.upload` rejecting `httpOptions`, and an
+   `undici` dispatcher skew) that no mock could see. Where a call costs money or needs a
+   secret the author lacks, an opt-in spec gated by an environment variable (the pattern of
+   `LIVE_DOC_TEST`, §5) satisfies this item; if it cannot be run, say so in the report and
+   do not claim the call verified.
 
 **Reporting a check as passing without running it is the most serious violation available to
 you** — it silently disables every other rule in this file.
@@ -380,7 +401,12 @@ weaken.
    `tsc` to one file, adding `exclude:` patterns, or reporting a check as passing without
    running it. Config drift counts: quietly loosening `vitest.config.ts` or `tsconfig.json`
    is the same violation committed instead of typed at the CLI.
-10. **Writing to a remote on your own initiative** — `git push`, opening or merging a Pull
+10. **Pinning a dependency to a runtime-bundled version without pinning the runtime** — an
+    `overrides` entry or exact pin chosen to match what a Node release bundles (for example
+    `undici` 7.24.4 for Node `24.15.0`) must land in the same change as `engines.node` in
+    `package.json` and a `.nvmrc` naming that Node version. Otherwise a different Node silently
+    reopens the skew the pin fixed.
+11. **Writing to a remote on your own initiative** — `git push`, opening or merging a Pull
     Request. Only `so-pr-creator` may push, and only on a separate, explicit human
     instruction (§10).
 
