@@ -10,6 +10,7 @@ import { formatBuild, readBuild } from './utils/build-info.js';
 import { warmProviders } from './providers/factory.js';
 import { resolveAllowedOrigins } from './cors-policy.js';
 import { createApp } from './app.js';
+import { mountImageStudioRoutes } from './image-studio/routes.js';
 
 config();
 
@@ -28,7 +29,10 @@ process.on('unhandledRejection', (reason) => {
 
 // CORS, the image body limit and the 50 MB parsers are composed in ./app.js (their order is the
 // contract); the routes below are registered on the returned app, after those parsers, as before.
-const app = createApp({ allowedOrigins: resolveAllowedOrigins(process.env.ALLOWED_ORIGINS) });
+const app = createApp({
+  allowedOrigins: resolveAllowedOrigins(process.env.ALLOWED_ORIGINS),
+  mountImageRoutes: mountImageStudioRoutes,
+});
 const PORT = process.env.PORT || 3001;
 const LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
 
