@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { MODEL_CATALOG, clampLevel, defaultModel, findModel, findProvider } from './model-catalog';
+import * as catalogModule from './model-catalog';
 import * as serverSupport from '../../server/providers/model-support.js';
+import rawCatalog from './model-catalog.json';
 
-const ALL_MODELS = MODEL_CATALOG.flatMap(p => p.models.map(m => ({ provider: p.id, ...m })));
+// US-10.1 (FR-4): the loops below keep every invariant for TEXT models. Image entries (modalities
+// contains 'image') have no levels / defaultLevel / maxOutputTokens by design (SD-8), so the
+// text-model loops are scoped to the non-image entries - scoped, not loosened: `levels` stays
+// required for every text model and no loop is skipped. The image entries get their own
+// assertions in the 'US-10.1 image entries' block at the bottom of this file.
+const isImageEntry = (m: { modalities?: string[] }) => Boolean(m.modalities?.includes('image'));
+const ALL_MODELS = MODEL_CATALOG.flatMap(p =>
+  p.models.filter(m => !isImageEntry(m as { modalities?: string[] })).map(m => ({ provider: p.id, ...m })));
 
 describe('model catalog integrity', () => {
   it('gives every model a defaultLevel it actually accepts', () => {
@@ -354,5 +363,151 @@ describe('US-4.1 v3 max rows and clamp parity invariant (FR-4, FR-4a)', () => {
   it('AC-1: the route-level resolver maps a max slot on claude-sonnet-5-5 to xhigh with the 128000 ceiling', () => {
     expect(serverSupport.resolveSlot('anthropic', { model: 'claude-sonnet-5-5', level: 'max' }))
       .toEqual({ model: 'claude-sonnet-5-5', level: 'xhigh', maxOutputTokens: 128000 });
+  });
+});
+
+/**
+ * US-10.1 (FR-2, FR-3, FR-4, SD-8, DD-2, P-16): the two Gemini image models are catalogue entries, and
+ * every text path stays blind to them. Written from the Specification, not from the implementation.
+ *
+ * Contract pinned here (CONTRACT.md "Catalogue helpers"): `textModelsOf(entries)` takes a flat list of
+ * model entries and returns, in the original order, only the entries whose `modalities` do not include
+ * 'image'; `IMAGE_MODELS`; `findImageModel(id)`; `isImageModelSpec(entry)`. The derivation function is fed
+ * SYNTHETIC lists, so no JSON module is mocked (P-16).
+ */
+describe('US-10.1 image entries (FR-2, FR-4, SD-8)', () => {
+  const FLASH = 'gemini-3.1-flash-image';
+  const PRO = 'gemini-3.1-pro-image-preview';
+  const rawGemini = () => (rawCatalog.providers as Array<{ id: string; models: any[] }>).find(p => p.id === 'gemini')!.models;
+
+  it('FR-2: appends both image models AFTER every existing Gemini text entry, so neither is models[0]', () => {
+    const ids = rawGemini().map(m => m.id);
+    expect(ids).toContain(FLASH);
+    expect(ids).toContain(PRO);
+    const lastText = Math.max(...rawGemini().map((m, i) => (isImageEntry(m) ? -1 : i)));
+    expect(ids.indexOf(FLASH)).toBeGreaterThan(lastText);
+    expect(ids.indexOf(PRO)).toBeGreaterThan(lastText);
+    expect(ids[0]).toBe('gemini-3.1-pro-preview');
+  });
+
+  it('FR-4 / SD-8: each image entry carries modalities [image], tier, inputTokenLimit and resolutions, and no thinking fields', () => {
+    const flash = rawGemini().find(m => m.id === FLASH);
+    const pro = rawGemini().find(m => m.id === PRO);
+    expect(flash, 'flash image entry').toBeDefined();
+    expect(pro, 'pro image entry').toBeDefined();
+    expect(flash.modalities).toContain('image');
+    expect(pro.modalities).toContain('image');
+    expect(flash.label).toBe('Nano Banana 2, Flash');
+    expect(pro.label).toBe('Nano Banana Pro, Pro');
+    expect(flash.tier).toBe('fast');
+    expect(pro.tier).toBe('premium');
+    expect(flash.inputTokenLimit).toBe(131072);
+    expect(pro.inputTokenLimit).toBe(65536);
+    expect(flash.resolutions).toEqual(['1K', '2K']);
+    expect(pro.resolutions).toEqual(['1K', '2K', '4K']);
+    for (const m of [flash, pro]) {
+      expect(m, m.id).not.toHaveProperty('levels');
+      expect(m, m.id).not.toHaveProperty('defaultLevel');
+      expect(m, m.id).not.toHaveProperty('maxOutputTokens');
+    }
+  });
+
+  it('FR-4: no image entry leaks into the text-model view the existing consumers import', () => {
+    expect(rawGemini().map(m => m.id), 'premise: the image entries exist in the raw JSON').toContain(FLASH);
+    const exported = MODEL_CATALOG.flatMap(p => p.models.map(m => m.id));
+    expect(exported).not.toContain(FLASH);
+    expect(exported).not.toContain(PRO);
+    expect(findModel('gemini', FLASH)).toBeUndefined();
+    expect(findModel('gemini', PRO)).toBeUndefined();
+    expect(findProvider('gemini')!.models[0].id).toBe('gemini-3.1-pro-preview');
+    expect(defaultModel('gemini')!.id).toBe('gemini-3.1-pro-preview');
+  });
+
+  it('FR-3: clampLevel for an image id never throws and answers from the text default model', () => {
+    expect(rawGemini().map(m => m.id), 'premise: the image entries exist in the raw JSON').toContain(FLASH);
+    // A crafted id must take the existing fallback (findModel ?? defaultModel), never see an entry without levels.
+    expect(() => clampLevel('gemini', FLASH, 'high')).not.toThrow();
+    const def = defaultModel('gemini')!;
+    expect(def.levels).toContain(clampLevel('gemini', FLASH, 'medium'));
+    expect(def.levels).toContain(clampLevel('gemini', PRO, 'minimal'));
+  });
+
+  it('FR-3: the server view agrees - findModel/defaultModel/resolveSlot never return an image entry', () => {
+    expect(rawGemini().map(m => m.id), 'premise: the image entries exist in the raw JSON').toContain(PRO);
+    expect(serverSupport.findModel('gemini', FLASH)).toBeUndefined();
+    expect(serverSupport.findModel('gemini', PRO)).toBeUndefined();
+    expect(serverSupport.defaultModel('gemini')!.id).toBe('gemini-3.1-pro-preview');
+    expect(serverSupport.resolveSlot('gemini', { model: FLASH, level: 'high' }).model).not.toBe(FLASH);
+    expect(serverSupport.resolveSlot('gemini', { model: PRO }, 'premium').model).toBe('gemini-3.1-pro-preview');
+    expect(serverSupport.resolveSlot('gemini', undefined, 'fast').model).toBe('gemini-3.8-flash');
+  });
+
+  it('FR-2: IMAGE_MODELS lists exactly the two image entries and findImageModel resolves both ids', () => {
+    const { IMAGE_MODELS, findImageModel } = catalogModule as any;
+    expect(Array.isArray(IMAGE_MODELS), 'IMAGE_MODELS exported').toBe(true);
+    expect(IMAGE_MODELS.map((m: any) => m.id)).toEqual([FLASH, PRO]);
+    expect(findImageModel(FLASH)).toEqual(expect.objectContaining({ id: FLASH, resolutions: ['1K', '2K'] }));
+    expect(findImageModel(PRO)).toEqual(expect.objectContaining({ id: PRO, resolutions: ['1K', '2K', '4K'] }));
+    expect(findImageModel('gemini-3.1-pro-preview')).toBeUndefined();
+    expect(findImageModel('nope')).toBeUndefined();
+  });
+
+  it('FR-2: the client and the server derive the same image model list from the one JSON file', () => {
+    const client = (catalogModule as any).IMAGE_MODELS.map((m: any) => m.id);
+    const server = (serverSupport as any).IMAGE_MODELS.map((m: any) => m.id);
+    expect(server).toEqual(client);
+  });
+});
+
+describe('US-10.1 textModelsOf over synthetic lists (FR-3, FR-4, P-16)', () => {
+  const textA = { id: 'text-a', label: 'A', tier: 'premium', levels: ['low', 'high'], defaultLevel: 'high', maxOutputTokens: 100 };
+  const textB = { id: 'text-b', label: 'B', tier: 'fast', levels: ['low'], defaultLevel: 'low', maxOutputTokens: 50 };
+  const imageX = { id: 'img-x', label: 'X', tier: 'fast', modalities: ['image'], inputTokenLimit: 1, resolutions: ['1K'] };
+  const textModelsOf = (entries: unknown[]): any[] => (catalogModule as any).textModelsOf(entries);
+  const serverTextModelsOf = (entries: unknown[]): any[] => (serverSupport as any).textModelsOf(entries);
+
+  it('FR-3: keeps only the text entries, in their original order (client)', () => {
+    expect(textModelsOf([textA, imageX, textB]).map(m => m.id)).toEqual(['text-a', 'text-b']);
+  });
+
+  it('FR-3: an image entry listed FIRST does not become the default model (models[0] of the derived list is the first text entry)', () => {
+    const derived = textModelsOf([imageX, textA, textB]);
+    expect(derived[0].id).toBe('text-a');
+    // the tier fallback `find(m => m.tier === preferTier)` can never land on the image entry
+    expect(derived.find(m => m.tier === 'fast')!.id).toBe('text-b');
+  });
+
+  it('FR-4: every entry of the derived list has non-empty levels containing its defaultLevel (clampLevel can never see a levels-less entry)', () => {
+    const derived = textModelsOf([imageX, textA, imageX, textB]);
+    expect(derived).toHaveLength(2);
+    for (const m of derived) {
+      expect(m.levels.length).toBeGreaterThan(0);
+      expect(m.levels).toContain(m.defaultLevel);
+    }
+  });
+
+  it('FR-3: a list of only image entries derives to an empty list, and an empty list stays empty', () => {
+    expect(textModelsOf([imageX])).toEqual([]);
+    expect(textModelsOf([])).toEqual([]);
+  });
+
+  it('P-16: does not mutate its input and keeps an entry whose modalities lack image', () => {
+    const input = [textA, imageX, textB];
+    const copy = structuredClone(input);
+    const derived = textModelsOf(input);
+    expect(derived).toHaveLength(2);
+    expect(input).toEqual(copy);
+    expect(textModelsOf([{ ...textA, modalities: ['text'] }]).map(m => m.id)).toEqual(['text-a']);
+  });
+
+  it('FR-3: the server derivation behaves the same on the same synthetic lists', () => {
+    expect(serverTextModelsOf([imageX, textA, textB]).map(m => m.id)).toEqual(['text-a', 'text-b']);
+    expect(serverTextModelsOf([imageX])).toEqual([]);
+  });
+
+  it('FR-2: isImageModelSpec distinguishes the shapes', () => {
+    const is = (catalogModule as any).isImageModelSpec;
+    expect(is(imageX)).toBe(true);
+    expect(is(textA)).toBe(false);
   });
 });

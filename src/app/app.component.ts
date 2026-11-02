@@ -19,6 +19,7 @@ import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { HtmlEditorComponent } from './components/html-editor/html-editor.component';
 import { ModelSettingsComponent } from './components/model-settings/model-settings.component';
 import { ContentTemplateSelectComponent } from './components/content-template-select/content-template-select.component';
+import { ImageStudioComponent } from './components/image-studio/image-studio.component';
 import { TEMPLATE_LABELS } from './content-template-labels';
 import { HighlightCodeDirective } from './directives/highlight-code.directive';
 import { FeedbackContextService } from '../services/feedback-context.service';
@@ -43,6 +44,7 @@ const TRANSLATIONS = {
     seoGenerator: 'SEO Meta',
     copywriter: 'Copywriter',
     htmlEditor: 'HTML Editor',
+    imageStudio: 'Image Studio',
     loadingHtmlEditor: 'Loading editor…',
     seoGenBtn: 'Generate Metadata',
     seoOnlyTitle: 'SEO Metadata Generator',
@@ -217,6 +219,7 @@ const TRANSLATIONS = {
     seoGenerator: 'SEO Мета',
     copywriter: 'Копірайтер',
     htmlEditor: 'HTML-редактор',
+    imageStudio: 'Студія зображень',
     loadingHtmlEditor: 'Завантаження редактора…',
     seoGenBtn: 'Генерувати метадані',
     seoOnlyTitle: 'Генератор SEO метаданих',
@@ -399,12 +402,13 @@ const TOOL_LABEL: Record<AppMode, string> = {
   'html-editor': 'HTML-редактор',
   'dashboard': 'Dashboard',
   'faq-generator': 'FAQ Generator',
+  'image-studio': 'Image Studio',
 };
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent, ModelSettingsComponent, ContentTemplateSelectComponent],
+  imports: [CommonModule, SafeHtmlPipe, SourceInputComponent, HighlightCodeDirective, DashboardComponent, HtmlEditorComponent, ModelSettingsComponent, ContentTemplateSelectComponent, ImageStudioComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent {
@@ -1155,6 +1159,9 @@ export class AppComponent {
         this.imgFiles().forEach(img => URL.revokeObjectURL(img.previewUrl));
         this.imgFiles.set([]);
         this.imgResults.set([]);
+        break;
+
+      case 'image-studio':
         break;
     }
   }

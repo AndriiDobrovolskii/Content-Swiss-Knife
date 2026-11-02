@@ -4,6 +4,7 @@ import { normalizePayload } from '../utils/payload.js';
 import { parseJsonResponse } from '../utils/json-parse.js';
 import { PDF_EXTRACT_PROMPT } from '../utils/pdf-prompt.js';
 import { clampLevel, resolveSlot } from './model-support.js';
+import { UPSTREAM_TIMEOUT_MS } from '../image-studio/constants.js';
 import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, VISION_TIMEOUT_MS, timeoutForMode } from '../utils/timeouts.js';
 
 // Used when a caller doesn't pass a slot (direct unit-test calls, or a request that
@@ -11,6 +12,11 @@ import { DEEP_TIMEOUT_MS, FAST_TIMEOUT_MS, VISION_TIMEOUT_MS, timeoutForMode } f
 // (the Fast default) has no 'minimal', so the Fast fallback runs at 'low'.
 const FALLBACK_DEEP = () => resolveSlot('gemini', { model: 'gemini-3.1-pro-preview' });
 const FALLBACK_FAST = () => resolveSlot('gemini', { model: 'gemini-3.8-flash', level: 'low' });
+
+/** An Error carrying only a runtime-style `name` (no HTTP `status`), as the retry loop expects for abort/timeout. */
+function namedError(name, message) {
+  return Object.assign(new Error(message), { name });
+}
 
 export class GeminiProvider {
   constructor(apiKey) {
@@ -132,6 +138,99 @@ export class GeminiProvider {
       : undefined;
 
     return withRetry(attempt(primary), undefined, undefined, fallback);
+  }
+
+  // --- Image Studio (US-10.1, DD-6) ---------------------------------------------------------------
+  // Three SINGLE-SHOT methods: one SDK call each, never `withRetry`, never a fallback model. The
+  // fixed 1000/2000/4000 ms schedule (FR-60) belongs to the BFF retry loop, which needs the SDK
+  // ApiError and its `status` to reach it unchanged, so a failure is rethrown as is. Each call
+  // carries the caller's AbortSignal (FR-21) and a per-call timeout far below the constructor's
+  // 20-minute client floor, which exists for Doc generation and must not govern an image call.
+  // generateImage and countTokens hand both to the SDK; uploadFile cannot (see its doc comment).
+  // This file is the only place under server/ that imports the SDK (Rule 1).
+
+  /** `contents` is passed through untouched (FR-35). No `systemInstruction` (FR-80). */
+  async generateImage({ model, contents, aspectRatio, resolution, signal }) {
+    return this.ai.models.generateContent({
+      model,
+      contents,
+      config: {
+        responseModalities: ['TEXT', 'IMAGE'],
+        imageConfig: { aspectRatio, imageSize: resolution },
+        abortSignal: signal,
+        httpOptions: { timeout: UPSTREAM_TIMEOUT_MS },
+      },
+    });
+  }
+
+  /**
+   * Files API upload of already-validated image bytes; resolves the SDK File object unchanged.
+   *
+   * This method must NOT pass `config.httpOptions` (nor rely on `config.abortSignal`) to `files.upload`.
+   * In @google/genai 1.52.0 `ApiClient.uploadFile` -> `fetchUploadUrl` REPLACES the resumable-upload start
+   * headers with `config.httpOptions` whenever it is truthy (even `{}`), and Google then answers 404 with an
+   * empty message; the upload path also never reads `config.abortSignal`. So the Cancel (FR-21) and the
+   * UPSTREAM_TIMEOUT_MS deadline are enforced HERE, as a race around the SDK call:
+   *   - signal aborted before the call -> AbortError, no SDK call is made;
+   *   - signal aborted during the call -> AbortError at once;
+   *   - UPSTREAM_TIMEOUT_MS elapsed    -> TimeoutError (a transient, status-less failure for the retry loop).
+   * An upload that resolves after the race was lost is deleted again (best effort), so the Files API keeps
+   * no orphan; its late failure is swallowed. A real SDK error (with its `status`) is rethrown unchanged.
+   */
+  async uploadFile({ bytes, mimeType, signal }) {
+    if (signal?.aborted) throw namedError('AbortError', 'The operation was aborted');
+
+    const upload = this.ai.files.upload({
+      file: new Blob([bytes], { type: mimeType }),
+      config: { mimeType },
+    });
+
+    let raceLost = false;
+    let timer;
+    let onAbort;
+    const guard = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        raceLost = true;
+        reject(namedError('TimeoutError', `The upload did not finish within ${UPSTREAM_TIMEOUT_MS} ms`));
+      }, UPSTREAM_TIMEOUT_MS);
+      onAbort = () => {
+        raceLost = true;
+        reject(namedError('AbortError', 'The operation was aborted'));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+
+    // Attached to the SDK promise itself: it settles the orphan question, and it is the handler that
+    // keeps a late SDK rejection from becoming an unhandled rejection once the race has been lost.
+    upload.then(
+      (file) => {
+        if (raceLost && file?.name) {
+          Promise.resolve()
+            .then(() => this.ai.files.delete({ name: file.name }))
+            .catch(() => undefined);
+        }
+      },
+      () => undefined,
+    );
+
+    try {
+      return await Promise.race([upload, guard]);
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+
+  /** Token count of `contents` for `model`; resolves the SDK answer. */
+  async countTokens({ model, contents, signal }) {
+    return this.ai.models.countTokens({
+      model,
+      contents,
+      config: {
+        abortSignal: signal,
+        httpOptions: { timeout: UPSTREAM_TIMEOUT_MS },
+      },
+    });
   }
 
   async analyzeImage(base64Data, mimeType, prompt, useThinking = false, slot) {

@@ -8,8 +8,45 @@ import catalog from '../../src/prompt-core/model-catalog.json' with { type: 'jso
 
 const LEVEL_ORDER = ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
+/** True when the catalog entry is an image-generation model (its `modalities` include 'image'). */
+export function isImageModel(entry) {
+  return Array.isArray(entry?.modalities) && entry.modalities.includes('image');
+}
+
+/** Pure derivation of the text-only model list: drops every image entry, keeps the original order
+ *  and never mutates its input. Applied once to the raw JSON list below, so findModel, defaultModel,
+ *  resolveSlot (and its tier fallback) and clampLevel can never see an image entry — even if a later
+ *  edit reorders the JSON. An image entry carries no `levels`, so one reaching clampLevel would throw. */
+export function textModelsOf(entries) {
+  return entries.filter(entry => !isImageModel(entry));
+}
+
+/** Every image-generation model across all providers, in catalog order. */
+export const IMAGE_MODELS = catalog.providers.flatMap(p => p.models.filter(isImageModel));
+
+/** The text-only view of the catalog every existing text path reads. */
+const TEXT_PROVIDERS = catalog.providers.map(p => ({ ...p, models: textModelsOf(p.models) }));
+
 export function findProvider(provider) {
-  return catalog.providers.find(p => p.id === provider);
+  return TEXT_PROVIDERS.find(p => p.id === provider);
+}
+
+export function findImageModel(modelId) {
+  return IMAGE_MODELS.find(m => m.id === modelId);
+}
+
+/** Resolve an image-model id from a request body. Accepts only an entry whose `modalities` include
+ *  'image'; a text model id, an unknown id or a non-string value is a client error (400
+ *  INVALID_REQUEST). The error carries only `status` and `code`, never the offending value. */
+export function resolveImageModel(modelId) {
+  const model = typeof modelId === 'string' ? findImageModel(modelId) : undefined;
+  if (!model) {
+    const err = new Error('The requested model is not an image model.');
+    err.status = 400;
+    err.code = 'INVALID_REQUEST';
+    throw err;
+  }
+  return model;
 }
 
 export function isKnownProvider(provider) {

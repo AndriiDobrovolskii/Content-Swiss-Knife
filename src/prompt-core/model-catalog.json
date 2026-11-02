@@ -65,6 +65,22 @@
           "levels": ["minimal", "low", "medium", "high"],
           "defaultLevel": "medium",
           "maxOutputTokens": 65536
+        },
+        {
+          "id": "gemini-3.1-flash-image",
+          "label": "Nano Banana 2, Flash",
+          "tier": "fast",
+          "modalities": ["image"],
+          "inputTokenLimit": 131072,
+          "resolutions": ["1K", "2K"]
+        },
+        {
+          "id": "gemini-3.1-pro-image-preview",
+          "label": "Nano Banana Pro, Pro",
+          "tier": "premium",
+          "modalities": ["image"],
+          "inputTokenLimit": 65536,
+          "resolutions": ["1K", "2K", "4K"]
         }
       ]
     }

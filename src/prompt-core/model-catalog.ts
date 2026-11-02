@@ -46,8 +46,55 @@ export interface ProviderSpec {
   models: ModelSpec[];
 }
 
-/** Single source of truth, shared verbatim with the server via model-catalog.json. */
-export const MODEL_CATALOG = catalog.providers as ProviderSpec[];
+/** An image-generation model (US-10.1). It has no thinking levels and no output-token ceiling, so it is
+ *  a separate shape from ModelSpec: `levels` stays required on ModelSpec and is never made optional. */
+export interface ImageModelSpec {
+  id: string;
+  label: string;
+  /** Advisory cost/speed hint, as for ModelSpec. */
+  tier: 'premium' | 'fast';
+  modalities: ['image'];
+  /** Input-token ceiling the BFF trim budgets against. */
+  inputTokenLimit: number;
+  /** Output resolutions this model accepts (a subset of the closed contract list). */
+  resolutions: string[];
+}
+
+/** One raw entry of model-catalog.json: a text model or an image model. */
+export type CatalogEntry = ModelSpec | ImageModelSpec;
+
+interface RawProviderSpec {
+  id: ProviderId;
+  label: string;
+  models: CatalogEntry[];
+}
+
+/** True for an image-generation entry (its `modalities` include 'image'). */
+export function isImageModelSpec(entry: CatalogEntry): entry is ImageModelSpec {
+  return 'modalities' in entry && Array.isArray(entry.modalities) && entry.modalities.includes('image');
+}
+
+/** Pure text-only derivation of a raw model list: drops every image entry, keeps the original order and
+ *  never mutates its input. Every text path (findModel, defaultModel, clampLevel, the settings menu)
+ *  reads this view, so an image entry (no `levels`) can never reach them. */
+export function textModelsOf(entries: CatalogEntry[]): ModelSpec[] {
+  return entries.filter((entry): entry is ModelSpec => !isImageModelSpec(entry));
+}
+
+const RAW_PROVIDERS = catalog.providers as unknown as RawProviderSpec[];
+
+/** Single source of truth, shared verbatim with the server via model-catalog.json. Text models only:
+ *  image models are listed in IMAGE_MODELS. */
+export const MODEL_CATALOG: ProviderSpec[] =
+  RAW_PROVIDERS.map(p => ({ ...p, models: textModelsOf(p.models) }));
+
+/** Every image-generation model across all providers, in catalog order. */
+export const IMAGE_MODELS: ImageModelSpec[] =
+  RAW_PROVIDERS.flatMap(p => p.models.filter(isImageModelSpec));
+
+export function findImageModel(modelId: string): ImageModelSpec | undefined {
+  return IMAGE_MODELS.find(m => m.id === modelId);
+}
 
 export function findProvider(provider: string): ProviderSpec | undefined {
   return MODEL_CATALOG.find(p => p.id === provider);

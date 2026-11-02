@@ -2,16 +2,13 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: US-9.1
-current_stage: ARCHIVED
-status: ARCHIVED
+story: US-10.1
+current_stage: PR_CREATION
+status: IN_PROGRESS
 pending_human_gate: null
-started_at: 2026-10-17T14:49:04Z
-updated_at: 2026-10-19T19:38:03Z
-stage_attempts:
-  STORY_WRITING: 2
-  SPECIFICATION: 1
-  ARCHITECTURE_PLANNING: 1
-track: prompt
+started_at: 2026-11-01T08:09:46Z
+updated_at: 2026-11-02T23:55:00Z
+stage_attempts: {}
+track: angular
 blockers: []
-note: "Archived. Delivery summary: docs/knowledge/US-9.1-delivery-summary.md. Open follow-ups: AC-11/AC-12 waived and never measured, FROZEN-approval event timestamp estimated, legacy operatorNotes keys in localStorage, OD-10 D-3..D-5/D-7/D-9, OD-13, OD-15 deferred."
+note: "pr_summary v2 (DRAFT) refreshed for HEAD b5185c0 (guard specs 8f7f17e and Story documents b5185c0 are now committed). PR_CREATION runs on the human's explicit instruction 'створи PR для US-10.1' (after the human chose: commit first, then PR). .tmp.driveupload/ stays out."
