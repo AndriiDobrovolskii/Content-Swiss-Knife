@@ -26,11 +26,15 @@ import {
  * because the mode switch stays enabled during a paid call and `AppComponent` destroys the studio branch: a
  * component-local state would unsubscribe a paid request and lose its result.
  *
- * This part owns the sessions and their persistence: the list (with the seven-day expiry on every load and the cap
- * of 20), the current session, the per-session composer drafts (in memory only, P-4), new-session creation with
- * eviction in the port's single transaction, the model switch, attaching, the atomic commit of a response batch, the
- * running cost, and the `downloaded` flags. Every storage failure is one native alert per failing user action (D-28);
- * a sent-bytes store failure never blocks an attach or a send (OD-37). Every ambient effect is a port (NFR-14).
+ * Sessions and persistence: the list (with the seven-day expiry on every load and the cap of 20), the current
+ * session, the per-session composer drafts (in memory only, P-4), new-session creation with eviction in the port's
+ * single transaction, the model switch, attaching, the atomic commit of a response batch, the running cost, and the
+ * `downloaded` flags. Every storage failure is one native alert per failing user action (D-28); a sent-bytes store
+ * failure never blocks an attach or a send (OD-37).
+ *
+ * Generation: the in-flight call (abort controller, session id), `send` / `retry` / `cancel` over the generation
+ * runner, the blocked state (FR-47), the non-history events of text and safety replies (D-5), and the status signal
+ * the runner announces through. Every ambient effect is a port (NFR-14).
  */
 
 export const DEFAULT_MODEL = 'gemini-3.1-flash-image';
@@ -66,6 +70,16 @@ export interface StudioMessage {
   textId: string;
   params?: Record<string, string | number>;
   region: 'alert';
+}
+
+/** A reply that is not part of the history: a text-only answer or a safety block (FR-36, D-5). In memory only. */
+export interface StudioEvent {
+  kind: 'text' | 'safety';
+  text?: string;
+  reason?: string;
+  sessionId: string;
+  /** The id of the user turn this reply answered; a Retry of that turn replaces the event. */
+  turnId: string;
 }
 
 /** The turn a Retry would re-send: only offered while the composer still holds exactly this content (SD-18). */
@@ -115,6 +129,9 @@ export class ImageStudioStore {
   private readonly status = signal('');
   private readonly pending = signal<StudioMessage | null>(null);
   private readonly retryTurn = signal<RetryTurn | null>(null);
+  private readonly running = signal<{ sessionId: string; controller: AbortController } | null>(null);
+  private readonly blockedSessionId = signal<string | null>(null);
+  private readonly eventLog = signal<StudioEvent[]>([]);
 
   /** The text of the one `role="status"` region; '' when cleared. */
   readonly statusMessage = this.status.asReadonly();
@@ -130,6 +147,21 @@ export class ImageStudioStore {
     if (!session) return defaultDraft(DEFAULT_MODEL);
     return this.drafts()[session.meta.id] ?? defaultDraft(session.meta.model);
   });
+  /** True while a generation runs (it belongs to the root store, not to any component, DD-14). */
+  readonly generating = computed(() => this.running() !== null);
+  /** The input is locked only while a generation runs; the blocked state keeps it enabled (SD-37). */
+  readonly inputEnabled = computed(() => !this.generating());
+  /** The current session is in the blocked state: the protected history alone exceeds the limits (FR-47, D-12). */
+  readonly blocked = computed(() => this.blockedSessionId() !== null && this.blockedSessionId() === this.currentSessionId());
+  /** Non-history replies of the current session (D-5). */
+  readonly events = computed(() => this.eventLog().filter((e) => e.sessionId === this.currentSessionId()));
+  /** Send needs content (text, a ready upload or an attached version) and no running call, upload or block (FR-18). */
+  readonly canSend = computed(() => {
+    const d = this.draft();
+    if (this.current() === null || this.generating() || this.blocked()) return false;
+    if (d.attachments.some((a) => a.state === 'uploading')) return false;
+    return d.text.trim() !== '' || d.attachments.some((a) => a.state === 'ready') || d.attachedVersion !== null;
+  });
   /** True while Retry is offered: the failed turn is still exactly what the composer holds (SD-18). */
   readonly canRetry = computed(() => {
     const retry = this.retryTurn();
@@ -138,7 +170,7 @@ export class ImageStudioStore {
   /** The model switch is inactive while the composer holds unsent content or a failed turn awaits Retry (D-4). */
   readonly modelSwitchLocked = computed(() => {
     const d = this.draft();
-    return d.text.trim() !== '' || d.attachments.length > 0 || d.attachedVersion !== null || this.canRetry();
+    return this.generating() || d.text.trim() !== '' || d.attachments.length > 0 || d.attachedVersion !== null || this.canRetry();
   });
 
   /** The announcer the generation runner calls; bound to the status signal (DD-23, P-15). */
@@ -258,6 +290,23 @@ export class ImageStudioStore {
     this.setDraft({ attachments: this.draft().attachments.filter((a) => a.id !== id) });
   }
 
+  /**
+   * "Edit this version" (FR-37). In the normal state the version is attached inline to the draft of the same session,
+   * replacing any earlier one. In the blocked state it creates a NEW session seeded with the version (FR-47): that exit
+   * is not subject to the composer guard.
+   */
+  async editVersion(versionNumber: number): Promise<void> {
+    const session = this.current();
+    if (!session) return;
+    const seed = this.versionImage(session, versionNumber);
+    if (!seed) return;
+    if (this.blocked()) {
+      await this.createSession({ model: session.meta.model, seed, carry: { productName: this.draft().productName } });
+      return;
+    }
+    this.setDraft({ attachedVersion: seed });
+  }
+
   // ---- persistence of the downloaded flag -----------------------------------------------------------------------
 
   /** Flags versions as downloaded, called only after an SD-17 success signal; renews the last activity (SD-32). */
@@ -283,7 +332,7 @@ export class ImageStudioStore {
   /** One user action from the current session's draft. The draft is cleared on send and restored on any failure. */
   async send(): Promise<void> {
     const session = this.current();
-    if (!session) return;
+    if (!session || this.generating()) return;
     const draft = this.draft();
     const buildInput: BuildInput = {
       newTurnId: this.ids.next(),
@@ -298,14 +347,37 @@ export class ImageStudioStore {
     await this.execute(session, buildInput, structuredClone(draft));
   }
 
+  /** Re-sends the SAME turn (same content, ratio, resolution, model, preset); a no-op unless Retry is offered. */
+  async retry(): Promise<void> {
+    const retry = this.retryTurn();
+    const session = this.current();
+    if (!retry || !session || this.generating() || !this.canRetry()) return;
+    this.eventLog.update((all) => all.filter((e) => e.turnId !== retry.buildInput.newTurnId));
+    await this.execute(session, retry.buildInput, retry.draft);
+  }
+
+  /** Cancel (FR-21): aborts the in-flight call; the runner ends the action as `cancelled`. */
+  cancel(): void {
+    this.running()?.controller.abort();
+  }
+
   private async execute(session: StoredSession, buildInput: BuildInput, draftSnapshot: ComposerDraft): Promise<void> {
     const sessionId = session.meta.id;
+    const controller = new AbortController();
     this.pending.set(null);
     this.retryTurn.set(null);
+    this.blockedSessionId.set(null);
+    this.running.set({ sessionId, controller });
     this.setDraftOf(sessionId, { ...draftSnapshot, text: '', attachments: [], attachedVersion: null });
 
-    const outcome = await this.runner.run({ sessionId, snapshot: session, buildInput });
-    await this.applyOutcome(outcome, sessionId, buildInput, draftSnapshot);
+    try {
+      const outcome = await this.runner.run({ sessionId, snapshot: session, buildInput }, controller.signal);
+      // The call has ended; from here on only the commit remains, which Cancel can no longer stop.
+      this.running.set(null);
+      await this.applyOutcome(outcome, sessionId, buildInput, draftSnapshot);
+    } finally {
+      this.running.set(null);
+    }
   }
 
   private async applyOutcome(outcome: RunOutcome, sessionId: string, buildInput: BuildInput, draft: ComposerDraft): Promise<void> {
@@ -324,6 +396,7 @@ export class ImageStudioStore {
         return;
       case 'blocked':
         this.restoreDraft(sessionId, draft);
+        this.blockedSessionId.set(sessionId);
         this.pending.set({ textId: outcome.textId, region: 'alert' });
         return;
       case 'failed':
@@ -366,13 +439,15 @@ export class ImageStudioStore {
         inputFormat: outputFormat({ uploadedFormats, attachedVersionFormat: attachedFormat, latestVersionFormat: latest?.inputFormat }),
       });
     } catch (error) {
+      // A response that lists a protected turn (InvalidResponseError) is an invalid response: nothing is applied.
+      if (!(error instanceof InvalidResponseError)) throw error;
       this.announcer.clear();
       this.restoreDraft(sessionId, draft);
-      this.pending.set({ textId: error instanceof InvalidResponseError ? 'T-12' : 'T-12', region: 'alert' });
+      this.pending.set({ textId: 'T-12', region: 'alert' });
       return;
     }
     if (!applied.batch) {
-      this.restoreDraft(sessionId, draft);
+      this.recordNonHistoryReply(outcome, sessionId, buildInput, draft);
       return;
     }
 
@@ -392,8 +467,30 @@ export class ImageStudioStore {
     const turns = applied.batch.meta.turnOrder.map((id) => byId.get(id)).filter((t): t is Turn => t !== undefined);
     this.replaceStored(sessionId, { meta: applied.batch.meta, turns });
 
+    if (outcome.type !== 'images') this.recordNonHistoryReply(outcome, sessionId, buildInput, draft);
     if (applied.notice) this.pending.set({ textId: 'T-9', params: { ...applied.notice }, region: 'alert' });
-    if (outcome.type !== 'images') this.restoreDraft(sessionId, draft);
+  }
+
+  /**
+   * A text-only or safety reply is a non-history event with Retry (FR-36, FR-62, FR-63): it is kept in memory only, the
+   * composer gets the content back, and a safety block also shows T-4 (the cut notice, when there is one, replaces it).
+   */
+  private recordNonHistoryReply(
+    outcome: Extract<RunOutcome, { type: 'images' | 'text' | 'safety' }>,
+    sessionId: string,
+    buildInput: BuildInput,
+    draft: ComposerDraft,
+  ): void {
+    const response = outcome.response;
+    const turnId = buildInput.newTurnId;
+    if (response.kind === 'text') {
+      this.eventLog.update((all) => [...all, { kind: 'text', text: response.text, sessionId, turnId }]);
+    } else if (response.kind === 'safety') {
+      this.eventLog.update((all) => [...all, { kind: 'safety', reason: response.reason, sessionId, turnId }]);
+      this.pending.set({ textId: 'T-4', region: 'alert' });
+    }
+    this.restoreDraft(sessionId, draft);
+    this.retryTurn.set({ sessionId, buildInput, draft });
   }
 
   // ---- internals ----------------------------------------------------------------------------------------------
@@ -448,15 +545,21 @@ export class ImageStudioStore {
 
   /** The session with a generation in flight, which the eviction must spare (D-23). */
   private inFlightSessionId(): string | undefined {
-    return undefined;
+    return this.running()?.sessionId;
   }
 
   /** The latest version's image, as the seed of a new session (FR-50). */
   private latestVersionImage(session: StoredSession): AttachedVersion | null {
     const latest = session.meta.versions.reduce<Version | undefined>((best, v) => (!best || v.number > best.number ? v : best), undefined);
-    const part = latest ? session.turns.find((t) => t.id === latest.turnId)?.parts[latest.partIndex] : undefined;
-    if (!latest || !part?.inlineData) return null;
-    return { mimeType: part.inlineData.mimeType, data: part.inlineData.data, fromVersion: latest.number };
+    return latest ? this.versionImage(session, latest.number) : null;
+  }
+
+  /** The inline image of one retained version, or null when its turn or part is not available. */
+  private versionImage(session: StoredSession, versionNumber: number): AttachedVersion | null {
+    const version = session.meta.versions.find((v) => v.number === versionNumber);
+    const part = version ? session.turns.find((t) => t.id === version.turnId)?.parts[version.partIndex] : undefined;
+    if (!version || !part?.inlineData) return null;
+    return { mimeType: part.inlineData.mimeType, data: part.inlineData.data, fromVersion: version.number };
   }
 
   private replaceStored(sessionId: string, stored: StoredSession): void {
