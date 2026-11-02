@@ -28,6 +28,30 @@
     </div>
   }
 
+  <!-- Attach: a real button and a real file input, a drop zone and the paste handler on the prompt (FR-8, FR-73) -->
+  <div
+    (dragover)="onDragOver($event)"
+    (drop)="onDrop($event)"
+    class="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-3 py-2">
+    <button
+      type="button"
+      (click)="picker.click()"
+      [disabled]="!store.inputEnabled()"
+      class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50">
+      {{ tx('X-2') }}
+    </button>
+    <span class="text-xs text-slate-500 dark:text-slate-400">{{ tx('X-3') }}</span>
+    <input
+      #picker
+      type="file"
+      multiple
+      accept="image/png,image/jpeg,image/webp"
+      tabindex="-1"
+      aria-hidden="true"
+      class="hidden"
+      (change)="onFilesChosen($event)" />
+  </div>
+
   <!-- Attached images: user uploads and the attached version (FR-14, FR-37) -->
   <ul [attr.aria-label]="tx('X-25')" class="flex flex-wrap gap-2">
     @if (store.draft().attachedVersion; as attached) {
@@ -36,9 +60,43 @@
           [src]="'data:' + attached.mimeType + ';base64,' + attached.data"
           [alt]="tx('X-27', { n: attached.fromVersion })"
           class="w-full h-full object-cover" />
+        <button
+          type="button"
+          (click)="removeAttachedVersion()"
+          [attr.aria-label]="tx('X-14')"
+          [disabled]="!store.inputEnabled()"
+          class="absolute top-0 right-0 w-5 h-5 text-xs leading-none bg-slate-900/70 text-white rounded-bl-lg disabled:opacity-50">&times;</button>
+      </li>
+    }
+    @for (attachment of store.draft().attachments; track attachment.id) {
+      <li class="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-600">
+        <img
+          [attr.src]="previews()[attachment.id] ?? null"
+          [alt]="attachment.fileName"
+          [class.opacity-40]="attachment.state !== 'ready'"
+          class="w-full h-full object-cover" />
+        @if (attachment.state === 'uploading') {
+          <span class="absolute inset-x-0 bottom-0 bg-slate-900/70 text-white text-[10px] text-center">{{ tx('X-23') }}</span>
+        }
+        @if (attachment.state === 'failed' && retryable().has(attachment.id)) {
+          <button
+            type="button"
+            (click)="retryAttachment(attachment.id)"
+            class="absolute inset-x-0 bottom-0 bg-amber-600 text-white text-[10px] font-semibold">{{ tx('T-22.retry') }}</button>
+        }
+        <button
+          type="button"
+          (click)="removeAttachment(attachment.id)"
+          [attr.aria-label]="tx('X-14')"
+          [disabled]="!store.inputEnabled()"
+          class="absolute top-0 right-0 w-5 h-5 text-xs leading-none bg-slate-900/70 text-white rounded-bl-lg disabled:opacity-50">&times;</button>
       </li>
     }
   </ul>
+
+  @if (attachMessage(); as message) {
+    <div role="alert" class="text-sm text-red-700 dark:text-red-300">{{ tx(message.textId) }}</div>
+  }
 
   <!-- Prompt -->
   <textarea
@@ -47,6 +105,7 @@
     [value]="store.draft().text"
     [disabled]="!store.inputEnabled()"
     (input)="onText($event)"
+    (paste)="onPaste($event)"
     class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 p-3 text-sm focus:ring-2 focus:ring-violet-500 disabled:opacity-60"></textarea>
 
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
