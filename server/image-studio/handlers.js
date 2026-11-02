@@ -4,7 +4,7 @@
  * Handler factories: every effect is an injected dependency, so a test drives a handler with a fake
  * `req`/`res` and a stub provider, with no socket, no network and no real waiting.
  *
- *   deps.getGemini()        the Gemini provider (independent of LLM_PROVIDER, FR-6)
+ *   deps.getGemini()        the Gemini provider (may be async) (independent of LLM_PROVIDER, FR-6)
  *   deps.hasGeminiKey()     whether a Gemini key is configured (FR-5)
  *   deps.sleep(ms, signal)  abortable wait used by the retry loop (FR-60)
  *   deps.log(...)           server-side log sink
@@ -106,7 +106,7 @@ export function createUploadHandler(deps) {
       if (!mimeType) throw new ImageStudioError('UNSUPPORTED_IMAGE_TYPE');
       if (!hasGeminiKey()) throw new ImageStudioError('GEMINI_KEY_MISSING');
 
-      const gemini = getGemini();
+      const gemini = await getGemini();
       const file = await runWithRetry(
         () => logged(log, 'upload', () => gemini.uploadFile({ bytes, mimeType, signal })),
         { sleep, signal },
@@ -151,7 +151,7 @@ export function createGenerateHandler(deps) {
       if (!hasGeminiKey()) throw new ImageStudioError('GEMINI_KEY_MISSING');
 
       const { model, aspectRatio, resolution, presetId } = request;
-      const gemini = getGemini();
+      const gemini = await getGemini();
       const newTurn = { id: request.newTurn.id, role: 'user', parts: request.newTurn.parts };
 
       // Size trim, then token trim (k + 1 counts, each under the retry loop, FR-40). A count that fails after

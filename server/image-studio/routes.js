@@ -7,7 +7,6 @@
  * Rule 1: no SDK import here; the Gemini provider is reached through the existing factory, always
  * `gemini` whatever LLM_PROVIDER says (FR-6). Rule 2: no retrieval.
  */
-import { resolveProvider } from '../providers/factory.js';
 import { computeImageCost } from '../usage/pricing.js';
 import { RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS } from './constants.js';
 import { createGenerateHandler, createUploadHandler } from './handlers.js';
@@ -43,10 +42,20 @@ async function insertUsageLazily(row) {
   insertUsage(row);
 }
 
+/**
+ * The Gemini provider, resolved on first use. `providers/factory.js` pulls in the three vendor SDKs, so it is loaded
+ * by the first request rather than when this module is imported: importing `server/app.js` stays light and free of
+ * side effects. The handlers await the result.
+ */
+async function getGeminiLazily() {
+  const { resolveProvider } = await import('../providers/factory.js');
+  return resolveProvider('gemini');
+}
+
 /** The production dependencies of the handlers. */
 function defaultDeps() {
   return {
-    getGemini: () => resolveProvider('gemini'),
+    getGemini: getGeminiLazily,
     hasGeminiKey: () => Boolean(process.env.GEMINI_API_KEY),
     now: () => Date.now(),
     sleep: abortableSleep,
