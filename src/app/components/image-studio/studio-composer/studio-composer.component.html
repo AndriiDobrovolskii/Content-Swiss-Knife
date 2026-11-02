@@ -1,0 +1,110 @@
+<div class="space-y-3">
+
+  <!-- Presets (FR-28 to FR-30) -->
+  <div role="group" [attr.aria-label]="tx('X-13')" class="flex flex-wrap gap-2">
+    @for (preset of presets; track preset.id) {
+      <button
+        type="button"
+        (click)="pickPreset(preset)"
+        [disabled]="!store.inputEnabled()"
+        class="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50">
+        {{ presetLabel(preset) }}
+      </button>
+    }
+  </div>
+
+  <!-- Quick-edit chips, only once a version exists (FR-31) -->
+  @if (showChips()) {
+    <div role="group" [attr.aria-label]="tx('X-24')" class="flex flex-wrap gap-2">
+      @for (chip of chips; track chip.id) {
+        <button
+          type="button"
+          (click)="sendChip(chip)"
+          [disabled]="!store.inputEnabled() || store.blocked()"
+          class="px-3 py-1.5 rounded-full text-xs font-semibold bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/50 disabled:opacity-50">
+          {{ chipLabel(chip) }}
+        </button>
+      }
+    </div>
+  }
+
+  <!-- Attached images: user uploads and the attached version (FR-14, FR-37) -->
+  <ul [attr.aria-label]="tx('X-25')" class="flex flex-wrap gap-2">
+    @if (store.draft().attachedVersion; as attached) {
+      <li class="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-600">
+        <img
+          [src]="'data:' + attached.mimeType + ';base64,' + attached.data"
+          [alt]="tx('X-27', { n: attached.fromVersion })"
+          class="w-full h-full object-cover" />
+      </li>
+    }
+  </ul>
+
+  <!-- Prompt -->
+  <textarea
+    rows="4"
+    [attr.aria-label]="tx('X-12')"
+    [value]="store.draft().text"
+    [disabled]="!store.inputEnabled()"
+    (input)="onText($event)"
+    class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 p-3 text-sm focus:ring-2 focus:ring-violet-500 disabled:opacity-60"></textarea>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <input
+      type="text"
+      [attr.aria-label]="tx('X-11')"
+      [value]="store.draft().productName"
+      [disabled]="!store.inputEnabled()"
+      (input)="onProductName($event)"
+      class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm col-span-2 md:col-span-1 disabled:opacity-60" />
+
+    <select
+      [attr.aria-label]="tx('X-4')"
+      [disabled]="!store.inputEnabled()"
+      (change)="onRatio($event)"
+      class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-2 py-2 text-sm disabled:opacity-60">
+      @for (ratio of ratios; track ratio) {
+        <option [value]="ratio" [selected]="ratio === store.draft().aspectRatio">{{ ratio }}</option>
+      }
+    </select>
+
+    <select
+      [attr.aria-label]="tx('X-5')"
+      [disabled]="!store.inputEnabled()"
+      (change)="onResolution($event)"
+      class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-2 py-2 text-sm disabled:opacity-60">
+      @for (resolution of resolutions(); track resolution) {
+        <option [value]="resolution" [selected]="resolution === store.draft().resolution">{{ resolution }}</option>
+      }
+    </select>
+
+    <select
+      [attr.aria-label]="tx('X-6')"
+      [disabled]="store.modelSwitchLocked()"
+      (change)="onModel($event)"
+      class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-2 py-2 text-sm disabled:opacity-60">
+      @for (model of models; track model.id) {
+        <option [value]="model.id" [selected]="model.id === store.draft().model">{{ model.label }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <button
+      type="button"
+      (click)="send()"
+      [disabled]="!store.canSend()"
+      class="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white transition-colors">
+      {{ tx('X-1') }}
+    </button>
+    @if (store.generating()) {
+      <button
+        type="button"
+        (click)="cancel()"
+        class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
+        {{ tx('T-22.cancel') }}
+      </button>
+    }
+  </div>
+
+</div>
