@@ -1,0 +1,52 @@
+---
+artifact: pull_request
+story: US-10.1
+version: 1
+status: ARCHIVED
+owner: so-pr-creator
+created_at: 2026-11-02T16:50:19Z
+updated_at: 2026-11-02T16:50:19Z
+supersedes: null
+inputs_consumed:
+  - key: story
+    version: 1
+  - key: pr_summary
+    version: 2
+open_decisions_blocking: false
+---
+# Record of the opened Pull Request. Opening it is not READY_FOR_PR and is not a review.
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+remote: origin
+pull_request:
+  number: 145
+  url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/145
+  state: open
+  draft: false
+  opened_at: 2026-11-02T16:50:12Z
+  title_source: docs/pr/US-10.1-pr-summary.md#v2 (verbatim)
+  body_source: docs/pr/US-10.1-pr-summary.md#v2 (verbatim)
+branch:
+  head: feat/US-10.1-nano-banana-image-studio
+  head_sha_pushed: 8142285fdf7fe7296a266f837f5a627fabb11a56
+  base: main
+  base_sha_at_open: 7118f7a2094945f8ecc6b7193a9400e3f37ebb42
+  commits_ahead_of_base: 53
+  commits_behind_base: 0
+push:
+  command: git push -u origin feat/US-10.1-nano-banana-image-studio
+  force: false
+  no_verify: false
+  remote_branch_existed_before: false
+authorisation: >
+  Human instruction in this session: "створи PR для US-10.1", after choosing
+  "commit the untracked files first, then PR".
+not_done:
+  - merge
+  - ready-for-review or approval marking
+  - reviewers, labels or milestone
+notes:
+  - .tmp.driveupload/ remains untracked and was not committed or pushed.
+  - pr_summary v2 said "52 commits ahead"; the branch is 53 ahead because the docs commit
+    8142285 (the pr_summary and the PR_CREATION hand-off) landed after the draft. The body was
+    posted verbatim and still reads "52 commits ahead" in reviewer note 7.
+  - This file was written after the push and is not part of the pushed head SHA.

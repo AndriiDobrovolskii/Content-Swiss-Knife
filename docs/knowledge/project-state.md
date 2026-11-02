@@ -132,3 +132,25 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Open items: AC-11 / AC-12 (live-run acceptance) were WAIVED by the owner (Story v6) and never measured; no live output was
   inspected (security L-1); the FROZEN-approval event in `history.jsonl` has an estimated timestamp; OD-10 D-3..D-5 / D-7 / D-9,
   OD-13, OD-15 deferred; legacy `operatorNotes` keys remain inert in `localStorage`.
+
+## US-10.1 — Image Studio (Nano Banana) for multi-turn product image generation and editing (archived 2026-11-02T16:58:06Z)
+- New Image Studio mode (own lazy chunk): up to five uploaded images, presets and chips, model / ratio / resolution selectors,
+  multi-turn Gemini image chat with Cancel and a 120 s deadline, a version strip with download / copy / ZIP, session list with
+  IndexedDB persistence (7-day expiry, 20 sessions), dashboard bucket `image-studio|<preset>|<resolution>`.
+- BFF routes `/api/image-studio/upload` and `/generate` (`server/image-studio/*`, mounted by `createApp` in `server/app.js`):
+  `Content-Length` body limit 30 MiB (413/411), per-IP rate limit 30/window, fixed 1000/2000/4000 ms retry, magic-byte upload
+  check, size and token trim of the history, `FILE_MISSING` → 410, image pricing and one usage row per successful generation.
+  Gemini SDK calls only in `server/providers/gemini.js`; no system instruction; no retrieval. The shared model catalogue gained the
+  two image models and keeps text-only views image-blind.
+- `package.json` `overrides.cheerio.undici = 7.24.4` (guard `test/undici-pin.spec.ts`): the npm `undici` loaded by `cheerio`
+  broke the Files API upload in the full server; 7.24.4 equals Node 24.15.0's bundled copy. Human-approved NFR-7 exception.
+- `GeminiProvider.uploadFile` passes no `httpOptions` (the SDK drops its upload headers and 404s otherwise) and enforces abort,
+  timeout and orphan cleanup itself.
+- No FROZEN file changed. Delivered by PR #145, merge commit `bd31254`. Summary: `docs/knowledge/US-10.1-delivery-summary.md`.
+- Open items: security N-1 (uncapped history → `countTokens` amplification before the limiter), N-2 (`fileUri`/`mimeType`/
+  `inlineData` unvalidated), N-4 (`/upload` without limiter or decoded-size cap; timed-out uploads are retried), N-3, N-5, F-8;
+  the `undici` pin re-opens advisories fixed in 7.28.0 and the production Node version is unknown (no `engines` / `.nvmrc`);
+  only the upload route was ever verified live — `generateContent`, studio `countTokens`, `FILE_MISSING`, model ids, prices and
+  Railway Content-Length are unverified; IndexedDB and canvas conversion are tested against fakes only (RC-3); AC-20 waived (W-1),
+  AC-5 plumbing only (W-2); Node 24.15.0 / Windows worker fault (`0xC0000409`) mitigated by keep-alive agents in two specs, not
+  fixed.

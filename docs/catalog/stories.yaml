@@ -79,5 +79,5 @@ stories:
     slug: nano-banana-image-studio
     track: angular
     path: docs/stories/US-10.1-nano-banana-image-studio.md
-    state: IN_PROGRESS
+    state: ARCHIVED
     created_at: 2026-11-01T12:00:00Z
