@@ -141,7 +141,7 @@ in, both buttons stay hidden.
 
 ### Prerequisites
 
-- **Node.js** (LTS recommended) and npm
+- **Node.js** 24.22.2 (pinned in `.nvmrc`) and npm
 - API key for at least one LLM provider (Anthropic, OpenAI, or Gemini)
 - *(Optional)* a Serper.dev key for product enrichment / web search
 
