@@ -53,14 +53,14 @@ export const PROMPT_PRESETS: PromptPreset[] = [
     name: { uk: 'Лайфстайл', en: 'Lifestyle' },
     template:
       'Lifestyle photo of {product} placed in a real environment such as a workshop, an office or a classroom.',
-    defaults: { aspectRatio: '4:3', resolution: '2K', model: 'gemini-3.1-pro-image-preview' },
+    defaults: { aspectRatio: '4:3', resolution: '2K', model: 'gemini-3-pro-image' },
   },
   {
     id: 'banner',
     name: { uk: 'Банер', en: 'Banner' },
     template:
       'Wide banner image featuring {product}, with a free area reserved for text. Do not draw any text.',
-    defaults: { aspectRatio: '16:9', resolution: '2K', model: 'gemini-3.1-pro-image-preview' },
+    defaults: { aspectRatio: '16:9', resolution: '2K', model: 'gemini-3-pro-image' },
   },
   {
     id: 'social',
@@ -72,7 +72,7 @@ export const PROMPT_PRESETS: PromptPreset[] = [
     id: 'detail-closeup',
     name: { uk: 'Деталь крупним планом', en: 'Detail close-up' },
     template: 'Detail close-up of {product}.',
-    defaults: { aspectRatio: '1:1', resolution: '2K', model: 'gemini-3.1-pro-image-preview' },
+    defaults: { aspectRatio: '1:1', resolution: '2K', model: 'gemini-3-pro-image' },
   },
 ];
 

@@ -75,7 +75,7 @@
           "resolutions": ["1K", "2K"]
         },
         {
-          "id": "gemini-3.1-pro-image-preview",
+          "id": "gemini-3-pro-image",
           "label": "Nano Banana Pro, Pro",
           "tier": "premium",
           "modalities": ["image"],

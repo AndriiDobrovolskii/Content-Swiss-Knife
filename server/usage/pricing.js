@@ -78,7 +78,7 @@ function getPrices(model, now = new Date()) {
 // together; test/image-studio/image-model-consistency.spec.ts fails until the two agree.
 const IMAGE_PRICES = {
   'gemini-3.1-flash-image': 0.03,
-  'gemini-3.1-pro-image-preview': 0.06,
+  'gemini-3-pro-image': 0.06,
 };
 
 // Thrown when an image model has no per-image price. The generate handler maps it to a 500

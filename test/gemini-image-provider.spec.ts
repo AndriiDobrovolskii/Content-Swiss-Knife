@@ -98,7 +98,7 @@ describe('GeminiProvider.generateImage - request shape (FR-6, FR-80)', () => {
   });
 
   it('FR-80: the outbound request carries NO system instruction, anywhere', async () => {
-    await provider().generateImage({ model: 'gemini-3.1-pro-image-preview', contents: CONTENTS, aspectRatio: '1:1', resolution: '1K', signal: new AbortController().signal });
+    await provider().generateImage({ model: 'gemini-3-pro-image', contents: CONTENTS, aspectRatio: '1:1', resolution: '1K', signal: new AbortController().signal });
     expect(genCalls[0].config.systemInstruction).toBeUndefined();
     expect(genCalls[0].systemInstruction).toBeUndefined();
     expect(JSON.stringify(genCalls[0])).not.toMatch(/systemInstruction/i);
@@ -132,7 +132,7 @@ describe('GeminiProvider - single shot, no retry, no fallback model (FR-60)', ()
   it('FR-60: a failing generateImage is attempted exactly once, never via withRetry, and rethrown with its status', async () => {
     const failure = Object.assign(new Error('{"error":{"code":503}}'), { status: 503 });
     genImpl = async () => { throw failure; };
-    await expect(provider().generateImage({ model: 'gemini-3.1-pro-image-preview', contents: CONTENTS, aspectRatio: '1:1', resolution: '1K', signal: new AbortController().signal }))
+    await expect(provider().generateImage({ model: 'gemini-3-pro-image', contents: CONTENTS, aspectRatio: '1:1', resolution: '1K', signal: new AbortController().signal }))
       .rejects.toMatchObject({ status: 503 });
     expect(genCalls).toHaveLength(1);
     expect(withRetryMock).not.toHaveBeenCalled();
@@ -147,8 +147,8 @@ describe('GeminiProvider - single shot, no retry, no fallback model (FR-60)', ()
 
   it('FR-60: the model is never silently substituted - every call names the requested model, also after a failure', async () => {
     genImpl = async () => { throw Object.assign(new Error('x'), { status: 500 }); };
-    await provider().generateImage({ model: 'gemini-3.1-pro-image-preview', contents: CONTENTS, aspectRatio: '1:1', resolution: '1K', signal: new AbortController().signal }).catch(() => undefined);
-    expect(genCalls.map((c) => c.model)).toEqual(['gemini-3.1-pro-image-preview']);
+    await provider().generateImage({ model: 'gemini-3-pro-image', contents: CONTENTS, aspectRatio: '1:1', resolution: '1K', signal: new AbortController().signal }).catch(() => undefined);
+    expect(genCalls.map((c) => c.model)).toEqual(['gemini-3-pro-image']);
   });
 
   it('FR-60: uploadFile and countTokens are single-shot too - one SDK call, no withRetry, status kept on failure', async () => {

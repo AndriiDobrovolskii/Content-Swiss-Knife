@@ -18,7 +18,7 @@ import { ModelSettingsService } from './model-settings.service';
 
 const KEY = 'seo_gen_model_settings';
 const FLASH = 'gemini-3.1-flash-image';
-const PRO = 'gemini-3.1-pro-image-preview';
+const PRO = 'gemini-3-pro-image';
 
 const rawGemini = (): any[] => (rawCatalog.providers as any[]).find(p => p.id === 'gemini').models;
 const textGeminiIds = () => rawGemini().filter(m => !m.modalities?.includes('image')).map(m => m.id);

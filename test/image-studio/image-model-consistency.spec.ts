@@ -20,7 +20,7 @@ const catalogImageIds = (): string[] => (catalog as any).providers.flatMap((pr: 
 
 describe('image model ids agree across the catalogue, the price table and the presets', () => {
   it('FR-2: the catalogue holds exactly the two verified image ids, in the Gemini provider, after every text model', () => {
-    expect(catalogImageIds().sort()).toEqual(['gemini-3.1-flash-image', 'gemini-3.1-pro-image-preview']);
+    expect(catalogImageIds().sort()).toEqual(['gemini-3-pro-image', 'gemini-3.1-flash-image']);
     const gemini = (catalog as any).providers.find((pr: any) => pr.id === 'gemini');
     const idx = gemini.models.map((m: any, i: number) => ((m.modalities ?? []).includes('image') ? i : -1)).filter((i: number) => i >= 0);
     expect(Math.min(...idx)).toBeGreaterThan(0); // neither is models[0]: the default text model is unchanged

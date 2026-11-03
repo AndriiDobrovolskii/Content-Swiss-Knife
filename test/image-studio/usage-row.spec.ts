@@ -30,7 +30,7 @@ describe('buildUsageRow - label and fixed columns', () => {
   it('SD-7 / FR-32: with no preset the literal none stands in for the preset id', async () => {
     const { buildUsageRow } = await load(MODULE);
     for (const presetId of [undefined, null]) {
-      const row = buildUsageRow({ model: 'gemini-3.1-pro-image-preview', presetId, resolution: '4K', usageMetadata: USAGE, costUsd: 0.06 });
+      const row = buildUsageRow({ model: 'gemini-3-pro-image', presetId, resolution: '4K', usageMetadata: USAGE, costUsd: 0.06 });
       expect(row.taskLabel).toBe('image-studio|none|4K');
     }
   });
@@ -51,7 +51,7 @@ describe('buildUsageRow - label and fixed columns', () => {
 
   it('FR-70 / FR-69: costUsd on the row is the per-image cost handed in, not tokens x rate', async () => {
     const { buildUsageRow } = await load(MODULE);
-    const row = buildUsageRow({ model: 'gemini-3.1-pro-image-preview', presetId: null, resolution: '2K', usageMetadata: USAGE, costUsd: 0.12 });
+    const row = buildUsageRow({ model: 'gemini-3-pro-image', presetId: null, resolution: '2K', usageMetadata: USAGE, costUsd: 0.12 });
     expect(row.costUsd).toBe(0.12);
   });
 });

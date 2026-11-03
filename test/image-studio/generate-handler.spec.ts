@@ -28,7 +28,7 @@ const load = (p: string): Promise<any> => import(/* @vite-ignore */ p);
 const HANDLERS = '../../server/image-studio/handlers.js';
 const PRICING = '../../server/usage/pricing.js';
 const FLASH = 'gemini-3.1-flash-image';
-const PRO = 'gemini-3.1-pro-image-preview';
+const PRO = 'gemini-3-pro-image';
 
 const IMG = { inlineData: { mimeType: 'image/png', data: 'QUJDRA==' } };
 const IMG2 = { inlineData: { mimeType: 'image/jpeg', data: 'RUZHSA==' } };

@@ -31,7 +31,7 @@ import * as catalog from './model-catalog';
 const load = (p: string): Promise<any> => import(/* @vite-ignore */ p);
 
 const FLASH = 'gemini-3.1-flash-image';
-const PRO = 'gemini-3.1-pro-image-preview';
+const PRO = 'gemini-3-pro-image';
 
 /** FR-30 table + SD-21 literals, verbatim. */
 const EXPECTED = [
