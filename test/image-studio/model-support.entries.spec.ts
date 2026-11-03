@@ -14,7 +14,7 @@ import catalog from '../../src/prompt-core/model-catalog.json';
 
 const mod = support as any;
 const FLASH = 'gemini-3.1-flash-image';
-const PRO = 'gemini-3.1-pro-image-preview';
+const PRO = 'gemini-3-pro-image';
 const gemini = (catalog as any).providers.find((p: any) => p.id === 'gemini');
 const rawById = (id: string) => gemini.models.find((m: any) => m.id === id);
 

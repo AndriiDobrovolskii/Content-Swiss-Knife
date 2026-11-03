@@ -12,7 +12,7 @@ import {
 
 export const PNG_B64 = toBase64(makeRaster({ format: 'png', width: 4, height: 4 }));
 export const FLASH = 'gemini-3.1-flash-image';
-export const PRO = 'gemini-3.1-pro-image-preview';
+export const PRO = 'gemini-3-pro-image';
 
 export const imagePart = (extra: Partial<Part> = {}): Part => ({ inlineData: { mimeType: 'image/png', data: PNG_B64 }, ...extra });
 

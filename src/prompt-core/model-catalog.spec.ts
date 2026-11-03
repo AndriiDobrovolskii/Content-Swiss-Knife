@@ -377,7 +377,7 @@ describe('US-4.1 v3 max rows and clamp parity invariant (FR-4, FR-4a)', () => {
  */
 describe('US-10.1 image entries (FR-2, FR-4, SD-8)', () => {
   const FLASH = 'gemini-3.1-flash-image';
-  const PRO = 'gemini-3.1-pro-image-preview';
+  const PRO = 'gemini-3-pro-image';
   const rawGemini = () => (rawCatalog.providers as Array<{ id: string; models: any[] }>).find(p => p.id === 'gemini')!.models;
 
   it('FR-2: appends both image models AFTER every existing Gemini text entry, so neither is models[0]', () => {

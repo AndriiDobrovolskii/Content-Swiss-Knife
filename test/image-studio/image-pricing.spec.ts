@@ -22,7 +22,7 @@ import catalog from '../../src/prompt-core/model-catalog.json';
 
 const p = pricing as any;
 const FLASH = 'gemini-3.1-flash-image';
-const PRO = 'gemini-3.1-pro-image-preview';
+const PRO = 'gemini-3-pro-image';
 const catalogImageIds: string[] = (catalog as any).providers.flatMap((pr: any) => pr.models)
   .filter((m: any) => (m.modalities ?? []).includes('image')).map((m: any) => m.id);
 

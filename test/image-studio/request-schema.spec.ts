@@ -22,7 +22,7 @@ const load = (p: string): Promise<any> => import(/* @vite-ignore */ p);
 const path = '../../server/image-studio/request-schema.js';
 
 const FLASH = 'gemini-3.1-flash-image';
-const PRO = 'gemini-3.1-pro-image-preview';
+const PRO = 'gemini-3-pro-image';
 
 const base = (over: Record<string, unknown> = {}) => ({
   model: FLASH,

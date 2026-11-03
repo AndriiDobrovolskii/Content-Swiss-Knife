@@ -48,7 +48,7 @@ export const LABELS = {
 
 export const MODEL_LABEL = { flash: 'Nano Banana 2, Flash', pro: 'Nano Banana Pro, Pro' } as const;
 export const FLASH = 'gemini-3.1-flash-image';
-export const PRO = 'gemini-3.1-pro-image-preview';
+export const PRO = 'gemini-3-pro-image';
 
 export interface RenderOptions {
   lang?: Lang;
