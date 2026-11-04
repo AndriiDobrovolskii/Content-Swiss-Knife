@@ -86,7 +86,7 @@ stories:
     slug: image-studio-security-resilience
     track: server
     path: docs/stories/US-10.2-image-studio-security-resilience.md
-    state: IN_PROGRESS
+    state: ARCHIVED
     created_at: 2026-11-02T17:15:19Z
   - id: US-10.3
     title: Image Studio security hardening, real-browser tests and opt-in live smoke tests - close the anonymous-reachable findings, test IndexedDB and Canvas in a real browser, verify the Gemini constants live

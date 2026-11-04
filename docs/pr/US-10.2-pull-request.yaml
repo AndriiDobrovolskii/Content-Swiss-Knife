@@ -1,0 +1,51 @@
+---
+artifact: pull_request
+story: US-10.2
+version: 1
+status: ARCHIVED
+owner: so-pr-creator
+created_at: 2026-11-04T06:03:00Z
+updated_at: 2026-11-04T06:03:00Z
+supersedes: null
+inputs_consumed:
+  - key: story
+    version: 2
+  - key: pr_summary
+    version: 1
+open_decisions_blocking: false
+---
+# Record of the opened Pull Request. Opening it is not READY_FOR_PR and is not a review.
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+remote: origin
+pull_request:
+  number: 148
+  url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/148
+  state: open
+  draft: false
+  opened_at: 2026-11-04T06:03:00Z
+  title_source: docs/pr/US-10.2-pr-summary.md#v1 (verbatim)
+  body_source: docs/pr/US-10.2-pr-summary.md#v1 (verbatim)
+branch:
+  head: feat/US-10.2-node-runtime-pin
+  head_sha_pushed: c265aa5bf14861644386896f6e96c74329cf7dcc
+  base: main
+  base_sha_at_open: e6199dea73f2fe219df9e4d4a28d81618648bcdd
+  commits_ahead_of_base: 6
+  commits_behind_base: 0
+push:
+  command: git push -u origin feat/US-10.2-node-runtime-pin
+  force: false
+  no_verify: false
+  remote_branch_existed_before: true
+  pushed_commits: [c265aa5]
+authorisation: >
+  Human instruction in this session: "create the PR for US-10.2".
+not_done:
+  - merge
+  - ready-for-review or approval marking
+  - reviewers, labels or milestone
+notes:
+  - Delivery commit c265aa5 committed the five APPROVED reports, workflow-state.yaml,
+    history.jsonl and the pr_summary by explicit path before the push; 47becd3 was already on origin.
+  - .tmp.driveupload/ remains untracked and was not committed or pushed.
+  - This file was written after the push and is not part of the pushed head SHA.
