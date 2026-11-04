@@ -142,15 +142,18 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
   check, size and token trim of the history, `FILE_MISSING` → 410, image pricing and one usage row per successful generation.
   Gemini SDK calls only in `server/providers/gemini.js`; no system instruction; no retrieval. The shared model catalogue gained the
   two image models and keeps text-only views image-blind.
-- `package.json` `overrides.cheerio.undici = 7.24.4` (guard `test/undici-pin.spec.ts`): the npm `undici` loaded by `cheerio`
-  broke the Files API upload in the full server; 7.24.4 equals Node 24.15.0's bundled copy. Human-approved NFR-7 exception.
+- `package.json` `overrides.cheerio.undici` (guard `test/undici-pin.spec.ts`): the npm `undici` loaded by `cheerio`
+  broke the Files API upload in the full server; US-10.1 pinned 7.24.4 (Node 24.15.0's bundled copy). Human-approved NFR-7
+  exception. **Superseded by US-10.2:** the pin is now 7.30.1 (Node 24.22.2's bundled copy), with `.nvmrc` and `engines.node`
+  both 24.22.2.
 - `GeminiProvider.uploadFile` passes no `httpOptions` (the SDK drops its upload headers and 404s otherwise) and enforces abort,
   timeout and orphan cleanup itself.
 - No FROZEN file changed. Delivered by PR #145, merge commit `bd31254`. Summary: `docs/knowledge/US-10.1-delivery-summary.md`.
 - Open items: security N-1 (uncapped history → `countTokens` amplification before the limiter), N-2 (`fileUri`/`mimeType`/
   `inlineData` unvalidated), N-4 (`/upload` without limiter or decoded-size cap; timed-out uploads are retried), N-3, N-5, F-8;
-  the `undici` pin re-opens advisories fixed in 7.28.0 and the production Node version is unknown (no `engines` / `.nvmrc`);
+  the `undici` pin re-opened advisories fixed in 7.28.0 (closed by US-10.2: 7.30.1 has none of the 23 current ones) and the
+  production Node version is still unknown (US-10.2 added `.nvmrc` and `engines.node`, which are advisory: no `engine-strict`);
   only the upload route was ever verified live — `generateContent`, studio `countTokens`, `FILE_MISSING`, model ids, prices and
   Railway Content-Length are unverified; IndexedDB and canvas conversion are tested against fakes only (RC-3); AC-20 waived (W-1),
   AC-5 plumbing only (W-2); Node 24.15.0 / Windows worker fault (`0xC0000409`) mitigated by keep-alive agents in two specs, not
-  fixed.
+  fixed (US-10.2: no crash observed in a ten-run series on Node 24.22.2, which does not prove it gone).
