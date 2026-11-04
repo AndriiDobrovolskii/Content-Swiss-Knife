@@ -332,7 +332,9 @@ in `afterEach` before the server is closed). Never open many short-lived connect
 `agent: false`: on Node `v24.15.0` / Windows a bare `http` server hit by such clients kills the
 vitest fork worker (exit `0xC0000409`, "Worker exited unexpectedly") with a per-connection
 probability — about 10% for a 280-connection spec — and no repository code is involved. The
-shared agent mitigates this; it does not fix the runtime.
+shared agent mitigates this; it does not fix the runtime. The repository now pins Node `24.22.2`
+(`.nvmrc`, `engines.node`); no crash was observed in a ten-run series on it, which is not proof
+that the fault is gone, so the rule stays.
 
 ## 6. Definition of Done
 
@@ -403,7 +405,7 @@ weaken.
    is the same violation committed instead of typed at the CLI.
 10. **Pinning a dependency to a runtime-bundled version without pinning the runtime** — an
     `overrides` entry or exact pin chosen to match what a Node release bundles (for example
-    `undici` 7.24.4 for Node `24.15.0`) must land in the same change as `engines.node` in
+    `undici` 7.30.1 for Node `24.22.2`, the current pair) must land in the same change as `engines.node` in
     `package.json` and a `.nvmrc` naming that Node version. Otherwise a different Node silently
     reopens the skew the pin fixed.
 11. **Writing to a remote on your own initiative** — `git push`, opening or merging a Pull

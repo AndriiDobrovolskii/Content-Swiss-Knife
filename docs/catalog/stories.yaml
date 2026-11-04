@@ -81,3 +81,17 @@ stories:
     path: docs/stories/US-10.1-nano-banana-image-studio.md
     state: ARCHIVED
     created_at: 2026-11-01T12:00:00Z
+  - id: US-10.2
+    title: Pin the Node runtime and the undici override together - Node 24.22.2 (or a newer stable 24.x) in .nvmrc and engines, undici pinned to the version bundled in it, verified live
+    slug: image-studio-security-resilience
+    track: server
+    path: docs/stories/US-10.2-image-studio-security-resilience.md
+    state: IN_PROGRESS
+    created_at: 2026-11-02T17:15:19Z
+  - id: US-10.3
+    title: Image Studio security hardening, real-browser tests and opt-in live smoke tests - close the anonymous-reachable findings, test IndexedDB and Canvas in a real browser, verify the Gemini constants live
+    slug: image-studio-security-tests-live-smoke
+    track: server
+    path: docs/stories/US-10.3-image-studio-security-tests-live-smoke.md
+    state: NOT_STARTED
+    created_at: 2026-11-02T17:28:37Z
