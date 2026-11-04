@@ -157,3 +157,17 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
   Railway Content-Length are unverified; IndexedDB and canvas conversion are tested against fakes only (RC-3); AC-20 waived (W-1),
   AC-5 plumbing only (W-2); Node 24.15.0 / Windows worker fault (`0xC0000409`) mitigated by keep-alive agents in two specs, not
   fixed (US-10.2: no crash observed in a ten-run series on Node 24.22.2, which does not prove it gone).
+
+## US-10.2 — Node runtime pin and the cheerio `undici` pin, together and verified live (archived 2026-11-04T06:45:00Z)
+- `.nvmrc` and `package.json` `engines.node` are both `24.22.2` (exact string); `overrides.cheerio.undici` is `7.30.1`, the copy bundled in
+  that Node. They move together: `test/undici-pin.spec.ts` (42 cases) fails when `.nvmrc`, `engines.node` and the pin disagree, when the
+  running Node is not the pinned one, or when the pin differs from `process.versions.undici`. It checks a relationship, not a window, and
+  fails rather than skips on another Node. The pin is advisory outside the tests (no `engine-strict`).
+- README Prerequisites names the pinned Node. No `src/` or `server/` code and no FROZEN file changed.
+- Live evidence (`docs/evidence/US-10.2-node-undici-pin-live-evidence.md`): the real upload route returns 200 with a `fileUri` on the pinned
+  Node; the same upload with the hoisted `undici` 7.28.0 (scratch tree) also returned 200, data only; ten `test:logic` runs on Node 24.22.2
+  showed no worker-exit marker, after a failed first series (a 5000 ms timeout in `measure-description.cli.spec.ts`).
+- Delivered by PR #148, merge commit `f3c0293`. Summary: `docs/knowledge/US-10.2-delivery-summary.md`.
+- Open items: production Node unknown (OD-9); the Windows worker fault is not proved gone; `npm audit` still flags the hoisted `undici`
+  7.28.0 and node-gyp's 6.27.0; US-10.1 findings N-1, N-2, N-4 belong to US-10.3; six unexplained Files API objects and a stale
+  `live-tmp6.mjs` process noted by the live checks; `.tmp.driveupload/` is not gitignored.
