@@ -250,10 +250,15 @@ describe('US-8.1 T12 / AC-13 UI side — the result view treats the FAQ Generato
 // predicate fed the wrong signal, passed every pin above. They remain source-text pins (no rendered DOM).
 
 describe('US-8.1 AC-10 (tightened) — the mode button is bound to the faqGenerator label key and sits with its siblings', () => {
-  /** The mode switcher: from the first mode button to the History Panel that follows it. */
+  /**
+   * The nav rail's mode buttons: from the `<!-- Nav Rail -->` anchor to the `<!-- Nav Rail: bottom controls -->` anchor.
+   * US-10.4 FR-18 (b): re-anchored from "first setMode('dashboard') to <!-- History Panel", because the global rail replaced the
+   * in-panel switcher. The asserted properties (the FAQ, SEO and Slugs buttons are all in the mode navigation; FAQ sits with UA)
+   * are unchanged; only where "the mode navigation" is found moved.
+   */
   const switcher = () => {
-    const start = htmlLf.indexOf("(click)=\"setMode('dashboard')\"");
-    const end = htmlLf.indexOf('<!-- History Panel');
+    const start = htmlLf.indexOf('<!-- Nav Rail -->');
+    const end = htmlLf.indexOf('<!-- Nav Rail: bottom controls -->');
     return start >= 0 && end > start ? htmlLf.slice(start, end) : '';
   };
   /** The one button whose click handler is setMode(<mode>), through its closing tag. */
@@ -273,21 +278,21 @@ describe('US-8.1 AC-10 (tightened) — the mode button is bound to the faqGenera
     expect(ukBlock).toMatch(/\bfaqGenerator\s*:\s*'FAQ Generator'/);
   });
 
-  it('the mode switcher holds the FAQ Generator button together with the SEO Meta and Slugs mode buttons', () => {
+  it('the nav rail holds the FAQ Generator button together with the SEO Meta and Slugs mode buttons', () => {
     const block = switcher();
-    expect(block, 'the mode switcher was not located').not.toBe('');
+    expect(block, 'the nav rail was not located').not.toBe('');
     for (const mode of ['faq-generator', 'seo-generator', 'slug-generator']) {
       expect(block, `setMode('${mode}')`).toContain(`setMode('${mode}')`);
     }
   });
 
-  it('the FAQ Generator button is in the same switcher row as the UA Description button (one button group, no other control between)', () => {
+  it('the FAQ Generator button is in the same group as the UA Description button (US-10.4 FR-18 b: the nine SEO & Text items are flat siblings, so no `</div>` sits between them)', () => {
     const block = switcher();
     const ua = block.indexOf("setMode('ua-generator')");
     const faq = block.indexOf("setMode('faq-generator')");
     expect(ua, "setMode('ua-generator')").toBeGreaterThanOrEqual(0);
     expect(faq, "setMode('faq-generator')").toBeGreaterThan(ua);
-    expect(block.slice(ua, faq), 'a row boundary sits between the two buttons').not.toContain('</div>');
+    expect(block.slice(ua, faq), 'a group boundary sits between the two buttons').not.toContain('</div>');
   });
 });
 
