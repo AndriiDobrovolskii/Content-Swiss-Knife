@@ -4,7 +4,7 @@ import { ContentOrchestratorService } from '../services/content-orchestrator.ser
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
 import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, TemplateStructure, ImageManifestEntry, TabDescriptor, NavGroupId } from './types';
-import { navGroupCount, isNavItemShown as shellNavItemShown, readRailExpanded, writeRailExpanded } from './shell-nav';
+import { navGroupCount, isNavItemShown as shellNavItemShown, readRailExpanded, writeRailExpanded, hasPanelFor } from './shell-nav';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
@@ -455,6 +455,8 @@ export class AppComponent {
    * neighbouring unguarded `seo_gen_*` reads would crash the app when storage is blocked (FR-5 ii).
    */
   railExpanded = signal<boolean>(readRailExpanded(() => localStorage));
+  /** Whether the input panel is rendered: the nine text modes and Image Tools only (FR-9). Read from the shell-nav table. */
+  hasPanel = computed(() => hasPanelFor(this.appMode()));
   /** Per-group open state, in memory only: every page load starts with all groups expanded (FR-2, OD-24). */
   navGroupOpen = signal<Record<NavGroupId, boolean>>({ 'seo-text': true, images: true, code: true });
   /** The visible code of the Language control; it is also the first part of the control's accessible name (FR-6). */
@@ -1230,6 +1232,8 @@ export class AppComponent {
         break;
 
       case 'image-studio':
+        // Unreachable at runtime: Clear All lives in the input panel, which hasPanel() no longer renders for this mode. The case
+        // stays because a wiring spec pins it.
         break;
     }
   }
