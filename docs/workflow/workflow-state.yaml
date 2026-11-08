@@ -2,13 +2,13 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: null
-current_stage: ARCHIVED
-status: ARCHIVED
+story: US-10.4
+current_stage: PR_CREATION
+status: IN_PROGRESS
 pending_human_gate: null
-started_at: 2026-11-02T17:31:32Z
-updated_at: 2026-11-04T06:45:00Z
+started_at: 2026-11-08T07:50:35Z
+updated_at: 2026-11-08T17:11:07Z
 stage_attempts: {}
-track: server
+track: angular
 blockers: []
-note: "Archived. Delivery summary: docs/knowledge/US-10.2-delivery-summary.md. Open follow-ups: production Node (OD-9), Windows worker fault not proved gone, npm audit on hoisted undici 7.28.0 / 6.27.0, US-10.1 N-1/N-2/N-4 belong to US-10.3, six unexplained Files API objects and a stale live-tmp6.mjs process, .tmp.driveupload/ not gitignored."
+note: null
