@@ -171,3 +171,22 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Open items: production Node unknown (OD-9); the Windows worker fault is not proved gone; `npm audit` still flags the hoisted `undici`
   7.28.0 and node-gyp's 6.27.0; US-10.1 findings N-1, N-2, N-4 belong to US-10.3; six unexplained Files API objects and a stale
   `live-tmp6.mjs` process noted by the live checks; `.tmp.driveupload/` is not gitignored.
+
+## US-10.4 — the app shell: grouped, collapsible navigation and restyled layout in light and dark themes (archived 2026-11-08T17:31:45Z)
+- A left navigation rail (`<nav>`, 256 px expanded / 64 px icon-only) replaces the header controls and the in-panel mode switcher: three collapsible
+  groups with a derived count (SEO and Text 9, Images 2, Code 1; English and Ukrainian names), one `aria-current="page"` item, a collapse control and
+  the bottom controls Dashboard, Language, Theme, AI Settings. The rail state persists under `localStorage` key `seo_gen_shell_rail_expanded`
+  (`true` means expanded; guarded read and write). Navigation rules live in the pure module `src/app/shell-nav.ts`.
+- The input panel (`<aside>`) renders only in the ten panel modes and is absent from HTML Editor, Dashboard and Image Studio; its 64 px header strip
+  holds only the generator-only History button, and the History overlay anchors to it through `--shell-header-h`. Clear All and the improvement-request
+  block are gated with the panel.
+- Eight `--shell-*` colour tokens (light on `:root`, dark on `html.dark`) feed a Tailwind `shell` family: page `#0b1120`, rail and panel chrome
+  `#111a2e`, borders `#26324a`, accent `#7c3aed` only for the active icon, active border and focus rings; `<main>` is opaque. Mode interiors keep
+  their `slate-*` colours. The `seo-generator` hover tooltips use `hidden group-hover/tooltip:block` so they add no scroll width.
+- Manual evidence (`docs/evidence/US-10.4-shell-manual-verification-evidence.md`, measured by an agent in Chrome 156): fit at 1024 x 768 and 1024 x 720
+  for 13 modes x 2 rail states x 2 themes, colour layers, light values, contrast (lowest 6.92) and the overlay geometry. FR-16 is met under the product
+  owner's reading of U-1 (in-component horizontal scrolls in 10 of 13 modes, all present at 640 px).
+- Delivered by PR #150, merge commit `a1f5142`. Summary: `docs/knowledge/US-10.4-delivery-summary.md`.
+- Open items: the U-1 ruling lives only in the evidence file (reconciliation R1); `test/shell-evidence.spec.ts` accepts any `FR-16 met:` text; US-10.5 and
+  US-10.6 are registered but uncommitted; `.tmp.driveupload/` is not gitignored; unguarded `JSON.parse` reads, open `cors()` and the Tailwind CDN
+  without SRI are pre-existing.

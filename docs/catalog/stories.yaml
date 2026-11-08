@@ -100,5 +100,5 @@ stories:
     slug: app-shell-redesign
     track: angular
     path: docs/stories/US-10.4-app-shell-redesign.md
-    state: IN_PROGRESS
+    state: ARCHIVED
     created_at: 2026-11-08T09:30:00Z
