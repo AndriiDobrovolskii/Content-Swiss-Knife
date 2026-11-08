@@ -5,6 +5,31 @@
    History overlay (top edge) and the strip (height) read one value and cannot drift apart. */
 :root { --shell-header-h: 4rem; }
 
+/* App shell colour tokens (US-10.4): every shell surface reads one of these through the Tailwind `shell` colour family
+   declared in index.html, so a surface cannot keep a dark colour in the light theme. Light values live here, dark values
+   on html.dark below; both blocks declare the same names. Panel interiors keep their slate classes. */
+:root {
+  --shell-bg: #f1f5f9;
+  --shell-rail: #ffffff;
+  --shell-line: #cbd5e1;
+  --shell-text: #0f172a;
+  --shell-muted: #475569;
+  --shell-hover: #f1f5f9;
+  --shell-active: #ede9fe;
+  --shell-accent: #7c3aed;
+}
+
+html.dark {
+  --shell-bg: #0b1120;
+  --shell-rail: #111a2e;
+  --shell-line: #26324a;
+  --shell-text: #f1f5f9;
+  --shell-muted: #cbd5e1;
+  --shell-hover: #1a2540;
+  --shell-active: #243052;
+  --shell-accent: #7c3aed;
+}
+
 /* Native browser UI (scrollbars, form controls) follows dark mode too. */
 html.dark { color-scheme: dark; }
 

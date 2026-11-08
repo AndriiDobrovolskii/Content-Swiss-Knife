@@ -483,11 +483,13 @@ export class AppComponent {
     return this.appMode() === mode ? 'page' : null;
   }
 
-  /** Layout classes of a rail button, by rail state; the active mode's item is also bold. Colour classes arrive with the shell tokens. */
+  /** Classes of a rail button: layout by rail state, then the shell tokens for text, hover, focus ring and the active state (accent left border, bold). */
   navItemClass(mode?: AppMode): string {
-    const base = 'w-full flex items-center py-2 text-left border-l-2 border-transparent';
+    const base = 'w-full flex items-center py-2 text-left border-l-2 text-shell-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-shell-accent';
     const layout = this.railExpanded() ? `${base} gap-3 px-4` : `${base} justify-center px-0`;
-    return mode !== undefined && this.appMode() === mode ? `${layout} font-semibold` : layout;
+    return mode !== undefined && this.appMode() === mode
+      ? `${layout} font-semibold border-shell-accent bg-shell-active`
+      : `${layout} border-transparent hover:bg-shell-hover`;
   }
 
   /** The tooltip of a rail button: its label, only while the label itself is hidden (icon-only rail); `null` removes the attribute. */
@@ -495,9 +497,10 @@ export class AppComponent {
     return this.railExpanded() ? null : label;
   }
 
-  /** Classes of a rail icon (a Font Awesome class name in, a full class string out). */
-  navIconClass(icon: string): string {
-    return `fa-solid ${icon} w-5 text-center shrink-0`;
+  /** Classes of a rail icon (a Font Awesome class name in, a full class string out). The accent colours the active mode's icon only, never a label (FR-15). */
+  navIconClass(icon: string, mode?: AppMode): string {
+    const base = `fa-solid ${icon} w-5 text-center shrink-0`;
+    return mode !== undefined && this.appMode() === mode ? `${base} text-shell-accent` : base;
   }
 
   // --- IMPROVEMENT-REQUEST FORM ---
