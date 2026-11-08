@@ -4,7 +4,7 @@ import { ContentOrchestratorService } from '../services/content-orchestrator.ser
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
 import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, TemplateStructure, ImageManifestEntry, TabDescriptor, NavGroupId } from './types';
-import { navGroupCount, isNavItemShown as shellNavItemShown } from './shell-nav';
+import { navGroupCount, isNavItemShown as shellNavItemShown, readRailExpanded, writeRailExpanded } from './shell-nav';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
@@ -45,6 +45,8 @@ const TRANSLATIONS = {
     switchLanguage: 'Switch Language',
     toggleTheme: 'Toggle Dark Mode',
     aiSettings: 'AI Model Settings',
+    navCollapse: 'Collapse navigation',
+    navExpand: 'Expand navigation',
     optimizer: 'Optimizer',
     translator: 'Translator',
     imageTools: 'Image Tools',
@@ -226,6 +228,8 @@ const TRANSLATIONS = {
     switchLanguage: 'Змінити мову',
     toggleTheme: 'Перемкнути темну тему',
     aiSettings: 'Налаштування моделі ШІ',
+    navCollapse: 'Згорнути навігацію',
+    navExpand: 'Розгорнути навігацію',
     optimizer: 'Оптимізатор',
     translator: 'Перекладач',
     imageTools: 'Інструменти зображень',
@@ -446,18 +450,30 @@ export class AppComponent {
   // --- NAVIGATION RAIL (US-10.4) ---
   // Group header counts come from the shell-nav module (derived from the membership list, never typed by hand).
   navGroupCount = navGroupCount;
+  /**
+   * Rail state: expanded (256 px, `w-64`) or icon-only (64 px, `w-16`). Read once here, through a guarded helper, because the
+   * neighbouring unguarded `seo_gen_*` reads would crash the app when storage is blocked (FR-5 ii).
+   */
+  railExpanded = signal<boolean>(readRailExpanded(() => localStorage));
   /** Per-group open state, in memory only: every page load starts with all groups expanded (FR-2, OD-24). */
   navGroupOpen = signal<Record<NavGroupId, boolean>>({ 'seo-text': true, images: true, code: true });
   /** The visible code of the Language control; it is also the first part of the control's accessible name (FR-6). */
   languageCode = computed(() => this.uiLanguage() === 'en' ? 'EN' : 'UA');
 
+  /** Flips the rail and persists the new state. No `effect`: the signal changes only here, so nothing is written on load. */
+  toggleRail() {
+    const next = !this.railExpanded();
+    this.railExpanded.set(next);
+    writeRailExpanded(() => localStorage, next);
+  }
+
   toggleNavGroup(id: NavGroupId) {
     this.navGroupOpen.update(open => ({ ...open, [id]: !open[id] }));
   }
 
-  /** Whether a mode item is rendered: its group is open, or it is the active mode (FR-2). The rail is expanded at this point. */
+  /** Whether a mode item is rendered: always in the icon-only rail, otherwise its group is open or it is the active mode (FR-2). */
   isNavItemShown(mode: AppMode): boolean {
-    return shellNavItemShown(mode, this.appMode(), true, this.navGroupOpen());
+    return shellNavItemShown(mode, this.appMode(), this.railExpanded(), this.navGroupOpen());
   }
 
   /** `aria-current="page"` on the active mode's item only (FR-3). The rail keeps no active-item state of its own. */
@@ -465,10 +481,16 @@ export class AppComponent {
     return this.appMode() === mode ? 'page' : null;
   }
 
-  /** Layout classes of a rail button; the active mode's item is also bold. Colour classes arrive with the shell tokens. */
+  /** Layout classes of a rail button, by rail state; the active mode's item is also bold. Colour classes arrive with the shell tokens. */
   navItemClass(mode?: AppMode): string {
-    const base = 'w-full flex items-center gap-3 px-4 py-2 text-left border-l-2 border-transparent';
-    return mode !== undefined && this.appMode() === mode ? `${base} font-semibold` : base;
+    const base = 'w-full flex items-center py-2 text-left border-l-2 border-transparent';
+    const layout = this.railExpanded() ? `${base} gap-3 px-4` : `${base} justify-center px-0`;
+    return mode !== undefined && this.appMode() === mode ? `${layout} font-semibold` : layout;
+  }
+
+  /** The tooltip of a rail button: its label, only while the label itself is hidden (icon-only rail); `null` removes the attribute. */
+  navTitle(label: string): string | null {
+    return this.railExpanded() ? null : label;
   }
 
   /** Classes of a rail icon (a Font Awesome class name in, a full class string out). */

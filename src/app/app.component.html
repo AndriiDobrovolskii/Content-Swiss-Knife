@@ -4,14 +4,22 @@
   <!-- Global left navigation (US-10.4). The rail is a nav element and never an aside: the input panel further down is the only aside,
        so a lookup for the aside finds the panel and not the rail. Each mode is one button that calls the existing mode setter. Items hidden
        by a collapsed group are removed from the template (not hidden with CSS) so they leave the accessibility tree. -->
-  <nav class="w-64 flex-shrink-0 h-full flex flex-col border-r">
+  <nav class="flex-shrink-0 h-full flex flex-col border-r" [class.w-64]="railExpanded()" [class.w-16]="!railExpanded()">
 
     <!-- Logo row -->
-    <div class="h-[var(--shell-header-h)] shrink-0 flex items-center gap-2 px-4 border-b">
+    <div class="h-[var(--shell-header-h)] shrink-0 flex items-center gap-2 px-4 border-b" [class.justify-center]="!railExpanded()">
       <h1 class="text-xl font-bold flex items-center gap-2 min-w-0">
         <i class="fa-solid fa-cube text-blue-600 dark:text-blue-400 shrink-0" aria-hidden="true"></i>
-        <span class="truncate">{{ uiLabels().appTitle }}</span>
+        <span class="truncate" [class.sr-only]="!railExpanded()">{{ uiLabels().appTitle }}</span>
       </h1>
+    </div>
+
+    <!-- Collapse / expand control: its name flips with the state; the choice is persisted (FR-4, FR-5) -->
+    <div class="shrink-0 py-1 border-b">
+      <button (click)="toggleRail()" [class]="navItemClass()" [attr.title]="navTitle(railExpanded() ? uiLabels().navCollapse : uiLabels().navExpand)">
+        <i [class]="navIconClass(railExpanded() ? 'fa-angles-left' : 'fa-angles-right')" aria-hidden="true"></i>
+        <span [class.sr-only]="!railExpanded()">{{ railExpanded() ? uiLabels().navCollapse : uiLabels().navExpand }}</span>
+      </button>
     </div>
 
     <!-- Groups: the only part of the rail that scrolls, so a short viewport never clips the bottom controls -->
@@ -19,96 +27,106 @@
 
       <!-- Group: seo-text -->
       <div>
-        <button (click)="toggleNavGroup('seo-text')" [attr.aria-expanded]="navGroupOpen()['seo-text']" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-xs font-semibold">
-          <span>{{ uiLabels().navGroupSeoText }} · {{ navGroupCount('seo-text') }}</span>
-          <i class="fa-solid fa-chevron-down text-[10px]" [class.-rotate-90]="!navGroupOpen()['seo-text']" aria-hidden="true"></i>
-        </button>
+        @if (railExpanded()) {
+          <button (click)="toggleNavGroup('seo-text')" [attr.aria-expanded]="navGroupOpen()['seo-text']" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-xs font-semibold">
+            <span>{{ uiLabels().navGroupSeoText }} · {{ navGroupCount('seo-text') }}</span>
+            <i class="fa-solid fa-chevron-down text-[10px]" [class.-rotate-90]="!navGroupOpen()['seo-text']" aria-hidden="true"></i>
+          </button>
+        }
         @if (isNavItemShown('generator')) {
-          <button (click)="setMode('generator')" [class]="navItemClass('generator')" [attr.aria-current]="navCurrent('generator')">
+          <button (click)="setMode('generator')" [class]="navItemClass('generator')" [attr.aria-current]="navCurrent('generator')" [attr.title]="navTitle(uiLabels().generator)">
             <i [class]="navIconClass('fa-wand-magic-sparkles')" aria-hidden="true"></i>
-            <span>{{ uiLabels().generator }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().generator }}</span>
           </button>
         }
         @if (isNavItemShown('ua-generator')) {
-          <button (click)="setMode('ua-generator')" [class]="navItemClass('ua-generator')" [attr.aria-current]="navCurrent('ua-generator')">
+          <button (click)="setMode('ua-generator')" [class]="navItemClass('ua-generator')" [attr.aria-current]="navCurrent('ua-generator')" [attr.title]="navTitle(uiLabels().uaGenerator)">
             <i [class]="navIconClass('fa-language')" aria-hidden="true"></i>
-            <span>{{ uiLabels().uaGenerator }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().uaGenerator }}</span>
           </button>
         }
         @if (isNavItemShown('optimizer')) {
-          <button (click)="setMode('optimizer')" [class]="navItemClass('optimizer')" [attr.aria-current]="navCurrent('optimizer')">
+          <button (click)="setMode('optimizer')" [class]="navItemClass('optimizer')" [attr.aria-current]="navCurrent('optimizer')" [attr.title]="navTitle(uiLabels().optimizer)">
             <i [class]="navIconClass('fa-bolt')" aria-hidden="true"></i>
-            <span>{{ uiLabels().optimizer }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().optimizer }}</span>
           </button>
         }
         @if (isNavItemShown('translator')) {
-          <button (click)="setMode('translator')" [class]="navItemClass('translator')" [attr.aria-current]="navCurrent('translator')">
+          <button (click)="setMode('translator')" [class]="navItemClass('translator')" [attr.aria-current]="navCurrent('translator')" [attr.title]="navTitle(uiLabels().translator)">
             <i [class]="navIconClass('fa-globe')" aria-hidden="true"></i>
-            <span>{{ uiLabels().translator }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().translator }}</span>
           </button>
         }
         @if (isNavItemShown('seo-generator')) {
-          <button (click)="setMode('seo-generator')" [class]="navItemClass('seo-generator')" [attr.aria-current]="navCurrent('seo-generator')">
+          <button (click)="setMode('seo-generator')" [class]="navItemClass('seo-generator')" [attr.aria-current]="navCurrent('seo-generator')" [attr.title]="navTitle(uiLabels().seoGenerator)">
             <i [class]="navIconClass('fa-tags')" aria-hidden="true"></i>
-            <span>{{ uiLabels().seoGenerator }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().seoGenerator }}</span>
           </button>
         }
         @if (isNavItemShown('copywriter')) {
-          <button (click)="setMode('copywriter')" [class]="navItemClass('copywriter')" [attr.aria-current]="navCurrent('copywriter')">
+          <button (click)="setMode('copywriter')" [class]="navItemClass('copywriter')" [attr.aria-current]="navCurrent('copywriter')" [attr.title]="navTitle(uiLabels().copywriter)">
             <i [class]="navIconClass('fa-pen-nib')" aria-hidden="true"></i>
-            <span>{{ uiLabels().copywriter }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().copywriter }}</span>
           </button>
         }
         @if (isNavItemShown('readability')) {
-          <button (click)="setMode('readability')" [class]="navItemClass('readability')" [attr.aria-current]="navCurrent('readability')">
+          <button (click)="setMode('readability')" [class]="navItemClass('readability')" [attr.aria-current]="navCurrent('readability')" [attr.title]="navTitle(uiLabels().readability)">
             <i [class]="navIconClass('fa-glasses')" aria-hidden="true"></i>
-            <span>{{ uiLabels().readability }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().readability }}</span>
           </button>
         }
         @if (isNavItemShown('slug-generator')) {
-          <button (click)="setMode('slug-generator')" [class]="navItemClass('slug-generator')" [attr.aria-current]="navCurrent('slug-generator')">
+          <button (click)="setMode('slug-generator')" [class]="navItemClass('slug-generator')" [attr.aria-current]="navCurrent('slug-generator')" [attr.title]="navTitle(uiLabels().slugGenerator)">
             <i [class]="navIconClass('fa-link')" aria-hidden="true"></i>
-            <span>{{ uiLabels().slugGenerator }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().slugGenerator }}</span>
           </button>
         }
         @if (isNavItemShown('faq-generator')) {
-          <button (click)="setMode('faq-generator')" [class]="navItemClass('faq-generator')" [attr.aria-current]="navCurrent('faq-generator')">
+          <button (click)="setMode('faq-generator')" [class]="navItemClass('faq-generator')" [attr.aria-current]="navCurrent('faq-generator')" [attr.title]="navTitle(uiLabels().faqGenerator)">
             <i [class]="navIconClass('fa-circle-question')" aria-hidden="true"></i>
-            <span>{{ uiLabels().faqGenerator }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().faqGenerator }}</span>
           </button>
         }
       </div>
 
       <!-- Group: images -->
       <div>
-        <button (click)="toggleNavGroup('images')" [attr.aria-expanded]="navGroupOpen()['images']" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-xs font-semibold">
-          <span>{{ uiLabels().navGroupImages }} · {{ navGroupCount('images') }}</span>
-          <i class="fa-solid fa-chevron-down text-[10px]" [class.-rotate-90]="!navGroupOpen()['images']" aria-hidden="true"></i>
-        </button>
+        @if (railExpanded()) {
+          <button (click)="toggleNavGroup('images')" [attr.aria-expanded]="navGroupOpen()['images']" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-xs font-semibold">
+            <span>{{ uiLabels().navGroupImages }} · {{ navGroupCount('images') }}</span>
+            <i class="fa-solid fa-chevron-down text-[10px]" [class.-rotate-90]="!navGroupOpen()['images']" aria-hidden="true"></i>
+          </button>
+        } @else {
+          <div class="mx-4 my-1 border-t" aria-hidden="true"></div>
+        }
         @if (isNavItemShown('image-tools')) {
-          <button (click)="setMode('image-tools')" [class]="navItemClass('image-tools')" [attr.aria-current]="navCurrent('image-tools')">
+          <button (click)="setMode('image-tools')" [class]="navItemClass('image-tools')" [attr.aria-current]="navCurrent('image-tools')" [attr.title]="navTitle(uiLabels().imageTools)">
             <i [class]="navIconClass('fa-images')" aria-hidden="true"></i>
-            <span>{{ uiLabels().imageTools }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().imageTools }}</span>
           </button>
         }
         @if (isNavItemShown('image-studio')) {
-          <button (click)="setMode('image-studio')" [class]="navItemClass('image-studio')" [attr.aria-current]="navCurrent('image-studio')">
+          <button (click)="setMode('image-studio')" [class]="navItemClass('image-studio')" [attr.aria-current]="navCurrent('image-studio')" [attr.title]="navTitle(uiLabels().imageStudio)">
             <i [class]="navIconClass('fa-palette')" aria-hidden="true"></i>
-            <span>{{ uiLabels().imageStudio }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().imageStudio }}</span>
           </button>
         }
       </div>
 
       <!-- Group: code -->
       <div>
-        <button (click)="toggleNavGroup('code')" [attr.aria-expanded]="navGroupOpen()['code']" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-xs font-semibold">
-          <span>{{ uiLabels().navGroupCode }} · {{ navGroupCount('code') }}</span>
-          <i class="fa-solid fa-chevron-down text-[10px]" [class.-rotate-90]="!navGroupOpen()['code']" aria-hidden="true"></i>
-        </button>
+        @if (railExpanded()) {
+          <button (click)="toggleNavGroup('code')" [attr.aria-expanded]="navGroupOpen()['code']" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-xs font-semibold">
+            <span>{{ uiLabels().navGroupCode }} · {{ navGroupCount('code') }}</span>
+            <i class="fa-solid fa-chevron-down text-[10px]" [class.-rotate-90]="!navGroupOpen()['code']" aria-hidden="true"></i>
+          </button>
+        } @else {
+          <div class="mx-4 my-1 border-t" aria-hidden="true"></div>
+        }
         @if (isNavItemShown('html-editor')) {
-          <button (click)="setMode('html-editor')" [class]="navItemClass('html-editor')" [attr.aria-current]="navCurrent('html-editor')">
+          <button (click)="setMode('html-editor')" [class]="navItemClass('html-editor')" [attr.aria-current]="navCurrent('html-editor')" [attr.title]="navTitle(uiLabels().htmlEditor)">
             <i [class]="navIconClass('fa-code')" aria-hidden="true"></i>
-            <span>{{ uiLabels().htmlEditor }}</span>
+            <span [class.sr-only]="!railExpanded()">{{ uiLabels().htmlEditor }}</span>
           </button>
         }
       </div>
@@ -116,26 +134,26 @@
 
     <!-- Nav Rail: bottom controls -->
     <div class="shrink-0 border-t py-2">
-      <button (click)="setMode('dashboard')" [class]="navItemClass('dashboard')" [attr.aria-current]="navCurrent('dashboard')">
+      <button (click)="setMode('dashboard')" [class]="navItemClass('dashboard')" [attr.aria-current]="navCurrent('dashboard')" [attr.title]="navTitle(uiLabels().dashboardTooltip)">
         <i [class]="navIconClass('fa-chart-line')" aria-hidden="true"></i>
-        <span>{{ uiLabels().dashboardTooltip }}</span>
+        <span [class.sr-only]="!railExpanded()">{{ uiLabels().dashboardTooltip }}</span>
       </button>
       <!-- Language: the visible code ("EN" / "UA") is part of the accessible name (WCAG 2.5.3 Label in Name) -->
-      <button (click)="toggleLanguage()" [class]="navItemClass()" [attr.aria-label]="languageCode() + ', ' + uiLabels().switchLanguage">
+      <button (click)="toggleLanguage()" [class]="navItemClass()" [attr.aria-label]="languageCode() + ', ' + uiLabels().switchLanguage" [attr.title]="navTitle(uiLabels().switchLanguage)">
         <span class="w-5 text-center text-xs font-bold shrink-0">{{ languageCode() }}</span>
-        <span>{{ uiLabels().switchLanguage }}</span>
+        <span [class.sr-only]="!railExpanded()">{{ uiLabels().switchLanguage }}</span>
       </button>
-      <button (click)="toggleDarkMode()" [class]="navItemClass()">
+      <button (click)="toggleDarkMode()" [class]="navItemClass()" [attr.title]="navTitle(uiLabels().toggleTheme)">
         @if (darkMode()) {
           <i [class]="navIconClass('fa-sun')" aria-hidden="true"></i>
         } @else {
           <i [class]="navIconClass('fa-moon')" aria-hidden="true"></i>
         }
-        <span>{{ uiLabels().toggleTheme }}</span>
+        <span [class.sr-only]="!railExpanded()">{{ uiLabels().toggleTheme }}</span>
       </button>
-      <button (click)="toggleModelSettings()" [class]="navItemClass()">
+      <button (click)="toggleModelSettings()" [class]="navItemClass()" [attr.title]="navTitle(uiLabels().aiSettings)">
         <i [class]="navIconClass('fa-sliders')" aria-hidden="true"></i>
-        <span>{{ uiLabels().aiSettings }}</span>
+        <span [class.sr-only]="!railExpanded()">{{ uiLabels().aiSettings }}</span>
       </button>
     </div>
   </nav>
