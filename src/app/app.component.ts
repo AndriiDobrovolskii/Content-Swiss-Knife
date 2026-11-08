@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { ContentOrchestratorService } from '../services/content-orchestrator.service';
 import { HistoryService } from '../services/history.service';
 import { LlmService } from '../services/llm.service';
-import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, TemplateStructure, ImageManifestEntry, TabDescriptor } from './types';
+import { WebsiteOption, WEBSITE_OPTIONS, ProductInput, SeoMetaItem, SlugItem, HistoryItem, ProcessedImage, AppMode, TemplateStructure, ImageManifestEntry, TabDescriptor, NavGroupId } from './types';
+import { navGroupCount, isNavItemShown as shellNavItemShown, readRailExpanded, writeRailExpanded, hasPanelFor } from './shell-nav';
 import { normalizeImageFilename } from '../utils/image-filename';
 import { buildVisionPrepassPrompt } from '../prompts/vision-prepass';
 import { buildImageAltPrompt } from '../prompts/image-alt';
@@ -38,6 +39,14 @@ const TRANSLATIONS = {
     generator: 'Generator',
     uaGenerator: 'UA Description',
     dashboardTooltip: 'Cost Dashboard',
+    navGroupSeoText: 'SEO & Text',
+    navGroupImages: 'Images',
+    navGroupCode: 'Code',
+    switchLanguage: 'Switch Language',
+    toggleTheme: 'Toggle Dark Mode',
+    aiSettings: 'AI Model Settings',
+    navCollapse: 'Collapse navigation',
+    navExpand: 'Expand navigation',
     optimizer: 'Optimizer',
     translator: 'Translator',
     imageTools: 'Image Tools',
@@ -213,6 +222,14 @@ const TRANSLATIONS = {
     generator: 'Генератор',
     uaGenerator: 'UA Опис',
     dashboardTooltip: 'Дашборд витрат',
+    navGroupSeoText: 'SEO та Текст',
+    navGroupImages: 'Зображення',
+    navGroupCode: 'Код',
+    switchLanguage: 'Змінити мову',
+    toggleTheme: 'Перемкнути темну тему',
+    aiSettings: 'Налаштування моделі ШІ',
+    navCollapse: 'Згорнути навігацію',
+    navExpand: 'Розгорнути навігацію',
     optimizer: 'Оптимізатор',
     translator: 'Перекладач',
     imageTools: 'Інструменти зображень',
@@ -429,6 +446,62 @@ export class AppComponent {
 
   // Computed Labels
   uiLabels = computed(() => TRANSLATIONS[this.uiLanguage()]);
+
+  // --- NAVIGATION RAIL (US-10.4) ---
+  // Group header counts come from the shell-nav module (derived from the membership list, never typed by hand).
+  navGroupCount = navGroupCount;
+  /**
+   * Rail state: expanded (256 px, `w-64`) or icon-only (64 px, `w-16`). Read once here, through a guarded helper, because the
+   * neighbouring unguarded `seo_gen_*` reads would crash the app when storage is blocked (FR-5 ii).
+   */
+  railExpanded = signal<boolean>(readRailExpanded(() => localStorage));
+  /** Whether the input panel is rendered: the nine text modes and Image Tools only (FR-9). Read from the shell-nav table. */
+  hasPanel = computed(() => hasPanelFor(this.appMode()));
+  /** Per-group open state, in memory only: every page load starts with all groups expanded (FR-2, OD-24). */
+  navGroupOpen = signal<Record<NavGroupId, boolean>>({ 'seo-text': true, images: true, code: true });
+  /** The visible code of the Language control; it is also the first part of the control's accessible name (FR-6). */
+  languageCode = computed(() => this.uiLanguage() === 'en' ? 'EN' : 'UA');
+
+  /** Flips the rail and persists the new state. No `effect`: the signal changes only here, so nothing is written on load. */
+  toggleRail() {
+    const next = !this.railExpanded();
+    this.railExpanded.set(next);
+    writeRailExpanded(() => localStorage, next);
+  }
+
+  toggleNavGroup(id: NavGroupId) {
+    this.navGroupOpen.update(open => ({ ...open, [id]: !open[id] }));
+  }
+
+  /** Whether a mode item is rendered: always in the icon-only rail, otherwise its group is open or it is the active mode (FR-2). */
+  isNavItemShown(mode: AppMode): boolean {
+    return shellNavItemShown(mode, this.appMode(), this.railExpanded(), this.navGroupOpen());
+  }
+
+  /** `aria-current="page"` on the active mode's item only (FR-3). The rail keeps no active-item state of its own. */
+  navCurrent(mode: AppMode): 'page' | null {
+    return this.appMode() === mode ? 'page' : null;
+  }
+
+  /** Classes of a rail button: layout by rail state, then the shell tokens for text, hover, focus ring and the active state (accent left border, bold). */
+  navItemClass(mode?: AppMode): string {
+    const base = 'w-full flex items-center py-2 text-left border-l-2 text-shell-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-shell-accent';
+    const layout = this.railExpanded() ? `${base} gap-3 px-4` : `${base} justify-center px-0`;
+    return mode !== undefined && this.appMode() === mode
+      ? `${layout} font-semibold border-shell-accent bg-shell-active`
+      : `${layout} border-transparent hover:bg-shell-hover`;
+  }
+
+  /** The tooltip of a rail button: its label, only while the label itself is hidden (icon-only rail); `null` removes the attribute. */
+  navTitle(label: string): string | null {
+    return this.railExpanded() ? null : label;
+  }
+
+  /** Classes of a rail icon (a Font Awesome class name in, a full class string out). The accent colours the active mode's icon only, never a label (FR-15). */
+  navIconClass(icon: string, mode?: AppMode): string {
+    const base = `fa-solid ${icon} w-5 text-center shrink-0`;
+    return mode !== undefined && this.appMode() === mode ? `${base} text-shell-accent` : base;
+  }
 
   // --- IMPROVEMENT-REQUEST FORM ---
   // null until the form is configured in src/environments/ — the buttons stay hidden.
@@ -1162,6 +1235,8 @@ export class AppComponent {
         break;
 
       case 'image-studio':
+        // Unreachable at runtime: Clear All lives in the input panel, which hasPanel() no longer renders for this mode. The case
+        // stays because a wiring spec pins it.
         break;
     }
   }

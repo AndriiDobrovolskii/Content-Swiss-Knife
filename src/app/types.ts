@@ -3,6 +3,15 @@ export type WebsiteGroup = 'UA' | 'EU' | 'ES' | 'US';
 
 export type AppMode = 'generator' | 'ua-generator' | 'optimizer' | 'translator' | 'image-tools' | 'seo-generator' | 'copywriter' | 'readability' | 'slug-generator' | 'html-editor' | 'dashboard' | 'faq-generator' | 'image-studio';
 
+/** Identifier of a navigation-rail group (US-10.4). The Dashboard belongs to no group. */
+export type NavGroupId = 'seo-text' | 'images' | 'code';
+
+/** A navigation-rail group: its id and its mode items in display order (US-10.4, FR-1). */
+export interface NavGroup {
+  id: NavGroupId;
+  modes: AppMode[];
+}
+
 export interface WebsiteOption {
   name: string;
   group: WebsiteGroup;

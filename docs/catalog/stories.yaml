@@ -95,3 +95,10 @@ stories:
     path: docs/stories/US-10.3-image-studio-security-tests-live-smoke.md
     state: NOT_STARTED
     created_at: 2026-11-02T17:28:37Z
+  - id: US-10.4
+    title: Redesign the app shell - grouped, collapsible navigation and restyled layout in light and dark themes
+    slug: app-shell-redesign
+    track: angular
+    path: docs/stories/US-10.4-app-shell-redesign.md
+    state: IN_PROGRESS
+    created_at: 2026-11-08T09:30:00Z

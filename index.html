@@ -10,7 +10,20 @@
     tailwind.config = {
       darkMode: 'class',
       theme: {
-        extend: {}
+        extend: {
+          colors: {
+            shell: {
+              bg: 'var(--shell-bg)',
+              rail: 'var(--shell-rail)',
+              line: 'var(--shell-line)',
+              text: 'var(--shell-text)',
+              muted: 'var(--shell-muted)',
+              hover: 'var(--shell-hover)',
+              active: 'var(--shell-active)',
+              accent: 'var(--shell-accent)'
+            }
+          }
+        }
       }
     }
   </script>
@@ -30,7 +43,7 @@
     .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
   </style>
 </head>
-<body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 h-screen overflow-hidden transition-colors duration-200">
+<body class="bg-shell-bg text-slate-900 dark:text-slate-100 h-screen overflow-hidden transition-colors duration-200">
   <app-root></app-root>
 </body>
 </html>

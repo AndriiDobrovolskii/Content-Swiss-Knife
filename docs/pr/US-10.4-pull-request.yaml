@@ -1,0 +1,59 @@
+---
+artifact: pull_request
+story: US-10.4
+version: 1
+status: DRAFT
+owner: so-pr-creator
+created_at: 2026-11-08T17:24:00Z
+updated_at: 2026-11-08T17:24:00Z
+supersedes: null
+inputs_consumed:
+  - key: story
+    version: 4
+  - key: pr_summary
+    version: 2
+open_decisions_blocking: false
+---
+# Record of the opened Pull Request. Opening it is not READY_FOR_PR and is not a review.
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+remote: origin
+pull_request:
+  number: 150
+  url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/150
+  state: open
+  draft: false
+  opened_at: 2026-11-08T17:23:00Z
+  title_source: docs/pr/US-10.4-pr-summary.md#v2 (verbatim)
+  body_source: docs/pr/US-10.4-pr-summary.md#v2 (verbatim)
+  verified_with: gh pr view 150 (title and body compared byte for byte with the draft; reviewRequests [], labels [], autoMergeRequest null)
+branch:
+  head: feature/US-10.4-app-shell
+  head_sha_pushed: 17efa92f1425e77147d80a1806a8b567b5282bfb
+  base: main
+  base_sha_at_open: 4a3202a3cf91d30f5185acceff56feefa50d5dad
+  merge_base: 91430f6ce91571ab1e3186abe46ef79caf11f335
+  commits_ahead_of_base: 9
+  commits_behind_base: 0
+push:
+  command: git push -u origin feature/US-10.4-app-shell
+  force: false
+  no_verify: false
+  remote_branch_existed_before: false
+  pushed_commits: [b5c3e29, 61c84c0, 7141dcc, 6ac207a, e33fa1b, 4acd8ab, b8fdfb7, b1ff64c, 17efa92]
+authorisation: >
+  Human instruction in chat: "створи PR для US-10.4".
+not_done:
+  - merge
+  - ready-for-review or approval marking
+  - reviewers, labels or milestone
+  - auto-merge
+notes:
+  - The drafted body was posted verbatim. Its "eight commits" (Note 6) and "+6318" (Note 9) are true at
+    b1ff64c, the draft's stated reference point; the pushed head is 17efa92, the ninth commit, which only
+    refreshes the draft itself (36 files, +6323 -215 at 91430f6..17efa92). Not edited, by instruction.
+  - Local main is stale (1b444e2); the PR base is origin main 4a3202a, merge-base 91430f6.
+  - Working-tree items not committed or pushed: the docs/catalog/stories.yaml modification (US-10.5 and
+    US-10.6 entries), docs/stories/US-10.5-*.md, docs/stories/US-10.6-*.md, .tmp.driveupload/.
+  - The PR was created with the gh CLI (--body-file) rather than the github MCP server, to keep the body
+    byte-identical to the draft.
+  - This file was written after the push and is not part of the pushed head SHA.
