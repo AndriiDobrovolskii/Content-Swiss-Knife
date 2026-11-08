@@ -1,6 +1,10 @@
 /* highlight.js — GitHub light theme (default) */
 @import 'highlight.js/styles/github.min.css';
 
+/* App shell (US-10.4): the height shared by the rail's logo row and the input panel's header strip, so the
+   History overlay (top edge) and the strip (height) read one value and cannot drift apart. */
+:root { --shell-header-h: 4rem; }
+
 /* Native browser UI (scrollbars, form controls) follows dark mode too. */
 html.dark { color-scheme: dark; }
 

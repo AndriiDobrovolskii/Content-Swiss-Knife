@@ -1,143 +1,161 @@
 
 <div class="flex h-screen w-full bg-slate-50 dark:bg-slate-900 text-sm transition-colors duration-200">
-  
-  <!-- Sidebar -->
-  <aside class="w-96 xl:w-[26rem] flex-shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full shadow-lg z-10 relative transition-colors duration-200">
-    
-    <!-- Sidebar Header -->
-    <div class="p-6 border-b border-slate-100 dark:border-slate-700 space-y-4">
-      <div class="flex justify-between items-center">
-        <div>
-          <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <i class="fa-solid fa-cube text-blue-600 dark:text-blue-400"></i>
-            {{ uiLabels().appTitle }}
-          </h1>
-        </div>
-        <div class="flex items-center gap-2">
-           <!-- Language Toggle -->
-           <button (click)="toggleLanguage()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title="Switch Language">
-             {{ uiLanguage() === 'en' ? 'EN' : 'UA' }}
-           </button>
-           <!-- AI Model Settings -->
-           <button (click)="toggleModelSettings()" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-90" title="AI Model Settings">
-             <i class="fa-solid fa-sliders text-lg"></i>
-           </button>
-           <!-- Dark Mode Toggle -->
-           <button (click)="toggleDarkMode()" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-90" title="Toggle Dark Mode">
-            @if (darkMode()) {
-              <i class="fa-solid fa-sun text-yellow-400"></i>
-            } @else {
-              <i class="fa-solid fa-moon"></i>
-            }
+  <!-- Nav Rail -->
+  <!-- Global left navigation (US-10.4). The rail is a nav element and never an aside: the input panel further down is the only aside,
+       so a lookup for the aside finds the panel and not the rail. Each mode is one button that calls the existing mode setter. Items hidden
+       by a collapsed group are removed from the template (not hidden with CSS) so they leave the accessibility tree. -->
+  <nav class="w-64 flex-shrink-0 h-full flex flex-col border-r">
+
+    <!-- Logo row -->
+    <div class="h-[var(--shell-header-h)] shrink-0 flex items-center gap-2 px-4 border-b">
+      <h1 class="text-xl font-bold flex items-center gap-2 min-w-0">
+        <i class="fa-solid fa-cube text-blue-600 dark:text-blue-400 shrink-0" aria-hidden="true"></i>
+        <span class="truncate">{{ uiLabels().appTitle }}</span>
+      </h1>
+    </div>
+
+    <!-- Groups: the only part of the rail that scrolls, so a short viewport never clips the bottom controls -->
+    <div class="flex-1 min-h-0 overflow-y-auto py-2 space-y-2">
+
+      <!-- Group: seo-text -->
+      <div>
+        <button (click)="toggleNavGroup('seo-text')" [attr.aria-expanded]="navGroupOpen()['seo-text']" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-xs font-semibold">
+          <span>{{ uiLabels().navGroupSeoText }} · {{ navGroupCount('seo-text') }}</span>
+          <i class="fa-solid fa-chevron-down text-[10px]" [class.-rotate-90]="!navGroupOpen()['seo-text']" aria-hidden="true"></i>
+        </button>
+        @if (isNavItemShown('generator')) {
+          <button (click)="setMode('generator')" [class]="navItemClass('generator')" [attr.aria-current]="navCurrent('generator')">
+            <i [class]="navIconClass('fa-wand-magic-sparkles')" aria-hidden="true"></i>
+            <span>{{ uiLabels().generator }}</span>
           </button>
-          @if (appMode() === 'generator') {
-            <button (click)="toggleHistory()" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-90" title="History">
-              <i class="fa-solid fa-clock-rotate-left text-lg"></i>
-            </button>
-          }
-          <button (click)="setMode('dashboard')"
-            class="transition-transform active:scale-90"
-            [class]="appMode() === 'dashboard' ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-400'"
-            [title]="uiLabels().dashboardTooltip">
-            <i class="fa-solid fa-chart-line text-lg"></i>
+        }
+        @if (isNavItemShown('ua-generator')) {
+          <button (click)="setMode('ua-generator')" [class]="navItemClass('ua-generator')" [attr.aria-current]="navCurrent('ua-generator')">
+            <i [class]="navIconClass('fa-language')" aria-hidden="true"></i>
+            <span>{{ uiLabels().uaGenerator }}</span>
           </button>
-        </div>
+        }
+        @if (isNavItemShown('optimizer')) {
+          <button (click)="setMode('optimizer')" [class]="navItemClass('optimizer')" [attr.aria-current]="navCurrent('optimizer')">
+            <i [class]="navIconClass('fa-bolt')" aria-hidden="true"></i>
+            <span>{{ uiLabels().optimizer }}</span>
+          </button>
+        }
+        @if (isNavItemShown('translator')) {
+          <button (click)="setMode('translator')" [class]="navItemClass('translator')" [attr.aria-current]="navCurrent('translator')">
+            <i [class]="navIconClass('fa-globe')" aria-hidden="true"></i>
+            <span>{{ uiLabels().translator }}</span>
+          </button>
+        }
+        @if (isNavItemShown('seo-generator')) {
+          <button (click)="setMode('seo-generator')" [class]="navItemClass('seo-generator')" [attr.aria-current]="navCurrent('seo-generator')">
+            <i [class]="navIconClass('fa-tags')" aria-hidden="true"></i>
+            <span>{{ uiLabels().seoGenerator }}</span>
+          </button>
+        }
+        @if (isNavItemShown('copywriter')) {
+          <button (click)="setMode('copywriter')" [class]="navItemClass('copywriter')" [attr.aria-current]="navCurrent('copywriter')">
+            <i [class]="navIconClass('fa-pen-nib')" aria-hidden="true"></i>
+            <span>{{ uiLabels().copywriter }}</span>
+          </button>
+        }
+        @if (isNavItemShown('readability')) {
+          <button (click)="setMode('readability')" [class]="navItemClass('readability')" [attr.aria-current]="navCurrent('readability')">
+            <i [class]="navIconClass('fa-glasses')" aria-hidden="true"></i>
+            <span>{{ uiLabels().readability }}</span>
+          </button>
+        }
+        @if (isNavItemShown('slug-generator')) {
+          <button (click)="setMode('slug-generator')" [class]="navItemClass('slug-generator')" [attr.aria-current]="navCurrent('slug-generator')">
+            <i [class]="navIconClass('fa-link')" aria-hidden="true"></i>
+            <span>{{ uiLabels().slugGenerator }}</span>
+          </button>
+        }
+        @if (isNavItemShown('faq-generator')) {
+          <button (click)="setMode('faq-generator')" [class]="navItemClass('faq-generator')" [attr.aria-current]="navCurrent('faq-generator')">
+            <i [class]="navIconClass('fa-circle-question')" aria-hidden="true"></i>
+            <span>{{ uiLabels().faqGenerator }}</span>
+          </button>
+        }
       </div>
 
-      <!-- Mode Switcher -->
-      <div class="space-y-1">
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
-          <button
-            (click)="setMode('slug-generator')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'slug-generator' ? 'bg-white dark:bg-slate-600 text-cyan-600 dark:text-cyan-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            <i class="fa-solid fa-link mr-1"></i> {{ uiLabels().slugGenerator }}
+      <!-- Group: images -->
+      <div>
+        <button (click)="toggleNavGroup('images')" [attr.aria-expanded]="navGroupOpen()['images']" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-xs font-semibold">
+          <span>{{ uiLabels().navGroupImages }} · {{ navGroupCount('images') }}</span>
+          <i class="fa-solid fa-chevron-down text-[10px]" [class.-rotate-90]="!navGroupOpen()['images']" aria-hidden="true"></i>
+        </button>
+        @if (isNavItemShown('image-tools')) {
+          <button (click)="setMode('image-tools')" [class]="navItemClass('image-tools')" [attr.aria-current]="navCurrent('image-tools')">
+            <i [class]="navIconClass('fa-images')" aria-hidden="true"></i>
+            <span>{{ uiLabels().imageTools }}</span>
           </button>
-          <button
-            (click)="setMode('generator')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'generator' ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().generator }}
+        }
+        @if (isNavItemShown('image-studio')) {
+          <button (click)="setMode('image-studio')" [class]="navItemClass('image-studio')" [attr.aria-current]="navCurrent('image-studio')">
+            <i [class]="navIconClass('fa-palette')" aria-hidden="true"></i>
+            <span>{{ uiLabels().imageStudio }}</span>
           </button>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
-          <button
-            (click)="setMode('optimizer')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'optimizer' ? 'bg-white dark:bg-slate-600 text-purple-600 dark:text-purple-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().optimizer }}
-          </button>
-          <button
-            (click)="setMode('translator')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'translator' ? 'bg-white dark:bg-slate-600 text-emerald-600 dark:text-emerald-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().translator }}
-          </button>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
-          <button
-            (click)="setMode('image-tools')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'image-tools' ? 'bg-white dark:bg-slate-600 text-orange-600 dark:text-orange-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().imageTools }}
-          </button>
-          <button
-            (click)="setMode('seo-generator')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'seo-generator' ? 'bg-white dark:bg-slate-600 text-teal-600 dark:text-teal-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().seoGenerator }}
-          </button>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
-          <button
-            (click)="setMode('copywriter')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'copywriter' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            {{ uiLabels().copywriter }}
-          </button>
-          <button
-            (click)="setMode('readability')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'readability' ? 'bg-white dark:bg-slate-600 text-pink-600 dark:text-pink-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            <i class="fa-solid fa-glasses mr-1"></i> {{ uiLabels().readability }}
-          </button>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg">
-          <button
-            (click)="setMode('html-editor')"
-            class="w-full py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'html-editor' ? 'bg-white dark:bg-slate-600 text-rose-600 dark:text-rose-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            <i class="fa-solid fa-code mr-1"></i> {{ uiLabels().htmlEditor }}
-          </button>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg">
-          <button
-            (click)="setMode('image-studio')"
-            class="w-full py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'image-studio' ? 'bg-white dark:bg-slate-600 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            <i class="fa-solid fa-palette mr-1"></i> {{ uiLabels().imageStudio }}
-          </button>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg grid grid-cols-2 gap-1">
-          <button
-            (click)="setMode('ua-generator')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'ua-generator' ? 'bg-white dark:bg-slate-600 text-amber-600 dark:text-amber-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            <i class="fa-solid fa-language mr-1"></i> {{ uiLabels().uaGenerator }}
-          </button>
-          <button
-            (click)="setMode('faq-generator')"
-            class="py-1.5 rounded-md text-xs font-semibold transition-all text-center"
-            [class]="appMode() === 'faq-generator' ? 'bg-white dark:bg-slate-600 text-green-600 dark:text-green-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'">
-            <i class="fa-solid fa-circle-question mr-1"></i> {{ uiLabels().faqGenerator }}
-          </button>
-        </div>
+        }
       </div>
+
+      <!-- Group: code -->
+      <div>
+        <button (click)="toggleNavGroup('code')" [attr.aria-expanded]="navGroupOpen()['code']" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 text-xs font-semibold">
+          <span>{{ uiLabels().navGroupCode }} · {{ navGroupCount('code') }}</span>
+          <i class="fa-solid fa-chevron-down text-[10px]" [class.-rotate-90]="!navGroupOpen()['code']" aria-hidden="true"></i>
+        </button>
+        @if (isNavItemShown('html-editor')) {
+          <button (click)="setMode('html-editor')" [class]="navItemClass('html-editor')" [attr.aria-current]="navCurrent('html-editor')">
+            <i [class]="navIconClass('fa-code')" aria-hidden="true"></i>
+            <span>{{ uiLabels().htmlEditor }}</span>
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Nav Rail: bottom controls -->
+    <div class="shrink-0 border-t py-2">
+      <button (click)="setMode('dashboard')" [class]="navItemClass('dashboard')" [attr.aria-current]="navCurrent('dashboard')">
+        <i [class]="navIconClass('fa-chart-line')" aria-hidden="true"></i>
+        <span>{{ uiLabels().dashboardTooltip }}</span>
+      </button>
+      <!-- Language: the visible code ("EN" / "UA") is part of the accessible name (WCAG 2.5.3 Label in Name) -->
+      <button (click)="toggleLanguage()" [class]="navItemClass()" [attr.aria-label]="languageCode() + ', ' + uiLabels().switchLanguage">
+        <span class="w-5 text-center text-xs font-bold shrink-0">{{ languageCode() }}</span>
+        <span>{{ uiLabels().switchLanguage }}</span>
+      </button>
+      <button (click)="toggleDarkMode()" [class]="navItemClass()">
+        @if (darkMode()) {
+          <i [class]="navIconClass('fa-sun')" aria-hidden="true"></i>
+        } @else {
+          <i [class]="navIconClass('fa-moon')" aria-hidden="true"></i>
+        }
+        <span>{{ uiLabels().toggleTheme }}</span>
+      </button>
+      <button (click)="toggleModelSettings()" [class]="navItemClass()">
+        <i [class]="navIconClass('fa-sliders')" aria-hidden="true"></i>
+        <span>{{ uiLabels().aiSettings }}</span>
+      </button>
+    </div>
+  </nav>
+  <!-- Nav Rail end -->
+
+  <!-- Sidebar -->
+  <aside class="w-96 xl:w-[26rem] flex-shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full shadow-lg z-10 relative transition-colors duration-200">
+
+    <!-- Panel header strip: a fixed height that does not depend on the mode; it holds only the History button, in generator mode (FR-9, FR-11) -->
+    <div class="h-[var(--shell-header-h)] shrink-0 px-4 flex items-center justify-end border-b border-slate-100 dark:border-slate-700">
+      @if (appMode() === 'generator') {
+        <button (click)="toggleHistory()" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-transform active:scale-90" title="History">
+          <i class="fa-solid fa-clock-rotate-left text-lg"></i>
+        </button>
+      }
     </div>
 
     <!-- History Panel (Only for Generator) -->
     @if (showHistory() && appMode() === 'generator') {
-      <div class="absolute inset-0 top-[125px] bg-white dark:bg-slate-800 z-20 flex flex-col animate-in slide-in-from-left duration-200 shadow-xl border-t border-slate-100 dark:border-slate-700">
+      <div class="absolute inset-0 top-[var(--shell-header-h)] bg-white dark:bg-slate-800 z-20 flex flex-col animate-in slide-in-from-left duration-200 shadow-xl border-t border-slate-100 dark:border-slate-700">
         <div class="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
           <h3 class="font-bold text-slate-700 dark:text-slate-200">{{ uiLabels().historyTitle }}</h3>
           <button (click)="toggleHistory()" class="text-slate-400 hover:text-red-500 active:scale-90 transition-transform"><i class="fa-solid fa-times"></i></button>
