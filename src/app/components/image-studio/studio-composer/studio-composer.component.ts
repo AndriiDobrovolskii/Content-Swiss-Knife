@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { ASPECT_RATIOS } from '../../../../prompt-core/image-studio-contract';
 import { findImageModel, IMAGE_MODELS } from '../../../../prompt-core/model-catalog';
 import {
-  applyProduct, CHIP_INSTRUCTIONS, presetName, PROMPT_PRESETS, type ChipInstruction, type PromptPreset,
+  CHIP_INSTRUCTIONS, presetName, PROMPT_PRESETS, type ChipInstruction, type PromptPreset,
 } from '../../../../prompt-core/prompt-presets';
 import { ImageStudioStore } from '../../../../services/image-studio/image-studio.store';
 import {
@@ -29,9 +29,9 @@ interface AttachMessage {
 }
 
 /**
- * The studio composer (US-10.1 DD-22): presets, quick-edit chips, the attachment surface (button, drop zone, paste,
- * thumbnails, upload states), the prompt, the product-name field, the ratio, resolution and model selectors, Send and
- * Cancel. State lives in the root `ImageStudioStore`; this component renders it and forwards user actions. Every text
+ * The studio composer (US-10.1 DD-22, restyled by US-10.5): presets (picked through the store's `applyPreset`),
+ * the attachment surface (button, drop zone, paste, thumbnails, upload states), quick-edit chips directly above the
+ * prompt, the prompt, the product-name field, the ratio, resolution and model selectors, Generate and Cancel. State lives in the root `ImageStudioStore`; this component renders it and forwards user actions. Every text
  * is resolved from `studio-texts` for `lang()` at render time (FR-77).
  *
  * Attaching (DD-17): each accepted file is ingested (DD-20) and uploaded at once; the attachment shows `uploading`,
@@ -128,24 +128,11 @@ export class StudioComposerComponent {
   }
 
   /**
-   * Picking a preset fills the prompt (the product name substituted once, D-14), the ratio, the resolution and,
-   * while the session holds no version, the model (FR-28). In a session with a version the model changes only
-   * through the model selector, which starts a new session.
+   * A chip is a one-click edit of the latest version: its English instruction is sent at once (FR-31). A chip send
+   * records no preset, neither the wire one nor the checked one (FR-14), so both fields are cleared first.
    */
-  protected pickPreset(preset: PromptPreset): void {
-    const patch = {
-      text: applyProduct(preset.template, this.store.draft().productName),
-      presetId: preset.id,
-      aspectRatio: preset.defaults.aspectRatio,
-      resolution: preset.defaults.resolution,
-      ...(this.store.versions().length === 0 ? { model: preset.defaults.model } : {}),
-    };
-    this.store.setDraft(patch);
-  }
-
-  /** A chip is a one-click edit of the latest version: its English instruction is sent at once (FR-31). */
   protected async sendChip(chip: ChipInstruction): Promise<void> {
-    this.store.setDraft({ text: chip.instruction, presetId: null });
+    this.store.setDraft({ text: chip.instruction, presetId: null, checkedPresetId: null });
     await this.store.send();
   }
 
