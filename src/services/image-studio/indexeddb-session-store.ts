@@ -1,5 +1,6 @@
-import { parseStoredSession, parseStoredTurn } from '../../utils/image-studio/schemas';
+import { parseStoredSession } from '../../utils/image-studio/schemas';
 import { isExpired } from '../../utils/image-studio/session-lifecycle';
+import { fromTurnRecord, toTurnRecord, type TurnRecord } from '../../utils/image-studio/turn-record';
 import {
   StorageQuotaError,
   type CommitBatch,
@@ -27,13 +28,6 @@ const DB_NAME = 'cwk-image-studio';
 const DB_VERSION = 1;
 
 type StoreName = 'sessions' | 'turns' | 'sentBytes';
-
-interface TurnRecord {
-  sessionId: string;
-  id: string;
-  role: Turn['role'];
-  parts: Turn['parts'];
-}
 
 interface SentBytesRecord {
   sessionId: string;
@@ -134,7 +128,7 @@ export class IndexedDbSessionStore implements SessionStorePort {
       const rows = (await requestResult(tx.objectStore('turns').index('sessionId').getAll(id))) as TurnRecord[];
       const byId = new Map<string, Turn>();
       for (const row of rows) {
-        const turn = parseStoredTurn({ id: row.id, role: row.role, parts: row.parts });
+        const turn = fromTurnRecord(row);
         if (turn) byId.set(turn.id, turn);
       }
       const turns = meta.turnOrder.map((turnId) => byId.get(turnId)).filter((turn): turn is Turn => turn !== undefined);
@@ -151,7 +145,7 @@ export class IndexedDbSessionStore implements SessionStorePort {
       for (const id of evictedIds) await this.deleteSessionRows(tx, id);
       await requestResult(tx.objectStore('sessions').put(newSession.meta));
       for (const turn of newSession.turns) {
-        await requestResult(tx.objectStore('turns').put(this.turnRecord(newSession.meta.id, turn)));
+        await requestResult(tx.objectStore('turns').put(toTurnRecord(newSession.meta.id, turn)));
       }
       return { created: true, evictedIds };
     });
@@ -168,7 +162,7 @@ export class IndexedDbSessionStore implements SessionStorePort {
         }
         await requestResult(turns.delete([sessionId, turnId]));
       }
-      for (const turn of batch.putTurns) await requestResult(turns.put(this.turnRecord(sessionId, turn)));
+      for (const turn of batch.putTurns) await requestResult(turns.put(toTurnRecord(sessionId, turn)));
       await requestResult(tx.objectStore('sessions').put(batch.meta));
     });
   }
@@ -212,9 +206,5 @@ export class IndexedDbSessionStore implements SessionStorePort {
 
   async deleteSession(id: string): Promise<void> {
     await this.transact(['sessions', 'turns', 'sentBytes'], 'readwrite', (tx) => this.deleteSessionRows(tx, id));
-  }
-
-  private turnRecord(sessionId: string, turn: Turn): TurnRecord {
-    return { sessionId, id: turn.id, role: turn.role, parts: turn.parts };
   }
 }
