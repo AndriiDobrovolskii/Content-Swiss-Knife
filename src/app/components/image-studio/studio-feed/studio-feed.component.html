@@ -34,6 +34,12 @@
     } @else {
       @for (card of cards(); track card.key) {
         <app-studio-turn-card [lang]="lang()" [card]="card" />
+        @if (card.holdsMain) {
+          <app-studio-version-strip [lang]="lang()" />
+        }
+      }
+      @if (stripAtEnd()) {
+        <app-studio-version-strip [lang]="lang()" />
       }
     }
 

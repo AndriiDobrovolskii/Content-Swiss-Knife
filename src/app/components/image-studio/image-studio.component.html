@@ -11,58 +11,15 @@
     <!-- The one generation status region (FR-74, FR-83): the only role="status" element of the studio. -->
     <div role="status" class="sr-only">{{ store.statusMessage() }}</div>
 
-    <p class="text-xs text-slate-500 dark:text-slate-400">{{ tx('T-19') }}</p>
-
-    <!-- The chat log: turns and replies in API order (FR-20). Its implicit live role is switched off:
-         announcements belong to the status region alone. -->
-    <div
-      role="log"
-      aria-live="off"
-      [attr.aria-label]="tx('X-26')"
-      class="space-y-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 min-h-40">
-      @for (turn of log(); track turn.id) {
-        @if (turn.parts.length > 0) {
-          <div class="space-y-2" [class.text-right]="turn.role === 'user'">
-            @for (part of turn.parts; track $index) {
-              @if (part.kind === 'text') {
-                <p
-                  class="inline-block max-w-full whitespace-pre-wrap rounded-lg px-3 py-2 text-sm text-left text-slate-900"
-                  [class.bg-violet-100]="turn.role === 'user'"
-                  [class.bg-slate-100]="turn.role === 'model'">{{ part.text }}</p>
-              } @else {
-                <figure class="space-y-1">
-                  <img [src]="part.src" [alt]="altOf(part.prompt)" class="max-h-96 rounded-lg" />
-                  <figcaption class="text-xs text-slate-500 dark:text-slate-400">v{{ part.number }} &middot; {{ part.modelLabel }} &middot; {{ part.resolution }}</figcaption>
-                </figure>
-              }
-            }
-          </div>
-        }
-      }
-      @for (event of store.events(); track event.turnId) {
-        @if (event.kind === 'text' && event.text) {
-          <p class="whitespace-pre-wrap rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-900">{{ event.text }}</p>
-        }
-      }
-      @if (store.canRetry()) {
-        <button
-          type="button"
-          (click)="retry()"
-          [disabled]="store.generating()"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50">
-          {{ tx('T-22.retry') }}
-        </button>
-      }
-    </div>
+    <!-- The results feed (US-10.5 DD-7): the log, the version strip, the events and Retry, Download all and the SynthID notice. -->
+    <app-studio-feed [lang]="lang()" />
 
     <!-- Errors and notices (FR-83): T-4, T-9, T-14, T-18 and every failure text. -->
     @if (store.message(); as message) {
       <div role="alert" class="text-sm text-red-700 dark:text-red-300">{{ tx(message.textId, message.params) }}</div>
     }
 
-    <app-studio-version-strip [lang]="lang()" />
-
-    <!-- The one full-view dialog (FR-10, FR-33): a sibling of the log, never inside it. -->
+    <!-- The one full-view dialog (FR-10, FR-33): a sibling of the feed's log, never inside it. -->
     <app-studio-full-view [lang]="lang()" />
 
     <app-studio-composer [lang]="lang()" />

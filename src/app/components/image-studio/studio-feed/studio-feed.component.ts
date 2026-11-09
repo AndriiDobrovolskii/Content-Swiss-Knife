@@ -6,6 +6,7 @@ import { buildFeed, type FeedCard } from '../../../../utils/image-studio/feed';
 import { studioText, type StudioLanguage, type StudioTextParams } from '../../../../utils/image-studio/studio-texts';
 import { StudioEmptyStateComponent } from '../studio-empty-state/studio-empty-state.component';
 import { StudioTurnCardComponent } from '../studio-turn-card/studio-turn-card.component';
+import { StudioVersionStripComponent } from '../studio-version-strip/studio-version-strip.component';
 
 /**
  * The results feed (US-10.5 FR-3 (h), FR-11, FR-18, FR-20, FR-33; plan DD-7, DD-8): a `role="log"` container that is always
@@ -18,12 +19,13 @@ import { StudioTurnCardComponent } from '../studio-turn-card/studio-turn-card.co
  * first generation (no role, no live region, `aria-hidden`), and the empty state returns when that generation stores no turn.
  * Before any session exists the log renders empty. Every text is a `studio-texts` id resolved for `lang()` at render time.
  * After the cards, still inside the log, come the non-history events (text replies) and Retry (T32, FR-27), with today's content
- * and behaviour. The version strip slot is T33's: it will sit between the cards and the events.
+ * and behaviour. The one version strip (T33, FR-13) follows the card that holds the main image, or ends the cards when that card is
+ * absent, and is not rendered when no version is retained; the events and Retry come after it.
  */
 @Component({
   selector: 'app-studio-feed',
   standalone: true,
-  imports: [StudioEmptyStateComponent, StudioTurnCardComponent],
+  imports: [StudioEmptyStateComponent, StudioTurnCardComponent, StudioVersionStripComponent],
   templateUrl: './studio-feed.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -50,6 +52,9 @@ export class StudioFeedComponent {
   protected readonly showEmpty = computed(() => this.noTurns() && !this.store.generating());
   protected readonly showProgress = computed(() => this.noTurns() && this.store.generating());
   protected readonly showDownloadAll = computed(() => this.session() !== null && !this.showEmpty());
+
+  /** True when versions are retained but no card in the feed holds the main one: the strip then ends the cards (FR-13). */
+  protected readonly stripAtEnd = computed(() => this.delivery.items().length > 0 && !this.cards().some((card) => card.holdsMain));
 
   protected readonly versionCount = computed(() => this.delivery.items().length);
   protected readonly messageId = this.delivery.messageId;

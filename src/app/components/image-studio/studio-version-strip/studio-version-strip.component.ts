@@ -5,11 +5,10 @@ import { studioText, type StudioLanguage, type StudioTextParams } from '../../..
 
 /**
  * The version strip (US-10.1 DD-22, FR-33, FR-37, FR-38, FR-54 to FR-58; US-10.5 FR-6, FR-10): the retained versions of
- * the current session as thumbnails and, until the feed takes it over, Download all versions. A click on a thumbnail
+ * the current session as thumbnails. Download all versions and the delivery failure alert (X-18 to X-22) live once, in the feed. A click on a thumbnail
  * asks StudioDeliveryService to open the full view, which is the StudioFullViewComponent's (the one dialog, a sibling of
  * the log). The delivery state and every action belong to the service (the bytes are delivered natively, there is no
- * format selector); this component only renders them and forwards the operator's clicks. Every failure is reported
- * through the `role="alert"` region (X-18 to X-22).
+ * format selector); this component only renders them and forwards the operator's clicks.
  */
 @Component({
   selector: 'app-studio-version-strip',
@@ -24,8 +23,6 @@ export class StudioVersionStripComponent {
 
   /** The retained versions of the current session, oldest first. */
   protected readonly items = this.delivery.items;
-  protected readonly messageId = this.delivery.messageId;
-  protected readonly busy = this.delivery.busy;
 
   protected tx(id: string, params?: StudioTextParams): string {
     return studioText(id, this.lang(), params);
@@ -42,9 +39,5 @@ export class StudioVersionStripComponent {
 
   protected open(item: DeliveryItem, event: Event): void {
     this.delivery.open(item.version.number, event.currentTarget as HTMLElement);
-  }
-
-  protected downloadAll(): Promise<void> {
-    return this.delivery.downloadAll();
   }
 }
