@@ -1,13 +1,13 @@
 <section class="space-y-3">
 
-  <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ tx('X-16') }}</h3>
+  <h3 class="text-sm font-semibold text-shell-text">{{ tx('X-16') }}</h3>
 
   <div class="flex flex-wrap gap-2">
     @for (item of items(); track item.version.number) {
       <button
         type="button"
         (click)="open(item, $event)"
-        class="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-600 hover:ring-2 hover:ring-violet-500 focus:ring-2 focus:ring-violet-500">
+        class="relative w-20 h-20 rounded-lg overflow-hidden border border-shell-line hover:ring-2 hover:ring-shell-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent">
         <img [attr.src]="srcOf(item)" [alt]="altOf(item)" class="w-full h-full object-cover" />
         <span class="absolute bottom-0 left-0 px-1.5 bg-slate-900/70 text-white text-[10px] font-semibold rounded-tr-lg">v{{ item.version.number }}</span>
       </button>
