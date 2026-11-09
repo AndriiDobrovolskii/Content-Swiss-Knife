@@ -2,13 +2,13 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: US-10.5
-current_stage: PR_CREATION
-status: IN_PROGRESS
+story: null
+current_stage: ARCHIVED
+status: ARCHIVED
 pending_human_gate: null
 started_at: 2026-11-08T17:41:27Z
-updated_at: 2026-11-09T19:44:53Z
+updated_at: 2026-11-09T20:26:06Z
 stage_attempts: {}
 track: angular
 blockers: []
-note: "Stopped before PR_CREATION by run_policy: needs a separate explicit human instruction. Story docs (docs/ for US-10.5/US-10.6, workflow and catalog files, docs/pr/US-10.5-pr-summary.md) are uncommitted and must be committed before the push; .tmp.driveupload/ must not be staged."
+note: "Archived. Delivery summary: docs/knowledge/US-10.5-delivery-summary.md. Open follow-ups: security O-5 (versionImage MIME) for a future hardening story, app.component.html:955 bg-amber-600, the US-10.5 open-decisions log is stale against the approved spec, US-10.6 not started, .tmp.driveupload/ not gitignored."

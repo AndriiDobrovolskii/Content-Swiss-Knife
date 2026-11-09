@@ -190,3 +190,21 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Open items: the U-1 ruling lives only in the evidence file (reconciliation R1); `test/shell-evidence.spec.ts` accepts any `FR-16 met:` text; US-10.5 and
   US-10.6 are registered but uncommitted; `.tmp.driveupload/` is not gitignored; unguarded `JSON.parse` reads, open `cors()` and the Tailwind CDN
   without SRI are pre-existing.
+
+## US-10.5 — Image Studio restyled onto the shell tokens: result-card feed, compare slider and starter cards (archived 2026-11-09T20:26:00Z)
+- Image Studio keeps every capability and is restyled onto the eight `--shell-*` tokens in both themes. A studio header ("New session", "history (N)") and a
+  slim session list (name, local `dd.MM . HH:mm` date, own cost) replace the old heading; the chat log is a feed of result cards (input thumbnails, prompt,
+  ratio / resolution / model / preset chips, "N image - $cost - seconds", interleaved text replies, Reuse prompt).
+- Image tiles download in the native format with one click (the format selector is gone), carry an "Edit of v{N}" chip that opens a keyboard-operable compare
+  slider in a full-view dialog, and "Download all (N) .zip" is named `{timestamp}-{sessionName}.zip`. The composer has quick-edit chips, one `sendState` for
+  Generate and its `Ctrl Enter` hint, a preset check mark (`aria-pressed` plus glyph); the empty state shows three starter preset cards from `PROMPT_PRESETS`.
+- Local sessions gain optional per-turn `cost`, `durationMs`, `presetId`, `inputRefs` and `editOfVersion`; old sessions load unchanged and an invalid new field is
+  treated as absent. Stored images are guarded: malformed base64 never throws, `inputRefs` is capped at 10, only png/jpeg/webp MIME types reach a `data:` URL.
+- Colour rule DD-15 (amended): studio markup uses only the `--shell-*` Tailwind family with no `dark:` variants, with two exempt strings (`text-red-700 dark:text-red-300`
+  on alerts, `bg-slate-900/70 text-white` on image labels). `test/image-studio-theme.spec.ts` allows exactly those two and rejects amber. Manual evidence
+  (`docs/evidence/US-10.5-image-studio-redesign-manual-verification-evidence.md`, measured by an agent in Chrome): studio text contrast at least 5.70:1 (C-2), the
+  Retry label 5.02:1 after the T44 fix (C-4), no horizontal scrollbar at 1024 px.
+- Delivered by PR #152, merge commit `19e9eea`. Summary: `docs/knowledge/US-10.5-delivery-summary.md`.
+- Open items: US-10.6 (new capabilities) is registered and not started; security O-5 (`versionImage` forwards a stored MIME without `isImageMime`) for a future
+  hardening story; `app.component.html:955` still has `bg-amber-600`; `docs/decisions/US-10.5-open-decisions.md` (v4) is stale against the approved Specification;
+  `.tmp.driveupload/` is not gitignored; open `cors()` and the Tailwind CDN without SRI are pre-existing.
