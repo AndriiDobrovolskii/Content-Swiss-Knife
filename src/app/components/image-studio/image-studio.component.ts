@@ -8,6 +8,7 @@ import { StudioMediaService } from '../../../services/image-studio/studio-media.
 import { buildAlt } from '../../../utils/image-studio/alt-text';
 import { studioText, type StudioLanguage, type StudioTextParams } from '../../../utils/image-studio/studio-texts';
 import { StudioComposerComponent } from './studio-composer/studio-composer.component';
+import { StudioFullViewComponent } from './studio-full-view/studio-full-view.component';
 import { StudioSessionListComponent } from './studio-session-list/studio-session-list.component';
 import { StudioVersionStripComponent } from './studio-version-strip/studio-version-strip.component';
 
@@ -34,7 +35,7 @@ interface LogTurn {
 @Component({
   selector: 'app-image-studio',
   standalone: true,
-  imports: [StudioComposerComponent, StudioSessionListComponent, StudioVersionStripComponent],
+  imports: [StudioComposerComponent, StudioFullViewComponent, StudioSessionListComponent, StudioVersionStripComponent],
   providers: [StudioMediaService, StudioDeliveryService],
   templateUrl: './image-studio.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

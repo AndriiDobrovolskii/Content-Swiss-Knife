@@ -1,0 +1,46 @@
+@if (opened(); as item) {
+  <div
+    #dialog
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    [attr.aria-label]="tx('X-17')"
+    (keydown.escape)="close()"
+    class="space-y-3 rounded-xl border border-shell-line bg-shell-rail text-shell-text p-4 shadow-lg">
+    @if (compare(); as pair) {
+      <app-studio-compare-slider [lang]="lang()" [before]="pair.before" [after]="pair.after" />
+    } @else {
+      <img [attr.src]="srcOf(item)" [alt]="altOf(item)" class="max-h-96 mx-auto rounded-lg object-contain" />
+    }
+
+    <div class="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        (click)="download(item)"
+        [disabled]="busy()"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-shell-accent hover:opacity-90 disabled:opacity-50 text-white">
+        {{ tx('X-8') }}
+      </button>
+      <button
+        type="button"
+        (click)="copy(item)"
+        [disabled]="busy()"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-shell-line text-shell-text hover:bg-shell-hover disabled:opacity-50">
+        {{ tx('T-22.copy') }}
+      </button>
+      <button
+        type="button"
+        (click)="edit(item)"
+        [disabled]="store.generating()"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-shell-line text-shell-text hover:bg-shell-hover disabled:opacity-50">
+        {{ tx('T-22.editVersion') }}
+      </button>
+      <button
+        type="button"
+        (click)="close()"
+        class="ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold border border-shell-line text-shell-text hover:bg-shell-hover">
+        {{ tx('X-15') }}
+      </button>
+    </div>
+  </div>
+}
