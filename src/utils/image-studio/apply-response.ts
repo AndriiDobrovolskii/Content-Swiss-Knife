@@ -31,6 +31,14 @@ export interface ApplyContext {
   prompt: string;
   /** The FR-82 input format stored with each new version (D-22). */
   inputFormat: ImageMime;
+  /** US-10.5: the measured generation duration in ms; written on the model turn when given. */
+  durationMs?: number;
+  /** US-10.5: the id of the preset (chip) the send was made with; written on the model turn when given. */
+  presetId?: string;
+  /** US-10.5: the number of the retained version this send edits; written on every version the response creates. */
+  editOfVersion?: number;
+  /** US-10.5: input image references of the send; when omitted they are derived from `userTurn.parts`. */
+  inputRefs?: { turnId: string; partIndex: number }[];
 }
 
 /** The T-9 counts: generated images V, removed turns M, images attached to removed user turns I (FR-45). */
@@ -84,6 +92,15 @@ function attachedImageCount(turn: Turn): number {
   return turn.parts.filter((part) => part.fileData !== undefined || part.inlineData !== undefined).length;
 }
 
+/** The (turnId, partIndex) references of the image parts of the sent user turn, in order (US-10.5 FR-3, FR-23). */
+function deriveInputRefs(turn: Turn): { turnId: string; partIndex: number }[] {
+  const refs: { turnId: string; partIndex: number }[] = [];
+  turn.parts.forEach((part, partIndex) => {
+    if (part.fileData !== undefined || part.inlineData !== undefined) refs.push({ turnId: turn.id, partIndex });
+  });
+  return refs;
+}
+
 export function applyResponse(snapshot: StoredSession, response: GenerateResponse, ctx: ApplyContext): ApplyResult {
   const turnsById = new Map(snapshot.turns.map((turn) => [turn.id, turn]));
   const known = snapshot.meta.turnOrder.filter((id) => turnsById.has(id));
@@ -124,13 +141,19 @@ export function applyResponse(snapshot: StoredSession, response: GenerateRespons
 
   const modelTurnId = ctx.ids.next();
   const modelTurn: Turn = { id: modelTurnId, role: 'model', parts: structuredClone(response.parts) as Part[] };
+  // US-10.5: display fields are written only when defined; a key is omitted, never stored as `undefined`.
+  modelTurn.cost = response.costUsd;
+  if (ctx.durationMs !== undefined) modelTurn.durationMs = ctx.durationMs;
+  if (ctx.presetId !== undefined) modelTurn.presetId = ctx.presetId;
+  const inputRefs = ctx.inputRefs ?? deriveInputRefs(ctx.userTurn);
+  if (inputRefs.length > 0) modelTurn.inputRefs = inputRefs;
   const newVersionNumbers: number[] = [];
   modelTurn.parts.forEach((part, partIndex) => {
     if (!isVersionPart(part)) return;
     const number = meta.nextVersionNumber;
     meta.nextVersionNumber += 1;
     newVersionNumbers.push(number);
-    meta.versions.push({
+    const version: Version = {
       number,
       turnId: modelTurnId,
       partIndex,
@@ -140,7 +163,9 @@ export function applyResponse(snapshot: StoredSession, response: GenerateRespons
       prompt: ctx.prompt,
       inputFormat: ctx.inputFormat,
       downloaded: false,
-    });
+    };
+    if (ctx.editOfVersion !== undefined) version.editOfVersion = ctx.editOfVersion;
+    meta.versions.push(version);
   });
   meta.turnOrder.push(ctx.userTurn.id, modelTurnId);
   meta.costUsd += response.costUsd;
