@@ -6,7 +6,7 @@
  * `schemas.ts` readers on every build, so an invalid value is "absent", never an error.
  */
 import type { StoredSession, Version } from './ports';
-import { readTurnExtras } from './schemas';
+import { readEditSource, readTurnExtras } from './schemas';
 
 /** One piece of a card, in the order the API returned it: a model text paragraph or a generated image. */
 export type FeedItem = { kind: 'text'; text: string } | { kind: 'image'; versionNumber: number };
@@ -16,6 +16,19 @@ export interface FeedSummary {
   count: number;
   cost?: number;
   durationMs?: number;
+}
+
+/** A reference to one input image part of a stored turn: what the card shows as a thumbnail. */
+export interface FeedThumb {
+  turnId: string;
+  partIndex: number;
+}
+
+/** One generated image of a card. `editOf` is present only for a valid stored edit source (FR-9, FR-23). */
+export interface FeedImage {
+  number: number;
+  partIndex: number;
+  editOf?: { n: number; sourceRetained: boolean };
 }
 
 /** One card of the feed: everything one stored model turn shows. */
@@ -29,8 +42,12 @@ export interface FeedCard {
   model: string;
   /** Present only when the stored id is valid and known to the registry. */
   presetId?: string;
+  /** The validated, non-dangling input references of the send, in stored order. */
+  thumbs: FeedThumb[];
   summary: FeedSummary;
   items: FeedItem[];
+  /** Every version of the card, by number order of the stored list, with its edit source when it has one. */
+  images: FeedImage[];
   /** True only on the card of the retained version with the highest number. */
   holdsMain: boolean;
 }
@@ -59,6 +76,12 @@ export function buildFeed(session: StoredSession, deps: FeedDeps): Feed {
     if (main === undefined || version.number > main.number) main = version;
   }
 
+  const turnById = new Map(session.turns.map((t) => [t.id, t]));
+  const isImagePartOf = (ref: FeedThumb): boolean => {
+    const part = turnById.get(ref.turnId)?.parts[ref.partIndex];
+    return part !== undefined && (part.inlineData !== undefined || part.fileData !== undefined);
+  };
+
   const cards: FeedCard[] = [];
   for (const turn of session.turns) {
     if (turn.role !== 'model') continue;
@@ -82,14 +105,24 @@ export function buildFeed(session: StoredSession, deps: FeedDeps): Feed {
     if (extras.cost !== undefined) summary.cost = extras.cost;
     if (extras.durationMs !== undefined) summary.durationMs = extras.durationMs;
 
+    const thumbs = (extras.inputRefs ?? []).filter(isImagePartOf);
+    const images: FeedImage[] = own.map((version) => {
+      const image: FeedImage = { number: version.number, partIndex: version.partIndex };
+      const editOf = readEditSource(version, versions);
+      if (editOf !== null) image.editOf = editOf;
+      return image;
+    });
+
     const card: FeedCard = {
       key: turn.id,
       prompt: first === undefined ? '' : first.prompt.trim(),
       aspectRatio: first === undefined ? '' : first.aspectRatio,
       resolution: first === undefined ? '' : first.resolution,
       model: first === undefined ? '' : first.model,
+      thumbs,
       summary,
       items,
+      images,
       holdsMain: main !== undefined && main.turnId === turn.id,
     };
     if (extras.presetId !== undefined && deps.isKnownPresetId(extras.presetId)) card.presetId = extras.presetId;
