@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { findImageModel } from '../../prompt-core/model-catalog';
+import { applyProduct, type PromptPreset } from '../../prompt-core/prompt-presets';
 import { applyResponse, InvalidResponseError } from '../../utils/image-studio/apply-response';
 import type { BuildInput } from '../../utils/image-studio/request-builder';
 import { createGenerationRunner, type RunOutcome } from '../../utils/image-studio/generation-runner';
@@ -265,6 +266,22 @@ export class ImageStudioStore {
     if (id === null) return;
     const next = { ...this.draft(), ...patch };
     this.drafts.update((all) => ({ ...all, [id]: next }));
+  }
+
+  /**
+   * Picking a preset fills the prompt (the product name substituted once, D-14), the ratio, the resolution and, while
+   * the session holds no version, the model (FR-28), and marks the preset as both the wire and the checked one
+   * (FR-19, FR-14 (i)). In a session with a version the model changes only through the model selector. Sends nothing.
+   */
+  applyPreset(preset: PromptPreset): void {
+    this.setDraft({
+      text: applyProduct(preset.template, this.draft().productName),
+      presetId: preset.id,
+      checkedPresetId: preset.id,
+      aspectRatio: preset.defaults.aspectRatio,
+      resolution: preset.defaults.resolution,
+      ...(this.versions().length === 0 ? { model: preset.defaults.model } : {}),
+    });
   }
 
   /**
