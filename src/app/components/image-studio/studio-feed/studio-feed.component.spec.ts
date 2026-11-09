@@ -16,13 +16,14 @@ import { screen, within } from '@testing-library/angular';
 import JSZip from 'jszip';
 import { StudioFeedComponent } from './studio-feed.component';
 import {
-  renderStudio, t, LABELS, textOf, imagesBody, expectGenerate, GENERATE_URL, type Harness,
+  renderStudio, t, LABELS, textOf, imagesBody, expectGenerate, GENERATE_URL, type Harness, type Lang,
 } from '../../../../../test/image-studio/helpers/studio-render';
 import { sessionOf, bytesEqual, mixedTextImageSession } from '../../../../../test/image-studio/helpers/sessions';
 import { makeSession, turn, textPart } from '../../../../../test/image-studio/helpers/fakes';
 import { ZipBuildError } from '../../../../utils/image-studio/zip';
 
-const log = () => screen.getByRole('log', { name: t('X-26', 'en') });
+// The log's accessible name follows the studio language (X-26: Conversation / Розмова), so the lookup takes the language of the render.
+const log = (lang: Lang = 'en') => screen.getByRole('log', { name: t('X-26', lang) });
 const downloadAll = () => screen.getByRole('button', { name: LABELS.en.downloadAll }) as HTMLButtonElement;
 const after = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 const flagOf = (h: Harness, i: number) => h.sessionStore.snapshot().sessions['s1'].meta.versions[i].downloaded;
@@ -261,7 +262,7 @@ describe('FR-27: events and Retry stay (T32)', () => {
     await h.settle();
     h.http.expectOne(GENERATE_URL).flush({ error: 'UPSTREAM_RETRIES_EXHAUSTED' }, { status: 502, statusText: 'x' });
     await h.settle();
-    expect(within(log()).getByRole('button', { name: 'Повторити' })).toBeDefined();
+    expect(within(log('uk')).getByRole('button', { name: 'Повторити' })).toBeDefined();
   });
 });
 
@@ -360,7 +361,7 @@ describe('FR-6 / FR-83 (moved from the strip, D-5): a single-image download fail
     const { session } = sessionOf([{ api: 'png' }]);
     const h = await renderStudio(StudioFeedComponent, { lang: 'uk', sessions: [session] });
     h.save.failWith = new Error('blocked');
-    await h.user.click(within(log()).getByRole('button', { name: 'Завантажити' }));
+    await h.user.click(within(log('uk')).getByRole('button', { name: 'Завантажити' }));
     expect(textOf(await screen.findByRole('alert'))).toBe('Не вдалося завантажити зображення.');
   });
 });
