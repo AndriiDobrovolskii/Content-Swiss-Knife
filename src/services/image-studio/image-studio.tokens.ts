@@ -1,11 +1,12 @@
 import { InjectionToken } from '@angular/core';
 import type {
-  AlertPort, ClipboardPort, Clock, ConfirmPort, IdSource, ImageCodec, SavePort, Scheduler, SessionStorePort,
+  AlertPort, ClipboardPort, Clock, ConfirmPort, IdSource, ImageCodec, LocalOffset, SavePort, Scheduler, SessionStorePort,
 } from '../../utils/image-studio/ports';
 import {
   createBrowserAlertPort, createBrowserClipboardPort, createBrowserClock, createBrowserConfirmPort,
-  createBrowserIdSource, createBrowserSavePort, createBrowserScheduler,
+  createBrowserIdSource, createBrowserLocalOffset, createBrowserSavePort, createBrowserScheduler,
 } from './browser-ports';
+import { buildZip } from '../../utils/image-studio/zip';
 import { createBrowserImageCodec } from './browser-image-codec';
 import { IndexedDbSessionStore } from './indexeddb-session-store';
 
@@ -62,4 +63,16 @@ export const SESSION_STORE_PORT = new InjectionToken<SessionStorePort>('IMAGE_ST
 export const IMAGE_CODEC_PORT = new InjectionToken<ImageCodec>('IMAGE_STUDIO_IMAGE_CODEC', {
   providedIn: 'root',
   factory: () => createBrowserImageCodec(),
+});
+
+/** The viewer's local-time offset in minutes east of UTC, for the row date (US-10.5 DD-13). */
+export const LOCAL_OFFSET_PORT = new InjectionToken<LocalOffset>('IMAGE_STUDIO_LOCAL_OFFSET', {
+  providedIn: 'root',
+  factory: () => createBrowserLocalOffset(),
+});
+
+/** The "download all versions" archive builder: the real `buildZip`; component specs provide a recording fake. */
+export const ARCHIVE_BUILDER_PORT = new InjectionToken<typeof buildZip>('IMAGE_STUDIO_ARCHIVE_BUILDER', {
+  providedIn: 'root',
+  factory: () => buildZip,
 });

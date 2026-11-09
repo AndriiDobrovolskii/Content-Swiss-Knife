@@ -43,6 +43,14 @@ export interface ClipboardPort {
   writePng(bytes: Uint8Array): Promise<void>;
 }
 
+/**
+ * The local-time offset of the viewer's zone at an instant (US-10.5 DD-13). The value is in minutes EAST of UTC (UTC+2
+ * is +120, UTC-5 is -300), the sign `formatRowDate` expects; it depends on the instant because of daylight saving.
+ */
+export interface LocalOffset {
+  offsetMinutes(epochMs: number): number;
+}
+
 /** Hands a file to the browser's save mechanism. */
 export interface SavePort {
   save(bytes: Uint8Array, mimeType: string, fileName: string): void;
