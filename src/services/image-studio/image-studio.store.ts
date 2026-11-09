@@ -362,6 +362,8 @@ export class ImageStudioStore {
   }
 
   private async execute(session: StoredSession, buildInput: BuildInput, draftSnapshot: ComposerDraft): Promise<void> {
+    // FR-24: Send and Retry both enter here, so the duration of a Retry is measured from the Retry click.
+    const startedAt = this.clock.now();
     const sessionId = session.meta.id;
     const controller = new AbortController();
     this.pending.set(null);
@@ -374,13 +376,19 @@ export class ImageStudioStore {
       const outcome = await this.runner.run({ sessionId, snapshot: session, buildInput }, controller.signal);
       // The call has ended; from here on only the commit remains, which Cancel can no longer stop.
       this.running.set(null);
-      await this.applyOutcome(outcome, sessionId, buildInput, draftSnapshot);
+      await this.applyOutcome(outcome, sessionId, buildInput, draftSnapshot, startedAt);
     } finally {
       this.running.set(null);
     }
   }
 
-  private async applyOutcome(outcome: RunOutcome, sessionId: string, buildInput: BuildInput, draft: ComposerDraft): Promise<void> {
+  private async applyOutcome(
+    outcome: RunOutcome,
+    sessionId: string,
+    buildInput: BuildInput,
+    draft: ComposerDraft,
+    startedAt: number,
+  ): Promise<void> {
     switch (outcome.type) {
       case 'discarded':
         await this.refreshSessions();
@@ -388,7 +396,7 @@ export class ImageStudioStore {
       case 'images':
       case 'text':
       case 'safety':
-        await this.commitResponse(outcome, sessionId, buildInput, draft);
+        await this.commitResponse(outcome, sessionId, buildInput, draft, startedAt);
         return;
       case 'cancelled':
         this.restoreDraft(sessionId, draft);
@@ -413,6 +421,7 @@ export class ImageStudioStore {
     sessionId: string,
     buildInput: BuildInput,
     draft: ComposerDraft,
+    startedAt: number,
   ): Promise<void> {
     const stored = await this.loadValid(sessionId);
     if (!stored) {
@@ -425,13 +434,23 @@ export class ImageStudioStore {
       ? stored.meta.versions.find((v) => v.number === draft.attachedVersion?.fromVersion)?.inputFormat
       : undefined;
     const latest = stored.meta.versions.reduce<Version | undefined>((best, v) => (!best || v.number > best.number ? v : best), undefined);
+    // FR-9 (plan F-1): the edit source is stored only when the attached version names a version of THIS session; a
+    // seed carried over from another session (switchModel, blocked editVersion) names none that exists here.
+    const editOfVersion =
+      draft.attachedVersion && stored.meta.versions.some((v) => v.number === draft.attachedVersion?.fromVersion)
+        ? draft.attachedVersion.fromVersion
+        : undefined;
+    // FR-24 (SQ-6-A): the clock is read once here; the interval ends at the hand-off to the port, so the write is not in it.
+    const now = this.clock.now();
 
     let applied;
     try {
       applied = applyResponse(stored, outcome.response, {
         userTurn,
         ids: this.ids,
-        now: this.clock.now(),
+        now,
+        durationMs: Math.max(0, now - startedAt),
+        ...(editOfVersion !== undefined ? { editOfVersion } : {}),
         model: buildInput.model,
         aspectRatio: buildInput.aspectRatio,
         resolution: buildInput.resolution,
