@@ -6,10 +6,13 @@
  * level honest: no studio template or component carries a `slate-`, `gray-`, `zinc-`, `violet-`, `bg-white` or `dark:` class, because every
  * studio surface uses the existing `--shell-*` tokens (the `shell` Tailwind family), which flip with `html.dark` by themselves.
  *
- * EXACTLY TWO patterns are allow-listed, by exact class string, and nothing else (plan DD-15, accepted at HUMAN_PLAN_APPROVAL):
+ * EXACTLY TWO patterns are allow-listed, by exact class string, and nothing else (plan DD-15, as AMENDED by the human decision after the
+ * T42 manual evidence, check C-4, 2026-11-09 - the approved plan text itself is not edited):
  *   (1) status text in role="alert" regions:        `text-red-700 dark:text-red-300`   (the theme-aware pair must stay whole)
- *   (2) fixed scrims over images (not theme surfaces): `bg-slate-900/70 text-white`  and  `bg-amber-600 text-white`
- * (the second pattern is two class strings of one kind). The FR-31 evidence records their measured contrast.
+ *   (2) a fixed scrim over images (not a theme surface): `bg-slate-900/70 text-white`
+ * The amber Retry label is NO LONGER allow-listed: `bg-amber-600 text-white` measured 3.19:1 (below the 4.5:1 of FR-30), so the scan now
+ * reports any amber 50..600 background as an offender, and the replacement `bg-amber-700 text-white` (white on #b45309, computed below)
+ * passes the colour rule on its own merits, so it needs no allow-list entry.
  *
  * The scan is proven NON-VACUOUS below on synthetic offending strings (a broken scanner fails instead of passing on nothing), and it
  * asserts it actually read the studio's files. Logic runner. Red until T37 (the shipped templates still carry slate-* classes).
@@ -22,10 +25,25 @@ const root = process.cwd();
 const STUDIO_DIR = 'src/app/components/image-studio';
 
 /** The allow-list: exact class strings. Exported so the tests can pin its size. */
-export const ALLOW_LIST = ['text-red-700 dark:text-red-300', 'bg-slate-900/70 text-white', 'bg-amber-600 text-white'] as const;
+export const ALLOW_LIST = ['text-red-700 dark:text-red-300', 'bg-slate-900/70 text-white'] as const;
 
-/** Forbidden class tokens: any colour of the slate, gray, zinc or violet scales (with or without a variant prefix), bg-white, and any dark: variant. */
-const FORBIDDEN = /\b(?:slate|gray|zinc|violet)-\d|\bbg-white\b|\bdark:/g;
+/**
+ * Forbidden class tokens: any colour of the slate, gray, zinc or violet scales (with or without a variant prefix), bg-white, any dark: variant,
+ * and any amber 50..600 background (white text on it is below the 4.5:1 of FR-30; amber-600 measured 3.19:1 at T42 check C-4).
+ */
+const FORBIDDEN = /\b(?:slate|gray|zinc|violet)-\d|\bbg-white\b|\bdark:|\bbg-amber-(?:50|[1-6]00)\b/g;
+
+/** WCAG 2.x contrast ratio of two #rrggbb colours (the standard relative-luminance formula, so the reason for a colour lives in the test). */
+export function contrastRatio(fg: string, bg: string): number {
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5]
+      .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [hi, lo] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+  return (hi + 0.05) / (lo + 0.05);
+}
 
 /** Offending class tokens left in `src` after the exact allow-listed strings are removed. */
 export function offendersIn(src: string): string[] {
@@ -65,7 +83,10 @@ describe('US-10.5 theme scan: the scanner is proven non-vacuous (T37)', () => {
   it('spares exactly the allow-listed class strings and nothing near them', () => {
     expect(offendersIn('class="text-red-700 dark:text-red-300"')).toEqual([]);
     expect(offendersIn('class="absolute bg-slate-900/70 text-white px-1"')).toEqual([]);
-    expect(offendersIn('class="bg-amber-600 text-white"')).toEqual([]);
+    // the amber Retry label is no longer exempt (human decision after T42 check C-4): amber-600 is an offender, amber-700 passes the colour rule
+    expect(offendersIn('class="bg-amber-600 text-white"').length).toBeGreaterThan(0);
+    expect(offendersIn('class="bg-amber-500 text-white"').length).toBeGreaterThan(0);
+    expect(offendersIn('class="bg-amber-700 text-white"')).toEqual([]);
     // the pair must stay whole: either half alone, or an extra colour, is an offender
     expect(offendersIn('class="dark:text-red-300"').length).toBeGreaterThan(0);
     expect(offendersIn('class="bg-slate-900/70"').length).toBeGreaterThan(0);
@@ -73,8 +94,39 @@ describe('US-10.5 theme scan: the scanner is proven non-vacuous (T37)', () => {
     expect(offendersIn('class="bg-slate-900 text-white"').length).toBeGreaterThan(0);
   });
 
-  it('the allow-list is exactly the two patterns of the plan: one status pair and two fixed scrims (three class strings)', () => {
-    expect([...ALLOW_LIST]).toEqual(['text-red-700 dark:text-red-300', 'bg-slate-900/70 text-white', 'bg-amber-600 text-white']);
+  it('the allow-list is exactly the two entries of the amended DD-15: one status pair and one fixed scrim (the amber scrim is gone)', () => {
+    expect([...ALLOW_LIST]).toEqual(['text-red-700 dark:text-red-300', 'bg-slate-900/70 text-white']);
+  });
+});
+
+describe('US-10.5 FR-30 / DD-15 amendment: the amber Retry label meets 4.5:1 (T42 check C-4)', () => {
+  const WHITE = '#ffffff';
+  const AMBER_600 = '#d97706';
+  const AMBER_700 = '#b45309';
+
+  it('the regression the evidence found: white on amber-600 (#d97706) is below the 4.5:1 of FR-30', () => {
+    expect(contrastRatio(WHITE, AMBER_600)).toBeLessThan(4.5);
+  });
+
+  it('the replacement: white on amber-700 (#b45309) is at least 4.5:1', () => {
+    expect(contrastRatio(WHITE, AMBER_700)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the formula is sane: black on white is 21:1 and a colour on itself is 1:1', () => {
+    expect(contrastRatio('#000000', WHITE)).toBeCloseTo(21, 5);
+    expect(contrastRatio(AMBER_700, AMBER_700)).toBeCloseTo(1, 5);
+  });
+
+  it('the real composer template has no bg-amber-600 and carries bg-amber-700 text-white on the Retry label', () => {
+    const html = readFileSync(join(root, STUDIO_DIR, 'studio-composer/studio-composer.component.html'), 'utf8');
+    expect(html).not.toContain('bg-amber-600');
+    expect(offendersIn(html)).toEqual([]);
+    const retry = html.split(/\r?\n/).filter((l) => l.includes("tx('T-22.retry')"));
+    expect(retry.length).toBeGreaterThan(0);
+    for (const line of retry) {
+      expect(line).toContain('bg-amber-700');
+      expect(line).toContain('text-white');
+    }
   });
 });
 
