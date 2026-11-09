@@ -1,0 +1,32 @@
+<div
+  class="relative w-full h-96 overflow-hidden rounded-lg border border-shell-line bg-shell-bg touch-none select-none"
+  (pointerdown)="onPointerDown($event)"
+  (pointermove)="onPointerMove($event)"
+  (pointerup)="onPointerEnd($event)"
+  (pointercancel)="onPointerEnd($event)">
+  <img [src]="before().src" [alt]="before().alt" class="absolute inset-0 w-full h-full object-contain" draggable="false" />
+  <img
+    [src]="after().src"
+    [alt]="after().alt"
+    class="absolute inset-0 w-full h-full object-contain"
+    draggable="false"
+    [style.clip-path]="'inset(0 0 0 ' + value() + '%)'" />
+
+  <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-xs font-semibold bg-slate-900/70 text-white">{{ tx('X-35', { N: before().number }) }}</span>
+  <span class="absolute top-2 right-2 px-1.5 py-0.5 rounded text-xs font-semibold bg-slate-900/70 text-white">{{ tx('X-36', { M: after().number }) }}</span>
+
+  <div
+    role="slider"
+    tabindex="0"
+    aria-orientation="horizontal"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    [attr.aria-valuenow]="value()"
+    [attr.aria-label]="tx('X-42')"
+    (keydown)="onKeydown($event)"
+    class="absolute top-0 bottom-0 -ml-3 w-6 flex items-center justify-center cursor-ew-resize focus-visible:outline-none group"
+    [style.left.%]="value()">
+    <span class="absolute inset-y-0 w-0.5 bg-shell-accent" aria-hidden="true"></span>
+    <span class="relative size-6 rounded-full bg-shell-accent text-white flex items-center justify-center text-xs group-focus-visible:ring-2 group-focus-visible:ring-shell-text" aria-hidden="true">&#8596;</span>
+  </div>
+</div>
