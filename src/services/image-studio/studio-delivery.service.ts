@@ -4,6 +4,7 @@ import { fromBase64 } from '../../utils/image-studio/base64';
 import { deliver, deliverForClipboard, DeliveryError } from '../../utils/image-studio/delivery';
 import { buildFileName } from '../../utils/image-studio/file-name';
 import type { ImageMime, Version } from '../../utils/image-studio/ports';
+import { isImageMime } from '../../utils/image-studio/schemas';
 import { sessionName } from '../../utils/image-studio/session-name';
 import { ZipBuildError, type ZipVersion } from '../../utils/image-studio/zip';
 import { ImageStudioStore } from './image-studio.store';
@@ -56,7 +57,9 @@ export class StudioDeliveryService {
       .sort((a, b) => a.number - b.number)
       .map((version) => {
         const inline = session.turns.find((turn) => turn.id === version.turnId)?.parts[version.partIndex]?.inlineData;
-        return { version, mime: (inline?.mimeType as ImageMime | undefined) ?? null, data: inline?.data ?? null };
+        // A stored MIME outside png/jpeg/webp is an unresolvable image: no mime, so nothing is delivered (NB-3).
+        const mime: ImageMime | null = isImageMime(inline?.mimeType) ? inline.mimeType : null;
+        return { version, mime, data: inline?.data ?? null };
       });
   });
 

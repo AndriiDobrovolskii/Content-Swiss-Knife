@@ -1,6 +1,7 @@
 import { Injectable, inject, signal, untracked, type Signal, type WritableSignal } from '@angular/core';
 import { toBase64 } from '../../utils/image-studio/base64';
 import type { Turn } from '../../utils/image-studio/ports';
+import { isImageMime } from '../../utils/image-studio/schemas';
 import { IMAGE_CODEC_PORT, SESSION_STORE_PORT } from './image-studio.tokens';
 import { ImageStudioStore } from './image-studio.store';
 
@@ -37,17 +38,18 @@ export class StudioMediaService {
 
     const size = signal<ImageSize | null>(null);
     this.sizes.set(key, size);
-    const bytes = getBytes();
-    if (bytes) {
-      void (async () => {
-        try {
-          const { width, height } = await this.codec.probe(bytes);
-          size.set({ width, height });
-        } catch {
-          // An undecodable image keeps its null size; never retried, never shown (FR-7).
-        }
-      })();
-    }
+    void (async () => {
+      try {
+        // The getter runs inside the try: stored base64 that cannot be decoded throws here and must not reach the
+        // render path (NB-1). The size stays null, cached, never retried.
+        const bytes = getBytes();
+        if (!bytes) return;
+        const { width, height } = await this.codec.probe(bytes);
+        size.set({ width, height });
+      } catch {
+        // An undecodable image keeps its null size; never retried, never shown (FR-7).
+      }
+    })();
     return size;
   }
 
@@ -61,13 +63,16 @@ export class StudioMediaService {
     const thumb = signal<string | null>(null);
     this.thumbs.set(key, thumb);
     if (part?.inlineData) {
-      thumb.set(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
+      // A stored MIME outside png/jpeg/webp gives no thumbnail, never a data URL of that type (NB-3).
+      const { mimeType, data } = part.inlineData;
+      if (isImageMime(mimeType)) thumb.set(`data:${mimeType};base64,${data}`);
     } else if (part?.fileData) {
       const { fileUri, mimeType } = part.fileData;
       void (async () => {
         try {
           const stored = await this.sessionStore.getSentBytes(sessionId, fileUri);
-          if (stored) thumb.set(`data:${stored.mimeType || mimeType};base64,${toBase64(stored.bytes)}`);
+          const sentMime = stored ? stored.mimeType || mimeType : null;
+          if (stored && isImageMime(sentMime)) thumb.set(`data:${sentMime};base64,${toBase64(stored.bytes)}`);
         } catch {
           // The sent bytes cannot be read: the thumbnail is omitted without an error (FR-3).
         }

@@ -75,6 +75,11 @@ export type UploadResponse = z.infer<typeof UploadResponseSchema>;
 
 const ImageMimeSchema = z.enum(['image/png', 'image/jpeg', 'image/webp']);
 
+/** True for a supported image MIME; the guard to run on a stored MIME string before it is typed as `ImageMime`. */
+export function isImageMime(value: unknown): value is z.infer<typeof ImageMimeSchema> {
+  return ImageMimeSchema.safeParse(value).success;
+}
+
 const StoredVersionSchema = z
   .object({
     number: z.number().int().min(1),
@@ -133,13 +138,19 @@ export interface TurnExtras {
   inputRefs?: { turnId: string; partIndex: number }[];
 }
 
+/**
+ * The most `inputRefs` entries `readTurnExtras` keeps per turn (NB-2). The real maximum is 6: `MAX_UPLOADS` = 5 uploads
+ * (`upload-rules.ts`) plus the one attached earlier version, which is outside the five. 10 leaves head-room of four.
+ */
+export const MAX_INPUT_REFS = 10;
+
 const isNonNegativeNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0;
 
 /**
  * Reads the optional display fields of a stored turn at read time (US-10.5 FR-23, NFR-6). A field that is absent or
  * fails its check is left out of the result (the key is not present); one bad field never takes another with it, and
- * never makes the turn unreadable. `inputRefs` is kept entry by entry. Registry membership of `presetId` is not
+ * never makes the turn unreadable. `inputRefs` is kept entry by entry, at most `MAX_INPUT_REFS` valid entries in stored order. Registry membership of `presetId` is not
  * checked here: the feed does that, so this module imports no registry.
  */
 export function readTurnExtras(turn: {
@@ -155,6 +166,7 @@ export function readTurnExtras(turn: {
   if (Array.isArray(turn.inputRefs)) {
     const refs: { turnId: string; partIndex: number }[] = [];
     for (const entry of turn.inputRefs as unknown[]) {
+      if (refs.length >= MAX_INPUT_REFS) break;
       if (typeof entry !== 'object' || entry === null) continue;
       const { turnId, partIndex } = entry as { turnId?: unknown; partIndex?: unknown };
       if (typeof turnId === 'string' && typeof partIndex === 'number' && Number.isInteger(partIndex) && partIndex >= 0) {
