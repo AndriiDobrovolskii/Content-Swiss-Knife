@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { findImageModel } from '../../../prompt-core/model-catalog';
 import { ImageStudioStore } from '../../../services/image-studio/image-studio.store';
+import { StudioDeliveryService } from '../../../services/image-studio/studio-delivery.service';
 import { StudioMediaService } from '../../../services/image-studio/studio-media.service';
 import { buildAlt } from '../../../utils/image-studio/alt-text';
 import { studioText, type StudioLanguage, type StudioTextParams } from '../../../utils/image-studio/studio-texts';
@@ -34,7 +35,7 @@ interface LogTurn {
   selector: 'app-image-studio',
   standalone: true,
   imports: [StudioComposerComponent, StudioSessionListComponent, StudioVersionStripComponent],
-  providers: [StudioMediaService],
+  providers: [StudioMediaService, StudioDeliveryService],
   templateUrl: './image-studio.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
