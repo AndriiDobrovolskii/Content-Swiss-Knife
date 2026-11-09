@@ -354,3 +354,78 @@ describe('FR-12 (owner ruling OI-A, option a): the archive name after an images-
     expect(save.saved[0].fileName).toBe('20261108-181530-make-the-shadow-softer.zip');
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// T43 (security hardening NB-3; docs/reviews/security/US-10.5-security-review.md section 7). A sibling block: no case above is changed.
+//
+// PINNED CONTRACT ADDITION (owner T43): `items()` validates the stored `inlineData.mimeType` against the supported image MIMEs
+// (image/png, image/jpeg, image/webp) BEFORE it is typed as an ImageMime. A version whose stored MIME is anything else is an
+// unresolvable image, exactly like a version whose bytes are gone: its item carries `mime: null` (never the stored string), so
+// download / copy / download-all give X-22 ("bytes unavailable") and hand nothing over. The retained-version list itself (which
+// versions exist, their order) is NOT changed by this rule; the cases below assert only that no item carries an unsupported MIME and
+// what is (not) delivered, so they hold whether the builder keeps the unresolvable item in the list (mime/data null) or leaves it out.
+// Red until T43 (the cases that use a bad MIME); the valid-MIME case is a green regression guard.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('NB-3 hardening: a stored MIME that is not png, jpeg or webp is an unresolvable image, never cast and never delivered (T43)', () => {
+  const SUPPORTED = ['image/png', 'image/jpeg', 'image/webp'];
+  const BAD = [['text/html'], ['image/svg+xml'], ['application/octet-stream'], ['image/gif'], ['']] as const;
+
+  /** v1 (png bytes) with its stored MIME replaced by `mime`, then v2 (jpg) and v3 (webp) untouched. */
+  const sessionWithBadFirst = (mime: unknown) => {
+    const { session } = sessionOf([{ api: 'png' }, { api: 'jpg' }, { api: 'webp' }]);
+    (session.turns[1].parts[0].inlineData as { mimeType: unknown }).mimeType = mime;
+    return session;
+  };
+
+  it.each(BAD)('items(): no item carries the stored MIME %j, and the valid neighbours keep theirs', async (mime) => {
+    const { delivery } = await setupStudioServices({ seed: [activeNow(sessionWithBadFirst(mime))] });
+    const items = delivery.items();
+    const v1 = items.find((i: any) => i.version.number === 1);
+    expect(v1?.mime ?? null).toBeNull();
+    expect(items.every((i: any) => i.mime === null || SUPPORTED.includes(i.mime))).toBe(true);
+    expect(items.find((i: any) => i.version.number === 2)?.mime).toBe('image/jpeg');
+    expect(items.find((i: any) => i.version.number === 3)?.mime).toBe('image/webp');
+  });
+
+  it('items(): a stored MIME that is not a string is not cast either', async () => {
+    const { delivery } = await setupStudioServices({ seed: [activeNow(sessionWithBadFirst(42))] });
+    expect(delivery.items().find((i: any) => i.version.number === 1)?.mime ?? null).toBeNull();
+  });
+
+  it.each(BAD)('download(1) with the stored MIME %j gives X-22, saves nothing and leaves the flag unset', async (mime) => {
+    const { delivery, save, port } = await setupStudioServices({ seed: [activeNow(sessionWithBadFirst(mime))] });
+    await delivery.download(1);
+    expect(delivery.messageId()).toBe('X-22');
+    expect(save.saved).toHaveLength(0);
+    expect(flagOf(port, 0)).toBe(false);
+    expect(delivery.busy()).toBe(false);
+  });
+
+  it('copy(1) with a stored MIME of text/html gives X-22, writes nothing to the clipboard and leaves the flag unset', async () => {
+    const { delivery, clipboard, codec, port } = await setupStudioServices({ seed: [activeNow(sessionWithBadFirst('text/html'))] });
+    await delivery.copy(1);
+    expect(delivery.messageId()).toBe('X-22');
+    expect(clipboard.written).toHaveLength(0);
+    expect(codec.transcodeCalls).toBe(0);
+    expect(flagOf(port, 0)).toBe(false);
+  });
+
+  it('download all on a session whose only version has an unsupported MIME saves nothing and flags nothing', async () => {
+    const { session } = sessionOf([{ api: 'png' }]);
+    (session.turns[1].parts[0].inlineData as { mimeType: unknown }).mimeType = 'image/svg+xml';
+    const { delivery, save, port } = await setupStudioServices({ seed: [activeNow(session)] });
+    await delivery.downloadAll();
+    expect(save.saved).toHaveLength(0);
+    expect(flagOf(port, 0)).toBe(false);
+  });
+
+  it('guard: the valid versions beside a rejected one are still delivered natively (jpg as image_v2_1x1.jpg, webp as image_v3_1x1.webp)', async () => {
+    const { delivery, save, codec } = await setupStudioServices({ seed: [activeNow(sessionWithBadFirst('text/html'))] });
+    await delivery.download(2);
+    await delivery.download(3);
+    expect(save.saved.map((s: any) => [s.fileName, s.mimeType])).toEqual([
+      ['image_v2_1x1.jpg', 'image/jpeg'], ['image_v3_1x1.webp', 'image/webp'],
+    ]);
+    expect(codec.transcodeCalls).toBe(0);
+  });
+});

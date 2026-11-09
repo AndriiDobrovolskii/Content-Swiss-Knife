@@ -280,3 +280,58 @@ describe('FR-33 / FR-81 (moved from the strip, D-5): a flag write that fails wit
     expect(h.sessionStore.snapshot().sessions['s1'].meta.versions[0].downloaded).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// T43 (security hardening NB-1, NB-3; docs/reviews/security/US-10.5-security-review.md section 7). A sibling block: no case above is changed.
+// Component runner; cannot be run at this stage (no `ng test`), so the red reasons are reasoned in test strategy v7 section 11.
+//
+// PINNED CONTRACT ADDITION (owner T43): stored image data is untrusted at render time.
+//   NB-1: malformed stored base64 (`inlineData.data`) never breaks the tile: it renders its <figure>, its <img> and its caption, and the caption reads
+//         `v{N}` (the "size unknown" rule of FR-7), with no alert and no uncaught render error.
+//   NB-3: an unsupported stored MIME (anything but image/png, image/jpeg, image/webp) is an unresolvable image: the tile still renders (figure,
+//         alt), but its <img> carries NO data URL of that MIME (no `src` of the stored string). The caption is not pinned for this case: whether
+//         the bytes are kept for the size probe is the builder's choice.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('NB-1 / NB-3 hardening: stored image data is not trusted at render time (T43)', () => {
+  const MALFORMED = '***not base64***';
+  const storedPart = (session: any) => session.turns[1].parts[0].inlineData as { mimeType: string; data: string };
+
+  it('precondition: atob really throws on the malformed string (so the case below is not vacuous)', () => {
+    expect(() => atob(MALFORMED)).toThrow();
+  });
+
+  it('NB-1: a version whose stored base64 is malformed still renders its tile - figure, image and the caption "v1" - with no alert', async () => {
+    const { session } = sessionOf([{ api: 'png' }]);
+    storedPart(session).data = MALFORMED;
+    const h = await renderStudio(StudioImageTileComponent, { sessions: [session], inputs: { versionNumber: 1 } });
+    await h.settle();
+    expect(within(figure()).getByAltText('prompt 1')).toBeDefined();
+    expect(caption()).toBe('v1');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('NB-1: the malformed-data tile keeps its Download and "Edit this →" buttons (the tile is not half-rendered)', async () => {
+    const { session } = sessionOf([{ api: 'png' }]);
+    storedPart(session).data = MALFORMED;
+    await renderStudio(StudioImageTileComponent, { sessions: [session], inputs: { versionNumber: 1 } });
+    expect(within(figure()).getByRole('button', { name: t('X-8', 'en') })).toBeDefined();
+    expect(within(figure()).getByRole('button', { name: t('T-22.editVersion', 'en') })).toBeDefined();
+  });
+
+  it.each([['text/html'], ['image/svg+xml']])('NB-3: a stored MIME of %s renders the tile with an image that carries no data URL of that MIME', async (mime) => {
+    const { session } = sessionOf([{ api: 'png' }]);
+    storedPart(session).mimeType = mime;
+    const h = await renderStudio(StudioImageTileComponent, { sessions: [session], inputs: { versionNumber: 1 } });
+    await h.settle();
+    const img = within(figure()).getByAltText('prompt 1');
+    expect(img.getAttribute('src') ?? '').not.toContain(mime);
+    expect(within(figure()).getByRole('button', { name: t('X-8', 'en') })).toBeDefined();
+  });
+
+  it('guard: the same session with a valid PNG still shows the data URL and the probed size', async () => {
+    const { session } = sessionOf([{ api: 'png' }]);
+    await renderStudio(StudioImageTileComponent, { sessions: [session], inputs: { versionNumber: 1 } });
+    expect(within(figure()).getByAltText('prompt 1').getAttribute('src') ?? '').toContain('data:image/png;base64,');
+    await vi.waitFor(() => expect(caption()).toBe('v1 · 40×30'));
+  });
+});

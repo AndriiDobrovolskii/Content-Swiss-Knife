@@ -419,3 +419,64 @@ describe('US-10.5 FR-23 / P-9 guard: a malformed optional field never makes a se
     expect(parseStoredSession(s.meta)).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// T43 (security hardening NB-2; docs/reviews/security/US-10.5-security-review.md section 7). A sibling block: no T2 case above is changed.
+//
+// PINNED CONTRACT ADDITION (owner T43): `readTurnExtras` keeps at most MAX_INPUT_REFS = 10 `inputRefs` entries, the FIRST 10 that pass
+// the entry validity check, in stored order; entries after the 10th valid one are dropped (an invalid entry never counts against the cap).
+// Source of 10: the app's real maximum number of image parts in one user message is 6 (MAX_UPLOADS = 5 uploads, src/utils/image-studio/
+// upload-rules.ts FR-10, plus the single attached version that is outside the five), and inputRefs is derived from exactly those parts
+// (apply-response.ts deriveInputRefs); 10 is >= 6 and <= 20 with head-room, so no genuine record is ever truncated. The number is pinned
+// here as a literal on purpose: a builder who picks another number is a finding for TEST_WRITING (test strategy v7, section 11).
+// Red until T43 (the over-cap cases); the exactly-cap and under-cap cases are green regression guards.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('NB-2 hardening: readTurnExtras caps inputRefs at 10 valid entries at read time (T43)', () => {
+  const CAP = 10;
+  const read = async (inputRefs: unknown) => {
+    const { readTurnExtras } = await load('./schemas');
+    return readTurnExtras({ id: 'm1', role: 'model', parts: [{ text: 'x' }], inputRefs }) as { inputRefs?: { turnId: string; partIndex: number }[] };
+  };
+  const refs = (n: number) => Array.from({ length: n }, (_v, i) => ({ turnId: 'u1', partIndex: i }));
+
+  it('exactly the cap is kept in full and in order (guard)', async () => {
+    expect((await read(refs(CAP))).inputRefs).toEqual(refs(CAP));
+  });
+
+  it('fewer than the cap (the real maximum of 6 images in one message) is kept in full (guard)', async () => {
+    expect((await read(refs(6))).inputRefs).toEqual(refs(6));
+  });
+
+  it('one more than the cap keeps only the first 10, in order', async () => {
+    expect((await read(refs(CAP + 1))).inputRefs).toEqual(refs(CAP));
+  });
+
+  it('a tampered record with 5,000 references keeps only the first 10, in order', async () => {
+    const out = await read(refs(5_000));
+    expect(out.inputRefs).toHaveLength(CAP);
+    expect(out.inputRefs).toEqual(refs(CAP));
+  });
+
+  it('the cap counts VALID entries: bad entries interleaved among 12 good ones do not use up the cap', async () => {
+    const mixed: unknown[] = [];
+    refs(12).forEach((r, i) => {
+      mixed.push(r);
+      if (i % 3 === 0) mixed.push(null, { turnId: 5, partIndex: 1 }, { turnId: 'u1', partIndex: -1 });
+    });
+    expect((await read(mixed)).inputRefs).toEqual(refs(CAP));
+  });
+
+  it('references that point at one and the same image are not collapsed below the cap: 25 copies keep exactly 10', async () => {
+    const same = Array.from({ length: 25 }, () => ({ turnId: 'u1', partIndex: 0 }));
+    expect((await read(same)).inputRefs).toEqual(Array.from({ length: CAP }, () => ({ turnId: 'u1', partIndex: 0 })));
+  });
+
+  it('the cap does not disturb the other fields of the same turn', async () => {
+    const { readTurnExtras } = await load('./schemas');
+    const out = readTurnExtras({ cost: 0.067, durationMs: 12_400, presetId: 'lifestyle', inputRefs: refs(40) }) as Record<string, unknown>;
+    expect(out['cost']).toBe(0.067);
+    expect(out['durationMs']).toBe(12_400);
+    expect(out['presetId']).toBe('lifestyle');
+    expect((out['inputRefs'] as unknown[]).length).toBe(CAP);
+  });
+});

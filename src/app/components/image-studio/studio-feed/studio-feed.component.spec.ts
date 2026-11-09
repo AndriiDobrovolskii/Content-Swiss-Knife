@@ -365,3 +365,19 @@ describe('FR-6 / FR-83 (moved from the strip, D-5): a single-image download fail
     expect(textOf(await screen.findByRole('alert'))).toBe('Не вдалося завантажити зображення.');
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// T43 (security hardening NB-1; docs/reviews/security/US-10.5-security-review.md section 7). A sibling block: no case above is changed.
+// Component runner; cannot be run at this stage. One unreadable stored image must not take the rest of the feed down.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('NB-1 hardening: a version with malformed stored base64 does not break the feed (T43)', () => {
+  it('the feed still renders both tiles: the malformed v1 is captioned "v1", the valid v2 gets its probed size, and no alert shows', async () => {
+    const { session } = sessionOf([{ api: 'png' }, { api: 'png' }]);
+    (session.turns[1].parts[0].inlineData as { data: string }).data = '***not base64***';
+    const h = await renderStudio(StudioFeedComponent, { sessions: [session] });
+    await h.settle();
+    const captions = () => Array.from(log().querySelectorAll('figure figcaption')).map((c) => (c.textContent ?? '').replace(/\s+/g, ' ').trim());
+    await vi.waitFor(() => expect(captions()).toEqual(['v1', 'v2 · 40×30']));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

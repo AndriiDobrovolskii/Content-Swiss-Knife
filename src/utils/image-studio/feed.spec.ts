@@ -305,3 +305,21 @@ describe('FR-9 / FR-23: buildFeed edit source per image (T12)', () => {
     expect(cards[1].images[0].editOf).toEqual({ n: 1, sourceRetained: true });
   });
 });
+
+describe('NB-2 hardening: a card never carries more than 10 input thumbnails (T43)', () => {
+  function withManyInputs(count: number): StoredSession {
+    const s = makeSession('s1', { pairs: 1 });
+    s.turns[0] = turn('u1', 'user', textPart('blend'), inlineImagePart('image/png', toBase64(makeRaster({ format: 'png', width: 4, height: 4 }))));
+    return withTurnExtras(s, 'm1', { inputRefs: Array.from({ length: count }, () => ({ turnId: 'u1', partIndex: 1 })) as [] });
+  }
+
+  it('guard: 10 references to a real image part give 10 thumbnails', async () => {
+    const [card] = (await feed(withManyInputs(10))).cards;
+    expect(card.thumbs).toHaveLength(10);
+  });
+
+  it('a tampered record with 2,000 references to one real image part gives a card with exactly 10 thumbnails', async () => {
+    const [card] = (await feed(withManyInputs(2_000))).cards;
+    expect(card.thumbs).toEqual(Array.from({ length: 10 }, () => ({ turnId: 'u1', partIndex: 1 })));
+  });
+});
