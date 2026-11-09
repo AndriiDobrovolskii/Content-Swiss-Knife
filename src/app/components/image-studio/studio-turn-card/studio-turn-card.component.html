@@ -30,6 +30,16 @@
     <p class="text-xs text-shell-muted">{{ summaryLine() }}</p>
   }
 
+  @if (card().prompt) {
+    <button
+      type="button"
+      (click)="reuse()"
+      [disabled]="!inputEnabled()"
+      class="rounded-lg border border-shell-line px-3 py-1.5 text-xs font-semibold text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+      {{ tx('X-37') }}
+    </button>
+  }
+
   <div class="space-y-2">
     @for (item of card().items; track $index) {
       @if (item.kind === 'text') {

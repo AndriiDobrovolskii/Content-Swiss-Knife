@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, untracked } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, inject, Injector, input, untracked } from '@angular/core';
 import { findImageModel } from '../../../../prompt-core/model-catalog';
 import { findPreset, presetName } from '../../../../prompt-core/prompt-presets';
 import { ImageStudioStore } from '../../../../services/image-studio/image-studio.store';
@@ -23,6 +24,9 @@ interface InputThumb {
  * The card holds ids and values only; every text is a studio-texts id or the preset registry name resolved for `lang()` at
  * render time (FR-77). Input thumbnails are plain `<img>` outside any `<figure>` (only tiles are figures) whose alt is the
  * "Input image {n}" text, never the prompt; a reference whose bytes are gone is omitted without an error.
+ * The "Reuse prompt" button (FR-5) exists only for a non-blank prompt, is disabled while the composer is, puts the card's
+ * prompt, ratio and model into the composer through `store.reusePrompt` (which sends nothing and writes no preset field) and
+ * then moves focus to the composer's prompt field, found by its accessible name once the field has rendered the new text.
  */
 @Component({
   selector: 'app-studio-turn-card',
@@ -37,6 +41,10 @@ export class StudioTurnCardComponent {
 
   private readonly store = inject(ImageStudioStore);
   private readonly media = inject(StudioMediaService);
+  private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
+
+  protected readonly inputEnabled = this.store.inputEnabled;
 
   /** The model chip: the catalog label of the model, or the stored id when the catalog no longer lists it. */
   protected readonly modelLabel = computed(() => {
@@ -89,6 +97,24 @@ export class StudioTurnCardComponent {
 
   protected editOf(versionNumber: number): TileEditOf | null {
     return this.editOfByNumber().get(versionNumber) ?? null;
+  }
+
+  protected reuse(): void {
+    const { prompt, aspectRatio, model } = this.card();
+    if (!prompt || !this.store.inputEnabled()) return;
+    this.store.reusePrompt({ prompt, aspectRatio, model });
+    afterNextRender(() => this.focusPrompt(), { injector: this.injector });
+  }
+
+  /** Focuses the composer's prompt field (the textarea named by X-12), if it is mounted and enabled. */
+  private focusPrompt(): void {
+    const name = this.tx('X-12');
+    for (const field of Array.from(this.document.querySelectorAll('textarea'))) {
+      if (field.getAttribute('aria-label') === name && !field.disabled) {
+        field.focus();
+        return;
+      }
+    }
   }
 
   protected tx(id: string, params?: StudioTextParams): string {
