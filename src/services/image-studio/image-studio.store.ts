@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { RESOLUTIONS } from '../../prompt-core/image-studio-contract';
 import { findImageModel } from '../../prompt-core/model-catalog';
 import { applyProduct, type PromptPreset } from '../../prompt-core/prompt-presets';
 import { applyResponse, InvalidResponseError } from '../../utils/image-studio/apply-response';
@@ -292,6 +293,24 @@ export class ImageStudioStore {
       resolution: preset.defaults.resolution,
       ...(this.versions().length === 0 ? { model: preset.defaults.model } : {}),
     });
+  }
+
+  /**
+   * "Reuse prompt" on a turn card (FR-5): puts the stored prompt text, aspect ratio and model back into the composer
+   * through the draft (no new session, no `switchModel`) and sends nothing. The resolution is not restored; it changes
+   * only when the restored model does not offer the current one, to the nearest lower resolution that model offers.
+   */
+  reusePrompt(input: { prompt: string; aspectRatio: string; model: string }): void {
+    const spec = findImageModel(input.model);
+    const current = this.draft().resolution;
+    const offered = spec?.resolutions ?? [];
+    let resolution = current;
+    if (offered.length > 0 && !offered.includes(current)) {
+      const rank = RESOLUTIONS.indexOf(current);
+      const lower = offered.filter((r) => RESOLUTIONS.indexOf(r) < rank);
+      resolution = lower.length > 0 ? lower.reduce((a, b) => (RESOLUTIONS.indexOf(b) > RESOLUTIONS.indexOf(a) ? b : a)) : offered[0];
+    }
+    this.setDraft({ text: input.prompt, aspectRatio: input.aspectRatio, model: input.model, resolution });
   }
 
   /**
