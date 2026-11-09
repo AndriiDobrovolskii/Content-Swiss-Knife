@@ -310,7 +310,10 @@ export class ImageStudioStore {
       const lower = offered.filter((r) => RESOLUTIONS.indexOf(r) < rank);
       resolution = lower.length > 0 ? lower.reduce((a, b) => (RESOLUTIONS.indexOf(b) > RESOLUTIONS.indexOf(a) ? b : a)) : offered[0];
     }
-    this.setDraft({ text: input.prompt, aspectRatio: input.aspectRatio, model: input.model, resolution });
+    // OI-B (owner ruling, option 1): Reuse counts as an edit, so the check mark clears; the wire presetId an earlier pick
+    // left in the draft is kept.
+    const presetPatch = { checkedPresetId: null };
+    this.setDraft({ text: input.prompt, aspectRatio: input.aspectRatio, model: input.model, resolution, ...presetPatch });
   }
 
   /**
