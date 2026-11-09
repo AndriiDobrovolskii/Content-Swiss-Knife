@@ -102,3 +102,17 @@ stories:
     path: docs/stories/US-10.4-app-shell-redesign.md
     state: ARCHIVED
     created_at: 2026-11-08T09:30:00Z
+  - id: US-10.5
+    title: Restyle Image Studio to the new design - header, session list, results feed, composer and empty state - without adding new capabilities
+    slug: image-studio-visual-redesign
+    track: angular
+    path: docs/stories/US-10.5-image-studio-visual-redesign.md
+    state: IN_PROGRESS
+    created_at: 2026-11-08T10:00:00Z
+  - id: US-10.6
+    title: Add the new Image Studio capabilities from the design - Upscale 4K, Variation, several images per generation, Style ref, saved presets, spend totals and pre-send estimate
+    slug: image-studio-new-capabilities
+    track: angular
+    path: docs/stories/US-10.6-image-studio-new-capabilities.md
+    state: NOT_STARTED
+    created_at: 2026-11-08T10:00:00Z
