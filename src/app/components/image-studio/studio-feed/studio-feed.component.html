@@ -36,6 +36,24 @@
         <app-studio-turn-card [lang]="lang()" [card]="card" />
       }
     }
+
+    <!-- Non-history events (text replies; a safety block carries no text) and Retry follow the cards (FR-27). Plain content: no live role (FR-33). -->
+    @for (event of store.events(); track event.turnId) {
+      @if (event.kind === 'text' && event.text) {
+        <p class="whitespace-pre-wrap rounded-lg bg-shell-hover px-3 py-2 text-sm text-shell-text">{{ event.text }}</p>
+      }
+    }
+    @if (store.canRetry()) {
+      <div>
+        <button
+          type="button"
+          (click)="retry()"
+          [disabled]="store.generating()"
+          class="rounded-lg border border-shell-line px-3 py-1.5 text-xs font-semibold text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+          {{ tx('T-22.retry') }}
+        </button>
+      </div>
+    }
   </div>
 
 </div>

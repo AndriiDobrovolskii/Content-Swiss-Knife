@@ -17,7 +17,8 @@ import { StudioTurnCardComponent } from '../studio-turn-card/studio-turn-card.co
  * The empty state shows iff the session has no turns and no generation runs; the progress element replaces it during the
  * first generation (no role, no live region, `aria-hidden`), and the empty state returns when that generation stores no turn.
  * Before any session exists the log renders empty. Every text is a `studio-texts` id resolved for `lang()` at render time.
- * The version strip slot is T33's; the non-history events, text replies and Retry are T32's.
+ * After the cards, still inside the log, come the non-history events (text replies) and Retry (T32, FR-27), with today's content
+ * and behaviour. The version strip slot is T33's: it will sit between the cards and the events.
  */
 @Component({
   selector: 'app-studio-feed',
@@ -29,7 +30,7 @@ import { StudioTurnCardComponent } from '../studio-turn-card/studio-turn-card.co
 export class StudioFeedComponent {
   readonly lang = input.required<StudioLanguage>();
 
-  private readonly store = inject(ImageStudioStore);
+  protected readonly store = inject(ImageStudioStore);
   protected readonly delivery = inject(StudioDeliveryService);
 
   private readonly session = this.store.currentSession;
@@ -55,6 +56,10 @@ export class StudioFeedComponent {
 
   protected downloadAll(): Promise<void> {
     return this.delivery.downloadAll();
+  }
+
+  protected retry(): Promise<void> {
+    return this.store.retry();
   }
 
   protected tx(id: string, params?: StudioTextParams): string {
