@@ -44,9 +44,10 @@ describe('FR-18: headline, sentence and three starter cards (T26)', () => {
   it('under uk the cards carry the Ukrainian names and descriptions', async () => {
     await renderStudio(StudioEmptyStateComponent, { lang: 'uk' });
     const names = cards().map((b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').replace(/\s+/g, ' ').trim());
-    expect(names[0]).toMatch(/^Товар на білому тлі\b.*Ідеально для товарних карток/);
-    expect(names[1]).toMatch(/^Лайфстайл-сцена\b.*Товар у реалістичному оточенні/);
-    expect(names[2]).toMatch(/^Банер категорії\b.*Широкий формат із місцем для тексту/);
+    // No \b here: without the u flag \b is ASCII-only, so after a Cyrillic letter it never matches before a space.
+    expect(names[0]).toMatch(/^Товар на білому тлі(?=\s).*Ідеально для товарних карток/);
+    expect(names[1]).toMatch(/^Лайфстайл-сцена(?=\s).*Товар у реалістичному оточенні/);
+    expect(names[2]).toMatch(/^Банер категорії(?=\s).*Широкий формат із місцем для тексту/);
   });
 });
 
