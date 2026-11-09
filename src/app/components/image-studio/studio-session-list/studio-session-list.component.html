@@ -1,25 +1,27 @@
-<section class="space-y-3">
+<section class="space-y-2">
 
-  <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ tx('X-9') }}</h3>
+  <p class="text-xs text-shell-muted">{{ countLine() }}</p>
 
-  <ul [attr.aria-label]="tx('X-9')" class="space-y-1">
+  <ul [attr.aria-label]="listLabel()" class="space-y-1">
     @for (meta of store.sessions(); track meta.id) {
       <li>
         <button
           type="button"
           (click)="select(meta.id)"
           [attr.aria-current]="meta.id === store.currentSessionId() ? 'true' : null"
-          class="w-full text-left px-3 py-2 rounded-lg text-xs border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
-          [class.border-violet-500]="meta.id === store.currentSessionId()">
-          <span class="block font-semibold text-slate-700 dark:text-slate-200">{{ whenOf(meta) }}</span>
-          @if (subtitleOf(meta); as subtitle) {
-            <span class="block truncate text-slate-500 dark:text-slate-400">{{ subtitle }}</span>
+          class="w-full text-left px-3 py-2 rounded-lg text-xs border border-shell-line text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent"
+          [class.bg-shell-active]="meta.id === store.currentSessionId()"
+          [class.border-shell-accent]="meta.id === store.currentSessionId()">
+          @if (nameOf(meta); as name) {
+            <span class="block truncate font-semibold">{{ name }}</span>
           }
+          <span class="flex items-center justify-between gap-2 text-shell-muted">
+            <span>{{ dateOf(meta) }}</span>
+            <span>{{ costOf(meta) }}</span>
+          </span>
         </button>
       </li>
     }
   </ul>
-
-  <p class="text-xs text-slate-500 dark:text-slate-400">{{ costLine() }}</p>
 
 </section>
