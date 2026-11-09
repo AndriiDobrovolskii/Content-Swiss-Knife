@@ -5,6 +5,7 @@ import { applyResponse, InvalidResponseError } from '../../utils/image-studio/ap
 import type { BuildInput } from '../../utils/image-studio/request-builder';
 import { createGenerationRunner, type RunOutcome } from '../../utils/image-studio/generation-runner';
 import { outputFormat } from '../../utils/image-studio/output-format';
+import { hasSendableContent } from '../../utils/image-studio/send-state';
 import {
   StorageQuotaError,
   type Announcer,
@@ -165,8 +166,17 @@ export class ImageStudioStore {
     const d = this.draft();
     if (this.current() === null || this.generating() || this.blocked()) return false;
     if (d.attachments.some((a) => a.state === 'uploading')) return false;
-    return d.text.trim() !== '' || d.attachments.some((a) => a.state === 'ready') || d.attachedVersion !== null;
+    return hasSendableContent(d);
   });
+  /**
+   * The one source of the send button's enablement and label (FR-17, SQ-1-B). `enabled` is exactly `canSend()`; the
+   * label follows the draft, not the reason the button is disabled: "Generate" whenever there is something to send,
+   * "Write a prompt to start" only when there is nothing to send.
+   */
+  readonly sendState = computed<{ enabled: boolean; labelId: 'generate' | 'write-prompt' }>(() => ({
+    enabled: this.canSend(),
+    labelId: hasSendableContent(this.draft()) ? 'generate' : 'write-prompt',
+  }));
   /** True while Retry is offered: the failed turn is still exactly what the composer holds (SD-18). */
   readonly canRetry = computed(() => {
     const retry = this.retryTurn();
