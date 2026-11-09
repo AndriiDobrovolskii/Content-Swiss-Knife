@@ -57,7 +57,10 @@ export interface AttachedVersion {
 export interface ComposerDraft {
   text: string;
   productName: string;
+  /** The WIRE preset id: sent to the request and the usage task label, unchanged by an edit (SQ-2-A). */
   presetId: string | null;
+  /** The preset whose check mark is showing; the only value recorded on the stored model turn (FR-14). */
+  checkedPresetId: string | null;
   model: string;
   aspectRatio: string;
   resolution: string;
@@ -91,7 +94,7 @@ interface RetryTurn {
 
 function defaultDraft(model: string): ComposerDraft {
   return {
-    text: '', productName: '', presetId: null, model, aspectRatio: '1:1', resolution: '1K', attachments: [], attachedVersion: null,
+    text: '', productName: '', presetId: null, checkedPresetId: null, model, aspectRatio: '1:1', resolution: '1K', attachments: [], attachedVersion: null,
   };
 }
 
@@ -104,6 +107,7 @@ function sameTurnContent(a: ComposerDraft, b: ComposerDraft): boolean {
   return (
     a.text === b.text &&
     a.presetId === b.presetId &&
+    a.checkedPresetId === b.checkedPresetId &&
     a.model === b.model &&
     a.aspectRatio === b.aspectRatio &&
     a.resolution === b.resolution &&
@@ -451,6 +455,7 @@ export class ImageStudioStore {
         now,
         durationMs: Math.max(0, now - startedAt),
         ...(editOfVersion !== undefined ? { editOfVersion } : {}),
+        ...(draft.checkedPresetId !== null ? { presetId: draft.checkedPresetId } : {}),
         model: buildInput.model,
         aspectRatio: buildInput.aspectRatio,
         resolution: buildInput.resolution,
