@@ -49,7 +49,7 @@ describe('FR-23 / R-1: a turn carrying every optional field survives a write and
 
   it('a value the Specification does not list ("an extra value") is preserved as stored and ignored, never rejected', () => {
     const withExtra = { ...full, futureField: { a: 1 } } as Turn;
-    const back = fromTurnRecord(toTurnRecord('s1', withExtra)) as Record<string, unknown> | null;
+    const back = fromTurnRecord(toTurnRecord('s1', withExtra)) as unknown as Record<string, unknown> | null;
     expect(back).not.toBeNull();
     expect(back?.['futureField']).toEqual({ a: 1 });
   });
