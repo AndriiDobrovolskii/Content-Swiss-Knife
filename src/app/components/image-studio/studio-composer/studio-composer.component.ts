@@ -59,6 +59,8 @@ export class StudioComposerComponent {
   protected readonly models = IMAGE_MODELS;
   /** The resolutions the selected model accepts: 4K is offered only by Pro (FR-19). */
   protected readonly resolutions = computed(() => findImageModel(this.store.draft().model)?.resolutions ?? []);
+  /** The send button's label follows the draft, not the reason it is disabled: "Generate" or "Write a prompt to start" (FR-17). */
+  protected readonly sendLabelTextId = computed(() => (this.store.sendState().labelId === 'generate' ? 'X-1' : 'X-29'));
   /** Chips appear only once the session holds a version (FR-31). */
   protected readonly showChips = computed(() => this.store.versions().length > 0);
 
@@ -138,6 +140,12 @@ export class StudioComposerComponent {
 
   protected async send(): Promise<void> {
     await this.store.send();
+  }
+
+  /** Ctrl+Enter in the prompt sends exactly when a click on the enabled button would (FR-17); never a newline. */
+  protected async onCtrlEnter(event: Event): Promise<void> {
+    event.preventDefault();
+    if (this.store.sendState().enabled) await this.send();
   }
 
   protected cancel(): void {

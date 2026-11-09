@@ -105,6 +105,7 @@
     [value]="store.draft().text"
     [disabled]="!store.inputEnabled()"
     (input)="onText($event)"
+    (keydown.control.enter)="onCtrlEnter($event)"
     (paste)="onPaste($event)"
     class="w-full rounded-lg border border-shell-line bg-shell-bg text-shell-text p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-60"></textarea>
 
@@ -152,9 +153,9 @@
     <button
       type="button"
       (click)="send()"
-      [disabled]="!store.canSend()"
+      [disabled]="!store.sendState().enabled"
       class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-shell-accent hover:opacity-90 disabled:opacity-50 text-white transition-colors">
-      {{ tx('X-1') }}
+      {{ tx(sendLabelTextId()) }}
       <span aria-hidden="true" class="text-xs font-normal opacity-80">Ctrl ↵</span>
     </button>
     @if (store.generating()) {
