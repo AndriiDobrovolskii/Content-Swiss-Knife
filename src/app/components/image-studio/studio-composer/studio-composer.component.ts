@@ -105,8 +105,12 @@ export class StudioComposerComponent {
     return studioText(chip.textId, this.lang());
   }
 
+  /**
+   * Typing clears only the check mark (FR-14 c): the wire `presetId` keeps being sent, but the stored turn records a
+   * preset only while the check mark was showing at send.
+   */
   protected onText(event: Event): void {
-    this.store.setDraft({ text: (event.target as HTMLTextAreaElement).value });
+    this.store.setDraft({ text: (event.target as HTMLTextAreaElement).value, checkedPresetId: null });
   }
 
   protected onProductName(event: Event): void {

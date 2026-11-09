@@ -6,8 +6,17 @@
       <button
         type="button"
         (click)="store.applyPreset(preset)"
+        [attr.aria-pressed]="store.draft().checkedPresetId === preset.id"
         [disabled]="!store.inputEnabled()"
-        class="px-3 py-1.5 rounded-full text-xs font-semibold border border-shell-line bg-shell-bg text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+        [class.border-shell-accent]="store.draft().checkedPresetId === preset.id"
+        [class.border-shell-line]="store.draft().checkedPresetId !== preset.id"
+        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border bg-shell-bg text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+        @if (store.draft().checkedPresetId === preset.id) {
+          <!-- The check mark (FR-14 i): the pressed state is the accessible signal, the glyph is decorative -->
+          <svg aria-hidden="true" viewBox="0 0 16 16" class="w-3 h-3 text-shell-accent" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8.5l3.5 3.5L13 4.5" />
+          </svg>
+        }
         {{ presetLabel(preset) }}
       </button>
     }
