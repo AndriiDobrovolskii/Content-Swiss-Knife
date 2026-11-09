@@ -49,26 +49,29 @@ const TABLE: Array<[string, string, string]> = [
   ['T-20', 'Не вдалося зберегти у сховищі браузера: перевищено квоту. Звільніть місце у сховищі браузера та спробуйте ще раз.', 'Could not save to browser storage: the storage quota is exceeded. Free up browser storage and try again.'],
   ['T-21', 'Згенероване зображення', 'Generated image'],
   ['T-23', 'Почати нову сесію? Поточна сесія залишиться у списку сесій.', 'Start a new session? The current session stays in the session list.'],
-  ['PRN-1', 'Білий фон', 'White background'],
-  ['PRN-2', 'Лайфстайл', 'Lifestyle'],
-  ['PRN-3', 'Банер', 'Banner'],
+  ['PRN-1', 'Товар на білому тлі', 'Product on white'],
+  ['PRN-2', 'Лайфстайл-сцена', 'Lifestyle scene'],
+  ['PRN-3', 'Банер категорії', 'Category banner'],
   ['PRN-4', 'Соцмережі', 'Social'],
   ['PRN-5', 'Деталь крупним планом', 'Detail close-up'],
 ];
 
-/** T-22: six control labels (uk, en), one table row. */
+/**
+ * T-22: six control labels (uk, en), one table row. US-10.5 D-11 (FR-6, FR-11, FR-32 (b)): `editVersion` and `downloadAll` follow the
+ * Story ("Edit this →", "Download all ({N}) .zip"); `{N}` is the number of retained versions.
+ */
 const T22: Array<[string, string]> = [
   ['Скасувати', 'Cancel'],
   ['Повторити', 'Retry'],
   ['Нова сесія', 'New session'],
-  ['Редагувати цю версію', 'Edit this version'],
-  ['Завантажити всі версії', 'Download all versions'],
+  ['Редагувати →', 'Edit this →'],
+  ['Завантажити все ({N}) .zip', 'Download all ({N}) .zip'],
   ['Копіювати в буфер обміну', 'Copy to clipboard'],
 ];
 
 /** [id, en, uk] from the plan's "Additional studio texts" table. */
 const X_TABLE: Array<[string, string, string]> = [
-  ['X-1', 'Send', 'Надіслати'],
+  ['X-1', 'Generate', 'Згенерувати'],
   ['X-2', 'Attach images', 'Додати зображення'],
   ['X-3', 'Drag images here, paste with Ctrl+V, or use the button', 'Перетягніть зображення сюди, вставте через Ctrl+V або скористайтеся кнопкою'],
   ['X-4', 'Aspect ratio', 'Співвідношення сторін'],
@@ -109,7 +112,7 @@ describe('FR-77 / SD-29 / OD-41: the Interface text table, verbatim, in both lan
     });
   }
 
-  it('FR-77 / T-22: the six control labels (Cancel, Retry, New session, Edit this version, Download all versions, Copy to clipboard) exist in both languages', async () => {
+  it('FR-77 / T-22 / US-10.5 D-11: the six control labels (Cancel, Retry, New session, Edit this →, Download all ({N}) .zip, Copy to clipboard) exist in both languages', async () => {
     const { STUDIO_TEXTS } = await load('./studio-texts');
     const keys = Object.keys(STUDIO_TEXTS).filter((k) => k.startsWith('T-22'));
     const uk = keys.map((k) => STUDIO_TEXTS[k].uk);
@@ -279,5 +282,102 @@ describe('FR-5 / FR-65 / SD-29: texts reference the right things', () => {
     expect(STUDIO_TEXTS['T-19'].uk).toContain('SynthID');
     expect(STUDIO_TEXTS['T-19'].en).toContain('cannot be removed');
     expect(STUDIO_TEXTS['T-19'].uk).toContain('неможливо видалити');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.5 T6 - the dictionary entries of the redesign (NFR-5; plan DD-12; D-11). A sibling block; the verbatim rows above for the
+// changed texts (X-1, T-22.editVersion, T-22.downloadAll, PRN-1..PRN-3) were updated in place (D-11), every other row is unchanged.
+// Logic runner; red until T6.
+//
+// THE ALLOCATION (test_strategy "Dictionary allocation" is the same table; T6 is the single owner and builds from it). X-28 is the
+// navigation label (app.component.ts), so the next free id is X-29. Copy marked (owner) is the Story / owner answers (OD-5); copy
+// marked (proposed) is the Specification's proposed copy (FR-4, FR-18) the human ratified at HUMAN_SPEC_APPROVAL; the three
+// accessible names marked (new) have no source text and are the smallest wording that names the control (flagged in the report).
+// ---------------------------------------------------------------------------------------------------------------------
+const NEW_TEXTS: Array<[id: string, en: string, uk: string]> = [
+  ['X-29', 'Write a prompt to start', 'Напишіть промпт для початку'],                                         // (owner) AC-11
+  ['X-30', 'Image Studio', 'Студія зображень'],                                                               // (owner) FR-1 title
+  ['X-31', 'Input image {n}', 'Вхідне зображення {n}'],                                                       // (new) input thumbnail alt, never the prompt
+  ['X-32.one', '{N} session', '{N} сесія'],                                                                   // (proposed) FR-2
+  ['X-32.few', '{N} sessions', '{N} сесії'],
+  ['X-32.many', '{N} sessions', '{N} сесій'],                                                                 // (owner) "N сесій"
+  ['X-33.one', '· history ({N})', '· історія ({N})'],                                                         // (owner) FR-1
+  ['X-33.few', '· history ({N})', '· історія ({N})'],
+  ['X-33.many', '· history ({N})', '· історія ({N})'],
+  ['X-34.one', '{N} image', '{N} зображення'],                                                                // (proposed) FR-4
+  ['X-34.few', '{N} images', '{N} зображення'],
+  ['X-34.many', '{N} images', '{N} зображень'],
+  ['X-35', 'Before (v{N})', 'До (v{N})'],                                                                     // (owner) FR-10
+  ['X-36', 'After (v{M})', 'Після (v{M})'],
+  ['X-37', 'Reuse prompt', 'Використати промпт'],                                                             // (owner) FR-3 (f)
+  ['X-38', 'Compare with v{N}', 'Порівняти з v{N}'],                                                          // (owner) FR-9
+  ['X-39', 'Edit of v{N}', 'Редакція v{N}'],                                                                  // (owner) FR-9
+  ['X-40', 'Your images will appear here', "Тут з'являться ваші зображення"],                                 // (owner EN / proposed UK) FR-18
+  ['X-41', 'Describe the image you want, or start from one of the templates below.', 'Опишіть потрібне зображення або почніть з одного з шаблонів нижче.'], // (proposed) FR-18
+  ['X-42', 'Before and after comparison', 'Порівняння до і після'],                                           // (new) accessible name of the slider
+  ['X-43', '{T} s', '{T} с'],                                                                                 // (proposed) FR-4 seconds unit
+];
+
+describe('US-10.5 NFR-5 / FR-77: every new text id exists in both languages with the allocated value (T6)', () => {
+  it.each(NEW_TEXTS)('%s has the allocated en and uk values', async (id, en, uk) => {
+    const { STUDIO_TEXTS } = await load('./studio-texts');
+    expect(STUDIO_TEXTS[id], id).toBeDefined();
+    expect(STUDIO_TEXTS[id].en).toBe(en);
+    expect(STUDIO_TEXTS[id].uk).toBe(uk);
+  });
+
+  it('no new id has a uk value equal to its en value (the rule of the studio dictionary), and none holds an UPPER_SNAKE token', async () => {
+    const { STUDIO_TEXTS } = await load('./studio-texts');
+    for (const [id] of NEW_TEXTS) {
+      const e = STUDIO_TEXTS[id];
+      expect(e, id).toBeDefined();
+      expect(e.uk, id).not.toBe(e.en);
+      expect(e.en, `${id} en`).not.toMatch(/\b[A-Z]{2,}(?:_[A-Z0-9]+)+\b/);
+      expect(e.uk, `${id} uk`).not.toMatch(/\b[A-Z]{2,}(?:_[A-Z0-9]+)+\b/);
+      expect(Object.keys(e).sort(), id).toEqual(['en', 'uk']);
+    }
+  });
+
+  it('the three count families have all of .one, .few and .many (a missing category would throw at render time)', async () => {
+    const { STUDIO_TEXTS } = await load('./studio-texts');
+    for (const family of ['X-32', 'X-33', 'X-34']) {
+      for (const cat of ['one', 'few', 'many']) expect(STUDIO_TEXTS[`${family}.${cat}`], `${family}.${cat}`).toBeDefined();
+    }
+  });
+
+  it('placeholders fill: X-31 {n}, X-35 {N}, X-36 {M}, X-38 {N}, X-39 {N}, X-43 {T} in both languages; an unfilled one throws', async () => {
+    const { studioText } = await load('./studio-texts');
+    expect(studioText('X-31', 'en', { n: 2 })).toBe('Input image 2');
+    expect(studioText('X-31', 'uk', { n: 2 })).toBe('Вхідне зображення 2');
+    expect(studioText('X-35', 'en', { N: 1 })).toBe('Before (v1)');
+    expect(studioText('X-35', 'uk', { N: 1 })).toBe('До (v1)');
+    expect(studioText('X-36', 'en', { M: 3 })).toBe('After (v3)');
+    expect(studioText('X-36', 'uk', { M: 3 })).toBe('Після (v3)');
+    expect(studioText('X-38', 'uk', { N: 1 })).toBe('Порівняти з v1');
+    expect(studioText('X-39', 'en', { N: 2 })).toBe('Edit of v2');
+    expect(studioText('X-43', 'en', { T: '12.4' })).toBe('12.4 s');
+    expect(studioText('X-43', 'uk', { T: '12.4' })).toBe('12.4 с');
+    expect(() => studioText('X-38', 'en')).toThrow();
+    expect(() => studioText('X-36', 'en', { N: 1 })).toThrow(); // {M}, not {N}
+  });
+
+  it('T-22.downloadAll fills {N} ("Download all (3) .zip" / "Завантажити все (3) .zip")', async () => {
+    const { studioText } = await load('./studio-texts');
+    expect(studioText('T-22.downloadAll', 'en', { N: 3 })).toBe('Download all (3) .zip');
+    expect(studioText('T-22.downloadAll', 'uk', { N: 3 })).toBe('Завантажити все (3) .zip');
+    expect(() => studioText('T-22.downloadAll', 'en')).toThrow();
+  });
+});
+
+describe('US-10.5 D-11 / FR-21: the dictionary copy of the preset names follows the registry (PRN-1..PRN-3, kept in step)', () => {
+  it('PRN-1..PRN-3 equal the registry names of white-bg, lifestyle, banner in both languages', async () => {
+    const { STUDIO_TEXTS } = await load('./studio-texts');
+    const { findPreset } = await load('../../prompt-core/prompt-presets');
+    const pairs: Array<[string, string]> = [['PRN-1', 'white-bg'], ['PRN-2', 'lifestyle'], ['PRN-3', 'banner']];
+    for (const [prn, id] of pairs) {
+      expect(STUDIO_TEXTS[prn].en, prn).toBe(findPreset(id).name.en);
+      expect(STUDIO_TEXTS[prn].uk, prn).toBe(findPreset(id).name.uk);
+    }
   });
 });

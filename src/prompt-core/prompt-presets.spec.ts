@@ -33,20 +33,23 @@ const load = (p: string): Promise<any> => import(/* @vite-ignore */ p);
 const FLASH = 'gemini-3.1-flash-image';
 const PRO = 'gemini-3-pro-image';
 
-/** FR-30 table + SD-21 literals, verbatim. */
+/**
+ * FR-30 table + SD-21 literals, verbatim. US-10.5 D-11 / FR-21 (T5): the names of white-bg, lifestyle and banner and the lifestyle
+ * ratio (4:3 -> 4:5) follow the Story; every template literal below is UNCHANGED.
+ */
 const EXPECTED = [
   {
-    id: 'white-bg', uk: 'Білий фон', en: 'White background', aspectRatio: '1:1', resolution: '2K', model: FLASH,
+    id: 'white-bg', uk: 'Товар на білому тлі', en: 'Product on white', aspectRatio: '1:1', resolution: '2K', model: FLASH,
     template: 'Product photo of {product} on a clean pure white (#FFFFFF) background, soft shadow below the product, product centred in the frame.',
     directives: ['#FFFFFF', 'soft shadow', 'centred'],
   },
   {
-    id: 'lifestyle', uk: 'Лайфстайл', en: 'Lifestyle', aspectRatio: '4:3', resolution: '2K', model: PRO,
+    id: 'lifestyle', uk: 'Лайфстайл-сцена', en: 'Lifestyle scene', aspectRatio: '4:5', resolution: '2K', model: PRO,
     template: 'Lifestyle photo of {product} placed in a real environment such as a workshop, an office or a classroom.',
     directives: ['workshop', 'office', 'classroom'],
   },
   {
-    id: 'banner', uk: 'Банер', en: 'Banner', aspectRatio: '16:9', resolution: '2K', model: PRO,
+    id: 'banner', uk: 'Банер категорії', en: 'Category banner', aspectRatio: '16:9', resolution: '2K', model: PRO,
     template: 'Wide banner image featuring {product}, with a free area reserved for text. Do not draw any text.',
     directives: ['free area reserved for text', 'Do not draw any text'],
   },
@@ -282,5 +285,108 @@ describe('no system instruction anywhere in the registry module (FR-80, NFR-8)',
   it('NFR-8: the prompt-presets source is the home of the template literals - the SD-21 white-bg template appears in it', () => {
     const src = readFileSync(resolve(process.cwd(), 'src/prompt-core/prompt-presets.ts'), 'utf8');
     expect(src).toContain('Product photo of {product} on a clean pure white (#FFFFFF) background');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.5 T5 - preset descriptions, the starter ids and the description validation (FR-21, FR-22, NFR-2; plan DD-14).
+// A sibling block; the template, default and name assertions above are unchanged except the D-11 data rows.
+// Logic runner; red until T5.
+//
+// PINNED CONTRACT (src/prompt-core/prompt-presets.ts, owner T5):
+//   PromptPreset.description?: Record<'en' | 'uk', string>        optional, bilingual like `name`
+//   presetDescription(preset, lang): string | undefined           undefined when the preset has no description
+//   STARTER_PRESET_IDS: readonly string[] = ['white-bg', 'lifestyle', 'banner']
+//   validatePreset(entry) additionally rejects a present `description` that lacks a non-empty en or uk value
+// ---------------------------------------------------------------------------------------------------------------------
+describe('US-10.5 FR-22: preset descriptions are registry data (T5)', () => {
+  const DESCRIPTIONS = {
+    'white-bg': { en: 'Perfect for e-commerce listings', uk: 'Ідеально для товарних карток' },
+    lifestyle: { en: 'Product in a realistic setting', uk: 'Товар у реалістичному оточенні' },
+    banner: { en: 'Wide format with space for text', uk: 'Широкий формат із місцем для тексту' },
+  } as const;
+
+  it.each(Object.entries(DESCRIPTIONS))('FR-22: %s has the Story description in en and uk, read through presetDescription', async (id, d) => {
+    const { findPreset, presetDescription } = await load('./prompt-presets');
+    const p = findPreset(id);
+    expect(presetDescription(p, 'en')).toBe(d.en);
+    expect(presetDescription(p, 'uk')).toBe(d.uk);
+  });
+
+  it('FR-22 failure path: social and detail-closeup have no description (undefined), so no card text and no empty element can be derived', async () => {
+    const { findPreset, presetDescription } = await load('./prompt-presets');
+    for (const id of ['social', 'detail-closeup']) {
+      expect(presetDescription(findPreset(id), 'en')).toBeUndefined();
+      expect(presetDescription(findPreset(id), 'uk')).toBeUndefined();
+    }
+  });
+
+  it('FR-22 / NFR-2: a preset added to a COPY of the registry with a description is described by the same function - no component change', async () => {
+    const { PROMPT_PRESETS, presetDescription } = await load('./prompt-presets');
+    const extra = {
+      id: 'packshot', name: { en: 'Packshot', uk: 'Пекшот' }, template: 'Packshot of {product}.',
+      description: { en: 'Clean packshot', uk: 'Чистий пекшот' },
+      defaults: { aspectRatio: '1:1', resolution: '1K', model: FLASH },
+    };
+    expect(presetDescription(extra, 'en')).toBe('Clean packshot');
+    expect(presetDescription(extra, 'uk')).toBe('Чистий пекшот');
+    expect([...PROMPT_PRESETS, extra]).toHaveLength(6);
+  });
+});
+
+describe('US-10.5 FR-18 / FR-22: STARTER_PRESET_IDS names exactly the three starter cards (T5)', () => {
+  it('is white-bg, lifestyle, banner in that order, and every id resolves to a registry preset that has a description', async () => {
+    const { STARTER_PRESET_IDS, findPreset, presetDescription } = await load('./prompt-presets');
+    expect([...STARTER_PRESET_IDS]).toEqual(['white-bg', 'lifestyle', 'banner']);
+    for (const id of STARTER_PRESET_IDS) {
+      const p = findPreset(id);
+      expect(p, id).toBeDefined();
+      expect(presetDescription(p, 'en'), id).toEqual(expect.any(String));
+    }
+  });
+
+  it('adding a description to social does NOT add a fourth starter id (an explicit list, not "presets that have a description")', async () => {
+    const { STARTER_PRESET_IDS, PROMPT_PRESETS } = await load('./prompt-presets');
+    expect(STARTER_PRESET_IDS).toHaveLength(3);
+    expect(PROMPT_PRESETS).toHaveLength(5);
+  });
+});
+
+describe('US-10.5 FR-21 / FR-22: validatePreset checks a present description (T5)', () => {
+  const GOOD = {
+    id: 'packshot', name: { en: 'Packshot', uk: 'Пекшот' }, template: 'Packshot of {product}.',
+    defaults: { aspectRatio: '1:1', resolution: '1K', model: FLASH },
+  };
+
+  it('accepts an entry with a complete description and an entry with none', async () => {
+    const { validatePreset } = await load('./prompt-presets');
+    expect(validatePreset({ ...GOOD, description: { en: 'a', uk: 'б' } })).toEqual([]);
+    expect(validatePreset(GOOD)).toEqual([]);
+  });
+
+  it.each([
+    ['an empty en value', { en: '', uk: 'б' }],
+    ['a missing uk value', { en: 'a' }],
+    ['a whitespace-only uk value', { en: 'a', uk: '   ' }],
+    ['a non-object description', 'text'],
+  ])('rejects a present description with %s, with at least one message (a registry-test failure, never a runtime error)', async (_n, description) => {
+    const { validatePreset } = await load('./prompt-presets');
+    expect(validatePreset({ ...GOOD, description }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('US-10.5 FR-21: the registry after the rename (T5)', () => {
+  it('holds exactly the five ids, every entry passes validatePreset, and the lifestyle default ratio is 4:5 (was 4:3)', async () => {
+    const { PROMPT_PRESETS, validatePreset, findPreset } = await load('./prompt-presets');
+    expect(PROMPT_PRESETS.map((p: any) => p.id)).toEqual(['white-bg', 'lifestyle', 'banner', 'social', 'detail-closeup']);
+    for (const p of PROMPT_PRESETS) expect(validatePreset(p), p.id).toEqual([]);
+    expect(findPreset('lifestyle').defaults.aspectRatio).toBe('4:5');
+  });
+
+  it('the social and detail-closeup presets are unchanged (names, ratios, templates)', async () => {
+    const { findPreset } = await load('./prompt-presets');
+    expect(findPreset('social').name).toEqual({ uk: 'Соцмережі', en: 'Social' });
+    expect(findPreset('social').defaults.aspectRatio).toBe('4:5');
+    expect(findPreset('detail-closeup').name).toEqual({ uk: 'Деталь крупним планом', en: 'Detail close-up' });
   });
 });

@@ -1,24 +1,25 @@
 /**
- * US-10.1 T44 - StudioSessionListComponent: the stored sessions, "New session", selection and the running cost line.
- * Covers FR-49, FR-71, FR-86; AC-26, AC-44 (UI half).
+ * US-10.1 T44 / US-10.5 T24 + T25 + T40 - StudioSessionListComponent: the stored sessions as rows (name, local date, own cost) under a count line.
+ * Covers FR-48, FR-86, AC-26 (US-10.1: the list, expiry, the cap) and FR-2, AC-2, NFR-4 (US-10.5).
  *
- * Component runner. The real root store over the in-memory `SessionStorePort` (all-or-nothing, quota switch) and a fake
- * `ConfirmPort` for the T-23 confirmation. Eviction ORDER is asserted through what the store port finally holds (which
- * session ids survive); the unit rules themselves (candidate choice, tie-break, healing) are T30's spec.
+ * US-10.5 DISPOSITIONS (Specification FR-32 table D-4, approved by the owner with SQ-5-B), each listed in the test generation report:
+ *   - the cost-line tests (old L151-181: "Estimated cost: {amount}" of the CURRENT session) are REMOVED: FR-2 removes the overall-cost line, and the
+ *     per-row cost is pinned by the new row tests below;
+ *   - the "New session" tests (old L57-148: confirmation T-23, creation, cap eviction) MOVED to studio-header.component.spec.ts, substance kept;
+ *   - the heading assertions (old L37 "Sessions" heading, L41-45 heading + button in uk) are REPLACED by the "N sessions" count line tests.
+ *   - selecting a row (old L165) is kept as its own test.
  *
- * Pinned UI contract (helpers/studio-render.ts): a list named X-9 whose items are the stored sessions, NEWEST last
- * activity first, each item holding one button that selects it; a button named "New session" (T-22); a cost line using X-10
- * whose `{amount}` is the current session's running total (the Specification fixes the text, not the number format, so the
- * assertion looks for the number, not for a currency layout).
+ * Component runner. Real root store over the in-memory session store; the local-time offset comes from the fake LOCAL_OFFSET_PORT
+ * (`offsetMinutes` render option, minutes EAST of UTC) - no TZ variable and no wall clock (NFR-4). The fake clock starts at 1 000 000 ms, and
+ * `makeSession` stamps lastActivity = 1 000 000 ms = 1970-01-01 00:16:40 UTC, so the expected row dates are fixed literals.
+ * Contract (helpers/studio-render.ts): the rows are the listitems of the list; each holds one button that selects the session; a row shows
+ * the session name (absent when empty), the date `dd.MM · HH:mm` and the cost `$0.00`. The T25 describes are type-clean from T21.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/angular';
 import { StudioSessionListComponent } from './studio-session-list.component';
-import {
-  renderStudio, t, LABELS, textOf, type Harness, type Lang,
-} from '../../../../../test/image-studio/helpers/studio-render';
+import { renderStudio, LABELS, textOf } from '../../../../../test/image-studio/helpers/studio-render';
 import { makeSession, type StoredSession } from '../../../../../test/image-studio/helpers/fakes';
-import { StorageQuotaError } from '../../../../utils/image-studio/ports';
 
 const NOW = 1_000_000; // the fake clock starts here; every stamp below is well inside the 7-day window
 const id2 = (n: number) => `a${String(n).padStart(2, '0')}`;
@@ -27,21 +28,43 @@ const id2 = (n: number) => `a${String(n).padStart(2, '0')}`;
 function twenty(): StoredSession[] {
   return Array.from({ length: 20 }, (_, i) => makeSession(id2(i + 1), { createdAt: NOW - 100_000 + i, lastActivity: NOW - i * 1000 }));
 }
-const rows = (lang: Lang = 'en') => within(screen.getByRole('list', { name: t('X-9', lang) })).queryAllByRole('listitem');
-const newSession = (lang: Lang = 'en') => screen.getByRole('button', { name: LABELS[lang].newSession });
-const storedIds = (h: Harness) => Object.keys(h.sessionStore.snapshot().sessions).sort();
+const rows = () => within(screen.getByRole('list')).queryAllByRole('listitem');
+const norm = (el: Element) => textOf(el);
 
-describe('FR-86 / AC-26: the list shows the stored sessions, at most twenty', () => {
-  it('FR-86: twenty stored sessions are twenty rows, under the heading "Sessions"', async () => {
+describe('FR-86 / AC-26 / FR-2: the list shows the stored sessions, at most twenty, under a count line (T25)', () => {
+  it('twenty stored sessions are twenty rows, under the line "20 sessions" - and there is no "Sessions" heading any more', async () => {
     await renderStudio(StudioSessionListComponent, { sessions: twenty() });
-    expect(screen.getByText(t('X-9', 'en'))).toBeDefined();
+    expect(screen.getByText('20 sessions')).toBeDefined();
     expect(rows()).toHaveLength(20);
+    expect(screen.queryByText('Sessions')).toBeNull();
   });
 
-  it('AC-26 / FR-49: the heading and the button follow the interface language', async () => {
-    await renderStudio(StudioSessionListComponent, { lang: 'uk', sessions: [makeSession('s1')] });
-    expect(screen.getByText('Сесії')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Нова сесія' })).toBeDefined();
+  it.each([
+    [1, '1 session', '1 сесія'], [2, '2 sessions', '2 сесії'], [5, '5 sessions', '5 сесій'],
+  ])('the count line for %i session(s) is "%s" in English and "%s" in Ukrainian (plural forms by the CLDR rule)', async (n, en, uk) => {
+    const sessions = Array.from({ length: n }, (_, i) => makeSession(id2(i + 1), { lastActivity: NOW - i * 1000 }));
+    const h = await renderStudio(StudioSessionListComponent, { sessions });
+    expect(screen.getByText(en)).toBeDefined();
+    await h.setLang('uk');
+    expect(screen.getByText(uk)).toBeDefined();
+    expect(screen.queryByText(en)).toBeNull();
+  });
+
+  it('shows no search hint (Ctrl+K search is not part of this Story)', async () => {
+    await renderStudio(StudioSessionListComponent, { sessions: [makeSession('s1')] });
+    expect(screen.queryByText(/Ctrl\s*\+?\s*K/i)).toBeNull();
+    expect(screen.queryByRole('searchbox')).toBeNull();
+  });
+
+  it('FR-1 failure path / D-4: the list holds no "New session" button any more (it moved to the header)', async () => {
+    await renderStudio(StudioSessionListComponent, { sessions: [makeSession('s1')] });
+    expect(screen.queryByRole('button', { name: LABELS.en.newSession })).toBeNull();
+  });
+
+  it('FR-2 / D-4: the overall "Estimated cost" line is not rendered anywhere in the list', async () => {
+    await renderStudio(StudioSessionListComponent, { sessions: [makeSession('s1', { costUsd: 0.12 })] });
+    expect(screen.queryByText(/Estimated cost/i)).toBeNull();
+    expect(screen.queryByText(/Орієнтовна вартість/)).toBeNull();
   });
 
   it('FR-48 / SD-33: a session older than seven days is gone from the list after the load (expiry at load, not on a timer)', async () => {
@@ -50,133 +73,102 @@ describe('FR-86 / AC-26: the list shows the stored sessions, at most twenty', ()
     const kept = makeSession('kept', { lastActivity: NOW - 604_800_000 });
     const h = await renderStudio(StudioSessionListComponent, { sessions: [fresh, stale, kept] });
     expect(rows()).toHaveLength(2);
-    expect(storedIds(h)).toEqual(['fresh', 'kept']);
+    expect(screen.getByText('2 sessions')).toBeDefined();
+    expect(Object.keys(h.sessionStore.snapshot().sessions).sort()).toEqual(['fresh', 'kept']);
   });
 });
 
-describe('FR-49 / AC-26: New session asks for confirmation (T-23)', () => {
-  it('FR-49: declining the confirmation changes nothing - no session is created, the rows are the same', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { sessions: [makeSession('s1')], confirmAnswer: false });
-    await h.user.click(newSession());
-    await h.settle();
-    expect(h.confirmPort.asked).toEqual(['Start a new session? The current session stays in the session list.']);
-    expect(rows()).toHaveLength(1);
-    expect(storedIds(h)).toEqual(['s1']);
-  });
-
-  it('AC-26 / FR-49: accepting creates a new session AND keeps the previous one in the list with its own data', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { sessions: [makeSession('s1', { pairs: 1, costUsd: 0.12 })], confirmAnswer: true });
-    await h.user.click(newSession());
-    await vi.waitFor(() => expect(rows()).toHaveLength(2));
-    expect(storedIds(h)).toHaveLength(2);
-    expect(storedIds(h)).toContain('s1');
-    expect(h.sessionStore.snapshot().sessions['s1'].turns.map((x) => x.id)).toEqual(['u1', 'm1']);
-    expect(h.sessionStore.snapshot().sessions['s1'].meta.costUsd).toBe(0.12);
-  });
-
-  it('FR-49 / FR-77: the confirmation text is the Ukrainian T-23 under uk', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { lang: 'uk', sessions: [makeSession('s1')], confirmAnswer: false });
-    await h.user.click(newSession('uk'));
-    expect(h.confirmPort.asked).toEqual(['Почати нову сесію? Поточна сесія залишиться у списку сесій.']);
-  });
-
-  it('D-26 / FR-49: "New session" creates a row even when the current session holds no turn', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { sessions: [makeSession('empty')] });
-    await h.user.click(newSession());
-    await vi.waitFor(() => expect(rows()).toHaveLength(2));
-    expect(storedIds(h)).toContain('empty');
-  });
-});
-
-describe('FR-86 / D-23 / SD-41 / D-24: creation at the cap evicts silently', () => {
-  it('FR-86: with twenty stored, "New session" evicts the OLDEST LAST ACTIVITY (a20), not the oldest created (a01); twenty rows remain', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { sessions: twenty() });
-    await h.user.click(newSession());
-    await vi.waitFor(() => expect(storedIds(h)).not.toContain('a20'));
-    expect(storedIds(h)).toHaveLength(20);
-    expect(storedIds(h)).toContain('a01');
-    expect(rows()).toHaveLength(20);
-  });
-
-  it('FR-86: the eviction is silent - the only dialog is the T-23 confirmation; no native alert, no role=alert, no role=status', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { sessions: twenty() });
-    await h.user.click(newSession());
-    await vi.waitFor(() => expect(storedIds(h)).not.toContain('a20'));
-    expect(h.confirmPort.asked).toHaveLength(1);
-    expect(h.alerts.messages).toEqual([]);
-    expect(screen.queryAllByRole('alert')).toHaveLength(0);
-    expect(screen.queryAllByRole('status')).toHaveLength(0);
-  });
-
-  it('D-23: the session the operator is leaving is never evicted, even when it holds the oldest stamp', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { sessions: twenty() });
-    await h.store.selectSession('a20'); // the oldest stamp, now the session in use
-    await h.settle();
-    await h.user.click(newSession());
-    await vi.waitFor(() => expect(storedIds(h)).toHaveLength(20));
-    await vi.waitFor(() => expect(storedIds(h)).not.toContain('a19')); // the next-oldest candidate goes instead
-    expect(storedIds(h)).toContain('a20');
-  });
-
-  it('SD-41: with all stamps equal the session with the smaller id (UTF-16 order) is evicted, deterministically', async () => {
-    const equal = Array.from({ length: 20 }, (_, i) => makeSession(`b${String(i + 1).padStart(2, '0')}`, { lastActivity: NOW }));
-    const h = await renderStudio(StudioSessionListComponent, { sessions: equal });
-    await h.store.selectSession('b10');
-    await h.settle();
-    await h.user.click(newSession());
-    await vi.waitFor(() => expect(storedIds(h)).not.toContain('b01'));
-    expect(storedIds(h)).toHaveLength(20);
-    expect(storedIds(h)).toContain('b10');
-  });
-
-  it('FR-86: with fewer than twenty stored nothing is deleted', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { sessions: twenty().slice(0, 19) });
-    await h.user.click(newSession());
-    await vi.waitFor(() => expect(storedIds(h)).toHaveLength(20));
-    expect(storedIds(h)).toContain('a19');
-  });
-
-  it('D-24 / FR-81: a creation that hits the quota creates no session and deletes none; one native alert (T-20) is shown', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { sessions: twenty() });
-    h.sessionStore.failWrites(new StorageQuotaError('quota'));
-    await h.user.click(newSession());
-    await vi.waitFor(() => expect(h.alerts.messages).toEqual([t('T-20', 'en')]));
-    h.sessionStore.failWrites(null);
-    expect(storedIds(h)).toHaveLength(20);
-    expect(storedIds(h)).toContain('a20');
-    expect(rows()).toHaveLength(20);
-  });
-});
-
-describe('FR-71 / AC-44 (UI half): the running cost total', () => {
-  const costLine = () => textOf(screen.getByText(/Estimated cost:/));
-
-  it('FR-71 / X-10: the cost line shows the current session\'s total using the "Estimated cost: {amount}" text', async () => {
-    await renderStudio(StudioSessionListComponent, { sessions: [makeSession('s1', { costUsd: 0.12 })] });
-    expect(costLine()).toMatch(/^Estimated cost: .*0\.12/);
-    expect(costLine()).not.toContain('{amount}');
-  });
-
-  it('FR-71 / FR-49: selecting another row switches the current session, and the line shows THAT session\'s total (not a sum)', async () => {
-    const a = makeSession('s1', { costUsd: 0.12, lastActivity: NOW });
-    const b = makeSession('s2', { costUsd: 0.34, lastActivity: NOW - 1000 });
+describe('FR-49: selecting a row selects that session (kept from the cost-line tests, L160-168) (T25)', () => {
+  it('clicking the second row makes its session current; the newest is first (rows are newest last-activity first)', async () => {
+    const a = makeSession('s1', { lastActivity: NOW });
+    const b = makeSession('s2', { lastActivity: NOW - 1000 });
     const h = await renderStudio(StudioSessionListComponent, { sessions: [a, b] });
-    expect(costLine()).toMatch(/0\.12/);
+    expect(h.store.currentSessionId()).toBe('s1');
     await h.user.click(within(rows()[1]).getByRole('button'));
-    await vi.waitFor(() => expect(costLine()).toMatch(/0\.34/));
-    expect(costLine()).not.toMatch(/0\.46/);
-  });
-
-  it('FR-71 / FR-77: the Ukrainian text "Орієнтовна вартість: {amount}" is used under uk', async () => {
-    await renderStudio(StudioSessionListComponent, { lang: 'uk', sessions: [makeSession('s1', { costUsd: 0.12 })] });
-    expect(textOf(screen.getByText(/Орієнтовна вартість:/))).toMatch(/^Орієнтовна вартість: .*0\.12/);
-  });
-
-  it('FR-49: a new session starts at a zero total - nothing is carried over from the previous one', async () => {
-    const h = await renderStudio(StudioSessionListComponent, { sessions: [makeSession('s1', { costUsd: 0.12 })] });
-    await h.user.click(newSession());
-    await vi.waitFor(() => expect(rows()).toHaveLength(2));
-    expect(costLine()).not.toMatch(/0\.12/);
-    expect(Number(costLine().match(/(\d+(?:\.\d+)?)/)![1])).toBe(0);
+    await vi.waitFor(() => expect(h.store.currentSessionId()).toBe('s2'));
   });
 });
+
+describe('FR-2: each row shows the session name, the local date and its own cost (T25)', () => {
+  function oneRow(over: { prompt?: string; costUsd?: number; lastActivity?: number } = {}) {
+    const s = makeSession('s1', { pairs: 1, costUsd: over.costUsd ?? 0.12, lastActivity: over.lastActivity ?? NOW });
+    if (over.prompt !== undefined) s.meta.versions[0].prompt = over.prompt;
+    return s;
+  }
+
+  it('shows the last typed prompt as the name, "01.01 · 00:16" as the date at offset 0 and "$0.12" as the cost', async () => {
+    await renderStudio(StudioSessionListComponent, { sessions: [oneRow({ prompt: 'red mug on a table' })] });
+    const row = norm(rows()[0]);
+    expect(row).toContain('red mug on a table');
+    expect(row).toContain('01.01 · 00:16');
+    expect(row).toContain('$0.12');
+  });
+
+  it('NFR-4: the date follows the local offset of the fake port - +120 gives 02:16 on the same day, -300 gives 19:16 on the day before; no TZ variable is involved', async () => {
+    await renderStudio(StudioSessionListComponent, { sessions: [oneRow()], offsetMinutes: 120 });
+    expect(norm(rows()[0])).toContain('01.01 · 02:16');
+  });
+
+  it('NFR-4: a negative offset crosses midnight backwards: -300 gives 31.12 · 19:16', async () => {
+    await renderStudio(StudioSessionListComponent, { sessions: [oneRow()], offsetMinutes: -300 });
+    expect(norm(rows()[0])).toContain('31.12 · 19:16');
+    expect(norm(rows()[0])).not.toContain('01.01 · 00:16');
+  });
+
+  it('the cost is the session\'s OWN cost with two decimals: $0.35 for 0.3456, $0.00 for a free session', async () => {
+    const a = oneRow({ costUsd: 0.3456 });
+    const b = makeSession('s2', { costUsd: 0, lastActivity: NOW - 1000 });
+    await renderStudio(StudioSessionListComponent, { sessions: [a, b] });
+    expect(norm(rows()[0])).toContain('$0.35');
+    expect(norm(rows()[1])).toContain('$0.00');
+  });
+
+  it('a long name is not cut in the data (truncation is one-line CSS): the whole prompt is in the DOM', async () => {
+    const long = `${'word '.repeat(50)}end`;
+    await renderStudio(StudioSessionListComponent, { sessions: [oneRow({ prompt: long })] });
+    expect(norm(rows()[0])).toContain(long.trim());
+  });
+
+  it('FR-2 failure path: a row whose session has no prompt yet still renders, with date and cost and NO name text', async () => {
+    await renderStudio(StudioSessionListComponent, { sessions: [makeSession('empty', { costUsd: 0.05 })] });
+    const row = rows()[0];
+    const leftover = norm(row).replace('01.01 · 00:16', '').replace('$0.05', '').trim();
+    expect(norm(row)).toContain('01.01 · 00:16');
+    expect(norm(row)).toContain('$0.05');
+    expect(leftover).toBe('');
+  });
+
+  it('every row shows its own name, date and cost (they are not shared between rows)', async () => {
+    const a = oneRow({ prompt: 'first prompt', costUsd: 0.1, lastActivity: NOW });
+    const b = makeSession('s2', { pairs: 1, costUsd: 0.2, lastActivity: NOW - 60_000 });
+    b.meta.versions[0].prompt = 'second prompt';
+    await renderStudio(StudioSessionListComponent, { sessions: [a, b] });
+    expect(norm(rows()[0])).toContain('first prompt');
+    expect(norm(rows()[0])).toContain('$0.10');
+    expect(norm(rows()[1])).toContain('second prompt');
+    expect(norm(rows()[1])).toContain('$0.20');
+    expect(norm(rows()[1])).toContain('01.01 · 00:15');
+  });
+});
+
+describe('FR-2 (owner ruling OI-A, option a): the row name for a blank or chip latest prompt (T40)', () => {
+  it('an images-only latest send (blank prompt) shows NO name, even though an earlier version was typed', async () => {
+    const s = makeSession('s1', { pairs: 2, costUsd: 0.06 });
+    s.meta.versions[0].prompt = 'red mug';
+    s.meta.versions[1].prompt = '';
+    await renderStudio(StudioSessionListComponent, { sessions: [s] });
+    const row = norm(rows()[0]);
+    expect(row).not.toContain('red mug');
+    expect(row.replace('01.01 · 00:16', '').replace('$0.06', '').trim()).toBe('');
+  });
+
+  it('a chip latest send shows the chip instruction text as the name', async () => {
+    const s = makeSession('s1', { pairs: 2 });
+    s.meta.versions[0].prompt = 'red mug';
+    s.meta.versions[1].prompt = 'Make the shadow softer.';
+    await renderStudio(StudioSessionListComponent, { sessions: [s] });
+    expect(norm(rows()[0])).toContain('Make the shadow softer.');
+    expect(norm(rows()[0])).not.toContain('red mug');
+  });
+});
+

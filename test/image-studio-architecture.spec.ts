@@ -247,3 +247,44 @@ describe('NFR-14 / FR-81: ambient effects go through ports', () => {
     expect(offences).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.5 DD-3 / R-1 (task T1): the IndexedDB adapter stores and reads turns ONLY through the tested pair in
+// `src/utils/image-studio/turn-record.ts`. The adapter has no spec by project decision (no fake-indexeddb), so this standing
+// source scan is what stops a new optional Turn field from being silently dropped by a hand-written row mapping.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** True when the (comment-stripped) adapter source calls both helpers of the pair. */
+export const callsTurnRecordPair = (src: string) => /\btoTurnRecord\s*\(/.test(src) && /\bfromTurnRecord\s*\(/.test(src);
+/** True when the source assembles a turn row field by field (`role: turn.role` / `role: row.role`), the old hand-written mapping. */
+export const buildsTurnRowByHand = (src: string) => /\brole\s*:\s*(?:turn|row|t|r)\.role\b/.test(src);
+
+describe('US-10.5 (T1): scans proven non-vacuous', () => {
+  it('the pair scanner needs both calls: neither one alone, nor a mention in prose, passes', () => {
+    expect(callsTurnRecordPair('x = toTurnRecord(id, t); y = fromTurnRecord(row);')).toBe(true);
+    expect(callsTurnRecordPair('x = toTurnRecord(id, t);')).toBe(false);
+    expect(callsTurnRecordPair('y = fromTurnRecord(row);')).toBe(false);
+    expect(callsTurnRecordPair(stripComments('// toTurnRecord( and fromTurnRecord( are used\nconst a = 1;'))).toBe(false);
+  });
+
+  it('the hand-written row scanner flags the pre-US-10.5 mapping and spares a helper call', () => {
+    expect(buildsTurnRowByHand('return { sessionId, id: turn.id, role: turn.role, parts: turn.parts };')).toBe(true);
+    expect(buildsTurnRowByHand('parseStoredTurn({ id: row.id, role: row.role, parts: row.parts })')).toBe(true);
+    expect(buildsTurnRowByHand('turns.put(toTurnRecord(sessionId, turn))')).toBe(false);
+  });
+});
+
+describe('US-10.5 DD-3 / R-1 (T1): the persistence adapter goes through turn-record.ts', () => {
+  const ADAPTER = 'src/services/image-studio/indexeddb-session-store.ts';
+
+  it('the adapter source exists, calls toTurnRecord and fromTurnRecord, and imports them from utils/image-studio/turn-record', () => {
+    expect(existsSync(join(root, ADAPTER))).toBe(true);
+    const src = read(ADAPTER);
+    expect(callsTurnRecordPair(src)).toBe(true);
+    expect(src).toMatch(/from\s+['"][^'"]*utils\/image-studio\/turn-record['"]/);
+  });
+
+  it('the adapter builds no turn row by hand: no `role: turn.role` / `role: row.role` assembly remains', () => {
+    expect(buildsTurnRowByHand(read(ADAPTER))).toBe(false);
+  });
+});

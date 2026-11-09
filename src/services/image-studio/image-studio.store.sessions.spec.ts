@@ -677,3 +677,198 @@ describe('Store: the downloaded flag (FR-33, SD-17, SD-32, FR-81; AC-19 client h
   });
 });
 
+
+// =====================================================================================================================
+// US-10.5 store additions, sessions side (Specification FR-5, FR-14, FR-19; plan DD-11). Sibling blocks, no case above changed.
+// TOP-LEVEL describes whose titles end in their owner task id (`-t "\(T15\)"`, breakdown rule R2). Logic runner.
+//
+// PINNED STORE ADDITIONS:
+//   applyPreset(preset: PromptPreset): void                                   [T15]  replaces the composer's private pickPreset: text with the
+//        product name applied, aspect ratio, resolution, model ONLY while the session holds no version, and BOTH presetId and
+//        checkedPresetId = preset.id; sends nothing
+//   reusePrompt(input: { prompt: string; aspectRatio: string; model: string }): void  [T17]  sets text, ratio and model through the draft
+//        (no new session), lowers the resolution to the nearest the model offers when needed, never sends or calls a request port
+//   T41 (owner ruling OI-B -> option 1, docs/decisions/US-10.5-open-decisions.md): Reuse prompt counts as an edit for the check mark
+//        (checkedPresetId -> null) and KEEPS the wire presetId left by an earlier pick (as shipped)
+// =====================================================================================================================
+const presetOf = async (id: string) => (await load('../../prompt-core/prompt-presets')).findPreset(id);
+const FLASH_ID = 'gemini-3.1-flash-image';
+
+describe('US-10.5 FR-19 / FR-14 (i): applyPreset fills the composer and sets BOTH preset fields (T15)', () => {
+  it('lifestyle in an empty session: text with "the product", ratio 4:5, 2K, Pro, and both fields = lifestyle', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000)] });
+    await store.init();
+    store.applyPreset(await presetOf('lifestyle'));
+    const d = store.draft();
+    expect(d.text).toBe('Lifestyle photo of the product placed in a real environment such as a workshop, an office or a classroom.');
+    expect(d.aspectRatio).toBe('4:5');
+    expect(d.resolution).toBe('2K');
+    expect(d.model).toBe(PRO);
+    expect(d.presetId).toBe('lifestyle');
+    expect(d.checkedPresetId).toBe('lifestyle');
+  });
+
+  it('the product-name field is substituted into the template, and no placeholder remains', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000)] });
+    await store.init();
+    store.setDraft({ productName: 'Bambu X1C' });
+    store.applyPreset(await presetOf('white-bg'));
+    expect(store.draft().text).toBe('Product photo of Bambu X1C on a clean pure white (#FFFFFF) background, soft shadow below the product, product centred in the frame.');
+    expect(store.draft().text).not.toContain('{product}');
+  });
+
+  it('the model changes only while the session holds no version: with a version, ratio, resolution and text still apply but the model stays', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    expect(store.draft().model).toBe(FLASH_ID);
+    store.applyPreset(await presetOf('banner'));
+    const d = store.draft();
+    expect(d.model).toBe(FLASH_ID);
+    expect(d.aspectRatio).toBe('16:9');
+    expect(d.resolution).toBe('2K');
+    expect(d.text).toContain('Wide banner image featuring the product');
+    expect(d.presetId).toBe('banner');
+    expect(d.checkedPresetId).toBe('banner');
+  });
+
+  it('a second pick replaces both fields - the check mark is never on two presets', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000)] });
+    await store.init();
+    store.applyPreset(await presetOf('white-bg'));
+    store.applyPreset(await presetOf('banner'));
+    expect(store.draft().presetId).toBe('banner');
+    expect(store.draft().checkedPresetId).toBe('banner');
+  });
+
+  it('FR-19: choosing a preset sends nothing and leaves the prompt editable (text is plain draft state)', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000)] });
+    await store.init();
+    const commits = port.commits;
+    store.applyPreset(await presetOf('social'));
+    expect(llm.generateImage).not.toHaveBeenCalled();
+    expect(port.commits).toBe(commits);
+    store.setDraft({ text: `${store.draft().text} with a green background` });
+    expect(store.draft().text).toBe('Social media image of the product. with a green background');
+  });
+
+  it('FR-16 / FR-19: every shipped preset leaves a resolution its model offers (4K needs Pro) - never a forbidden combination', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000)] });
+    await store.init();
+    const { PROMPT_PRESETS } = await load('../../prompt-core/prompt-presets');
+    const { findImageModel } = await load('../../prompt-core/model-catalog');
+    for (const p of PROMPT_PRESETS) {
+      store.applyPreset(p);
+      const d = store.draft();
+      expect(findImageModel(d.model).resolutions, p.id).toContain(d.resolution);
+    }
+  });
+
+  it('with the preset applied and then a send, the wire preset id and the recorded preset are both the picked id (no edit in between)', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000)] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.applyPreset(await presetOf('social'));
+    await store.send();
+    expect(llm.generateImage.mock.calls[0][0].presetId).toBe('social');
+    const turns = port.snapshot().sessions['a'].turns;
+    expect((turns[turns.length - 1] as unknown as Record<string, unknown>)['presetId']).toBe('social');
+  });
+});
+
+describe('US-10.5 FR-5: reusePrompt fills text, ratio and model and sends nothing (T17)', () => {
+  const reuse = { prompt: 'a red mug on a table', aspectRatio: '16:9', model: FLASH_ID };
+
+  it('sets the prompt text (replacing what was there), the aspect ratio and the model', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ text: 'old text', aspectRatio: '1:1' });
+    store.reusePrompt(reuse);
+    expect(store.draft().text).toBe('a red mug on a table');
+    expect(store.draft().aspectRatio).toBe('16:9');
+    expect(store.draft().model).toBe(FLASH_ID);
+  });
+
+  it('restoring a different model does not create a session (it only fills the form)', async () => {
+    const { store, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.reusePrompt({ ...reuse, model: PRO });
+    expect(store.draft().model).toBe(PRO);
+    expect(Object.keys(port.snapshot().sessions)).toEqual(['a']);
+    expect(store.currentSessionId()).toBe('a');
+  });
+
+  it('FR-5 failure path: when the restored model does not offer the current resolution it drops to the nearest lower one it offers (4K on Flash -> 2K)', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ model: PRO, resolution: '4K' });
+    store.reusePrompt({ ...reuse, model: FLASH_ID });
+    expect(store.draft().model).toBe(FLASH_ID);
+    expect(store.draft().resolution).toBe('2K');
+  });
+
+  it('a resolution the restored model offers is left alone (the resolution is not restored from the card)', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ model: PRO, resolution: '4K' });
+    store.reusePrompt({ ...reuse, model: PRO });
+    expect(store.draft().resolution).toBe('4K');
+    store.setDraft({ resolution: '1K' });
+    store.reusePrompt({ ...reuse, model: PRO });
+    expect(store.draft().resolution).toBe('1K');
+  });
+
+  it('it never sends: no request port call, nothing written to storage, no generation started', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    const commits = port.commits;
+    store.reusePrompt(reuse);
+    expect(llm.generateImage).not.toHaveBeenCalled();
+    expect(llm.uploadImageFile).not.toHaveBeenCalled();
+    expect(port.commits).toBe(commits);
+    expect(store.generating()).toBe(false);
+  });
+
+  it('after Reuse the composer can send what was restored (the button state follows the restored text)', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    expect(store.canSend()).toBe(false);
+    store.reusePrompt(reuse);
+    expect(store.canSend()).toBe(true);
+  });
+});
+
+describe('US-10.5 FR-5 / FR-14 (owner ruling OI-B, option 1): Reuse prompt clears the check mark and keeps the wire preset id (T41)', () => {
+  it('after a preset pick, Reuse clears the check mark but KEEPS the wire presetId', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.applyPreset(await presetOf('white-bg'));
+    expect(store.draft().checkedPresetId).toBe('white-bg');
+
+    store.reusePrompt({ prompt: 'a red mug', aspectRatio: '1:1', model: FLASH_ID });
+
+    expect(store.draft().checkedPresetId).toBeNull();
+    expect(store.draft().presetId).toBe('white-bg');
+  });
+
+  it('with no preset picked, Reuse leaves both fields null', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.reusePrompt({ prompt: 'a red mug', aspectRatio: '1:1', model: FLASH_ID });
+    expect(store.draft().checkedPresetId).toBeNull();
+    expect(store.draft().presetId).toBeNull();
+  });
+
+  it('a send right after Reuse carries the kept wire preset id, and the stored turn records no preset (no check mark showed)', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.applyPreset(await presetOf('banner'));
+    store.reusePrompt({ prompt: 'a red mug', aspectRatio: '16:9', model: PRO });
+
+    await store.send();
+
+    expect(llm.generateImage.mock.calls[0][0].presetId).toBe('banner');
+    const turns = port.snapshot().sessions['a'].turns;
+    expect(Object.prototype.hasOwnProperty.call(turns[turns.length - 1], 'presetId')).toBe(false);
+  });
+});

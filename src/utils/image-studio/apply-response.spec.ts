@@ -302,3 +302,95 @@ describe('applyResponse: text and safety replies are non-history events (FR-36, 
   });
 });
 
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.5 T3 - applyResponse writes the new optional stored fields (plan DD-1, DD-5). A sibling block; no case above is
+// changed (D-12) and the full-`Version` toEqual above stays green because absent keys are OMITTED, never `undefined`.
+// Logic runner; red until T3.
+//
+// PINNED CONTRACT (ApplyContext gains OPTIONAL members, owner T3):
+//   durationMs?: number, presetId?: string, editOfVersion?: number  -> written on the model turn (durationMs, presetId) and on
+//   EVERY version created by the response (editOfVersion); `cost` (= response.costUsd, the amount added to meta.costUsd) is
+//   always written on the model turn of an images response; `inputRefs` is DERIVED from ctx.userTurn.parts (the indexes of its
+//   fileData / inlineData parts) and written on the model turn when there is at least one.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('US-10.5 FR-23 / FR-24 / FR-9: applyResponse writes the stored display fields (T3)', () => {
+  const modelOf = (out: any) => out.batch.putTurns[1];
+
+  it('FR-24: the model turn of an images response carries cost equal to the amount added to the session cost', async () => {
+    const { applyResponse } = await mod();
+    const snap = makeSession('s1', { pairs: 1, costUsd: 0.1 });
+    const out = applyResponse(snap, imagesResponse({ costUsd: 0.067 }), ctx({}, 'u2'));
+    expect(modelOf(out).cost).toBe(0.067);
+    expect(out.batch.meta.costUsd - snap.meta.costUsd).toBeCloseTo(modelOf(out).cost, 10);
+  });
+
+  it('FR-24 / FR-23: durationMs and presetId given in the context are written on the model turn, nowhere else', async () => {
+    const { applyResponse } = await mod();
+    const c = ctx({ durationMs: 12_400, presetId: 'lifestyle' }, 'u2');
+    const out = applyResponse(makeSession('s1', { pairs: 1 }), imagesResponse(), c);
+    expect(modelOf(out).durationMs).toBe(12_400);
+    expect(modelOf(out).presetId).toBe('lifestyle');
+    // The user turn stays exactly what was sent (a turn is the resend payload).
+    expect(out.batch.putTurns[0]).toEqual(c.userTurn);
+  });
+
+  it('FR-23: without durationMs / presetId in the context those keys do not exist on the model turn (omitted, not undefined)', async () => {
+    const { applyResponse } = await mod();
+    const out = applyResponse(makeSession('s1', { pairs: 1 }), imagesResponse(), ctx({}, 'u2'));
+    const model = modelOf(out);
+    expect('durationMs' in model).toBe(false);
+    expect('presetId' in model).toBe(false);
+    expect(Object.values(model).includes(undefined)).toBe(false);
+  });
+
+  it('FR-9: editOfVersion in the context is written on EVERY version the response creates, and only on those', async () => {
+    const { applyResponse } = await mod();
+    const snap = makeSession('s1', { pairs: 2 });
+    const response = imagesResponse({ parts: [imagePart(), imagePart()] });
+    const out = applyResponse(snap, response, ctx({ editOfVersion: 2 }, 'u3'));
+    const created = out.batch.meta.versions.filter((v: any) => out.newVersionNumbers.includes(v.number));
+    expect(created.map((v: any) => v.number)).toEqual([3, 4]);
+    expect(created.map((v: any) => v.editOfVersion)).toEqual([2, 2]);
+    const older = out.batch.meta.versions.filter((v: any) => !out.newVersionNumbers.includes(v.number));
+    expect(older.some((v: any) => 'editOfVersion' in v)).toBe(false);
+  });
+
+  it('FR-9: without editOfVersion in the context a created version has no such key (the shipped full-Version shape is unchanged)', async () => {
+    const { applyResponse } = await mod();
+    const out = applyResponse(makeSession('s1', { pairs: 1 }), imagesResponse(), ctx({}, 'u2'));
+    const v = out.batch.meta.versions.find((x: any) => x.number === 2);
+    expect('editOfVersion' in v).toBe(false);
+    expect(Object.values(v).includes(undefined)).toBe(false);
+  });
+
+  it('FR-3 (a) / FR-23: inputRefs lists the image parts of the SENT user turn by (turnId, partIndex), in order, and skips text parts', async () => {
+    const { applyResponse } = await mod();
+    const userTurn = turn('u2', 'user', textPart('blend these'), filePart('files/a'), textPart('and'), inlineImagePart('image/png', PNG_B64));
+    const out = applyResponse(makeSession('s1', { pairs: 1 }), imagesResponse(), ctx({ userTurn }, 'u2'));
+    expect(modelOf(out).inputRefs).toEqual([{ turnId: 'u2', partIndex: 1 }, { turnId: 'u2', partIndex: 3 }]);
+  });
+
+  it('FR-3 (a): a text-only user turn gives no thumbnail references (absent or empty, never undefined-valued)', async () => {
+    const { applyResponse } = await mod();
+    const out = applyResponse(makeSession('s1', { pairs: 1 }), imagesResponse(), ctx({}, 'u2'));
+    const model = modelOf(out);
+    expect(model.inputRefs ?? []).toEqual([]);
+    expect(Object.values(model).includes(undefined)).toBe(false);
+  });
+
+  it('FR-24 failure path: a text reply and a safety reply store no turn, so neither cost, duration, preset nor refs are written anywhere', async () => {
+    const { applyResponse } = await mod();
+    const c = ctx({ durationMs: 500, presetId: 'white-bg', editOfVersion: 1 }, 'u2');
+    for (const response of [textResponse('words only'), safetyResponse()]) {
+      const out = applyResponse(makeSession('s1', { pairs: 1 }), response, c);
+      expect(out.batch).toBeNull();
+    }
+  });
+
+  it('FR-24 failure path: a cut-only batch from a text reply puts no turn at all (so it can carry no display field)', async () => {
+    const { applyResponse } = await mod();
+    const out = applyResponse(threePairs(), textResponse('words', ['m1', 'u2']), ctx({ durationMs: 500, presetId: 'white-bg' }, 'u4'));
+    expect(out.batch.putTurns).toEqual([]);
+  });
+});

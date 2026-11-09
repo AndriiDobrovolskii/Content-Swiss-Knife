@@ -266,7 +266,7 @@ describe('FR-15 / AC-7: a rejected file shows its reason and keeps the rest', ()
   });
 });
 
-describe('FR-16 / DD-17: upload states and Retry', () => {
+describe('FR-16 / DD-17: upload states and Retry (T35)', () => {
   it('FR-16 / T-7: an exhausted retry loop (502 UPSTREAM_RETRIES_EXHAUSTED) marks the attachment failed, shows T-7 and offers Retry on it', async () => {
     const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
     await h.user.upload(fileInput(h), fileOf('flaky.png', png()));
@@ -276,7 +276,8 @@ describe('FR-16 / DD-17: upload states and Retry', () => {
     expect(alertsText()).toContain(t('T-7', 'en'));
     const item = thumbs()[0];
     expect(within(item).getByRole('button', { name: LABELS.en.retry })).toBeDefined();
-    expect((byName.button(t('X-1', 'en')) as HTMLButtonElement).disabled).toBe(true);
+    // S11 site (was L279): a failed upload with a blank prompt leaves nothing to send, so the disabled button reads "Write a prompt to start".
+    expect((byName.button(t('X-29', 'en')) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('FR-16: Retry on a failed attachment issues a new upload POST and, once answered, the attachment is ready (no Retry left)', async () => {
@@ -361,3 +362,58 @@ async function waitForSentBytes(h: Harness, sessionId: string, uri: string) {
   expect(containsBytes(stored!.bytes, EXIF_MARKER)).toBe(false);
   expect(decodeRaster(stored!.bytes)?.format).toBe('png');
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.5 T35 - Ctrl+Enter and the label with attachments (Specification FR-17, owner ruling SQ-1-B).
+// The images-only tests above (L138-150: ready upload, blank prompt, click Send, outbound turn with no text part) are KEPT unchanged: their
+// button lookup is dictionary-bound (X-1), so it follows the new text "Generate" by itself (D-2: "only the lookup name changes").
+// ---------------------------------------------------------------------------------------------------------------------
+describe('US-10.5 FR-17: a blank prompt with attachments - label, enablement and Ctrl+Enter (T35)', () => {
+  const chord = '{Control>}{Enter}{/Control}';
+
+  it('a blank prompt with a ready upload reads "Generate" (not "Write a prompt to start") and is enabled', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await attach(h, [fileOf('only.png', png())], ['files/only']);
+    expect((screen.getByRole('button', { name: LABELS.en.generate }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: LABELS.en.writePrompt })).toBeNull();
+  });
+
+  it('Ctrl+Enter with a blank prompt and a ready upload sends the images-only turn exactly as a click does (file part, no text part)', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await attach(h, [fileOf('only.png', png())], ['files/only']);
+    await h.user.click(byName.textarea('en'));
+    await h.user.keyboard(chord);
+    const req = expectGenerate(h);
+    expect(req.request.body.newTurn.parts).toEqual([{ fileData: { fileUri: 'files/only', mimeType: 'image/png' } }]);
+    req.flush(imagesBody());
+    await h.settle();
+  });
+
+  it('while an attachment is still uploading the blank-prompt button reads "Write a prompt to start" and Ctrl+Enter sends nothing', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await h.user.upload(fileInput(h), fileOf('slow.png', png()));
+    await screen.findByAltText('slow.png');
+    expect((byName.button(LABELS.en.writePrompt) as HTMLButtonElement).disabled).toBe(true);
+    await h.user.click(byName.textarea('en'));
+    await h.user.keyboard(chord);
+    await h.settle();
+    h.http.expectNone('/api/image-studio/generate');
+    const [req] = await collectUploads(h, 1);
+    req.flush({ fileUri: 'files/slow', mimeType: 'image/png' });
+    await h.settle();
+  });
+
+  it('typed text with an uploading attachment keeps the label "Generate" but the button stays disabled and Ctrl+Enter sends nothing', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await h.user.type(byName.textarea('en'), 'with image');
+    await h.user.upload(fileInput(h), fileOf('slow.png', png()));
+    await screen.findByAltText('slow.png');
+    expect((byName.button(LABELS.en.generate) as HTMLButtonElement).disabled).toBe(true);
+    await h.user.keyboard(chord);
+    await h.settle();
+    h.http.expectNone('/api/image-studio/generate');
+    const [req] = await collectUploads(h, 1);
+    req.flush({ fileUri: 'files/slow', mimeType: 'image/png' });
+    await h.settle();
+  });
+});

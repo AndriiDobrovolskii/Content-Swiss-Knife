@@ -236,3 +236,51 @@ describe('buildGenerateRequest: protected set and snapshot discipline (SD-27, FR
     expect(containsBytes(new TextEncoder().encode(JSON.stringify(request)), 'MUTATED')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.5 T4 - stored display metadata never rides in the resend payload (plan DD-4; Specification FR-23, FR-17 rule 5, NFR-1).
+// A sibling block; the L64 `toEqual(before.turns)` case above stays green because a turn without extras is unchanged.
+// Logic runner; red until T4.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('US-10.5 FR-23 / NFR-1: history is the {id, role, parts} projection of the stored turns (T4)', () => {
+  function sessionWithExtras(): StoredSession {
+    const s = makeSession('s1', { pairs: 2 });
+    Object.assign(s.turns[1], { cost: 0.067, durationMs: 12_400, presetId: 'white-bg', inputRefs: [{ turnId: 'u1', partIndex: 0 }], futureField: 'x' });
+    Object.assign(s.turns[3], { cost: 0.03, durationMs: 800 });
+    return s;
+  }
+
+  it('a turn seeded with every extra produces a history entry with exactly the keys id, role and parts', async () => {
+    const { buildGenerateRequest } = await mod();
+    const snap = sessionWithExtras();
+    const { request } = buildGenerateRequest(snap, { ...BUILD_BASE, newTurnId: 'u3', text: 'again' });
+    for (const entry of request.history) expect(Object.keys(entry).sort()).toEqual(['id', 'parts', 'role']);
+    expect(request.history.map((t: any) => t.id)).toEqual(['u1', 'm1', 'u2', 'm2']);
+  });
+
+  it('the history equals the {id, role, parts} projection of the stored turns, parts byte for byte', async () => {
+    const { buildGenerateRequest } = await mod();
+    const snap = sessionWithExtras();
+    const { request } = buildGenerateRequest(snap, { ...BUILD_BASE, newTurnId: 'u3', text: 'again' });
+    expect(request.history).toEqual(snap.turns.map((t) => ({ id: t.id, role: t.role, parts: t.parts })));
+  });
+
+  it('building the request does not modify the stored session (the extras stay stored)', async () => {
+    const { buildGenerateRequest } = await mod();
+    const snap = sessionWithExtras();
+    const before = structuredClone(snap);
+    buildGenerateRequest(snap, { ...BUILD_BASE, newTurnId: 'u3', text: 'again' });
+    expect(snap).toEqual(before);
+    expect((snap.turns[1] as unknown as Record<string, unknown>)['cost']).toBe(0.067);
+  });
+
+  it('the serialised request body contains none of the extra values (no cost, duration, stored preset id or references leak)', async () => {
+    const { buildGenerateRequest } = await mod();
+    const { request } = buildGenerateRequest(sessionWithExtras(), { ...BUILD_BASE, newTurnId: 'u3', text: 'again' });
+    const body = JSON.stringify(request);
+    expect(body).not.toContain('durationMs');
+    expect(body).not.toContain('inputRefs');
+    expect(body).not.toContain('12400');
+    expect(body).not.toContain('futureField');
+  });
+});

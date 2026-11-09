@@ -58,7 +58,16 @@ export interface Part {
   fileData?: { fileUri: string; mimeType: string };
   [extra: string]: unknown;
 }
-export interface Turn { id: string; role: 'user' | 'model'; parts: Part[] }
+export interface Turn {
+  id: string;
+  role: 'user' | 'model';
+  parts: Part[];
+  /** US-10.5 display metadata (optional, never resent): see ports.ts `Turn`. */
+  cost?: number;
+  durationMs?: number;
+  presetId?: string;
+  inputRefs?: Array<{ turnId: string; partIndex: number }>;
+}
 export interface Version {
   number: number;
   turnId: string;
@@ -69,6 +78,8 @@ export interface Version {
   prompt: string;
   inputFormat: ImageMime;
   downloaded: boolean;
+  /** US-10.5: the source version of an edit (optional). */
+  editOfVersion?: number;
 }
 export interface SessionMeta {
   schemaVersion: 1;
@@ -195,6 +206,67 @@ export function makeSavePort(): SavePort & { saved: Array<{ bytes: Uint8Array; m
     save(bytes: Uint8Array, mimeType: string, fileName: string) {
       if (rec.failWith) throw rec.failWith;
       rec.saved.push({ bytes, mimeType, fileName });
+    },
+  };
+  return rec;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.5 additions (T18/T20 symbol set). Additive only; every existing export above is unchanged.
+//
+// `LocalOffset` is declared LOCALLY, like every other port in this file (see the header), not imported from ports.ts:
+// importing the type would put this file on the type-check red list until T18 lands and ~29 untouched logic specs
+// import it. The structural fit with the production `LocalOffset` is checked once, in `browser-ports.spec.ts` (T18),
+// by assigning a fake to the production type there. `ArchiveBuilder` mirrors `buildZip(versions, deps)` of zip.ts,
+// the existing module `ARCHIVE_BUILDER_PORT` defaults to.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export interface LocalOffset { offsetMinutes(epochMs: number): number }
+export interface FakeLocalOffset extends LocalOffset {
+  /** Make every later `offsetMinutes` answer `minutes` (minutes EAST of UTC, e.g. +120 for UTC+2, -300 for UTC-5). */
+  set(minutes: number): void;
+  /** The instants `offsetMinutes` was asked about, in order. */
+  readonly asked: number[];
+}
+export function makeFakeLocalOffset(minutes = 0): FakeLocalOffset {
+  let current = minutes;
+  const asked: number[] = [];
+  return { asked, set(m) { current = m; }, offsetMinutes(epochMs) { asked.push(epochMs); return current; } };
+}
+
+export interface ArchiveVersionInput {
+  number: number;
+  bytes: Uint8Array;
+  mime: ImageMime;
+  targetMime: ImageMime;
+  aspectRatio: string;
+}
+export type ArchiveBuilder = (
+  versions: readonly ArchiveVersionInput[],
+  deps: { codec: ImageCodec; productName: string },
+) => Promise<Uint8Array | null>;
+
+export interface FakeArchiveBuilder {
+  /** The function to provide behind `ARCHIVE_BUILDER_PORT`. */
+  build: ArchiveBuilder;
+  /** Every call's version numbers and target MIMEs, in order. */
+  readonly calls: Array<{ numbers: number[]; targetMimes: string[]; productName: string }>;
+  /** When set, `build` rejects with this error instead of building (use a `ZipBuildError` for the X-21 path). */
+  failWith: Error | null;
+}
+/**
+ * A recording archive builder that delegates to the REAL `buildZip` (so a produced archive can be opened with JSZip and
+ * checked entry by entry) unless `failWith` is set. The real builder is passed in by the caller so this file does not
+ * import zip.ts (and JSZip) into the ~29 specs that only need the other doubles.
+ */
+export function makeFakeArchiveBuilder(realBuildZip: ArchiveBuilder): FakeArchiveBuilder {
+  const rec: FakeArchiveBuilder = {
+    calls: [],
+    failWith: null,
+    build: async (versions, deps) => {
+      rec.calls.push({ numbers: versions.map((v) => v.number), targetMimes: versions.map((v) => v.targetMime), productName: deps.productName });
+      if (rec.failWith) throw rec.failWith;
+      return realBuildZip(versions, deps);
     },
   };
   return rec;
