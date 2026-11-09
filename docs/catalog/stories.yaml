@@ -107,7 +107,7 @@ stories:
     slug: image-studio-visual-redesign
     track: angular
     path: docs/stories/US-10.5-image-studio-visual-redesign.md
-    state: IN_PROGRESS
+    state: ARCHIVED
     created_at: 2026-11-08T10:00:00Z
   - id: US-10.6
     title: Add the new Image Studio capabilities from the design - Upscale 4K, Variation, several images per generation, Style ref, saved presets, spend totals and pre-send estimate

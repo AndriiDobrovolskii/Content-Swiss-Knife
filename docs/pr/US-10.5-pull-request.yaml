@@ -1,0 +1,52 @@
+---
+artifact: pull_request
+story: US-10.5
+version: 1
+status: ARCHIVED
+owner: so-pr-creator
+created_at: 2026-11-09T20:17:55Z
+updated_at: 2026-11-09T20:17:55Z
+supersedes: null
+inputs_consumed:
+  - key: story
+    version: 5
+  - key: pr_summary
+    version: 1
+open_decisions_blocking: false
+---
+# Record of the opened Pull Request. Opening it is not READY_FOR_PR and is not a review.
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+remote: origin
+pull_request:
+  number: 152
+  url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/152
+  state: open
+  draft: false
+  opened_at: 2026-11-09T20:17:28Z
+  title_source: docs/pr/US-10.5-pr-summary.md#v1 (verbatim)
+  body_source: docs/pr/US-10.5-pr-summary.md#v1 (verbatim; the Claude Code session link was appended as the last line)
+  verified_with: gh pr view 152 (title and body compared with the draft; reviewRequests [], labels [], autoMergeRequest null)
+branch:
+  head: feature/US-10.5-image-studio-visual-redesign
+  head_sha_pushed: 6d31d2794932fd81aec208d860017d89ccb43f14
+  base: main
+  base_sha_at_open: 65d6761225a56383bb7d7a4d90a5b567d0bd1106
+  merge_base: cedbe8e09cf86002ed88cf36993d34671fd7bd85
+  commits_ahead_of_base: 48
+push:
+  command: git push -u origin feature/US-10.5-image-studio-visual-redesign
+  force: false
+  no_verify: false
+  remote_branch_existed_before: false
+  docs_commit: 6d31d27 (added the Story documents and PR summary before the push, at the human's choice)
+authorisation: >
+  Human instruction in chat: "create the PR for US-10.5"; and the answer "Закомітити docs" to commit the Story documents first.
+not_done:
+  - merge
+  - ready-for-review or approval marking
+  - reviewers, labels or milestone
+  - auto-merge
+notes:
+  - The PR was created with the gh CLI (--body-file) rather than the github MCP server, to keep the body byte-identical to the draft.
+  - The draft's hand-over note 1 (docs uncommitted) is resolved by 6d31d27; its commit-hygiene section still describes the pre-commit state and was not edited.
+  - .tmp.driveupload/ was not staged. This file and the workflow state change are written after the push and are not part of the pushed head SHA.
