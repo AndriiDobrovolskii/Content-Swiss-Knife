@@ -6,7 +6,7 @@ import { studioText, type StudioLanguage, type StudioTextParams } from '../../..
 
 /**
  * The session list (US-10.1 DD-22, FR-49, FR-71, FR-86): the stored sessions, newest last activity first (at most 20,
- * the store enforces the cap), New session behind the T-23 confirmation, selection, and the running estimated cost of
+ * the store enforces the cap), selection, and the running estimated cost of
  * the current session (X-10). The list and New session stay enabled while a generation runs: the store keeps the
  * response with the session that sent it. Every text comes from `studio-texts` for `lang()` at render time (FR-77).
  */
@@ -48,9 +48,5 @@ export class StudioSessionListComponent {
 
   protected async select(id: string): Promise<void> {
     await this.store.selectSession(id);
-  }
-
-  protected async newSession(): Promise<void> {
-    await this.store.newSession();
   }
 }

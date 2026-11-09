@@ -1,14 +1,6 @@
 <section class="space-y-3">
 
-  <div class="flex items-center justify-between gap-3">
-    <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ tx('X-9') }}</h3>
-    <button
-      type="button"
-      (click)="newSession()"
-      class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white transition-colors">
-      {{ tx('T-22.newSession') }}
-    </button>
-  </div>
+  <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ tx('X-9') }}</h3>
 
   <ul [attr.aria-label]="tx('X-9')" class="space-y-1">
     @for (meta of store.sessions(); track meta.id) {

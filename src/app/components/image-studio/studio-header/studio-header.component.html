@@ -1,0 +1,12 @@
+<header class="flex flex-wrap items-center justify-between gap-3">
+  <div class="flex items-baseline gap-2 min-w-0">
+    <h2 class="text-base font-semibold text-shell-text">{{ title() }}</h2>
+    <span class="text-xs text-shell-muted">{{ historyCount() }}</span>
+  </div>
+  <button
+    type="button"
+    (click)="newSession()"
+    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-shell-accent hover:opacity-90 text-white transition-colors">
+    {{ newSessionLabel() }}
+  </button>
+</header>

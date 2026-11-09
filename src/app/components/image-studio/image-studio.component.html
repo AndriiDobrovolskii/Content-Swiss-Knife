@@ -6,6 +6,8 @@
 
   <div class="flex-1 min-w-0 space-y-4">
 
+    <app-studio-header [lang]="lang()" />
+
     <!-- The one generation status region (FR-74, FR-83): the only role="status" element of the studio. -->
     <div role="status" class="sr-only">{{ store.statusMessage() }}</div>
 
