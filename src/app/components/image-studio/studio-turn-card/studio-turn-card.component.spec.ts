@@ -70,6 +70,7 @@ describe('FR-3 (b)-(d): prompt and chips (T28)', () => {
     expect(cardsOf(s)[0].presetId).toBeUndefined();
     await renderCard(s);
     expect(screen.queryByRole('alert')).toBeNull();
+    expect(text(article())).not.toContain('removed-later'); // no chip, and the raw id is not printed in its place
   });
 });
 
@@ -89,7 +90,13 @@ describe('FR-3 (a): input thumbnails (T28)', () => {
     const thumbs = within(article()).getAllByAltText(/^Input image \d+$/);
     expect(thumbs.map((i) => i.getAttribute('alt'))).toEqual(['Input image 1', 'Input image 2']);
     for (const img of thumbs) expect(img.closest('figure')).toBeNull();
-    expect(within(article()).queryByAltText('prompt 1')).toBeNull();
+    // ASSERTION SCOPE (test_strategy v5, section 9): the <article> also holds the generated tile (T27), whose <img> alt IS the version prompt
+    // ("prompt 1", FR-75 / buildAlt). "Never the prompt" is a fact about the INPUT THUMBNAILS only, so it is asked of the images that are NOT
+    // inside a <figure> (the thumbnails), not of the whole card. Together with the two lines above this pins: the thumbnails are exactly the
+    // two "Input image {n}" images, none sits in a figure, and none carries the prompt as its alt.
+    const nonTileImages = Array.from(article().querySelectorAll('img')).filter((i) => i.closest('figure') === null);
+    expect(nonTileImages.map((i) => i.getAttribute('alt'))).toEqual(['Input image 1', 'Input image 2']);
+    expect(nonTileImages.some((i) => i.getAttribute('alt') === 'prompt 1')).toBe(false);
   });
 
   it('FR-3 failure path: a thumbnail whose bytes are no longer stored is omitted without an error (the inline one remains)', async () => {
@@ -130,13 +137,17 @@ describe('FR-4: the summary line and its partial-field rule (T28)', () => {
   it('only a cost: the missing duration drops its separator', async () => {
     await renderCard(single({ cost: 0.12 }));
     expect(text(article())).toContain('1 image · $0.12');
-    expect(text(article())).not.toMatch(/·\s*$/);
+    // ASSERTION SCOPE (test_strategy v5, section 9): the summary line is followed by the tiles inside the same <article>, so the old
+    // `not.toMatch(/·\s*$/)` looked at the END of the whole card (the tile's last button) and was vacuous. The dangling separator is asked of
+    // the text right after the cost: whatever follows (the tile caption "v1 ...") must not start with a "·".
+    expect(text(article())).toMatch(/1 image · \$0\.12(?!\s*·)/);
   });
 
   it('only a duration: "1 image · 5.0 s" and no cost segment', async () => {
     await renderCard(single({ durationMs: 5_000 }));
     expect(text(article())).toContain('1 image · 5.0 s');
     expect(text(article())).not.toContain('$');
+    expect(text(article())).not.toMatch(/·\s*·/); // the missing cost leaves no empty segment between two separators
   });
 
   it('neither cost nor duration (an old session): no summary line at all, and nothing renders as NaN, undefined or $0.00', async () => {
@@ -256,6 +267,20 @@ describe('FR-5: Reuse prompt fills the composer, moves focus and sends nothing (
     await h.settle();
     h.http.expectNone(GENERATE_URL);
     expect(h.store.generating()).toBe(false);
+  });
+
+  // POSITIVE TWIN of the blank-prompt case below (test_strategy v5, section 9): that case passes today only because no Reuse button exists
+  // yet. This one is red until T29 renders the button, and it re-renders the SAME card with a blank prompt, so "absent" is proved against a
+  // button that was demonstrably there a moment earlier (not against a button that never existed).
+  it('is present, named "Reuse prompt", on a card that has a prompt, and disappears when the same card is re-rendered with a blank prompt', async () => {
+    const withPrompt = sessionWithPrompt();
+    const h = await renderReuse(withPrompt);
+    expect(screen.getAllByRole('button', { name: t('X-37', 'en') })).toHaveLength(1);
+    const blank = sessionWithPrompt();
+    blank.meta.versions[0].prompt = '';
+    h.view.fixture.componentRef.setInput('card', cardsOf(blank)[0]);
+    await h.settle();
+    expect(screen.queryByRole('button', { name: t('X-37', 'en') })).toBeNull();
   });
 
   it('is absent on a card that has no prompt (an images-only send)', async () => {

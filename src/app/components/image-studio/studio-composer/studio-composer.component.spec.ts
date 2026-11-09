@@ -408,6 +408,7 @@ describe('US-10.5 FR-14 / FR-19: the preset row uses the store\'s applyPreset (T
     h = await renderStudio(StudioComposerComponent, { sessions: [makeSession('s1', { pairs: 1 })] });
     await h.user.click(presetBtn('Product on white'));
     expect(h.store.draft().presetId).toBe('white-bg');
+    expect(h.store.draft().checkedPresetId).toBe('white-bg'); // precondition: the check mark is set, so "null after the chip" is a clearing, not an absence
     await h.user.click(byName.button('Brighter'));
     const req = expectGenerate(h);
     expect(req.request.body.presetId).toBeUndefined();
@@ -547,6 +548,10 @@ describe('US-10.5 FR-14 (i)/(c): the check mark is conveyed programmatically and
   it('editing the prompt text clears the check mark (glyph and aria-pressed) as soon as the user types', async () => {
     h = await renderStudio(StudioComposerComponent);
     await h.user.click(presetBtn('Product on white'));
+    // PRECONDITION (test_strategy v5, section 9): without it the two negations below pass before T36, because a button that has no check
+    // mark at all also has "no check mark after typing". The mark must be there first, then be seen to clear.
+    expect(pressed('Product on white')).toBe('true');
+    expect(presetBtn('Product on white').querySelector('[aria-hidden="true"]')).not.toBeNull();
     await h.user.type(byName.textarea('en'), ' on a table');
     expect(pressed('Product on white')).not.toBe('true');
     expect(presetBtn('Product on white').querySelector('[aria-hidden="true"]')).toBeNull();

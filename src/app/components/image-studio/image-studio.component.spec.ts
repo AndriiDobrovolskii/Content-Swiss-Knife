@@ -32,6 +32,19 @@ const EMPTY = () => makeSession('s0');
 const alertsText = () => screen.queryAllByRole('alert').map((a) => textOf(a)).join(' | ');
 const sendBtn = (lang: Lang = 'en') => byName.button(t('X-1', lang)) as HTMLButtonElement;
 const retryBtn = (lang: Lang = 'en') => screen.queryByRole('button', { name: LABELS[lang].retry });
+/**
+ * The image tile (<figure>) of version n inside the log, found by its accessible name (the figcaption `v{N}` / `v{N} · {W}×{H}`). Scoped to
+ * the log so the status region's "Version v{N} is ready", the version strip and the dialog can never satisfy a tile assertion.
+ */
+const tileLabelled = (n: number, lang: Lang = 'en') =>
+  within(screen.getByRole('log', { name: t('X-26', lang) })).queryAllByRole('figure', { name: new RegExp(`\\bv${n}\\b`) });
+/** The version strip of the container, and one of its thumbnail buttons (a tile's "Compare with v{n}" button must never be mistaken for it). */
+const stripEl = (h: Harness) => {
+  const el = h.view.container.querySelector('app-studio-version-strip');
+  if (el === null) throw new Error('app-studio-version-strip is not rendered');
+  return el as HTMLElement;
+};
+const stripThumb = (h: Harness, n: number) => within(stripEl(h)).getByRole('button', { name: new RegExp(`\\bv${n}\\b`) });
 
 /** Counts the transitions of the status region to a non-empty text. */
 function watchStatus() {
@@ -77,8 +90,11 @@ describe('FR-74 / AC-46 / FR-83: the status region announces exactly twice for a
     await typeAndSend(h, 'two variants');
     await flushGenerate(h, imagesBody({ count: 2 }));
     expect(w.announcements()).toEqual(['Generating…', 'Version v2 is ready']);
-    expect(screen.getAllByText(/\bv1\b/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/\bv2\b/).length).toBeGreaterThan(0);
+    // ASSERTION SCOPE (test_strategy v5, section 9): the status region itself reads "Version v2 is ready", so a whole-screen /\bv2\b/ text
+    // lookup is satisfied by the announcement alone and proves nothing about the images. The label is asked of the tiles: one <figure> per
+    // image, named by its caption (v{N} · {W}×{H}), inside the log.
+    expect(tileLabelled(1)).toHaveLength(1);
+    expect(tileLabelled(2)).toHaveLength(1);
     w.stop();
   });
 
@@ -230,7 +246,7 @@ describe('FR-36: Retry re-sends the same turn; a failed turn returns to the comp
     expect(n2.parts).toEqual(n1.parts);
     second.flush(imagesBody());
     await h.settle();
-    expect(screen.getAllByText(/\bv1\b/).length).toBeGreaterThan(0);
+    expect(tileLabelled(1)).toHaveLength(1); // the tile, not the status text "Version v1 is ready" (assertion scope, test_strategy v5, section 9)
   });
 });
 
@@ -285,7 +301,7 @@ describe('FR-21 / FR-22 / AC-11 / AC-12: Cancel and the 120 s deadline', () => {
     const req = expectGenerate(h);
     expect((byName.button(LABELS.en.cancel) as HTMLButtonElement).disabled).toBe(false);
     expect((byName.button(LABELS.en.newSession) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole('button', { name: /\bv1\b/ }) as HTMLButtonElement).disabled).toBe(false);
+    expect((stripThumb(h, 1) as HTMLButtonElement).disabled).toBe(false);
     expect((byName.button(LABELS.en.downloadAll) as HTMLButtonElement).disabled).toBe(false);
     req.flush(imagesBody());
     await h.settle();
@@ -418,12 +434,23 @@ describe('FR-20 / FR-23 / AC-10 / AC-13: the chat log (T33)', () => {
 
 describe('FR-75 / AC-47: alt text of a generated image', () => {
   const altsOfGenerated = () => screen.getAllByRole('img').map((i) => (i as HTMLImageElement).alt);
+  // ASSERTION SCOPE (test_strategy v5, section 9): the alt rule binds BOTH renderings of a generated image - the tile in the log (an <img> inside
+  // a <figure>) and the strip thumbnail (an <img> inside a button). A whole-screen `toContain` is satisfied by either one alone, so a tile with a
+  // wrong alt would pass behind a correct thumbnail. The positive checks therefore ask each rendering on its own; the "no stray text" check
+  // keeps the whole screen.
+  const altsOf = (imgs: Iterable<Element>) => Array.from(imgs).map((i) => i.getAttribute('alt') ?? '');
+  const tileAlts = (h: Harness) => altsOf(h.view.container.querySelectorAll('[role="log"] figure img'));
+  const stripAlts = (h: Harness) => altsOf(stripEl(h).querySelectorAll('img'));
+  const expectBoth = (h: Harness, alt: string) => {
+    expect(tileAlts(h), 'tile alt').toContain(alt);
+    expect(stripAlts(h), 'strip alt').toContain(alt);
+  };
 
   it('AC-47 / SD-35: a prompt of at most 100 code points is the alt as it is (whitespace collapsed, trimmed)', async () => {
     const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
     await typeAndSend(h, '  white   mug on a table ');
     await flushGenerate(h, imagesBody());
-    expect(altsOfGenerated()).toContain('white mug on a table');
+    expectBoth(h, 'white mug on a table');
   });
 
   it('AC-47 / SD-35: a 101-code-point prompt gives its first 100 code points followed by three ASCII full stops', async () => {
@@ -433,7 +460,7 @@ describe('FR-75 / AC-47: alt text of a generated image', () => {
     await h.user.paste(prompt);
     await h.user.click(sendBtn());
     await flushGenerate(h, imagesBody());
-    expect(altsOfGenerated()).toContain('a'.repeat(100) + '...');
+    expectBoth(h, 'a'.repeat(100) + '...');
     expect(altsOfGenerated().some((a) => a.includes('b'))).toBe(false);
   });
 
@@ -444,9 +471,9 @@ describe('FR-75 / AC-47: alt text of a generated image', () => {
     await h.settle();
     await h.user.click(sendBtn());
     await flushGenerate(h, imagesBody());
-    expect(altsOfGenerated()).toContain('Generated image');
+    expectBoth(h, 'Generated image');
     await h.setLang('uk');
-    expect(altsOfGenerated()).toContain('Згенероване зображення');
+    expectBoth(h, 'Згенероване зображення');
   });
 
   it('FR-75 / D-35: a prompt-derived alt is NOT localised by a language toggle', async () => {
@@ -454,7 +481,7 @@ describe('FR-75 / AC-47: alt text of a generated image', () => {
     await typeAndSend(h, 'white mug');
     await flushGenerate(h, imagesBody());
     await h.setLang('uk');
-    expect(altsOfGenerated()).toContain('white mug');
+    expectBoth(h, 'white mug');
   });
 });
 
@@ -474,7 +501,7 @@ describe('FR-79 / FR-56: the product-name field names the downloaded file', () =
     await h.user.type(byName.product('en'), 'Bambu Lab H2D');
     await typeAndSend(h, 'studio shot');
     await flushGenerate(h, imagesBody());
-    await h.user.click(screen.getByRole('button', { name: /\bv1\b/ }));
+    await h.user.click(stripThumb(h, 1));
     await h.settle();
     const dlg = within(screen.getByRole('dialog', { name: t('X-17', 'en') }));
     await h.user.click(dlg.getByRole('button', { name: t('X-8', 'en') }));
@@ -582,7 +609,7 @@ describe('US-10.5 FR-10 / FR-33 (T23): the single full-view dialog is a sibling 
   it('opening a version from the strip shows exactly one dialog, and it is NOT inside the log', async () => {
     const h = await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 1 })] });
     expect(screen.queryByRole('dialog')).toBeNull();
-    await h.user.click(screen.getByRole('button', { name: /\bv1\b/ }));
+    await h.user.click(stripThumb(h, 1));
     await h.settle();
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
     const log = screen.getByRole('log', { name: t('X-26', 'en') });
@@ -593,8 +620,12 @@ describe('US-10.5 FR-10 / FR-33 (T23): the single full-view dialog is a sibling 
     const h = await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 1 })] });
     const log = screen.getByRole('log', { name: t('X-26', 'en') });
     const before = log.querySelectorAll('figure img').length;
-    await h.user.click(screen.getByRole('button', { name: /\bv1\b/ }));
+    // PRECONDITION (test_strategy v5, section 9): "unchanged" is only meaningful when there is something to change. With no tile at all the
+    // count is 0 before and 0 after, and the case would pass on a feed that renders nothing. The one-version session has exactly one tile image.
+    expect(before).toBe(1);
+    await h.user.click(stripThumb(h, 1));
     await h.settle();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1); // the dialog is open (its own image is outside the log)
     expect(log.querySelectorAll('figure img').length).toBe(before);
   });
 });
