@@ -7,7 +7,7 @@
       (click)="downloadAll()"
       [disabled]="items().length === 0 || busy()"
       class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50">
-      {{ tx('T-22.downloadAll') }}
+      {{ tx('T-22.downloadAll', { N: items().length }) }}
     </button>
   </div>
 
@@ -39,14 +39,6 @@
       <img [attr.src]="srcOf(item)" [alt]="altOf(item)" class="max-h-96 mx-auto rounded-lg" />
 
       <div class="flex flex-wrap items-center gap-2">
-        <select
-          [attr.aria-label]="tx('X-7')"
-          (change)="onFormat(item, $event)"
-          class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-2 py-1.5 text-sm">
-          @for (format of formats; track format.mime) {
-            <option [value]="format.mime" [selected]="format.mime === targetOf(item)">{{ format.label }}</option>
-          }
-        </select>
         <button
           type="button"
           (click)="download(item)"
