@@ -1,5 +1,5 @@
 import saveAs from 'file-saver';
-import type { AlertPort, ClipboardPort, Clock, ConfirmPort, IdSource, SavePort, Scheduler } from '../../utils/image-studio/ports';
+import type { AlertPort, ClipboardPort, Clock, ConfirmPort, IdSource, LocalOffset, SavePort, Scheduler } from '../../utils/image-studio/ports';
 
 /**
  * The thin browser implementations of the Image Studio ports (US-10.1 DD-15, NFR-14). Each adapter is a one-statement
@@ -46,4 +46,12 @@ export function createBrowserClipboardPort(): ClipboardPort {
 
 export function createBrowserSavePort(): SavePort {
   return { save: (bytes, mimeType, fileName) => saveAs(new Blob([bytes as BlobPart], { type: mimeType }), fileName) };
+}
+
+/**
+ * The viewer's local-time offset (US-10.5 DD-13). `getTimezoneOffset` answers minutes WEST of UTC, so the sign is flipped
+ * to the east-positive value `formatRowDate` expects. This is the only place `Date` is constructed for the row date.
+ */
+export function createBrowserLocalOffset(): LocalOffset {
+  return { offsetMinutes: (epochMs) => -new Date(epochMs).getTimezoneOffset() };
 }

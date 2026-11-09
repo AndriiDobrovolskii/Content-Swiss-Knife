@@ -2,13 +2,13 @@
 # Stage skills return a Result Envelope; they never touch this file.
 # Schema: docs/workflow/state-schema.md
 version: 1
-story: null
-current_stage: ARCHIVED
-status: ARCHIVED
+story: US-10.5
+current_stage: PR_CREATION
+status: IN_PROGRESS
 pending_human_gate: null
-started_at: 2026-11-08T07:50:35Z
-updated_at: 2026-11-08T17:31:45Z
+started_at: 2026-11-08T17:41:27Z
+updated_at: 2026-11-09T19:44:53Z
 stage_attempts: {}
 track: angular
 blockers: []
-note: "Archived. Delivery summary: docs/knowledge/US-10.4-delivery-summary.md. Open follow-ups: the U-1 ruling is recorded only in the evidence file, shell-evidence.spec accepts any FR-16 text, US-10.5/10.6 are uncommitted, .tmp.driveupload/ not gitignored."
+note: "Stopped before PR_CREATION by run_policy: needs a separate explicit human instruction. Story docs (docs/ for US-10.5/US-10.6, workflow and catalog files, docs/pr/US-10.5-pr-summary.md) are uncommitted and must be committed before the push; .tmp.driveupload/ must not be staged."

@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, si
 import { ASPECT_RATIOS } from '../../../../prompt-core/image-studio-contract';
 import { findImageModel, IMAGE_MODELS } from '../../../../prompt-core/model-catalog';
 import {
-  applyProduct, CHIP_INSTRUCTIONS, presetName, PROMPT_PRESETS, type ChipInstruction, type PromptPreset,
+  CHIP_INSTRUCTIONS, presetName, PROMPT_PRESETS, type ChipInstruction, type PromptPreset,
 } from '../../../../prompt-core/prompt-presets';
 import { ImageStudioStore } from '../../../../services/image-studio/image-studio.store';
 import {
@@ -29,9 +29,9 @@ interface AttachMessage {
 }
 
 /**
- * The studio composer (US-10.1 DD-22): presets, quick-edit chips, the attachment surface (button, drop zone, paste,
- * thumbnails, upload states), the prompt, the product-name field, the ratio, resolution and model selectors, Send and
- * Cancel. State lives in the root `ImageStudioStore`; this component renders it and forwards user actions. Every text
+ * The studio composer (US-10.1 DD-22, restyled by US-10.5): presets (picked through the store's `applyPreset`),
+ * the attachment surface (button, drop zone, paste, thumbnails, upload states), quick-edit chips directly above the
+ * prompt, the prompt, the product-name field, the ratio, resolution and model selectors, Generate and Cancel. State lives in the root `ImageStudioStore`; this component renders it and forwards user actions. Every text
  * is resolved from `studio-texts` for `lang()` at render time (FR-77).
  *
  * Attaching (DD-17): each accepted file is ingested (DD-20) and uploaded at once; the attachment shows `uploading`,
@@ -59,6 +59,8 @@ export class StudioComposerComponent {
   protected readonly models = IMAGE_MODELS;
   /** The resolutions the selected model accepts: 4K is offered only by Pro (FR-19). */
   protected readonly resolutions = computed(() => findImageModel(this.store.draft().model)?.resolutions ?? []);
+  /** The send button's label follows the draft, not the reason it is disabled: "Generate" or "Write a prompt to start" (FR-17). */
+  protected readonly sendLabelTextId = computed(() => (this.store.sendState().labelId === 'generate' ? 'X-1' : 'X-29'));
   /** Chips appear only once the session holds a version (FR-31). */
   protected readonly showChips = computed(() => this.store.versions().length > 0);
 
@@ -103,8 +105,12 @@ export class StudioComposerComponent {
     return studioText(chip.textId, this.lang());
   }
 
+  /**
+   * Typing clears only the check mark (FR-14 c): the wire `presetId` keeps being sent, but the stored turn records a
+   * preset only while the check mark was showing at send.
+   */
   protected onText(event: Event): void {
-    this.store.setDraft({ text: (event.target as HTMLTextAreaElement).value });
+    this.store.setDraft({ text: (event.target as HTMLTextAreaElement).value, checkedPresetId: null });
   }
 
   protected onProductName(event: Event): void {
@@ -128,29 +134,22 @@ export class StudioComposerComponent {
   }
 
   /**
-   * Picking a preset fills the prompt (the product name substituted once, D-14), the ratio, the resolution and,
-   * while the session holds no version, the model (FR-28). In a session with a version the model changes only
-   * through the model selector, which starts a new session.
+   * A chip is a one-click edit of the latest version: its English instruction is sent at once (FR-31). A chip send
+   * records no preset, neither the wire one nor the checked one (FR-14), so both fields are cleared first.
    */
-  protected pickPreset(preset: PromptPreset): void {
-    const patch = {
-      text: applyProduct(preset.template, this.store.draft().productName),
-      presetId: preset.id,
-      aspectRatio: preset.defaults.aspectRatio,
-      resolution: preset.defaults.resolution,
-      ...(this.store.versions().length === 0 ? { model: preset.defaults.model } : {}),
-    };
-    this.store.setDraft(patch);
-  }
-
-  /** A chip is a one-click edit of the latest version: its English instruction is sent at once (FR-31). */
   protected async sendChip(chip: ChipInstruction): Promise<void> {
-    this.store.setDraft({ text: chip.instruction, presetId: null });
+    this.store.setDraft({ text: chip.instruction, presetId: null, checkedPresetId: null });
     await this.store.send();
   }
 
   protected async send(): Promise<void> {
     await this.store.send();
+  }
+
+  /** Ctrl+Enter in the prompt sends exactly when a click on the enabled button would (FR-17); never a newline. */
+  protected async onCtrlEnter(event: Event): Promise<void> {
+    event.preventDefault();
+    if (this.store.sendState().enabled) await this.send();
   }
 
   protected cancel(): void {

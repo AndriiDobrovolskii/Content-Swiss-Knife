@@ -18,6 +18,23 @@
  *   - the per-version actions (format selector X-7, Download X-8, Copy, Edit this version) live in the full-view dialog
  *     opened by clicking the version's thumbnail button (its accessible name contains `v<N>`); "Download all versions"
  *     lives in the strip.
+ *
+ * US-10.5 CHANGES TO THE CONTRACT (the format selector, X-7, is gone; the dialog is `app-studio-full-view`; "Download all
+ * (N) .zip" lives in the feed). The additional pinned DOM contract, which the component specs of this Story assume and the
+ * builder must satisfy (test_strategy section "Pinned component contract" lists it with the owner task of each line):
+ *   - `app-studio-header`: heading "Image Studio" (X-30, role heading, NOT a button), a button "New session" (T-22), the
+ *     plain text `· history (N)` (X-33.*);
+ *   - `app-studio-feed`: `<div role="log" aria-live="off">` named X-26 (always rendered) holding, in order, the empty state or
+ *     a presentational progress element (`aria-hidden="true"`, no role) or the turn cards, then the one strip, then events and
+ *     Retry; the "Download all (N) .zip" button and the SynthID notice (T-19) sit OUTSIDE the log, above it;
+ *   - `app-studio-turn-card`: root is an `<article>`; it holds input thumbnails (`img`, alt X-31, NOT inside a `figure`), the
+ *     prompt text, chips (ratio, resolution, model, preset) as plain text, the summary line, text paragraphs and the tiles
+ *     in API order, and a button "Reuse prompt" (X-37);
+ *   - `app-studio-image-tile`: a `<figure aria-labelledby>` whose `<figcaption>` reads `v{N} · {W}x{H}` (or `v{N}`), holding
+ *     one `img` (alt = prompt, or X T-21 when blank), buttons "Download" (X-8) and "Edit this →" (T-22.editVersion), the chip
+ *     "Edit of v{n}" (X-39) and the button "Compare with v{n}" (X-38) only when the source is retained;
+ *   - `app-studio-version-strip`: thumbnails only, each an `img` inside a `button` named by `v{N}`, never inside a `figure`;
+ *   - `app-studio-full-view`: the only `role="dialog"` (named X-17); `app-studio-compare-slider`: one `role="slider"`.
  */
 import { vi, expect } from 'vitest';
 import { render, screen } from '@testing-library/angular';
@@ -28,22 +45,35 @@ import { provideHttpClientTesting, HttpTestingController, TestRequest } from '@a
 import type { Type } from '@angular/core';
 import {
   makeFakeClock, makeFakeScheduler, makeIdSource, makeAlertPort, makeConfirmPort, makeClipboardPort, makeSavePort,
-  makeFakeCodec, makeInMemorySessionStore, makeRaster, toBase64,
+  makeFakeCodec, makeInMemorySessionStore, makeRaster, toBase64, makeFakeLocalOffset, makeFakeArchiveBuilder,
   type StoredSession, type FakeCodecOptions, type Part,
 } from './fakes';
 import {
   CLOCK_PORT, SCHEDULER_PORT, ID_SOURCE_PORT, SESSION_STORE_PORT, IMAGE_CODEC_PORT, ALERT_PORT, CONFIRM_PORT,
-  CLIPBOARD_PORT, SAVE_PORT,
+  CLIPBOARD_PORT, SAVE_PORT, LOCAL_OFFSET_PORT, ARCHIVE_BUILDER_PORT,
 } from '../../../src/services/image-studio/image-studio.tokens';
 import { ImageStudioStore } from '../../../src/services/image-studio/image-studio.store';
+import { StudioDeliveryService } from '../../../src/services/image-studio/studio-delivery.service';
+import { StudioMediaService } from '../../../src/services/image-studio/studio-media.service';
+import { buildZip } from '../../../src/utils/image-studio/zip';
 import { studioText } from '../../../src/utils/image-studio/studio-texts';
 
 export type Lang = 'en' | 'uk';
 
 /** T-22 control labels, verbatim from the Interface text table. */
 export const LABELS = {
-  en: { cancel: 'Cancel', retry: 'Retry', newSession: 'New session', edit: 'Edit this version', downloadAll: 'Download all versions', copy: 'Copy to clipboard' },
-  uk: { cancel: 'Скасувати', retry: 'Повторити', newSession: 'Нова сесія', edit: 'Редагувати цю версію', downloadAll: 'Завантажити всі версії', copy: 'Копіювати в буфер обміну' },
+  // US-10.5 (D-1, FR-6, FR-11): "Edit this version" -> "Edit this →"; "Download all versions" -> "Download all (N) .zip", so the
+  // lookup is a pattern over N (a string name would have to know N). `generate` / `writePrompt` are the two states of the
+  // send button (FR-17); `reuse` is the turn card's button. Every importer was checked: only the container and strip specs
+  // read `edit` / `downloadAll`; the app-shell and clear-all specs read neither.
+  en: {
+    cancel: 'Cancel', retry: 'Retry', newSession: 'New session', edit: 'Edit this →', downloadAll: /^Download all \(\d+\) \.zip$/, copy: 'Copy to clipboard',
+    generate: 'Generate', writePrompt: 'Write a prompt to start', reuse: 'Reuse prompt',
+  },
+  uk: {
+    cancel: 'Скасувати', retry: 'Повторити', newSession: 'Нова сесія', edit: 'Редагувати →', downloadAll: /^Завантажити все \(\d+\) \.zip$/, copy: 'Копіювати в буфер обміну',
+    generate: 'Згенерувати', writePrompt: 'Напишіть промпт для початку', reuse: 'Використати промпт',
+  },
 } as const;
 
 export const MODEL_LABEL = { flash: 'Nano Banana 2, Flash', pro: 'Nano Banana Pro, Pro' } as const;
@@ -56,6 +86,8 @@ export interface RenderOptions {
   sentBytes?: Record<string, Record<string, { bytes: Uint8Array; mimeType: string }>>;
   codec?: FakeCodecOptions;
   confirmAnswer?: boolean;
+  /** Minutes east of UTC the fake `LOCAL_OFFSET_PORT` reports (default 0); change later with `h.offset.set(...)`. */
+  offsetMinutes?: number;
   /** Extra inputs for the component (besides `lang`). */
   inputs?: Record<string, unknown>;
   /** For hosts that have no `lang` input (AppComponent): do not pass one. */
@@ -81,6 +113,8 @@ export async function renderStudio<T>(component: Type<T>, opts: RenderOptions = 
   const save = makeSavePort();
   const codec = makeFakeCodec(opts.codec);
   const sessionStore = makeInMemorySessionStore();
+  const offset = makeFakeLocalOffset(opts.offsetMinutes ?? 0);
+  const archive = makeFakeArchiveBuilder(buildZip);
   for (const s of opts.sessions ?? []) sessionStore.seed(s, opts.sentBytes?.[s.meta.id]);
 
   const view = await render(component, {
@@ -97,6 +131,11 @@ export async function renderStudio<T>(component: Type<T>, opts: RenderOptions = 
       { provide: CONFIRM_PORT, useValue: confirmPort },
       { provide: CLIPBOARD_PORT, useValue: clipboard },
       { provide: SAVE_PORT, useValue: save },
+      { provide: LOCAL_OFFSET_PORT, useValue: offset },
+      { provide: ARCHIVE_BUILDER_PORT, useValue: archive.build },
+      // In production only the container provides these two (container-scoped, plan DD-6); an isolated component render
+      // has no container, so the harness provides them (plan DD-6, "test infrastructure").
+      StudioDeliveryService, StudioMediaService,
     ],
   });
   const store = TestBed.inject(ImageStudioStore);
@@ -131,7 +170,7 @@ export async function renderStudio<T>(component: Type<T>, opts: RenderOptions = 
     view.detectChanges();
   };
 
-  return { view, store, http, user, clock, scheduler, ids, alerts, confirmPort, clipboard, save, codec, sessionStore, setLang, settle, lang };
+  return { view, store, http, user, clock, scheduler, ids, alerts, confirmPort, clipboard, save, codec, sessionStore, offset, archive, setLang, settle, lang };
 }
 
 /**

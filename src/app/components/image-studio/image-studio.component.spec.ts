@@ -32,6 +32,19 @@ const EMPTY = () => makeSession('s0');
 const alertsText = () => screen.queryAllByRole('alert').map((a) => textOf(a)).join(' | ');
 const sendBtn = (lang: Lang = 'en') => byName.button(t('X-1', lang)) as HTMLButtonElement;
 const retryBtn = (lang: Lang = 'en') => screen.queryByRole('button', { name: LABELS[lang].retry });
+/**
+ * The image tile (<figure>) of version n inside the log, found by its accessible name (the figcaption `v{N}` / `v{N} · {W}×{H}`). Scoped to
+ * the log so the status region's "Version v{N} is ready", the version strip and the dialog can never satisfy a tile assertion.
+ */
+const tileLabelled = (n: number, lang: Lang = 'en') =>
+  within(screen.getByRole('log', { name: t('X-26', lang) })).queryAllByRole('figure', { name: new RegExp(`\\bv${n}\\b`) });
+/** The version strip of the container, and one of its thumbnail buttons (a tile's "Compare with v{n}" button must never be mistaken for it). */
+const stripEl = (h: Harness) => {
+  const el = h.view.container.querySelector('app-studio-version-strip');
+  if (el === null) throw new Error('app-studio-version-strip is not rendered');
+  return el as HTMLElement;
+};
+const stripThumb = (h: Harness, n: number) => within(stripEl(h)).getByRole('button', { name: new RegExp(`\\bv${n}\\b`) });
 
 /** Counts the transitions of the status region to a non-empty text. */
 function watchStatus() {
@@ -77,8 +90,11 @@ describe('FR-74 / AC-46 / FR-83: the status region announces exactly twice for a
     await typeAndSend(h, 'two variants');
     await flushGenerate(h, imagesBody({ count: 2 }));
     expect(w.announcements()).toEqual(['Generating…', 'Version v2 is ready']);
-    expect(screen.getAllByText(/\bv1\b/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/\bv2\b/).length).toBeGreaterThan(0);
+    // ASSERTION SCOPE (test_strategy v5, section 9): the status region itself reads "Version v2 is ready", so a whole-screen /\bv2\b/ text
+    // lookup is satisfied by the announcement alone and proves nothing about the images. The label is asked of the tiles: one <figure> per
+    // image, named by its caption (v{N} · {W}×{H}), inside the log.
+    expect(tileLabelled(1)).toHaveLength(1);
+    expect(tileLabelled(2)).toHaveLength(1);
     w.stop();
   });
 
@@ -230,7 +246,7 @@ describe('FR-36: Retry re-sends the same turn; a failed turn returns to the comp
     expect(n2.parts).toEqual(n1.parts);
     second.flush(imagesBody());
     await h.settle();
-    expect(screen.getAllByText(/\bv1\b/).length).toBeGreaterThan(0);
+    expect(tileLabelled(1)).toHaveLength(1); // the tile, not the status text "Version v1 is ready" (assertion scope, test_strategy v5, section 9)
   });
 });
 
@@ -285,7 +301,7 @@ describe('FR-21 / FR-22 / AC-11 / AC-12: Cancel and the 120 s deadline', () => {
     const req = expectGenerate(h);
     expect((byName.button(LABELS.en.cancel) as HTMLButtonElement).disabled).toBe(false);
     expect((byName.button(LABELS.en.newSession) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole('button', { name: /\bv1\b/ }) as HTMLButtonElement).disabled).toBe(false);
+    expect((stripThumb(h, 1) as HTMLButtonElement).disabled).toBe(false);
     expect((byName.button(LABELS.en.downloadAll) as HTMLButtonElement).disabled).toBe(false);
     req.flush(imagesBody());
     await h.settle();
@@ -379,7 +395,7 @@ describe('FR-45 / FR-83: the trim notice', () => {
   });
 });
 
-describe('FR-20 / FR-23 / AC-10 / AC-13: the chat log', () => {
+describe('FR-20 / FR-23 / AC-10 / AC-13: the chat log (T33)', () => {
   it('AC-10 / FR-20: text and images are rendered in the order the API returned them', async () => {
     const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
     await typeAndSend(h, 'order check');
@@ -391,7 +407,8 @@ describe('FR-20 / FR-23 / AC-10 / AC-13: the chat log', () => {
     const log = screen.getByRole('log', { name: t('X-26', 'en') });
     const first = within(log).getByText('FIRST-TEXT');
     const second = within(log).getByText('SECOND-TEXT');
-    const images = within(log).getAllByRole('img').filter((i) => (i as HTMLImageElement).alt === 'order check');
+    // D-10 / FR-3 (h): the tiles are the images inside a <figure>; the strip's thumbnails (alt = the prompt as well) sit in buttons.
+    const images = within(log).getAllByRole('img').filter((i) => (i as HTMLImageElement).alt === 'order check' && i.closest('figure') !== null);
     expect(images).toHaveLength(2);
     const before = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     expect(before(first, images[0])).toBe(true);
@@ -401,25 +418,39 @@ describe('FR-20 / FR-23 / AC-10 / AC-13: the chat log', () => {
 
   it('AC-13 / FR-23: each generated image is labelled with its version number, the model label and the resolution', async () => {
     const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
-    await h.user.click(byName.button('Lifestyle'));
+    await h.user.click(byName.button('Lifestyle scene')); // renamed by FR-21 (was 'Lifestyle'): a mandated name-only change
     await h.user.click(sendBtn());
     await flushGenerate(h, imagesBody());
     const log = screen.getByRole('log', { name: t('X-26', 'en') });
-    const label = textOf(within(log).getAllByText(/\bv1\b/)[0].closest('figure') ?? within(log).getAllByText(/\bv1\b/)[0]);
-    expect(label).toContain('v1');
-    expect(label).toContain(MODEL_LABEL.pro);
-    expect(label).toContain('2K');
+    // D-10: all three facts stay asserted - the version number on the image tile, the model label and the resolution on the tile's card (chips).
+    const tile = within(log).getAllByText(/\bv1\b/).map((el) => el.closest('figure')).find((f) => f !== null) as HTMLElement;
+    expect(textOf(tile)).toContain('v1');
+    const card = tile.closest('article') as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(textOf(card)).toContain(MODEL_LABEL.pro);
+    expect(textOf(card)).toContain('2K');
   });
 });
 
 describe('FR-75 / AC-47: alt text of a generated image', () => {
   const altsOfGenerated = () => screen.getAllByRole('img').map((i) => (i as HTMLImageElement).alt);
+  // ASSERTION SCOPE (test_strategy v5, section 9): the alt rule binds BOTH renderings of a generated image - the tile in the log (an <img> inside
+  // a <figure>) and the strip thumbnail (an <img> inside a button). A whole-screen `toContain` is satisfied by either one alone, so a tile with a
+  // wrong alt would pass behind a correct thumbnail. The positive checks therefore ask each rendering on its own; the "no stray text" check
+  // keeps the whole screen.
+  const altsOf = (imgs: Iterable<Element>) => Array.from(imgs).map((i) => i.getAttribute('alt') ?? '');
+  const tileAlts = (h: Harness) => altsOf(h.view.container.querySelectorAll('[role="log"] figure img'));
+  const stripAlts = (h: Harness) => altsOf(stripEl(h).querySelectorAll('img'));
+  const expectBoth = (h: Harness, alt: string) => {
+    expect(tileAlts(h), 'tile alt').toContain(alt);
+    expect(stripAlts(h), 'strip alt').toContain(alt);
+  };
 
   it('AC-47 / SD-35: a prompt of at most 100 code points is the alt as it is (whitespace collapsed, trimmed)', async () => {
     const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
     await typeAndSend(h, '  white   mug on a table ');
     await flushGenerate(h, imagesBody());
-    expect(altsOfGenerated()).toContain('white mug on a table');
+    expectBoth(h, 'white mug on a table');
   });
 
   it('AC-47 / SD-35: a 101-code-point prompt gives its first 100 code points followed by three ASCII full stops', async () => {
@@ -429,7 +460,7 @@ describe('FR-75 / AC-47: alt text of a generated image', () => {
     await h.user.paste(prompt);
     await h.user.click(sendBtn());
     await flushGenerate(h, imagesBody());
-    expect(altsOfGenerated()).toContain('a'.repeat(100) + '...');
+    expectBoth(h, 'a'.repeat(100) + '...');
     expect(altsOfGenerated().some((a) => a.includes('b'))).toBe(false);
   });
 
@@ -440,9 +471,9 @@ describe('FR-75 / AC-47: alt text of a generated image', () => {
     await h.settle();
     await h.user.click(sendBtn());
     await flushGenerate(h, imagesBody());
-    expect(altsOfGenerated()).toContain('Generated image');
+    expectBoth(h, 'Generated image');
     await h.setLang('uk');
-    expect(altsOfGenerated()).toContain('Згенероване зображення');
+    expectBoth(h, 'Згенероване зображення');
   });
 
   it('FR-75 / D-35: a prompt-derived alt is NOT localised by a language toggle', async () => {
@@ -450,7 +481,7 @@ describe('FR-75 / AC-47: alt text of a generated image', () => {
     await typeAndSend(h, 'white mug');
     await flushGenerate(h, imagesBody());
     await h.setLang('uk');
-    expect(altsOfGenerated()).toContain('white mug');
+    expectBoth(h, 'white mug');
   });
 });
 
@@ -470,7 +501,7 @@ describe('FR-79 / FR-56: the product-name field names the downloaded file', () =
     await h.user.type(byName.product('en'), 'Bambu Lab H2D');
     await typeAndSend(h, 'studio shot');
     await flushGenerate(h, imagesBody());
-    await h.user.click(screen.getByRole('button', { name: /\bv1\b/ }));
+    await h.user.click(stripThumb(h, 1));
     await h.settle();
     const dlg = within(screen.getByRole('dialog', { name: t('X-17', 'en') }));
     await h.user.click(dlg.getByRole('button', { name: t('X-8', 'en') }));
@@ -509,13 +540,115 @@ describe('FR-81 / SD-34: a quota failure on the response commit', () => {
 describe('FR-77: a language toggle re-renders the studio chrome', () => {
   it('FR-77: labels, the SynthID notice and the control names switch to Ukrainian without a reload and back to English', async () => {
     const h = await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 1 })] });
-    expect(sendBtn()).toBeDefined();
+    // S11 sites (were L512, L514, L518, L519): the draft is blank, so the button reads X-29 in both languages. The two null-checks (were L516 and
+    // L519) are re-pointed at the text of the state they test: after the toggle the OTHER language's button must be gone (the old
+    // 'Send' / 'Надіслати' lookups would now be vacuous - no such label exists any more).
+    expect(byName.button(t('X-29', 'en'))).toBeDefined();
     await h.setLang('uk');
-    expect(byName.button('Надіслати')).toBeDefined();
+    expect(byName.button(t('X-29', 'uk'))).toBeDefined();
     expect(byName.button(LABELS.uk.newSession)).toBeDefined();
-    expect(screen.queryByRole('button', { name: t('X-1', 'en') })).toBeNull();
+    expect(screen.queryByRole('button', { name: t('X-29', 'en') })).toBeNull();
     await h.setLang('en');
-    expect(sendBtn()).toBeDefined();
-    expect(screen.queryByRole('button', { name: 'Надіслати' })).toBeNull();
+    expect(byName.button(t('X-29', 'en'))).toBeDefined();
+    expect(screen.queryByRole('button', { name: t('X-29', 'uk') })).toBeNull();
+  });
+});
+
+
+// =====================================================================================================================
+// US-10.5 container composition (T23, T24, T33). The container mounts the header, the session list, the feed (which hosts the strip), the
+// single full-view dialog and the composer; it keeps the one role="status" region, the role="alert" region and the focus return.
+// =====================================================================================================================
+describe('US-10.5 FR-1 / FR-26 (T24): the header is mounted and "New session" exists exactly once', () => {
+  it('shows the "Image Studio" heading (not a button), exactly one "New session" button and the "· history (N)" count', async () => {
+    await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 1 }), makeSession('s2', { lastActivity: 999_000 })] });
+    expect(screen.getByRole('heading', { name: 'Image Studio' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Image Studio' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: LABELS.en.newSession })).toHaveLength(1);
+    expect(screen.getByText('· history (2)')).toBeDefined();
+    expect(screen.getByText('2 sessions')).toBeDefined();
+  });
+});
+
+describe('US-10.5 FR-13 / FR-3 (h) / FR-11 (T33): the feed is mounted inside the container', () => {
+  it('there is exactly one log named X-26, one Download all control, one strip, and the strip is inside the log', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 2 })] });
+    expect(screen.getAllByRole('log')).toHaveLength(1);
+    const log = screen.getByRole('log', { name: t('X-26', 'en') });
+    expect(screen.getAllByRole('button', { name: LABELS.en.downloadAll })).toHaveLength(1);
+    expect(h.view.container.querySelectorAll('app-studio-version-strip')).toHaveLength(1);
+    expect(log.contains(h.view.container.querySelector('app-studio-version-strip'))).toBe(true);
+  });
+
+  it('FR-6 / FR-11: "Download all (2) .zip" shows the number of retained versions and the SynthID notice is still shown', async () => {
+    await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 2 })] });
+    expect(screen.getByRole('button', { name: 'Download all (2) .zip' })).toBeDefined();
+    expect(screen.getByText('Gemini images carry an invisible SynthID watermark that cannot be removed.')).toBeDefined();
+  });
+
+  it('FR-18 / AC-12: a session with no turn shows the empty state; sending the first prompt shows no empty state afterwards', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
+    expect(screen.getByText('Your images will appear here')).toBeDefined();
+    await typeAndSend(h, 'a mug');
+    await flushGenerate(h, imagesBody());
+    expect(screen.queryByText('Your images will appear here')).toBeNull();
+  });
+
+  it('FR-33 / FR-20: during the first generation the empty state is replaced by a presentational progress element, and there is still exactly ONE role=status and NO aria-live="polite"', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
+    await typeAndSend(h, 'a mug');
+    expectGenerate(h);
+    expect(screen.queryByText('Your images will appear here')).toBeNull();
+    expect(screen.getByTestId('studio-progress').getAttribute('aria-hidden')).toBe('true');
+    expect(h.view.container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(h.view.container.querySelectorAll('[aria-live="polite"]')).toHaveLength(0);
+  });
+});
+
+describe('US-10.5 FR-10 / FR-33 (T23): the single full-view dialog is a sibling of the log', () => {
+  it('opening a version from the strip shows exactly one dialog, and it is NOT inside the log', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 1 })] });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await h.user.click(stripThumb(h, 1));
+    await h.settle();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    const log = screen.getByRole('log', { name: t('X-26', 'en') });
+    expect(log.contains(screen.getByRole('dialog'))).toBe(false);
+  });
+
+  it('the log\'s tile-image count is not changed by an open dialog (the dialog\'s image is outside the log)', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 1 })] });
+    const log = screen.getByRole('log', { name: t('X-26', 'en') });
+    const before = log.querySelectorAll('figure img').length;
+    // PRECONDITION (test_strategy v5, section 9): "unchanged" is only meaningful when there is something to change. With no tile at all the
+    // count is 0 before and 0 after, and the case would pass on a feed that renders nothing. The one-version session has exactly one tile image.
+    expect(before).toBe(1);
+    await h.user.click(stripThumb(h, 1));
+    await h.settle();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1); // the dialog is open (its own image is outside the log)
+    expect(log.querySelectorAll('figure img').length).toBe(before);
+  });
+});
+
+describe('US-10.5 FR-8 (T33): nothing out of scope is rendered anywhere in the studio', () => {
+  it('no Upscale 4K, Variation, Alt text, Ctrl+K search, spend total, Save as preset, ref role selector, Images 1/2/4 or estimate', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 1, costUsd: 0.12 })] });
+    const text = h.view.container.textContent ?? '';
+    for (const re of [/Upscale/i, /Variation/i, /Alt text/i, /Ctrl\s*\+?\s*K/i, /Today|This month/i, /Save (current )?as preset/i, /Product ref|Style ref/i, /Images\s*1\s*\/\s*2\s*\/\s*4/, /Estimated|estimate/i]) {
+      expect(text, String(re)).not.toMatch(re);
+    }
+  });
+});
+
+describe('US-10.5 FR-7 (T33): the size probe runs once per distinct image however often the studio re-renders', () => {
+  it('two versions give two probe calls across a language toggle and a draft change', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 2 })] });
+    await h.settle();
+    const first = h.codec.probeCalls;
+    expect(first).toBe(2);
+    await h.setLang('uk');
+    await h.user.type(byName.textarea('uk'), 'x');
+    await h.settle();
+    expect(h.codec.probeCalls).toBe(first);
   });
 });

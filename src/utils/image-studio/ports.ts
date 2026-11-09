@@ -43,6 +43,14 @@ export interface ClipboardPort {
   writePng(bytes: Uint8Array): Promise<void>;
 }
 
+/**
+ * The local-time offset of the viewer's zone at an instant (US-10.5 DD-13). The value is in minutes EAST of UTC (UTC+2
+ * is +120, UTC-5 is -300), the sign `formatRowDate` expects; it depends on the instant because of daylight saving.
+ */
+export interface LocalOffset {
+  offsetMinutes(epochMs: number): number;
+}
+
 /** Hands a file to the browser's save mechanism. */
 export interface SavePort {
   save(bytes: Uint8Array, mimeType: string, fileName: string): void;
@@ -102,6 +110,16 @@ export interface Turn {
   id: string;
   role: 'user' | 'model';
   parts: Part[];
+  // US-10.5 display metadata, all optional and never part of the resend payload (the request builder projects a turn to
+  // `{role, parts}` only). A turn saved before US-10.5 carries none of them.
+  /** The cost in USD of the response that created this model turn. */
+  cost?: number;
+  /** The measured duration of that generation, in milliseconds. */
+  durationMs?: number;
+  /** The id of the preset (chip) the send was made with, when it was. */
+  presetId?: string;
+  /** The input images of the send: the user-turn parts it used. */
+  inputRefs?: { turnId: string; partIndex: number }[];
 }
 
 /** One retained generated image of a session. */
@@ -115,6 +133,11 @@ export interface Version {
   prompt: string;
   inputFormat: ImageMime;
   downloaded: boolean;
+  /**
+   * US-10.5 display metadata, not part of the resend payload: the number of the version this one was edited from, when it
+   * was generated from a retained version. Optional; a version saved before US-10.5 has none.
+   */
+  editOfVersion?: number;
 }
 
 /** The persisted session meta record (the `sessions` object store). */

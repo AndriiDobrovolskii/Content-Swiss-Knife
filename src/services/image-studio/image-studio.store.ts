@@ -1,9 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { RESOLUTIONS } from '../../prompt-core/image-studio-contract';
 import { findImageModel } from '../../prompt-core/model-catalog';
+import { applyProduct, type PromptPreset } from '../../prompt-core/prompt-presets';
 import { applyResponse, InvalidResponseError } from '../../utils/image-studio/apply-response';
 import type { BuildInput } from '../../utils/image-studio/request-builder';
 import { createGenerationRunner, type RunOutcome } from '../../utils/image-studio/generation-runner';
 import { outputFormat } from '../../utils/image-studio/output-format';
+import { hasSendableContent } from '../../utils/image-studio/send-state';
 import {
   StorageQuotaError,
   type Announcer,
@@ -57,7 +60,10 @@ export interface AttachedVersion {
 export interface ComposerDraft {
   text: string;
   productName: string;
+  /** The WIRE preset id: sent to the request and the usage task label, unchanged by an edit (SQ-2-A). */
   presetId: string | null;
+  /** The preset whose check mark is showing; the only value recorded on the stored model turn (FR-14). */
+  checkedPresetId: string | null;
   model: string;
   aspectRatio: string;
   resolution: string;
@@ -91,7 +97,7 @@ interface RetryTurn {
 
 function defaultDraft(model: string): ComposerDraft {
   return {
-    text: '', productName: '', presetId: null, model, aspectRatio: '1:1', resolution: '1K', attachments: [], attachedVersion: null,
+    text: '', productName: '', presetId: null, checkedPresetId: null, model, aspectRatio: '1:1', resolution: '1K', attachments: [], attachedVersion: null,
   };
 }
 
@@ -104,6 +110,7 @@ function sameTurnContent(a: ComposerDraft, b: ComposerDraft): boolean {
   return (
     a.text === b.text &&
     a.presetId === b.presetId &&
+    a.checkedPresetId === b.checkedPresetId &&
     a.model === b.model &&
     a.aspectRatio === b.aspectRatio &&
     a.resolution === b.resolution &&
@@ -160,8 +167,17 @@ export class ImageStudioStore {
     const d = this.draft();
     if (this.current() === null || this.generating() || this.blocked()) return false;
     if (d.attachments.some((a) => a.state === 'uploading')) return false;
-    return d.text.trim() !== '' || d.attachments.some((a) => a.state === 'ready') || d.attachedVersion !== null;
+    return hasSendableContent(d);
   });
+  /**
+   * The one source of the send button's enablement and label (FR-17, SQ-1-B). `enabled` is exactly `canSend()`; the
+   * label follows the draft, not the reason the button is disabled: "Generate" whenever there is something to send,
+   * "Write a prompt to start" only when there is nothing to send.
+   */
+  readonly sendState = computed<{ enabled: boolean; labelId: 'generate' | 'write-prompt' }>(() => ({
+    enabled: this.canSend(),
+    labelId: hasSendableContent(this.draft()) ? 'generate' : 'write-prompt',
+  }));
   /** True while Retry is offered: the failed turn is still exactly what the composer holds (SD-18). */
   readonly canRetry = computed(() => {
     const retry = this.retryTurn();
@@ -264,6 +280,43 @@ export class ImageStudioStore {
   }
 
   /**
+   * Picking a preset fills the prompt (the product name substituted once, D-14), the ratio, the resolution and, while
+   * the session holds no version, the model (FR-28), and marks the preset as both the wire and the checked one
+   * (FR-19, FR-14 (i)). In a session with a version the model changes only through the model selector. Sends nothing.
+   */
+  applyPreset(preset: PromptPreset): void {
+    this.setDraft({
+      text: applyProduct(preset.template, this.draft().productName),
+      presetId: preset.id,
+      checkedPresetId: preset.id,
+      aspectRatio: preset.defaults.aspectRatio,
+      resolution: preset.defaults.resolution,
+      ...(this.versions().length === 0 ? { model: preset.defaults.model } : {}),
+    });
+  }
+
+  /**
+   * "Reuse prompt" on a turn card (FR-5): puts the stored prompt text, aspect ratio and model back into the composer
+   * through the draft (no new session, no `switchModel`) and sends nothing. The resolution is not restored; it changes
+   * only when the restored model does not offer the current one, to the nearest lower resolution that model offers.
+   */
+  reusePrompt(input: { prompt: string; aspectRatio: string; model: string }): void {
+    const spec = findImageModel(input.model);
+    const current = this.draft().resolution;
+    const offered = spec?.resolutions ?? [];
+    let resolution = current;
+    if (offered.length > 0 && !offered.includes(current)) {
+      const rank = RESOLUTIONS.indexOf(current);
+      const lower = offered.filter((r) => RESOLUTIONS.indexOf(r) < rank);
+      resolution = lower.length > 0 ? lower.reduce((a, b) => (RESOLUTIONS.indexOf(b) > RESOLUTIONS.indexOf(a) ? b : a)) : offered[0];
+    }
+    // OI-B (owner ruling, option 1): Reuse counts as an edit, so the check mark clears; the wire presetId an earlier pick
+    // left in the draft is kept.
+    const presetPatch = { checkedPresetId: null };
+    this.setDraft({ text: input.prompt, aspectRatio: input.aspectRatio, model: input.model, resolution, ...presetPatch });
+  }
+
+  /**
    * Adds already-uploaded files as `ready` attachments (one user action) and keeps their sent bytes best effort
    * (OD-37): a store failure never rejects, never drops an attachment and raises ONE alert for the whole call (D-28).
    */
@@ -362,6 +415,8 @@ export class ImageStudioStore {
   }
 
   private async execute(session: StoredSession, buildInput: BuildInput, draftSnapshot: ComposerDraft): Promise<void> {
+    // FR-24: Send and Retry both enter here, so the duration of a Retry is measured from the Retry click.
+    const startedAt = this.clock.now();
     const sessionId = session.meta.id;
     const controller = new AbortController();
     this.pending.set(null);
@@ -374,13 +429,19 @@ export class ImageStudioStore {
       const outcome = await this.runner.run({ sessionId, snapshot: session, buildInput }, controller.signal);
       // The call has ended; from here on only the commit remains, which Cancel can no longer stop.
       this.running.set(null);
-      await this.applyOutcome(outcome, sessionId, buildInput, draftSnapshot);
+      await this.applyOutcome(outcome, sessionId, buildInput, draftSnapshot, startedAt);
     } finally {
       this.running.set(null);
     }
   }
 
-  private async applyOutcome(outcome: RunOutcome, sessionId: string, buildInput: BuildInput, draft: ComposerDraft): Promise<void> {
+  private async applyOutcome(
+    outcome: RunOutcome,
+    sessionId: string,
+    buildInput: BuildInput,
+    draft: ComposerDraft,
+    startedAt: number,
+  ): Promise<void> {
     switch (outcome.type) {
       case 'discarded':
         await this.refreshSessions();
@@ -388,7 +449,7 @@ export class ImageStudioStore {
       case 'images':
       case 'text':
       case 'safety':
-        await this.commitResponse(outcome, sessionId, buildInput, draft);
+        await this.commitResponse(outcome, sessionId, buildInput, draft, startedAt);
         return;
       case 'cancelled':
         this.restoreDraft(sessionId, draft);
@@ -413,6 +474,7 @@ export class ImageStudioStore {
     sessionId: string,
     buildInput: BuildInput,
     draft: ComposerDraft,
+    startedAt: number,
   ): Promise<void> {
     const stored = await this.loadValid(sessionId);
     if (!stored) {
@@ -425,13 +487,24 @@ export class ImageStudioStore {
       ? stored.meta.versions.find((v) => v.number === draft.attachedVersion?.fromVersion)?.inputFormat
       : undefined;
     const latest = stored.meta.versions.reduce<Version | undefined>((best, v) => (!best || v.number > best.number ? v : best), undefined);
+    // FR-9 (plan F-1): the edit source is stored only when the attached version names a version of THIS session; a
+    // seed carried over from another session (switchModel, blocked editVersion) names none that exists here.
+    const editOfVersion =
+      draft.attachedVersion && stored.meta.versions.some((v) => v.number === draft.attachedVersion?.fromVersion)
+        ? draft.attachedVersion.fromVersion
+        : undefined;
+    // FR-24 (SQ-6-A): the clock is read once here; the interval ends at the hand-off to the port, so the write is not in it.
+    const now = this.clock.now();
 
     let applied;
     try {
       applied = applyResponse(stored, outcome.response, {
         userTurn,
         ids: this.ids,
-        now: this.clock.now(),
+        now,
+        durationMs: Math.max(0, now - startedAt),
+        ...(editOfVersion !== undefined ? { editOfVersion } : {}),
+        ...(draft.checkedPresetId !== null ? { presetId: draft.checkedPresetId } : {}),
         model: buildInput.model,
         aspectRatio: buildInput.aspectRatio,
         resolution: buildInput.resolution,

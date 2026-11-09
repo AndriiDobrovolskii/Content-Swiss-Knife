@@ -30,10 +30,10 @@ import { Injector } from '@angular/core';
 import { LlmService } from '../llm.service';
 import {
   makeFakeClock, makeFakeScheduler, makeIdSource, makeInMemorySessionStore, makeAlertPort, makeConfirmPort, makeClipboardPort,
-  makeSavePort, makeFakeCodec, makeSession, type StoredSession,
+  makeSavePort, makeFakeCodec, makeSession, makeRaster, type StoredSession,
 } from '../../../test/image-studio/helpers/fakes';
 import {
-  imagesResponse, textResponse, safetyResponse, okBody, failure, flush, deferred, pendingUntilAbort, PRO,
+  imagesResponse, textResponse, safetyResponse, okBody, failure, flush, deferred, pendingUntilAbort, PRO, PNG_B64,
   type ImageHttpResult,
 } from '../../../test/image-studio/helpers/core-fixtures';
 
@@ -657,5 +657,409 @@ describe('Store: per-session drafts live in memory (P-4, FR-50)', () => {
     const fresh = reload();
     await fresh.init();
     expect(fresh.draft().text).toBe('');
+  });
+});
+
+// =====================================================================================================================
+// US-10.5 store additions (Specification FR-9, FR-14, FR-17, FR-23, FR-24; plan DD-5, DD-11). Sibling blocks: no case above
+// is changed. Each block is a TOP-LEVEL describe whose title ends in its owner task id, so `-t "\(T13\)"` selects exactly
+// that task's cases (breakdown rule R2). Logic runner. Each is red until its owner task.
+//
+// PINNED STORE ADDITIONS (owner in brackets):
+//   ComposerDraft.checkedPresetId: string | null          [T14]  default null; the preset whose check mark shows; presetId stays the WIRE value
+//   stored model turn: cost, durationMs, presetId?, inputRefs; stored version: editOfVersion?          [T13, T14]
+//   sendState(): { enabled: boolean; labelId: 'generate' | 'write-prompt' }                            [T16]
+// =====================================================================================================================
+
+/** The model turn stored by the last successful send into session `id`, and its versions. */
+function lastModelTurn(port: ReturnType<typeof makeInMemorySessionStore>, id: string) {
+  const s = port.snapshot().sessions[id];
+  const models = s.turns.filter((t) => t.role === 'model');
+  return { turn: models[models.length - 1] as unknown as Record<string, unknown>, session: s };
+}
+const hasKey = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
+
+describe('US-10.5 FR-24: duration, cost and input references are measured and stored (T13)', () => {
+  it('FR-24: durationMs is the time from the Send click to the hand-off of the response, from the injected clock', async () => {
+    const { store, llm, clock, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockImplementationOnce(async () => { clock.advance(12_400); return okBody(imagesResponse()); });
+    store.setDraft({ text: 'make it blue' });
+
+    await store.send();
+
+    expect(lastModelTurn(port, 'a').turn['durationMs']).toBe(12_400);
+  });
+
+  it('FR-24: a Retry restarts the clock - the retried generation runs from the Retry click, not from the original Send', async () => {
+    const { store, llm, clock, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage
+      .mockImplementationOnce(async () => { clock.advance(5_000); return failure(503); })
+      .mockImplementationOnce(async () => { clock.advance(3_000); return okBody(imagesResponse()); });
+    store.setDraft({ text: 'same words' });
+
+    await store.send();
+    clock.advance(60_000); // the user reads the error for a minute
+    await store.retry();
+
+    expect(lastModelTurn(port, 'a').turn['durationMs']).toBe(3_000);
+  });
+
+  it('FR-24: a clock that moved backwards during the call stores 0, never a negative duration', async () => {
+    const { store, llm, clock, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockImplementationOnce(async () => { clock.set(clock.now() - 500); return okBody(imagesResponse()); });
+    store.setDraft({ text: 'x' });
+
+    await store.send();
+
+    expect(lastModelTurn(port, 'a').turn['durationMs']).toBe(0);
+  });
+
+  it('FR-24 (SQ-6-A): the interval ends at the hand-off - time spent after the response is applied is not in it', async () => {
+    const { store, llm, clock, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockImplementationOnce(async () => { clock.advance(2_000); return okBody(imagesResponse()); });
+    store.setDraft({ text: 'x' });
+    await store.send();
+    clock.advance(99_000); // later activity must not change what was stored
+    expect(lastModelTurn(port, 'a').turn['durationMs']).toBe(2_000);
+  });
+
+  it('FR-24 / OD-3b: the stored cost is the response cost and equals what the session cost grew by', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1, costUsd: 0.1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse({ costUsd: 0.067 })));
+    store.setDraft({ text: 'x' });
+
+    await store.send();
+
+    const { turn, session } = lastModelTurn(port, 'a');
+    expect(turn['cost']).toBe(0.067);
+    expect(session.meta.costUsd - 0.1).toBeCloseTo(turn['cost'] as number, 10);
+  });
+
+  it('FR-24 failure path: a text reply, a safety reply and a failure store no turn, so no cost or duration is stored anywhere', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    const before = structuredClone(port.snapshot().sessions['a']);
+    llm.generateImage
+      .mockResolvedValueOnce(okBody(textResponse('words only')))
+      .mockResolvedValueOnce(okBody(safetyResponse()))
+      .mockResolvedValueOnce(failure(503));
+    for (const text of ['one', 'two', 'three']) {
+      store.setDraft({ text });
+      await store.send();
+    }
+    const after = port.snapshot().sessions['a'];
+    expect(after.turns).toEqual(before.turns);
+    expect(after.turns.some((t) => hasKey(t, 'cost') || hasKey(t, 'durationMs'))).toBe(false);
+  });
+
+  it('FR-23 / FR-3 (a): the stored model turn lists the input images of the sent turn as (turnId, partIndex) references', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    await store.attach([
+      { fileUri: 'files/A', mimeType: 'image/png', fileName: 'a.png', bytes: makeRaster({ format: 'png', width: 4, height: 4 }) },
+      { fileUri: 'files/B', mimeType: 'image/png', fileName: 'b.png', bytes: makeRaster({ format: 'png', width: 4, height: 4 }) },
+    ]);
+    store.setDraft({ text: 'blend these' });
+
+    await store.send();
+
+    const sent = llm.generateImage.mock.calls[0][0].newTurn as { id: string; parts: Array<Record<string, unknown>> };
+    const expected = sent.parts
+      .map((p, partIndex) => ({ p, partIndex }))
+      .filter(({ p }) => p['fileData'] !== undefined || p['inlineData'] !== undefined)
+      .map(({ partIndex }) => ({ turnId: sent.id, partIndex }));
+    expect(expected).toHaveLength(2);
+    expect(lastModelTurn(port, 'a').turn['inputRefs']).toEqual(expected);
+  });
+});
+
+describe('US-10.5 FR-9 (SQ-7-A, plan F-1): the edit source is stored only for a send with a version of THIS session attached (T13)', () => {
+  const editOf = (port: ReturnType<typeof makeInMemorySessionStore>, id: string, n: number) =>
+    (port.snapshot().sessions[id].meta.versions.find((v) => v.number === n) as unknown as Record<string, unknown>)['editOfVersion'];
+
+  it('"Edit this version" then a typed prompt stores editOfVersion = the attached version number on the new image', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 2 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    await store.editVersion(1);
+    store.setDraft({ text: 'make the background blue' });
+
+    await store.send();
+
+    expect(editOf(port, 'a', 3)).toBe(1);
+  });
+
+  it('an edit with an attached version and NO text (images-only edit) also stores the source', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 2 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    await store.editVersion(2);
+    await store.send();
+    expect(editOf(port, 'a', 3)).toBe(2);
+  });
+
+  it('a typed follow-up with nothing attached stores no source', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'now with a shadow' });
+    await store.send();
+    expect(hasKey(port.snapshot().sessions['a'].meta.versions[1], 'editOfVersion')).toBe(false);
+  });
+
+  it('a quick-edit chip send (the chip instruction as text, nothing attached) stores no source', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'Make the shadow softer.', presetId: null });
+    await store.send();
+    expect(hasKey(port.snapshot().sessions['a'].meta.versions[1], 'editOfVersion')).toBe(false);
+  });
+
+  it('FR-9 Proposed (OD-35 remainder): attaching a version and detaching it before Send stores no source', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 2 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    await store.editVersion(1);
+    store.setDraft({ attachedVersion: null, text: 'changed my mind' });
+    await store.send();
+    expect(hasKey(port.snapshot().sessions['a'].meta.versions[2], 'editOfVersion')).toBe(false);
+  });
+
+  it('the cross-session seed stores no source: switching model seeds the NEW empty session with v1 of the old one, but the new session holds no version', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    expect(await store.switchModel(PRO)).toBe(true);
+    const fresh = store.currentSessionId();
+    expect(fresh).not.toBe('a');
+    expect(store.draft().attachedVersion).toMatchObject({ fromVersion: 1 });
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'carry on' });
+
+    await store.send();
+
+    const versions = port.snapshot().sessions[fresh].meta.versions;
+    expect(versions).toHaveLength(1);
+    expect(hasKey(versions[0], 'editOfVersion')).toBe(false);
+  });
+
+  it('a multi-image first generation in a seeded session gives NO image an "Edit of v1" pointing at its own sibling', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    await store.switchModel(PRO);
+    const fresh = store.currentSessionId();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse({ parts: [{ inlineData: { mimeType: 'image/png', data: PNG_B64 } }, { inlineData: { mimeType: 'image/png', data: PNG_B64 } }] })));
+    store.setDraft({ text: 'two variants' });
+
+    await store.send();
+
+    const versions = port.snapshot().sessions[fresh].meta.versions;
+    expect(versions).toHaveLength(2);
+    expect(versions.some((v) => hasKey(v, 'editOfVersion'))).toBe(false);
+  });
+});
+
+describe('US-10.5 FR-14 (SQ-2-A): the wire preset id, the check mark and the recorded preset are three separate values (T14)', () => {
+  it('a new session starts with no check mark and no wire preset', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    expect(store.draft().checkedPresetId).toBeNull();
+    expect(store.draft().presetId).toBeNull();
+  });
+
+  it('FR-14 rule 1: with no edit after the pick, the request carries the picked id AND the stored turn records it', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'white background please', presetId: 'white-bg', checkedPresetId: 'white-bg' });
+
+    await store.send();
+
+    expect(llm.generateImage.mock.calls[0][0].presetId).toBe('white-bg');
+    expect(lastModelTurn(port, 'a').turn['presetId']).toBe('white-bg');
+  });
+
+  it('FR-14 rule 4 (SQ-2-A): after an edit cleared the check mark, the request STILL carries the picked id but the stored turn records none', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'white background please', presetId: 'white-bg', checkedPresetId: 'white-bg' });
+    store.setDraft({ text: 'white background please, but blue', checkedPresetId: null }); // what the composer does on typing
+
+    await store.send();
+
+    expect(llm.generateImage.mock.calls[0][0].presetId).toBe('white-bg');
+    expect(hasKey(lastModelTurn(port, 'a').turn, 'presetId')).toBe(false);
+  });
+
+  it('FR-14 rule 2: with no preset picked the request has no presetId and the stored turn records none', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'plain' });
+    await store.send();
+    expect(hasKey(llm.generateImage.mock.calls[0][0], 'presetId')).toBe(false);
+    expect(hasKey(lastModelTurn(port, 'a').turn, 'presetId')).toBe(false);
+  });
+
+  it('the post-send draft clear keeps BOTH preset fields (as today, FR-14 Proposed (ii))', async () => {
+    const { store, llm } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'x', presetId: 'banner', checkedPresetId: 'banner' });
+    await store.send();
+    expect(store.draft().text).toBe('');
+    expect(store.draft().presetId).toBe('banner');
+    expect(store.draft().checkedPresetId).toBe('banner');
+  });
+
+  it('Retry equality includes the check mark: changing checkedPresetId after a failed send withdraws Retry, restoring it offers Retry again', async () => {
+    const { store, llm } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(failure(503));
+    store.setDraft({ text: 'same words', presetId: 'social', checkedPresetId: 'social' });
+    await store.send();
+    expect(store.canRetry()).toBe(true);
+
+    store.setDraft({ checkedPresetId: null });
+    expect(store.canRetry()).toBe(false);
+
+    store.setDraft({ checkedPresetId: 'social' });
+    expect(store.canRetry()).toBe(true);
+  });
+
+  it('Retry re-sends and re-records the SAME turn: the retried model turn carries the preset that was checked at the first Send', async () => {
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(failure(503)).mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'same words', presetId: 'social', checkedPresetId: 'social' });
+    await store.send();
+    await store.retry();
+    expect(llm.generateImage.mock.calls[1][0].presetId).toBe('social');
+    expect(lastModelTurn(port, 'a').turn['presetId']).toBe('social');
+  });
+
+  it('a new session created after a pick carries neither preset field', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ presetId: 'banner', checkedPresetId: 'banner' });
+    await store.newSession();
+    expect(store.currentSessionId()).not.toBe('a');
+    expect(store.draft().presetId).toBeNull();
+    expect(store.draft().checkedPresetId).toBeNull();
+  });
+});
+
+describe('US-10.5 FR-17 (SQ-1-B): sendState is the one source of the button enablement and label (T16)', () => {
+  const ready = { id: 'r', fileName: 'a.png', fileUri: 'files/a', mimeType: 'image/png', state: 'ready' };
+  const uploading = { id: 'u', fileName: 'b.png', fileUri: '', mimeType: 'image/png', state: 'uploading' };
+
+  it('a blank draft: disabled, "Write a prompt to start"', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    expect(store.sendState()).toEqual({ enabled: false, labelId: 'write-prompt' });
+  });
+
+  it('a whitespace-only draft: disabled, "Write a prompt to start"', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ text: '  \n ' });
+    expect(store.sendState()).toEqual({ enabled: false, labelId: 'write-prompt' });
+  });
+
+  it('typed text: enabled, "Generate"', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ text: 'a mug' });
+    expect(store.sendState()).toEqual({ enabled: true, labelId: 'generate' });
+  });
+
+  it('a blank prompt with a READY upload: enabled, "Generate" (the images-only send is kept)', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ attachments: [ready] });
+    expect(store.sendState()).toEqual({ enabled: true, labelId: 'generate' });
+  });
+
+  it('a blank prompt with only an UPLOADING attachment: disabled, "Write a prompt to start" (nothing to send yet)', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ attachments: [uploading] });
+    expect(store.sendState()).toEqual({ enabled: false, labelId: 'write-prompt' });
+  });
+
+  it('typed text with an uploading attachment: disabled, but the label stays "Generate" (the label follows the draft)', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ text: 'with image', attachments: [uploading] });
+    expect(store.sendState()).toEqual({ enabled: false, labelId: 'generate' });
+  });
+
+  it('a blank prompt with an attached earlier version: enabled, "Generate"', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    await store.editVersion(1);
+    expect(store.sendState()).toEqual({ enabled: true, labelId: 'generate' });
+  });
+
+  it('v4 change to the approved OD-13 block: while a generation runs the draft is blank, so the disabled button reads "Write a prompt to start"', async () => {
+    const { store, llm } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    const g = gate(llm);
+    store.setDraft({ text: 'a mug' });
+
+    const sending = store.send();
+    await flush();
+
+    expect(store.generating()).toBe(true);
+    expect(store.sendState()).toEqual({ enabled: false, labelId: 'write-prompt' });
+    g.resolve(okBody(imagesResponse()));
+    await sending;
+  });
+
+  it('blocked session: text keeps "Generate" (disabled); blank text reads "Write a prompt to start"; a blank draft with a ready upload reads "Generate" although disabled', async () => {
+    const { store, llm } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(failure(413, 'PROTECTED_HISTORY_EXCEEDS_LIMIT'));
+    store.setDraft({ text: 'too big' });
+    await store.send();
+    expect(store.blocked()).toBe(true);
+    expect(store.sendState()).toEqual({ enabled: false, labelId: 'generate' });
+
+    store.setDraft({ text: '' });
+    expect(store.sendState()).toEqual({ enabled: false, labelId: 'write-prompt' });
+
+    store.setDraft({ attachments: [ready] });
+    expect(store.sendState()).toEqual({ enabled: false, labelId: 'generate' });
+  });
+
+  it('enabled is exactly canSend() in every state above', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    const states: Array<Record<string, unknown>> = [
+      {}, { text: ' ' }, { text: 'x' }, { text: '', attachments: [ready] }, { text: '', attachments: [uploading] },
+      { text: 'x', attachments: [uploading] }, { text: '', attachments: [] },
+    ];
+    for (const patch of states) {
+      store.setDraft({ text: '', attachments: [], attachedVersion: null, ...patch });
+      expect(store.sendState().enabled, JSON.stringify(patch)).toBe(store.canSend());
+    }
+    await store.editVersion(1);
+    expect(store.sendState().enabled).toBe(store.canSend());
+  });
+
+  it('FR-17 rule 5: an images-only send still produces the same request - a user turn holding only the file part, no text part', async () => {
+    const { store, llm } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ attachments: [ready] });
+    await store.send();
+    expect(llm.generateImage.mock.calls[0][0].newTurn.parts).toEqual([{ fileData: { fileUri: 'files/a', mimeType: 'image/png' } }]);
   });
 });

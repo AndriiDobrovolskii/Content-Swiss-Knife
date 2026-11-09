@@ -1,46 +1,40 @@
 <div class="space-y-3">
 
-  <!-- Presets (FR-28 to FR-30) -->
+  <!-- Presets (FR-28 to FR-30): a pick goes through the store's applyPreset, like a starter card (FR-19) -->
   <div role="group" [attr.aria-label]="tx('X-13')" class="flex flex-wrap gap-2">
     @for (preset of presets; track preset.id) {
       <button
         type="button"
-        (click)="pickPreset(preset)"
+        (click)="store.applyPreset(preset)"
+        [attr.aria-pressed]="store.draft().checkedPresetId === preset.id"
         [disabled]="!store.inputEnabled()"
-        class="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50">
+        [class.border-shell-accent]="store.draft().checkedPresetId === preset.id"
+        [class.border-shell-line]="store.draft().checkedPresetId !== preset.id"
+        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border bg-shell-bg text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+        @if (store.draft().checkedPresetId === preset.id) {
+          <!-- The check mark (FR-14 i): the pressed state is the accessible signal, the glyph is decorative -->
+          <svg aria-hidden="true" viewBox="0 0 16 16" class="w-3 h-3 text-shell-accent" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8.5l3.5 3.5L13 4.5" />
+          </svg>
+        }
         {{ presetLabel(preset) }}
       </button>
     }
   </div>
 
-  <!-- Quick-edit chips, only once a version exists (FR-31) -->
-  @if (showChips()) {
-    <div role="group" [attr.aria-label]="tx('X-24')" class="flex flex-wrap gap-2">
-      @for (chip of chips; track chip.id) {
-        <button
-          type="button"
-          (click)="sendChip(chip)"
-          [disabled]="!store.inputEnabled() || store.blocked()"
-          class="px-3 py-1.5 rounded-full text-xs font-semibold bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/50 disabled:opacity-50">
-          {{ chipLabel(chip) }}
-        </button>
-      }
-    </div>
-  }
-
   <!-- Attach: a real button and a real file input, a drop zone and the paste handler on the prompt (FR-8, FR-73) -->
   <div
     (dragover)="onDragOver($event)"
     (drop)="onDrop($event)"
-    class="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-3 py-2">
+    class="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-shell-line px-3 py-2">
     <button
       type="button"
       (click)="picker.click()"
       [disabled]="!store.inputEnabled()"
-      class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50">
+      class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-shell-line bg-shell-bg text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
       {{ tx('X-2') }}
     </button>
-    <span class="text-xs text-slate-500 dark:text-slate-400">{{ tx('X-3') }}</span>
+    <span class="text-xs text-shell-muted">{{ tx('X-3') }}</span>
     <input
       #picker
       type="file"
@@ -55,7 +49,7 @@
   <!-- Attached images: user uploads and the attached version (FR-14, FR-37) -->
   <ul [attr.aria-label]="tx('X-25')" class="flex flex-wrap gap-2">
     @if (store.draft().attachedVersion; as attached) {
-      <li class="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-600">
+      <li class="relative w-16 h-16 rounded-lg overflow-hidden border border-shell-line">
         <img
           [src]="'data:' + attached.mimeType + ';base64,' + attached.data"
           [alt]="tx('X-27', { n: attached.fromVersion })"
@@ -69,7 +63,7 @@
       </li>
     }
     @for (attachment of store.draft().attachments; track attachment.id) {
-      <li class="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-600">
+      <li class="relative w-16 h-16 rounded-lg overflow-hidden border border-shell-line">
         <img
           [attr.src]="previews()[attachment.id] ?? null"
           [alt]="attachment.fileName"
@@ -82,7 +76,7 @@
           <button
             type="button"
             (click)="retryAttachment(attachment.id)"
-            class="absolute inset-x-0 bottom-0 bg-amber-600 text-white text-[10px] font-semibold">{{ tx('T-22.retry') }}</button>
+            class="absolute inset-x-0 bottom-0 bg-amber-700 text-white text-[10px] font-semibold">{{ tx('T-22.retry') }}</button>
         }
         <button
           type="button"
@@ -98,6 +92,21 @@
     <div role="alert" class="text-sm text-red-700 dark:text-red-300">{{ tx(message.textId) }}</div>
   }
 
+  <!-- Quick-edit chips, only once a version exists, directly above the prompt (FR-15, FR-31) -->
+  @if (showChips()) {
+    <div role="group" [attr.aria-label]="tx('X-24')" class="flex flex-wrap gap-2">
+      @for (chip of chips; track chip.id) {
+        <button
+          type="button"
+          (click)="sendChip(chip)"
+          [disabled]="!store.inputEnabled() || store.blocked()"
+          class="px-3 py-1.5 rounded-full text-xs font-semibold border border-shell-accent bg-shell-bg text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+          {{ chipLabel(chip) }}
+        </button>
+      }
+    </div>
+  }
+
   <!-- Prompt -->
   <textarea
     rows="4"
@@ -105,8 +114,9 @@
     [value]="store.draft().text"
     [disabled]="!store.inputEnabled()"
     (input)="onText($event)"
+    (keydown.control.enter)="onCtrlEnter($event)"
     (paste)="onPaste($event)"
-    class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 p-3 text-sm focus:ring-2 focus:ring-violet-500 disabled:opacity-60"></textarea>
+    class="w-full rounded-lg border border-shell-line bg-shell-bg text-shell-text p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-60"></textarea>
 
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
     <input
@@ -115,13 +125,13 @@
       [value]="store.draft().productName"
       [disabled]="!store.inputEnabled()"
       (input)="onProductName($event)"
-      class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm col-span-2 md:col-span-1 disabled:opacity-60" />
+      class="rounded-lg border border-shell-line bg-shell-bg text-shell-text px-3 py-2 text-sm col-span-2 md:col-span-1 disabled:opacity-60" />
 
     <select
       [attr.aria-label]="tx('X-4')"
       [disabled]="!store.inputEnabled()"
       (change)="onRatio($event)"
-      class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-2 py-2 text-sm disabled:opacity-60">
+      class="rounded-lg border border-shell-line bg-shell-bg text-shell-text px-2 py-2 text-sm disabled:opacity-60">
       @for (ratio of ratios; track ratio) {
         <option [value]="ratio" [selected]="ratio === store.draft().aspectRatio">{{ ratio }}</option>
       }
@@ -131,7 +141,7 @@
       [attr.aria-label]="tx('X-5')"
       [disabled]="!store.inputEnabled()"
       (change)="onResolution($event)"
-      class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-2 py-2 text-sm disabled:opacity-60">
+      class="rounded-lg border border-shell-line bg-shell-bg text-shell-text px-2 py-2 text-sm disabled:opacity-60">
       @for (resolution of resolutions(); track resolution) {
         <option [value]="resolution" [selected]="resolution === store.draft().resolution">{{ resolution }}</option>
       }
@@ -141,7 +151,7 @@
       [attr.aria-label]="tx('X-6')"
       [disabled]="store.modelSwitchLocked()"
       (change)="onModel($event)"
-      class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 px-2 py-2 text-sm disabled:opacity-60">
+      class="rounded-lg border border-shell-line bg-shell-bg text-shell-text px-2 py-2 text-sm disabled:opacity-60">
       @for (model of models; track model.id) {
         <option [value]="model.id" [selected]="model.id === store.draft().model">{{ model.label }}</option>
       }
@@ -152,15 +162,16 @@
     <button
       type="button"
       (click)="send()"
-      [disabled]="!store.canSend()"
-      class="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white transition-colors">
-      {{ tx('X-1') }}
+      [disabled]="!store.sendState().enabled"
+      class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-shell-accent hover:opacity-90 disabled:opacity-50 text-white transition-colors">
+      {{ tx(sendLabelTextId()) }}
+      <span aria-hidden="true" class="text-xs font-normal opacity-80">Ctrl ↵</span>
     </button>
     @if (store.generating()) {
       <button
         type="button"
         (click)="cancel()"
-        class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
+        class="px-4 py-2 rounded-lg text-sm font-semibold border border-shell-line text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent transition-colors">
         {{ tx('T-22.cancel') }}
       </button>
     }

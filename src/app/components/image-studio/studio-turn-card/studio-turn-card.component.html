@@ -1,0 +1,52 @@
+<article class="space-y-3 rounded-2xl border border-shell-line bg-shell-rail p-3">
+  @if (thumbs().length > 0) {
+    <div class="flex flex-wrap gap-2">
+      @for (thumb of thumbs(); track thumb.n) {
+        <img [attr.src]="thumb.src" [alt]="tx('X-31', { n: thumb.n })" class="h-16 w-16 rounded-lg border border-shell-line object-cover" />
+      }
+    </div>
+  }
+
+  @if (card().prompt) {
+    <p class="whitespace-pre-wrap text-sm text-shell-text">{{ card().prompt }}</p>
+  }
+
+  <div class="flex flex-wrap items-center gap-2 text-xs text-shell-muted">
+    @if (card().aspectRatio) {
+      <span class="rounded-full border border-shell-line px-2 py-0.5">{{ card().aspectRatio }}</span>
+    }
+    @if (card().resolution) {
+      <span class="rounded-full border border-shell-line px-2 py-0.5">{{ card().resolution }}</span>
+    }
+    @if (modelLabel()) {
+      <span class="rounded-full border border-shell-line px-2 py-0.5">{{ modelLabel() }}</span>
+    }
+    @if (presetLabel()) {
+      <span class="rounded-full border border-shell-accent px-2 py-0.5 text-shell-text">{{ presetLabel() }}</span>
+    }
+  </div>
+
+  @if (summaryLine()) {
+    <p class="text-xs text-shell-muted">{{ summaryLine() }}</p>
+  }
+
+  @if (card().prompt) {
+    <button
+      type="button"
+      (click)="reuse()"
+      [disabled]="!inputEnabled()"
+      class="rounded-lg border border-shell-line px-3 py-1.5 text-xs font-semibold text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+      {{ tx('X-37') }}
+    </button>
+  }
+
+  <div class="space-y-2">
+    @for (item of card().items; track $index) {
+      @if (item.kind === 'text') {
+        <p class="whitespace-pre-wrap text-sm text-shell-muted">{{ item.text }}</p>
+      } @else {
+        <app-studio-image-tile [lang]="lang()" [versionNumber]="item.versionNumber" [editOf]="editOf(item.versionNumber)" />
+      }
+    }
+  </div>
+</article>

@@ -28,6 +28,8 @@ export interface PromptPreset {
   /** Lowercase, unique, free of "|" so it is safe inside a task label. */
   id: string;
   name: Record<PresetLang, string>;
+  /** Optional one-line card text, bilingual like `name` (US-10.5 FR-22). A preset without one has no card text. */
+  description?: Record<PresetLang, string>;
   /** User-prompt template; carries the `{product}` placeholder. */
   template: string;
   defaults: PresetDefaults;
@@ -43,21 +45,24 @@ const EMPTY_PRODUCT_TEXT = 'the product';
 export const PROMPT_PRESETS: PromptPreset[] = [
   {
     id: 'white-bg',
-    name: { uk: 'Білий фон', en: 'White background' },
+    name: { uk: 'Товар на білому тлі', en: 'Product on white' },
+    description: { en: 'Perfect for e-commerce listings', uk: 'Ідеально для товарних карток' },
     template:
       'Product photo of {product} on a clean pure white (#FFFFFF) background, soft shadow below the product, product centred in the frame.',
     defaults: { aspectRatio: '1:1', resolution: '2K', model: 'gemini-3.1-flash-image' },
   },
   {
     id: 'lifestyle',
-    name: { uk: 'Лайфстайл', en: 'Lifestyle' },
+    name: { uk: 'Лайфстайл-сцена', en: 'Lifestyle scene' },
+    description: { en: 'Product in a realistic setting', uk: 'Товар у реалістичному оточенні' },
     template:
       'Lifestyle photo of {product} placed in a real environment such as a workshop, an office or a classroom.',
-    defaults: { aspectRatio: '4:3', resolution: '2K', model: 'gemini-3-pro-image' },
+    defaults: { aspectRatio: '4:5', resolution: '2K', model: 'gemini-3-pro-image' },
   },
   {
     id: 'banner',
-    name: { uk: 'Банер', en: 'Banner' },
+    name: { uk: 'Банер категорії', en: 'Category banner' },
+    description: { en: 'Wide format with space for text', uk: 'Широкий формат із місцем для тексту' },
     template:
       'Wide banner image featuring {product}, with a free area reserved for text. Do not draw any text.',
     defaults: { aspectRatio: '16:9', resolution: '2K', model: 'gemini-3-pro-image' },
@@ -75,6 +80,12 @@ export const PROMPT_PRESETS: PromptPreset[] = [
     defaults: { aspectRatio: '1:1', resolution: '2K', model: 'gemini-3-pro-image' },
   },
 ];
+
+/**
+ * The ids of the three starter cards of the empty state, in card order (US-10.5 FR-18, FR-22). An explicit list,
+ * not "the presets that have a description", so giving another preset a description adds no card.
+ */
+export const STARTER_PRESET_IDS: readonly string[] = ['white-bg', 'lifestyle', 'banner'];
 
 /** One quick-edit chip (FR-31). The instruction is model-facing and single-language English whatever the UI language. */
 export interface ChipInstruction {
@@ -112,6 +123,11 @@ export function presetName(preset: PromptPreset, lang: PresetLang): string {
   return preset.name[lang];
 }
 
+/** The preset's card text in `lang`, or undefined when the preset has no description (US-10.5 FR-22). */
+export function presetDescription(preset: PromptPreset, lang: PresetLang): string | undefined {
+  return preset.description?.[lang];
+}
+
 function isNonEmptyString(x: unknown): x is string {
   return typeof x === 'string' && x.trim() !== '';
 }
@@ -135,6 +151,15 @@ export function validatePreset(entry: unknown, models: readonly ImageModelSpec[]
   } else {
     if (!isNonEmptyString(name['uk'])) errors.push('name.uk is missing');
     if (!isNonEmptyString(name['en'])) errors.push('name.en is missing');
+  }
+  if (preset['description'] !== undefined) {
+    const description = preset['description'];
+    if (typeof description !== 'object' || description === null || Array.isArray(description)) {
+      errors.push('description must be an object with en and uk');
+    } else {
+      if (!isNonEmptyString(description['uk'])) errors.push('description.uk is missing');
+      if (!isNonEmptyString(description['en'])) errors.push('description.en is missing');
+    }
   }
   if (!isNonEmptyString(preset['template'])) {
     errors.push('template is missing');

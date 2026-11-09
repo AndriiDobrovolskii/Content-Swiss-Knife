@@ -16,7 +16,8 @@ export interface StudioText {
  *
  * T-n, T-15a..d, T-16..T-21, T-23 and PRN-n are the Interface text table (confirmed in OD-41); X-n are the
  * additional texts of the plan (SD-29). T-22 is one table row of six control labels, held under six keys that
- * start with "T-22". Placeholders: {V} {M} {I} (T-9), {N} (T-17), {amount} (X-10), {n} (X-27).
+ * start with "T-22". Placeholders: {V} {M} {I} (T-9), {N} (T-17, T-22.downloadAll, X-32..X-35, X-38, X-39), {M} (X-36), {amount} (X-10),
+ * {n} (X-27, X-31), {T} (X-43). X-32..X-34 are plural families (`.one` / `.few` / `.many`, resolved by `studioCount`).
  *
  * Model-facing text is NOT in this file (it is English only, SD-21). The control label of the navigation entry
  * (X-28) lives in app.component.ts.
@@ -47,18 +48,18 @@ export const STUDIO_TEXTS: Readonly<Record<string, StudioText>> = {
   "T-20": { en: "Could not save to browser storage: the storage quota is exceeded. Free up browser storage and try again.", uk: "Не вдалося зберегти у сховищі браузера: перевищено квоту. Звільніть місце у сховищі браузера та спробуйте ще раз." },
   "T-21": { en: "Generated image", uk: "Згенероване зображення" },
   "T-23": { en: "Start a new session? The current session stays in the session list.", uk: "Почати нову сесію? Поточна сесія залишиться у списку сесій." },
-  "PRN-1": { en: "White background", uk: "Білий фон" },
-  "PRN-2": { en: "Lifestyle", uk: "Лайфстайл" },
-  "PRN-3": { en: "Banner", uk: "Банер" },
+  "PRN-1": { en: "Product on white", uk: "Товар на білому тлі" },
+  "PRN-2": { en: "Lifestyle scene", uk: "Лайфстайл-сцена" },
+  "PRN-3": { en: "Category banner", uk: "Банер категорії" },
   "PRN-4": { en: "Social", uk: "Соцмережі" },
   "PRN-5": { en: "Detail close-up", uk: "Деталь крупним планом" },
   "T-22.cancel": { en: "Cancel", uk: "Скасувати" },
   "T-22.retry": { en: "Retry", uk: "Повторити" },
   "T-22.newSession": { en: "New session", uk: "Нова сесія" },
-  "T-22.editVersion": { en: "Edit this version", uk: "Редагувати цю версію" },
-  "T-22.downloadAll": { en: "Download all versions", uk: "Завантажити всі версії" },
+  "T-22.editVersion": { en: "Edit this →", uk: "Редагувати →" },
+  "T-22.downloadAll": { en: "Download all ({N}) .zip", uk: "Завантажити все ({N}) .zip" },
   "T-22.copy": { en: "Copy to clipboard", uk: "Копіювати в буфер обміну" },
-  "X-1": { en: "Send", uk: "Надіслати" },
+  "X-1": { en: "Generate", uk: "Згенерувати" },
   "X-2": { en: "Attach images", uk: "Додати зображення" },
   "X-3": { en: "Drag images here, paste with Ctrl+V, or use the button", uk: "Перетягніть зображення сюди, вставте через Ctrl+V або скористайтеся кнопкою" },
   "X-4": { en: "Aspect ratio", uk: "Співвідношення сторін" },
@@ -85,11 +86,32 @@ export const STUDIO_TEXTS: Readonly<Record<string, StudioText>> = {
   "X-25": { en: "Attached images", uk: "Додані зображення" },
   "X-26": { en: "Conversation", uk: "Розмова" },
   "X-27": { en: "Version v{n} attached for editing", uk: "Версію v{n} додано для редагування" },
+  "X-29": { en: "Write a prompt to start", uk: "Напишіть промпт для початку" },
+  "X-30": { en: "Image Studio", uk: "Студія зображень" },
+  "X-31": { en: "Input image {n}", uk: "Вхідне зображення {n}" },
+  "X-32.one": { en: "{N} session", uk: "{N} сесія" },
+  "X-32.few": { en: "{N} sessions", uk: "{N} сесії" },
+  "X-32.many": { en: "{N} sessions", uk: "{N} сесій" },
+  "X-33.one": { en: "· history ({N})", uk: "· історія ({N})" },
+  "X-33.few": { en: "· history ({N})", uk: "· історія ({N})" },
+  "X-33.many": { en: "· history ({N})", uk: "· історія ({N})" },
+  "X-34.one": { en: "{N} image", uk: "{N} зображення" },
+  "X-34.few": { en: "{N} images", uk: "{N} зображення" },
+  "X-34.many": { en: "{N} images", uk: "{N} зображень" },
+  "X-35": { en: "Before (v{N})", uk: "До (v{N})" },
+  "X-36": { en: "After (v{M})", uk: "Після (v{M})" },
+  "X-37": { en: "Reuse prompt", uk: "Використати промпт" },
+  "X-38": { en: "Compare with v{N}", uk: "Порівняти з v{N}" },
+  "X-39": { en: "Edit of v{N}", uk: "Редакція v{N}" },
+  "X-40": { en: "Your images will appear here", uk: "Тут з'являться ваші зображення" },
+  "X-41": { en: "Describe the image you want, or start from one of the templates below.", uk: "Опишіть потрібне зображення або почніть з одного з шаблонів нижче." },
+  "X-42": { en: "Before and after comparison", uk: "Порівняння до і після" },
+  "X-43": { en: "{T} s", uk: "{T} с" },
 };
 
 export type StudioLanguage = 'en' | 'uk';
 
-/** Values for the placeholders of a text: {V} {M} {I} (T-9), {N} (T-17), {amount} (X-10), {n} (X-27). */
+/** Values for the placeholders of a text: {V} {M} {I} (T-9), {N} (T-17 and others), {M} (X-36), {amount} (X-10), {n} (X-27, X-31), {T} (X-43). */
 export type StudioTextParams = Record<string, string | number>;
 
 export function studioText(id: string, lang: StudioLanguage, params: StudioTextParams = {}): string {

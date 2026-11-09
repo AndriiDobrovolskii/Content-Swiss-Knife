@@ -70,6 +70,15 @@ function protectedIds(snapshot: StoredSession): string[] {
   return ids;
 }
 
+/**
+ * The resend projection of a stored turn (US-10.5 FR-23, NFR-1): `{ id, role, parts }` only. The display metadata a turn
+ * may carry (cost, duration, preset, input refs) is stored for the UI and never rides in `history`. A turn without those
+ * fields projects to the same shape it had before.
+ */
+function toResendTurn(turn: Turn): Turn {
+  return { id: turn.id, role: turn.role, parts: turn.parts };
+}
+
 export function buildGenerateRequest(
   snapshot: StoredSession,
   input: BuildInput,
@@ -89,7 +98,7 @@ export function buildGenerateRequest(
   const history: Turn[] = [];
   for (const id of snapshot.meta.turnOrder) {
     const turn = byId.get(id);
-    if (turn) history.push(structuredClone(turn));
+    if (turn) history.push(structuredClone(toResendTurn(turn)));
   }
 
   const request: GenerateRequest = {

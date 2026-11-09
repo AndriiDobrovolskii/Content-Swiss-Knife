@@ -290,3 +290,193 @@ describe('StorageQuotaError (DD-15, FR-81)', () => {
     expect(new Error('quota')).not.toBeInstanceOf(StorageQuotaError);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.5 T2 - the read-side validity readers (plan DD-2; Specification FR-23 validity table, ratified OD-28).
+// A sibling block: no existing case above is changed (D-12). Logic runner; red until T2.
+//
+// PINNED CONTRACT (src/utils/image-studio/schemas.ts, owner T2):
+//   readTurnExtras(turn): { cost?: number; durationMs?: number; presetId?: string; inputRefs?: Array<{ turnId: string; partIndex: number }> }
+//       an invalid field is ABSENT from the result (the key is not present), never `undefined`-valued, `NaN` or the raw value;
+//       `inputRefs` is filtered entry by entry; registry membership of `presetId` is NOT checked here (buildFeed does that).
+//   readEditSource(version, versions): { n: number; sourceRetained: boolean } | null
+//       `null` unless `version.editOfVersion` is an integer >= 1 and strictly lower than `version.number`; `sourceRetained`
+//       says whether a version numbered `n` is still present in `versions`.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('US-10.5 FR-23 / NFR-6: readTurnExtras keeps only valid optional turn fields (T2)', () => {
+  const base = { id: 'm1', role: 'model', parts: [{ text: 'x' }] };
+  const read = async (extra: Record<string, unknown>) => {
+    const { readTurnExtras } = await load('./schemas');
+    return readTurnExtras({ ...base, ...extra }) as Record<string, unknown>;
+  };
+  const has = (o: Record<string, unknown>, k: string) => Object.prototype.hasOwnProperty.call(o, k);
+
+  it('keeps a valid cost, durationMs, presetId and inputRefs unchanged', async () => {
+    const out = await read({ cost: 0.067, durationMs: 12_400, presetId: 'lifestyle', inputRefs: [{ turnId: 'u1', partIndex: 0 }] });
+    expect(out).toEqual({ cost: 0.067, durationMs: 12_400, presetId: 'lifestyle', inputRefs: [{ turnId: 'u1', partIndex: 0 }] });
+  });
+
+  it('a turn with none of the fields (an old session) yields no key at all', async () => {
+    expect(Object.keys(await read({}))).toEqual([]);
+  });
+
+  it('zero is a valid cost and a valid duration (a free generation, an instant one) and is kept', async () => {
+    const out = await read({ cost: 0, durationMs: 0 });
+    expect(out['cost']).toBe(0);
+    expect(out['durationMs']).toBe(0);
+  });
+
+  it.each([
+    ['a string', 'abc'], ['a negative number', -0.01], ['NaN', Number.NaN], ['Infinity', Number.POSITIVE_INFINITY], ['null', null], ['an object', {}],
+  ])('cost %s is present-but-invalid: the key is absent from the result', async (_n, v) => {
+    expect(has(await read({ cost: v }), 'cost')).toBe(false);
+  });
+
+  it.each([
+    ['a string', '12'], ['a negative number', -1], ['NaN', Number.NaN], ['-Infinity', Number.NEGATIVE_INFINITY],
+  ])('durationMs %s is present-but-invalid: the key is absent from the result', async (_n, v) => {
+    expect(has(await read({ durationMs: v }), 'durationMs')).toBe(false);
+  });
+
+  it('an invalid cost does not take the valid durationMs of the same turn with it (FR-4: only the duration segment remains)', async () => {
+    const out = await read({ cost: 'abc', durationMs: 5_000 });
+    expect(has(out, 'cost')).toBe(false);
+    expect(out['durationMs']).toBe(5_000);
+  });
+
+  it.each([['an empty string', ''], ['a number', 7], ['null', null], ['an array', ['white-bg']]])(
+    'presetId %s is present-but-invalid: the key is absent', async (_n, v) => {
+      expect(has(await read({ presetId: v }), 'presetId')).toBe(false);
+    });
+
+  it('a presetId that is a non-empty string is kept even when no preset has that id (registry membership is the feed check)', async () => {
+    expect((await read({ presetId: 'removed-later' }))['presetId']).toBe('removed-later');
+  });
+
+  it('inputRefs is kept entry by entry: a bad entry is dropped on its own and the good ones remain, in order', async () => {
+    const out = await read({
+      inputRefs: [
+        { turnId: 'u1', partIndex: 0 }, { turnId: 5, partIndex: 1 }, { turnId: 'u1', partIndex: -1 },
+        { turnId: 'u1', partIndex: 1.5 }, null, 'u1:2', { turnId: 'u1' }, { turnId: 'u2', partIndex: 3 },
+      ],
+    });
+    expect(out['inputRefs']).toEqual([{ turnId: 'u1', partIndex: 0 }, { turnId: 'u2', partIndex: 3 }]);
+  });
+
+  it('inputRefs that is not an array yields no usable refs (absent or empty), never an error', async () => {
+    const out = await read({ inputRefs: 'files/a' });
+    expect((out['inputRefs'] as unknown[] | undefined) ?? []).toEqual([]);
+  });
+});
+
+describe('US-10.5 FR-9 / FR-23: readEditSource (T2)', () => {
+  const v = (number: number, extra: Record<string, unknown> = {}) => ({
+    number, turnId: `m${number}`, partIndex: 0, model: 'm', resolution: '1K', aspectRatio: '1:1', prompt: 'p', inputFormat: 'image/png', downloaded: false, ...extra,
+  });
+  const read = async (version: Record<string, unknown>, versions: Array<Record<string, unknown>>) => {
+    const { readEditSource } = await load('./schemas');
+    return readEditSource(version, versions);
+  };
+
+  it('a source lower than the own number and still retained gives {n, sourceRetained: true}', async () => {
+    const own = v(3, { editOfVersion: 1 });
+    expect(await read(own, [v(1), v(2), own])).toEqual({ n: 1, sourceRetained: true });
+  });
+
+  it('a valid source that is no longer in the session keeps its number and says it is not retained (chip stays, Compare hidden)', async () => {
+    const own = v(3, { editOfVersion: 1 });
+    expect(await read(own, [v(2), own])).toEqual({ n: 1, sourceRetained: false });
+  });
+
+  it('no editOfVersion (an old session, a typed follow-up) gives null', async () => {
+    const own = v(2);
+    expect(await read(own, [v(1), own])).toBeNull();
+  });
+
+  it.each([
+    ['equal to the own number', 3], ['greater than the own number', 4], ['zero', 0], ['negative', -1], ['non-integer', 1.5],
+    ['a numeric string', '1'], ['NaN', Number.NaN], ['null', null],
+  ])('a source %s is present-but-invalid and gives null', async (_n, bad) => {
+    const own = v(3, { editOfVersion: bad });
+    expect(await read(own, [v(1), v(2), own])).toBeNull();
+  });
+});
+
+describe('US-10.5 FR-23 / P-9 guard: a malformed optional field never makes a session or a turn vanish (T2)', () => {
+  // These two cases are guards of an existing behaviour (the optional fields stay OUT of the zod objects): they are green
+  // on arrival by design and turn red if a builder adds the fields to StoredTurnSchema / StoredVersionSchema.
+  it('parseStoredTurn still returns the turn when cost, durationMs, presetId and inputRefs are all malformed', async () => {
+    const { parseStoredTurn } = await load('./schemas');
+    const t = parseStoredTurn({ id: 'm1', role: 'model', parts: [{ text: 'x' }], cost: 'abc', durationMs: -1, presetId: 3, inputRefs: 'nope' });
+    expect(t).not.toBeNull();
+    expect(t.id).toBe('m1');
+  });
+
+  it('parseStoredSession still returns the meta when a version carries a malformed editOfVersion', async () => {
+    const { parseStoredSession } = await load('./schemas');
+    const s = makeSession('s1', { pairs: 1 });
+    (s.meta.versions[0] as unknown as Record<string, unknown>)['editOfVersion'] = 'not-a-number';
+    expect(parseStoredSession(s.meta)).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// T43 (security hardening NB-2; docs/reviews/security/US-10.5-security-review.md section 7). A sibling block: no T2 case above is changed.
+//
+// PINNED CONTRACT ADDITION (owner T43): `readTurnExtras` keeps at most MAX_INPUT_REFS = 10 `inputRefs` entries, the FIRST 10 that pass
+// the entry validity check, in stored order; entries after the 10th valid one are dropped (an invalid entry never counts against the cap).
+// Source of 10: the app's real maximum number of image parts in one user message is 6 (MAX_UPLOADS = 5 uploads, src/utils/image-studio/
+// upload-rules.ts FR-10, plus the single attached version that is outside the five), and inputRefs is derived from exactly those parts
+// (apply-response.ts deriveInputRefs); 10 is >= 6 and <= 20 with head-room, so no genuine record is ever truncated. The number is pinned
+// here as a literal on purpose: a builder who picks another number is a finding for TEST_WRITING (test strategy v7, section 11).
+// Red until T43 (the over-cap cases); the exactly-cap and under-cap cases are green regression guards.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('NB-2 hardening: readTurnExtras caps inputRefs at 10 valid entries at read time (T43)', () => {
+  const CAP = 10;
+  const read = async (inputRefs: unknown) => {
+    const { readTurnExtras } = await load('./schemas');
+    return readTurnExtras({ id: 'm1', role: 'model', parts: [{ text: 'x' }], inputRefs }) as { inputRefs?: { turnId: string; partIndex: number }[] };
+  };
+  const refs = (n: number) => Array.from({ length: n }, (_v, i) => ({ turnId: 'u1', partIndex: i }));
+
+  it('exactly the cap is kept in full and in order (guard)', async () => {
+    expect((await read(refs(CAP))).inputRefs).toEqual(refs(CAP));
+  });
+
+  it('fewer than the cap (the real maximum of 6 images in one message) is kept in full (guard)', async () => {
+    expect((await read(refs(6))).inputRefs).toEqual(refs(6));
+  });
+
+  it('one more than the cap keeps only the first 10, in order', async () => {
+    expect((await read(refs(CAP + 1))).inputRefs).toEqual(refs(CAP));
+  });
+
+  it('a tampered record with 5,000 references keeps only the first 10, in order', async () => {
+    const out = await read(refs(5_000));
+    expect(out.inputRefs).toHaveLength(CAP);
+    expect(out.inputRefs).toEqual(refs(CAP));
+  });
+
+  it('the cap counts VALID entries: bad entries interleaved among 12 good ones do not use up the cap', async () => {
+    const mixed: unknown[] = [];
+    refs(12).forEach((r, i) => {
+      mixed.push(r);
+      if (i % 3 === 0) mixed.push(null, { turnId: 5, partIndex: 1 }, { turnId: 'u1', partIndex: -1 });
+    });
+    expect((await read(mixed)).inputRefs).toEqual(refs(CAP));
+  });
+
+  it('references that point at one and the same image are not collapsed below the cap: 25 copies keep exactly 10', async () => {
+    const same = Array.from({ length: 25 }, () => ({ turnId: 'u1', partIndex: 0 }));
+    expect((await read(same)).inputRefs).toEqual(Array.from({ length: CAP }, () => ({ turnId: 'u1', partIndex: 0 })));
+  });
+
+  it('the cap does not disturb the other fields of the same turn', async () => {
+    const { readTurnExtras } = await load('./schemas');
+    const out = readTurnExtras({ cost: 0.067, durationMs: 12_400, presetId: 'lifestyle', inputRefs: refs(40) }) as Record<string, unknown>;
+    expect(out['cost']).toBe(0.067);
+    expect(out['durationMs']).toBe(12_400);
+    expect(out['presetId']).toBe('lifestyle');
+    expect((out['inputRefs'] as unknown[]).length).toBe(CAP);
+  });
+});
