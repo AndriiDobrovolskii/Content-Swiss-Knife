@@ -11,6 +11,7 @@ import {
   StorageQuotaError,
   type Announcer,
   type ImageMime,
+  type Part,
   type SessionMeta,
   type StoredSession,
   type Turn,
@@ -19,9 +20,12 @@ import {
 import { parseStoredSession, parseStoredTurn } from '../../utils/image-studio/schemas';
 import { pickEvictionVictims, SESSION_CAP, touchOnEvent } from '../../utils/image-studio/session-lifecycle';
 import { studioText, type StudioLanguage } from '../../utils/image-studio/studio-texts';
+import { fromBase64, toBase64 } from '../../utils/image-studio/base64';
+import type { GenerateResponse } from '../../utils/image-studio/schemas';
+import { needsWhiteBackground } from '../../utils/image-studio/white-background';
 import { LlmService } from '../llm.service';
 import {
-  ALERT_PORT, CLOCK_PORT, CONFIRM_PORT, ID_SOURCE_PORT, SCHEDULER_PORT, SESSION_STORE_PORT,
+  ALERT_PORT, CLOCK_PORT, CONFIRM_PORT, ID_SOURCE_PORT, IMAGE_BACKGROUND_PORT, SCHEDULER_PORT, SESSION_STORE_PORT,
 } from './image-studio.tokens';
 
 /**
@@ -128,6 +132,7 @@ export class ImageStudioStore {
   private readonly port = inject(SESSION_STORE_PORT);
   private readonly alerts = inject(ALERT_PORT);
   private readonly confirmPort = inject(CONFIRM_PORT);
+  private readonly background = inject(IMAGE_BACKGROUND_PORT);
 
   private readonly language = signal<StudioLanguage>('en');
   private readonly metas = signal<SessionMeta[]>([]);
@@ -497,9 +502,12 @@ export class ImageStudioStore {
     // FR-24 (SQ-6-A): the clock is read once here; the interval ends at the hand-off to the port, so the write is not in it.
     const now = this.clock.now();
 
+    // A "Product on white" / "Remove background" result gets a pure #FFFFFF backdrop before anything is stored or shown.
+    const flattened = await this.withWhiteBackground(outcome.response, buildInput);
+
     let applied;
     try {
-      applied = applyResponse(stored, outcome.response, {
+      applied = applyResponse(stored, flattened.response, {
         userTurn,
         ids: this.ids,
         now,
@@ -543,6 +551,39 @@ export class ImageStudioStore {
 
     if (outcome.type !== 'images') this.recordNonHistoryReply(outcome, sessionId, buildInput, draft);
     if (applied.notice) this.pending.set({ textId: 'T-9', params: { ...applied.notice }, region: 'alert' });
+    else if (flattened.failed) this.pending.set({ textId: 'X-44', region: 'alert' });
+  }
+
+  /**
+   * Sets the backdrop of every final image of an `images` response to #FFFFFF when the send asked for a white backdrop
+   * (`needsWhiteBackground`). Only `inlineData` of the image part is replaced (the flattened image is lossless PNG); every
+   * other part field survives. An image that cannot be flattened is kept as the model returned it and reported through
+   * `failed`: the generation is already paid for, so the operator still gets the image, with a warning.
+   */
+  private async withWhiteBackground(
+    response: GenerateResponse,
+    buildInput: BuildInput,
+  ): Promise<{ response: GenerateResponse; failed: boolean }> {
+    if (response.kind !== 'images' || !needsWhiteBackground({ presetId: buildInput.presetId, text: buildInput.text })) {
+      return { response, failed: false };
+    }
+    let failed = false;
+    const parts: Part[] = [];
+    for (const part of response.parts as Part[]) {
+      const inline = part.inlineData;
+      if (part.thought === true || !inline || !inline.mimeType.startsWith('image/') || inline.data.length === 0) {
+        parts.push(part);
+        continue;
+      }
+      try {
+        const flat = await this.background.flattenToWhite(fromBase64(inline.data), inline.mimeType);
+        parts.push({ ...part, inlineData: { mimeType: flat.mime, data: toBase64(flat.bytes) } });
+      } catch {
+        failed = true;
+        parts.push(part);
+      }
+    }
+    return { response: { ...response, parts } as GenerateResponse, failed };
   }
 
   /**

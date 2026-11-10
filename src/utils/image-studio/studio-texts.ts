@@ -107,6 +107,7 @@ export const STUDIO_TEXTS: Readonly<Record<string, StudioText>> = {
   "X-41": { en: "Describe the image you want, or start from one of the templates below.", uk: "Опишіть потрібне зображення або почніть з одного з шаблонів нижче." },
   "X-42": { en: "Before and after comparison", uk: "Порівняння до і після" },
   "X-43": { en: "{T} s", uk: "{T} с" },
+  "X-44": { en: "The background could not be set to pure white (#FFFFFF); the original image is shown.", uk: "Не вдалося зробити фон чисто білим (#FFFFFF); показано оригінальне зображення." },
 };
 
 export type StudioLanguage = 'en' | 'uk';

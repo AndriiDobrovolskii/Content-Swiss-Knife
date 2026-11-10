@@ -1,12 +1,14 @@
 import { InjectionToken } from '@angular/core';
 import type {
-  AlertPort, ClipboardPort, Clock, ConfirmPort, IdSource, ImageCodec, LocalOffset, SavePort, Scheduler, SessionStorePort,
+  AlertPort, ClipboardPort, Clock, ConfirmPort, IdSource, ImageBackgroundPort, ImageCodec, LocalOffset, SavePort, Scheduler,
+  SessionStorePort,
 } from '../../utils/image-studio/ports';
 import {
   createBrowserAlertPort, createBrowserClipboardPort, createBrowserClock, createBrowserConfirmPort,
   createBrowserIdSource, createBrowserLocalOffset, createBrowserSavePort, createBrowserScheduler,
 } from './browser-ports';
 import { buildZip } from '../../utils/image-studio/zip';
+import { createBrowserBackgroundFlattener } from './browser-background-flattener';
 import { createBrowserImageCodec } from './browser-image-codec';
 import { IndexedDbSessionStore } from './indexeddb-session-store';
 
@@ -63,6 +65,12 @@ export const SESSION_STORE_PORT = new InjectionToken<SessionStorePort>('IMAGE_ST
 export const IMAGE_CODEC_PORT = new InjectionToken<ImageCodec>('IMAGE_STUDIO_IMAGE_CODEC', {
   providedIn: 'root',
   factory: () => createBrowserImageCodec(),
+});
+
+/** The background port: sets the backdrop of a "Product on white" / "Remove background" result to #FFFFFF. */
+export const IMAGE_BACKGROUND_PORT = new InjectionToken<ImageBackgroundPort>('IMAGE_STUDIO_IMAGE_BACKGROUND', {
+  providedIn: 'root',
+  factory: () => createBrowserBackgroundFlattener(),
 });
 
 /** The viewer's local-time offset in minutes east of UTC, for the row date (US-10.5 DD-13). */

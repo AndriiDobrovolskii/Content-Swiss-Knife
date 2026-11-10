@@ -30,17 +30,21 @@ import { Injector } from '@angular/core';
 import { LlmService } from '../llm.service';
 import {
   makeFakeClock, makeFakeScheduler, makeIdSource, makeInMemorySessionStore, makeAlertPort, makeConfirmPort, makeClipboardPort,
-  makeSavePort, makeFakeCodec, makeSession, makeRaster, type StoredSession,
+  makeSavePort, makeFakeCodec, makeSession, makeRaster, toBase64, type StoredSession,
 } from '../../../test/image-studio/helpers/fakes';
 import {
-  imagesResponse, textResponse, safetyResponse, okBody, failure, flush, deferred, pendingUntilAbort, PRO, PNG_B64,
+  imagesResponse, imagePart, textResponse, safetyResponse, okBody, failure, flush, deferred, pendingUntilAbort, PRO, PNG_B64,
   type ImageHttpResult,
 } from '../../../test/image-studio/helpers/core-fixtures';
 
 const load = (p: string): Promise<any> => import(/* @vite-ignore */ p);
 const DAY = 86_400_000;
 
-async function setup(opts: { seed?: StoredSession[] } = {}) {
+/** What the fake background port returns for every image: a recognisable marker, never the input. */
+const PROCESSED_BYTES = new Uint8Array([9, 9, 9, 9]);
+const PROCESSED_B64 = toBase64(PROCESSED_BYTES);
+
+async function setup(opts: { seed?: StoredSession[]; background?: { flattenToWhite: ReturnType<typeof vi.fn> } } = {}) {
   const tokens = await load('./image-studio.tokens');
   const { ImageStudioStore } = await load('./image-studio.store');
   const clock = makeFakeClock(100 * DAY);
@@ -48,6 +52,7 @@ async function setup(opts: { seed?: StoredSession[] } = {}) {
   const port = makeInMemorySessionStore();
   const alert = makeAlertPort();
   const llm = { generateImage: vi.fn(), uploadImageFile: vi.fn() };
+  const background = opts.background ?? { flattenToWhite: vi.fn(async () => ({ bytes: PROCESSED_BYTES, mime: 'image/png' })) };
   for (const s of opts.seed ?? []) port.seed(s);
   const providers = [
     { provide: tokens.CLOCK_PORT, useValue: clock },
@@ -55,6 +60,7 @@ async function setup(opts: { seed?: StoredSession[] } = {}) {
     { provide: tokens.ID_SOURCE_PORT, useValue: makeIdSource('gen') },
     { provide: tokens.SESSION_STORE_PORT, useValue: port },
     { provide: tokens.IMAGE_CODEC_PORT, useValue: makeFakeCodec() },
+    { provide: tokens.IMAGE_BACKGROUND_PORT, useValue: background },
     { provide: tokens.ALERT_PORT, useValue: alert },
     { provide: tokens.CONFIRM_PORT, useValue: makeConfirmPort(true) },
     { provide: tokens.CLIPBOARD_PORT, useValue: makeClipboardPort() },
@@ -66,7 +72,7 @@ async function setup(opts: { seed?: StoredSession[] } = {}) {
   const store: any = injector.get(ImageStudioStore);
   /** A second page load over the same storage: a fresh store, as after a reload. */
   const reload = () => Injector.create({ providers: [...providers.slice(0, -1), { provide: ImageStudioStore, useClass: ImageStudioStore }] }).get(ImageStudioStore) as any;
-  return { store, injector, clock, scheduler, port, alert, llm, reload, ImageStudioStore };
+  return { store, injector, clock, scheduler, port, alert, llm, background, reload, ImageStudioStore };
 }
 
 const aged = (id: string, ageMs: number, extra: Parameters<typeof makeSession>[1] = {}) =>
@@ -1062,5 +1068,119 @@ describe('US-10.5 FR-17 (SQ-1-B): sendState is the one source of the button enab
     store.setDraft({ attachments: [ready] });
     await store.send();
     expect(llm.generateImage.mock.calls[0][0].newTurn.parts).toEqual([{ fileData: { fileUri: 'files/a', mimeType: 'image/png' } }]);
+  });
+});
+
+// ---- pure white backdrop for "Product on white" and "Remove background" -------------------------------------------------------
+// The image model returns an off-white backdrop whatever the prompt says, so a send that asks for a white backdrop has its
+// result flattened before it is stored. The pixel work is behind IMAGE_BACKGROUND_PORT (`flattenToWhite(bytes, mime)`); the
+// store decides WHEN (white-bg preset on the wire, or the Remove-background chip text) and keeps the original on failure.
+describe('Store: a pure white backdrop (white-bg preset and Remove background)', () => {
+  type StoredPart = { thought?: boolean; inlineData?: { mimeType: string; data: string }; thoughtSignature?: string };
+  const imageParts = (port: ReturnType<typeof makeInMemorySessionStore>) =>
+    (lastModelTurn(port, 'a').turn['parts'] as StoredPart[]).filter((p) => p.inlineData);
+
+  it('a white-bg send stores the flattened image, not the one the model returned, and keeps the other part fields', async () => {
+    const { store, llm, port, background } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'Product photo on a clean pure white background.', presetId: 'white-bg', checkedPresetId: 'white-bg' });
+
+    await store.send();
+
+    expect(background.flattenToWhite).toHaveBeenCalledTimes(1);
+    expect(background.flattenToWhite.mock.calls[0][1]).toBe('image/png');
+    expect(imageParts(port)[0]).toMatchObject({ inlineData: { mimeType: 'image/png', data: PROCESSED_B64 }, thoughtSignature: 'sig-new' });
+    expect(store.message()).toBeNull();
+  });
+
+  it('the Remove-background chip text is flattened as well, although the chip send records no preset', async () => {
+    const { store, llm, port, background } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'Remove the background.', presetId: null, checkedPresetId: null });
+
+    await store.send();
+
+    expect(background.flattenToWhite).toHaveBeenCalledTimes(1);
+    expect(imageParts(port)[0].inlineData?.data).toBe(PROCESSED_B64);
+  });
+
+  it('the backdrop is still flattened after the operator edited the prompt (the wire presetId stays)', async () => {
+    const { store, llm, port, background } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'white', presetId: 'white-bg', checkedPresetId: 'white-bg' });
+    store.setDraft({ text: 'something else entirely', checkedPresetId: null }); // what the composer does on typing
+
+    await store.send();
+
+    expect(background.flattenToWhite).toHaveBeenCalledTimes(1);
+    expect(imageParts(port)[0].inlineData?.data).toBe(PROCESSED_B64);
+  });
+
+  it('any other preset, and free text that only mentions a white background, is stored exactly as the model returned it', async () => {
+    const { store, llm, port, background } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'Lifestyle photo of the product.', presetId: 'lifestyle', checkedPresetId: 'lifestyle' });
+    await store.send();
+    expect(imageParts(port)[0].inlineData?.data).toBe(PNG_B64);
+
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'Put it on a pure white background', presetId: null, checkedPresetId: null });
+    await store.send();
+
+    expect(background.flattenToWhite).not.toHaveBeenCalled();
+    expect(imageParts(port)[0].inlineData?.data).toBe(PNG_B64);
+  });
+
+  it('only final images are flattened: a thought image part is stored untouched', async () => {
+    const { store, llm, port, background } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(
+      okBody(imagesResponse({ parts: [imagePart({ thought: true }), imagePart({ thoughtSignature: 'sig-final' })] })),
+    );
+    store.setDraft({ text: 'x', presetId: 'white-bg', checkedPresetId: 'white-bg' });
+
+    await store.send();
+
+    expect(background.flattenToWhite).toHaveBeenCalledTimes(1);
+    const parts = imageParts(port);
+    expect(parts[0].inlineData?.data).toBe(PNG_B64);
+    expect(parts[1].inlineData?.data).toBe(PROCESSED_B64);
+  });
+
+  it('when the flattening fails the original image is kept and shown, with a warning in the alert region', async () => {
+    const failing = {
+      flattenToWhite: vi.fn(async () => {
+        throw new Error('canvas unavailable');
+      }),
+    };
+    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })], background: failing });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    store.setDraft({ text: 'x', presetId: 'white-bg', checkedPresetId: 'white-bg' });
+
+    await store.send();
+
+    expect(imageParts(port)[0].inlineData?.data).toBe(PNG_B64);
+    expect(port.snapshot().sessions['a'].meta.versions).toHaveLength(2);
+    expect(store.message()).toMatchObject({ textId: 'X-44', region: 'alert' });
+  });
+
+  it('a Retry of a white-bg turn is flattened too', async () => {
+    const { store, llm, port, background } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    llm.generateImage.mockResolvedValueOnce(failure(503));
+    store.setDraft({ text: 'x', presetId: 'white-bg', checkedPresetId: 'white-bg' });
+    await store.send();
+    expect(background.flattenToWhite).not.toHaveBeenCalled();
+
+    llm.generateImage.mockResolvedValueOnce(okBody(imagesResponse()));
+    await store.retry();
+
+    expect(background.flattenToWhite).toHaveBeenCalledTimes(1);
+    expect(imageParts(port)[0].inlineData?.data).toBe(PROCESSED_B64);
   });
 });

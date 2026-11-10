@@ -70,6 +70,7 @@ async function setup(opts: { seed?: StoredSession[]; confirm?: boolean } = {}) {
       { provide: tokens.ID_SOURCE_PORT, useValue: ids },
       { provide: tokens.SESSION_STORE_PORT, useValue: port },
       { provide: tokens.IMAGE_CODEC_PORT, useValue: makeFakeCodec() },
+      { provide: tokens.IMAGE_BACKGROUND_PORT, useValue: { flattenToWhite: async (bytes: Uint8Array) => ({ bytes, mime: 'image/png' }) } },
       { provide: tokens.ALERT_PORT, useValue: alert },
       { provide: tokens.CONFIRM_PORT, useValue: confirm },
       { provide: tokens.CLIPBOARD_PORT, useValue: makeClipboardPort() },

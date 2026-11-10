@@ -54,3 +54,6 @@ coverage/
 
 # Build output written by test/security.spec.ts (the bundle scan, FR-65) - reproducible
 .test-dist/
+
+# Google Drive upload scratch directory - local only
+.tmp.driveupload/
