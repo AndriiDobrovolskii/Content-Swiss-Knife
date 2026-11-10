@@ -317,6 +317,7 @@ const NEW_TEXTS: Array<[id: string, en: string, uk: string]> = [
   ['X-41', 'Describe the image you want, or start from one of the templates below.', 'Опишіть потрібне зображення або почніть з одного з шаблонів нижче.'], // (proposed) FR-18
   ['X-42', 'Before and after comparison', 'Порівняння до і після'],                                           // (new) accessible name of the slider
   ['X-43', '{T} s', '{T} с'],                                                                                 // (proposed) FR-4 seconds unit
+  ['X-44', 'The background could not be set to pure white (#FFFFFF); the original image is shown.', 'Не вдалося зробити фон чисто білим (#FFFFFF); показано оригінальне зображення.'], // white backdrop fallback warning
 ];
 
 describe('US-10.5 NFR-5 / FR-77: every new text id exists in both languages with the allocated value (T6)', () => {

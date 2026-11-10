@@ -96,6 +96,14 @@ export interface ImageCodec {
   transcode(req: CodecTranscodeRequest): Promise<CodecTranscodeResult>;
 }
 
+/**
+ * Sets the backdrop of a decoded image to exactly #FFFFFF (see `flattenBackgroundToWhite`). Rejects when the bytes cannot be
+ * decoded or the canvas is unavailable; the caller keeps the original image then. The result is always lossless PNG.
+ */
+export interface ImageBackgroundPort {
+  flattenToWhite(bytes: Uint8Array, mime: string): Promise<{ bytes: Uint8Array; mime: string }>;
+}
+
 /** A content part exactly as it must be resent; service fields pass through untouched (FR-35). */
 export interface Part {
   text?: string;
