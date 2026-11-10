@@ -183,11 +183,12 @@ export class ImageStudioStore {
     const retry = this.retryTurn();
     return retry !== null && retry.sessionId === this.currentSessionId() && sameTurnContent(retry.draft, this.draft());
   });
-  /** The model switch is inactive while the composer holds unsent content or a failed turn awaits Retry (D-4). */
-  readonly modelSwitchLocked = computed(() => {
-    const d = this.draft();
-    return this.generating() || d.text.trim() !== '' || d.attachments.length > 0 || d.attachedVersion !== null || this.canRetry();
-  });
+  /**
+   * The model switch is inactive only while a generation runs. D-4 (US-10.1) also locked it for unsent content and a pending
+   * Retry; that made the Pro model unreachable once a prompt was typed or a preset was applied, so the lock was relaxed.
+   * `switchModel` carries the unsent text across, so nothing typed is lost.
+   */
+  readonly modelSwitchLocked = computed(() => this.generating());
 
   /** The announcer the generation runner calls; bound to the status signal (DD-23, P-15). */
   private readonly announcer: Announcer = {
@@ -266,7 +267,7 @@ export class ImageStudioStore {
     return this.createSession({
       model: modelId,
       seed,
-      carry: { productName: draft.productName, aspectRatio: draft.aspectRatio, resolution },
+      carry: { productName: draft.productName, aspectRatio: draft.aspectRatio, resolution, text: draft.text },
     });
   }
 
@@ -587,7 +588,7 @@ export class ImageStudioStore {
   private async createSession(opts: {
     model: string;
     seed?: AttachedVersion;
-    carry?: Partial<Pick<ComposerDraft, 'productName' | 'aspectRatio' | 'resolution'>>;
+    carry?: Partial<Pick<ComposerDraft, 'productName' | 'aspectRatio' | 'resolution' | 'text'>>;
   }): Promise<boolean> {
     const now = this.clock.now();
     const id = this.ids.next();

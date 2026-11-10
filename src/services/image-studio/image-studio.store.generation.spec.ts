@@ -386,17 +386,18 @@ describe('Store: failed turns and Retry (FR-36, FR-64, SD-18, FR-85; AC-12, AC-4
     expect(store.costUsd()).toBeCloseTo(0.06, 10);
   });
 
-  it('D-4 / FR-50: while Retry is still offered the model switch is inactive and no session is created', async () => {
-    const { store, llm, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+  it('FR-50 (D-4 relaxed by the model-picker fix): while Retry is offered the model switch stays available and leaves the retry with its own session', async () => {
+    const { store, llm } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
     await store.init();
     llm.generateImage.mockResolvedValueOnce(failure(503));
     store.setDraft({ text: 'x' });
     await store.send();
 
     expect(store.canRetry()).toBe(true);
-    expect(store.modelSwitchLocked()).toBe(true);
-    expect(await store.switchModel(PRO)).toBe(false);
-    expect(Object.keys(port.snapshot().sessions)).toEqual(['a']);
+    expect(store.modelSwitchLocked()).toBe(false);
+    expect(await store.switchModel(PRO)).toBe(true);
+    expect(store.currentSessionId()).not.toBe('a');
+    expect(store.canRetry()).toBe(false);
   });
 });
 
