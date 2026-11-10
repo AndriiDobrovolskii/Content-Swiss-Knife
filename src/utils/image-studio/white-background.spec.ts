@@ -132,10 +132,10 @@ describe('flattenBackgroundToWhite: the product and the shadow', () => {
   it('keeps the soft shadow: pixels well below white stay darker than #FFFFFF and the product is untouched', () => {
     const img = backdrop();
     fillRect(img, W, 20, 10, 40, 40, [200, 120, 60]);
-    // A shadow band under the product that fades from (205,205,210) at the product down to the backdrop.
+    // A shadow band under the product that fades from (170,170,175) at the product down to the backdrop.
     for (let y = 40; y < 52; y++) {
       const fade = (y - 40) / 11;
-      const base = Math.round(205 + fade * (244 - 205));
+      const base = Math.round(170 + fade * (244 - 170));
       for (let x = 14; x < 46; x++) set(img, W, x, y, [base, base, base + 3]);
     }
 
@@ -148,26 +148,28 @@ describe('flattenBackgroundToWhite: the product and the shadow', () => {
   });
 
   it('blends the shadow into the white without a seam: no adjacent step grows beyond a small bound', () => {
-    const img = backdrop();
+    // A tall frame so the shadow fades out as gently as a real one (about 2 levels per row, the sample's steepest is 1.4).
+    const height = 90;
+    const img = backdrop(W, height);
     fillRect(img, W, 20, 10, 40, 40, [200, 120, 60]);
-    for (let y = 40; y < 56; y++) {
-      const fade = (y - 40) / 15;
-      const base = Math.round(205 + fade * (244 - 205));
+    for (let y = 40; y < 80; y++) {
+      const fade = (y - 40) / 39;
+      const base = Math.round(170 + fade * (244 - 170));
       for (let x = 14; x < 46; x++) set(img, W, x, y, [base, base, base + 3]);
     }
 
-    const out = flattenBackgroundToWhite(img, W, H);
+    const out = flattenBackgroundToWhite(img, W, height);
 
     let widest = 0;
     let previous = get(out, W, 30, 40)[0];
-    for (let y = 41; y < H; y++) {
+    for (let y = 41; y < height; y++) {
       const value = get(out, W, 30, y)[0];
       expect(value, `row ${y} must not get darker going away from the product`).toBeGreaterThanOrEqual(previous);
       widest = Math.max(widest, value - previous);
       previous = value;
     }
     expect(widest).toBeLessThanOrEqual(8);
-    expect(get(out, W, 30, H - 1)).toEqual([255, 255, 255, 255]);
+    expect(get(out, W, 30, height - 1)).toEqual([255, 255, 255, 255]);
   });
 });
 

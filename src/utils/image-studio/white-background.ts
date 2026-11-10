@@ -10,8 +10,8 @@ import { CHIP_INSTRUCTIONS } from '../../prompt-core/prompt-presets';
  * The backdrop is the region reachable from the frame border through pixels that are (a) light and near-neutral and
  * (b) a smooth step away from their already-accepted neighbour. The fill starts only from border pixels close to the
  * typical border colour, so a light product that touches the frame does not seed it. A sharp product edge stops the fill, and a region the
- * product encloses is never reached. Inside the region a smoothstep ramp brings the nearly white part to exactly 255 and
- * lets the darker shadow keep its own value, so there is no seam where the two meet.
+ * product encloses is never reached. Inside the region the nearly white part becomes exactly 255 and the shadow's faint
+ * tail is brought up to meet its own value along a straight line, so there is no seam where the two meet.
  *
  * Known limit: a product whose colour equals the backdrop where it touches the frame border cannot be told apart from it
  * by any border fill.
@@ -21,9 +21,9 @@ import { CHIP_INSTRUCTIONS } from '../../prompt-core/prompt-presets';
 export const WHITE_BACKGROUND_PRESET_ID = 'white-bg';
 
 /** Darkness (255 - min channel) up to which a backdrop pixel becomes exactly white. */
-const D_WHITE = 12;
+const D_WHITE = 22;
 /** Darkness above which a pixel is never backdrop: it is shadow or product and keeps its own value. */
-const D_MAX = 36;
+const D_MAX = 70;
 /** The largest RGB distance between two neighbouring backdrop pixels; a gradient passes, a product edge does not. */
 const STEP = 8;
 /** The largest RGB distance between a border pixel and the typical (median) border colour for it to seed the fill. */
@@ -35,11 +35,6 @@ const REMOVE_BACKGROUND_TEXT = CHIP_INSTRUCTIONS.find((chip) => chip.id === 'rem
 export function needsWhiteBackground(input: { presetId?: string; text?: string }): boolean {
   if (input.presetId === WHITE_BACKGROUND_PRESET_ID) return true;
   return REMOVE_BACKGROUND_TEXT !== '' && input.text?.trim() === REMOVE_BACKGROUND_TEXT;
-}
-
-function smoothstep(t: number): number {
-  const c = t <= 0 ? 0 : t >= 1 ? 1 : t;
-  return c * c * (3 - 2 * c);
 }
 
 /** The median of 0..255 values (0 for an empty list). */
@@ -118,12 +113,14 @@ export function flattenBackgroundToWhite(rgba: Uint8ClampedArray, width: number,
     if (y < height - 1) visit(p, p + width);
   }
 
-  // 3. Remap the backdrop: darkness d -> d * smoothstep((d - D_WHITE) / (D_MAX - D_WHITE)), continuous at both ends.
+  // 3. Remap the backdrop's darkness: d <= D_WHITE -> 0 (pure white); D_WHITE < d < D_MAX -> (d - D_WHITE) * D_MAX / (D_MAX - D_WHITE),
+  //    a straight line that meets d at D_MAX, so there is no step at either end and the shadow tail is not compressed (a
+  //    smoothstep multiplier shortened the real sample's shadow by about 30 px, measured).
   for (let p = 0; p < pixels; p++) {
     if (inBackdrop[p] === 0) continue;
     const i = p * 4;
     const d = darkness(out[i], out[i + 1], out[i + 2]);
-    const factor = smoothstep((d - D_WHITE) / (D_MAX - D_WHITE));
+    const factor = d <= D_WHITE ? 0 : d >= D_MAX ? 1 : ((d - D_WHITE) * D_MAX) / ((D_MAX - D_WHITE) * d);
     for (let c = 0; c < 3; c++) out[i + c] = Math.round(255 - (255 - out[i + c]) * factor);
   }
   return out;
