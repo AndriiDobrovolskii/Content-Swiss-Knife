@@ -273,12 +273,15 @@ describe('FR-50 / D-4 / AC-27 (UI half): the model switch', () => {
     expect(Object.keys(h.sessionStore.snapshot().sessions).sort()).toEqual(before);
   });
 
-  it('FR-50 / D-4: with unsent text in the composer the model switch is inactive and creates no session', async () => {
-    h = await renderStudio(StudioComposerComponent, { sessions: [makeSession('s1', { pairs: 1 })] });
+  it('FR-50 (D-4 relaxed): with unsent text in the composer the model selector stays enabled and switching keeps the text', async () => {
+    h = await renderStudio(StudioComposerComponent);
     await h.user.type(byName.textarea('en'), 'unsent');
     await h.settle();
-    expect(byName.select('X-6', 'en').disabled).toBe(true);
-    expect(Object.keys(h.sessionStore.snapshot().sessions)).toEqual(['s1']);
+    expect(byName.select('X-6', 'en').disabled).toBe(false);
+    await h.user.selectOptions(byName.select('X-6', 'en'), MODEL_LABEL.pro);
+    await h.settle();
+    expect(byName.select('X-6', 'en').selectedOptions[0].textContent!.trim()).toBe(MODEL_LABEL.pro);
+    expect((byName.textarea('en') as HTMLTextAreaElement).value).toBe('unsent');
   });
 
   it('FR-50 / AC-27: with a version and an empty composer, switching Flash to Pro creates a NEW session seeded with the latest version as an attachment', async () => {

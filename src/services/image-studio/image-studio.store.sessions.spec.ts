@@ -394,27 +394,42 @@ describe('Store: model switch starts a new session (FR-50, SD-19, D-4; AC-27)', 
     expect(port.snapshot().sessions['a']).toEqual(before);
   });
 
-  it('FR-50 / D-4: the model switch is inactive while the composer holds unsent text, new uploads, or an unsent attached version', async () => {
-    const { store, port } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+  it('FR-50 (D-4 relaxed by the model-picker fix): unsent text, uploads or an attached version no longer lock the model switch', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
     await store.init();
     expect(store.modelSwitchLocked()).toBe(false);
 
     store.setDraft({ text: 'a half typed prompt' });
-    expect(store.modelSwitchLocked()).toBe(true);
-    expect(await store.switchModel(PRO)).toBe(false);
-    expect(store.sessions()).toHaveLength(1);
-
-    store.setDraft({ text: '   ' }); // whitespace is not unsent content
     expect(store.modelSwitchLocked()).toBe(false);
 
     await store.attach([{ fileUri: 'files/a', mimeType: 'image/png', fileName: 'a.png', bytes: new Uint8Array([1]) }]);
-    expect(store.modelSwitchLocked()).toBe(true);
-    expect(await store.switchModel(PRO)).toBe(false);
+    expect(store.modelSwitchLocked()).toBe(false);
 
     store.setDraft({ attachments: [], attachedVersion: { mimeType: 'image/png', data: PNG_B64, fromVersion: 1 } });
-    expect(store.modelSwitchLocked()).toBe(true);
-    expect(await store.switchModel(PRO)).toBe(false);
-    expect(Object.keys(port.snapshot().sessions)).toEqual(['a']);
+    expect(store.modelSwitchLocked()).toBe(false);
+  });
+
+  it('FR-50: switching with unsent text in a session that holds a version carries the text into the new session', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000, { pairs: 1 })] });
+    await store.init();
+    store.setDraft({ text: 'a half typed prompt' });
+
+    expect(await store.switchModel(PRO)).toBe(true);
+
+    expect(store.currentSessionId()).not.toBe('a');
+    expect(store.draft().model).toBe(PRO);
+    expect(store.draft().text).toBe('a half typed prompt');
+  });
+
+  it('SD-19: before the session holds a version, switching with unsent text keeps the text and sets only the model', async () => {
+    const { store } = await setup({ seed: [aged('a', 1_000)] });
+    await store.init();
+    store.setDraft({ text: 'a half typed prompt' });
+
+    expect(await store.switchModel(PRO)).toBe(true);
+
+    expect(store.currentSessionId()).toBe('a');
+    expect(store.draft()).toMatchObject({ model: PRO, text: 'a half typed prompt' });
   });
 
   it('FR-50 / FR-81: a seeded creation whose write fails (quota) creates no session, deletes none, and alerts once', async () => {
