@@ -5,6 +5,7 @@ import { applyProduct, type PromptPreset } from '../../prompt-core/prompt-preset
 import { applyResponse, InvalidResponseError } from '../../utils/image-studio/apply-response';
 import type { BuildInput } from '../../utils/image-studio/request-builder';
 import { createGenerationRunner, type RunOutcome } from '../../utils/image-studio/generation-runner';
+import { normalizeImageCount, type ImageCount } from '../../utils/image-studio/image-count';
 import { outputFormat } from '../../utils/image-studio/output-format';
 import { hasSendableContent } from '../../utils/image-studio/send-state';
 import {
@@ -73,6 +74,8 @@ export interface ComposerDraft {
   resolution: string;
   attachments: Attachment[];
   attachedVersion: AttachedVersion | null;
+  /** US-10.6 FR-4: the images asked for in one send (1, 2 or 4); any other value is normalised to 1 on write. */
+  imageCount: ImageCount;
 }
 
 /** The one pending error or notice, shown in the alert region. */
@@ -97,11 +100,16 @@ interface RetryTurn {
   sessionId: string;
   buildInput: BuildInput;
   draft: ComposerDraft;
+  /**
+   * US-10.6 FR-9 (b), OD-6 (b): set when the retry follows a PARTIAL result. The first turn is already committed, so its id
+   * is in the history and a retry of the same action must send a NEW turn id.
+   */
+  freshTurnId?: boolean;
 }
 
 function defaultDraft(model: string): ComposerDraft {
   return {
-    text: '', productName: '', presetId: null, checkedPresetId: null, model, aspectRatio: '1:1', resolution: '1K', attachments: [], attachedVersion: null,
+    text: '', productName: '', presetId: null, checkedPresetId: null, model, aspectRatio: '1:1', resolution: '1K', attachments: [], attachedVersion: null, imageCount: 1,
   };
 }
 
@@ -118,6 +126,7 @@ function sameTurnContent(a: ComposerDraft, b: ComposerDraft): boolean {
     a.model === b.model &&
     a.aspectRatio === b.aspectRatio &&
     a.resolution === b.resolution &&
+    a.imageCount === b.imageCount &&
     a.attachments.map((x) => x.fileUri).join('\n') === b.attachments.map((x) => x.fileUri).join('\n') &&
     (a.attachedVersion?.fromVersion ?? null) === (b.attachedVersion?.fromVersion ?? null)
   );
@@ -144,9 +153,15 @@ export class ImageStudioStore {
   private readonly running = signal<{ sessionId: string; controller: AbortController } | null>(null);
   private readonly blockedSessionId = signal<string | null>(null);
   private readonly eventLog = signal<StudioEvent[]>([]);
+  private readonly completedActions = signal(0);
 
   /** The text of the one `role="status"` region; '' when cleared. */
   readonly statusMessage = this.status.asReadonly();
+  /**
+   * US-10.6 FR-18 (c), OD-13: counts the actions that ended with at least one image committed (a partial result counts once, a
+   * multi-image success counts once). The container observes it to refresh the spend; the store does not inject the spend service.
+   */
+  readonly imageActionsCompleted = this.completedActions.asReadonly();
   /** The pending error or notice (alert region); cleared when the next action starts. */
   readonly message = this.pending.asReadonly();
   readonly sessions = computed(() => [...this.metas()].sort(newestFirst));
@@ -282,6 +297,8 @@ export class ImageStudioStore {
     const id = this.currentSessionId();
     if (id === null) return;
     const next = { ...this.draft(), ...patch };
+    // FR-4 failure path: a count outside the shared contract's counts is never kept (it would never be sent as a count).
+    if ('imageCount' in patch) next.imageCount = normalizeImageCount(patch.imageCount);
     this.drafts.update((all) => ({ ...all, [id]: next }));
   }
 
@@ -401,6 +418,7 @@ export class ImageStudioStore {
       model: draft.model,
       aspectRatio: draft.aspectRatio,
       resolution: draft.resolution,
+      imageCount: draft.imageCount,
       ...(draft.presetId !== null ? { presetId: draft.presetId } : {}),
     };
     await this.execute(session, buildInput, structuredClone(draft));
@@ -412,7 +430,9 @@ export class ImageStudioStore {
     const session = this.current();
     if (!retry || !session || this.generating() || !this.canRetry()) return;
     this.eventLog.update((all) => all.filter((e) => e.turnId !== retry.buildInput.newTurnId));
-    await this.execute(session, retry.buildInput, retry.draft);
+    // After a partial result the first turn is committed and its id is in the history: the retry draws a new one.
+    const buildInput = retry.freshTurnId ? { ...retry.buildInput, newTurnId: this.ids.next() } : retry.buildInput;
+    await this.execute(session, buildInput, retry.draft);
   }
 
   /** Cancel (FR-21): aborts the in-flight call; the runner ends the action as `cancelled`. */
@@ -548,6 +568,14 @@ export class ImageStudioStore {
     for (const turn of applied.batch.putTurns) byId.set(turn.id, turn);
     const turns = applied.batch.meta.turnOrder.map((id) => byId.get(id)).filter((t): t is Turn => t !== undefined);
     this.replaceStored(sessionId, { meta: applied.batch.meta, turns });
+
+    if (applied.newVersionNumbers.length > 0) this.completedActions.update((n) => n + 1);
+    const batch = outcome.response.kind === 'images' ? outcome.response.batch : undefined;
+    if (batch !== undefined && batch.succeeded < batch.requested) {
+      // A partial result (FR-9 (b)): the images stay and Retry applies to the whole action, so the composer gets the content back.
+      this.restoreDraft(sessionId, draft);
+      this.retryTurn.set({ sessionId, buildInput, draft, freshTurnId: true });
+    }
 
     if (outcome.type !== 'images') this.recordNonHistoryReply(outcome, sessionId, buildInput, draft);
     if (applied.notice) this.pending.set({ textId: 'T-9', params: { ...applied.notice }, region: 'alert' });
