@@ -2,7 +2,7 @@
  * Per-IP fixed-window rate limiter for the Image Studio generate route (US-10.1, DD-8).
  *
  * Contract:
- *   createRateLimiter({ limit, windowMs, now }) -> { tryConsume(key), trackedKeys() }
+ *   createRateLimiter({ limit, windowMs, now }) -> { tryConsume(key), tryConsumeUpTo(key, n), trackedKeys() }
  *
  * - `tryConsume` is one synchronous check-and-increment. There is no `await` between the check and the
  *   increment, so concurrent requests cannot take a key past `limit` (FR-66).
@@ -51,6 +51,34 @@ export function createRateLimiter({ limit, windowMs, now }) {
 
       const msLeft = entry.start + windowMs - at;
       return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(msLeft / 1000)) };
+    },
+
+    /**
+     * Atomic partial grant (US-10.6 FR-8, NFR-6): counts min(remaining, n) units for `key` in ONE synchronous
+     * check-and-increment (no `await` between the check and the increment). Granted units are counted exactly
+     * like `tryConsume` units (same key, same window, same limit). When nothing is left it grants 0, carries
+     * `retryAfterSeconds` (whole seconds left in the window, rounded up) and neither counts nor moves the window.
+     * @param {string} key
+     * @param {number} n units asked for (a positive integer)
+     * @returns {{ granted: number, retryAfterSeconds: number }}
+     */
+    tryConsumeUpTo(key, n) {
+      if (!Number.isInteger(n) || n < 1) return { granted: 0, retryAfterSeconds: 0 };
+
+      const at = now();
+      sweep(at);
+
+      const entry = entries.get(key);
+      const remaining = limit - (entry ? entry.count : 0);
+      if (remaining < 1) {
+        const msLeft = (entry ? entry.start : at) + windowMs - at;
+        return { granted: 0, retryAfterSeconds: Math.max(1, Math.ceil(msLeft / 1000)) };
+      }
+
+      const granted = Math.min(remaining, n);
+      if (entry) entry.count += granted;
+      else entries.set(key, { start: at, count: granted });
+      return { granted, retryAfterSeconds: 0 };
     },
 
     /** Number of keys currently held (after the most recent sweep). */
