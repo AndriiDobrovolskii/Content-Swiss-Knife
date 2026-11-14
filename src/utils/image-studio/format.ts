@@ -6,6 +6,9 @@
  * machine and in every test.
  */
 
+import { studioCount } from './plural';
+import type { StudioLanguage } from './studio-texts';
+
 const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_DAY = 1440;
 
@@ -50,6 +53,28 @@ function isNonNegativeFinite(value: unknown): value is number {
 /** `$` + two decimals for a finite number >= 0 (a stored zero renders `$0.00`); null for anything else. */
 export function formatCost(cost: unknown): string | null {
   return isNonNegativeFinite(cost) ? `$${cost.toFixed(2)}` : null;
+}
+
+/**
+ * `$` + `decimals` decimals for a finite number >= 0; null for anything else (US-10.6 FR-20, AC-13).
+ * Rounds for display only (Rule A): the amount stored or passed in is never rounded by the caller.
+ */
+export function formatMoney(amount: unknown, decimals: number): string | null {
+  return isNonNegativeFinite(amount) ? `$${amount.toFixed(decimals)}` : null;
+}
+
+/** Decimals of the pre-send estimate text (owner ruling SM-7 i: two decimals). */
+const ESTIMATE_DECIMALS = 2;
+
+/**
+ * The pre-send estimate text "≈ $X for N images" (US-10.6 FR-20, AC-13) through the plural family X-54. `amount` is
+ * the UNROUNDED estimate; it is rounded here, for display. The dollar sign is part of the X-54 text, so `{amount}`
+ * is the formatted money without its own sign. Null when the amount is null (an unpriced pair shows no number).
+ */
+export function formatEstimate(amount: number | null, n: number, lang: StudioLanguage): string | null {
+  const money = formatMoney(amount, ESTIMATE_DECIMALS);
+  if (money === null) return null;
+  return studioCount('X-54', lang, n, { amount: money.slice(1) });
 }
 
 /** One decimal of `durationMs / 1000` for a finite number >= 0; null for anything else. */
