@@ -1,4 +1,5 @@
 import { CHIP_INSTRUCTIONS } from '../../prompt-core/prompt-presets';
+import { normalizeImageCount } from './image-count';
 import type { Part, StoredSession, Turn } from './ports';
 
 /**
@@ -25,6 +26,16 @@ export interface BuildInput {
   aspectRatio: string;
   resolution: string;
   presetId?: string;
+  /**
+   * US-10.6 FR-4: the images asked for in this ONE request. Emitted only when greater than 1, so a one-image request is
+   * byte-identical to one built without the field. A value outside the shared contract's counts is treated as 1.
+   */
+  imageCount?: number;
+  /**
+   * US-10.6 FR-1, FR-3 (Upscale and Variation): the request carries an EMPTY history; the new turn is built as always
+   * (text, uploads, then the attached version inline), so the source version travels in the turn, not in the history.
+   */
+  omitHistory?: boolean;
 }
 
 export interface GenerateRequest {
@@ -32,6 +43,7 @@ export interface GenerateRequest {
   aspectRatio: string;
   resolution: string;
   presetId?: string;
+  imageCount?: number;
   history: Turn[];
   newTurn: { id: string; parts: Part[] };
 }
@@ -96,9 +108,11 @@ export function buildGenerateRequest(
 
   const byId = new Map(snapshot.turns.map((turn) => [turn.id, turn]));
   const history: Turn[] = [];
-  for (const id of snapshot.meta.turnOrder) {
-    const turn = byId.get(id);
-    if (turn) history.push(structuredClone(toResendTurn(turn)));
+  if (input.omitHistory !== true) {
+    for (const id of snapshot.meta.turnOrder) {
+      const turn = byId.get(id);
+      if (turn) history.push(structuredClone(toResendTurn(turn)));
+    }
   }
 
   const request: GenerateRequest = {
@@ -106,6 +120,7 @@ export function buildGenerateRequest(
     aspectRatio: input.aspectRatio,
     resolution: input.resolution,
     ...(input.presetId !== undefined ? { presetId: input.presetId } : {}),
+    ...(normalizeImageCount(input.imageCount) > 1 ? { imageCount: normalizeImageCount(input.imageCount) } : {}),
     history,
     newTurn: { id: input.newTurnId, parts },
   };
