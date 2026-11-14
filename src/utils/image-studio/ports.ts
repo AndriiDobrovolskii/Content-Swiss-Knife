@@ -128,6 +128,11 @@ export interface Turn {
   presetId?: string;
   /** The input images of the send: the user-turn parts it used. */
   inputRefs?: { turnId: string; partIndex: number }[];
+  /**
+   * US-10.6 FR-14: the index in `parts` of the image sent as a Style reference. The role tag lives at turn level and
+   * never on a Part, so it is never sent to the model; absent means every image is Product.
+   */
+  styleRefPartIndex?: number;
 }
 
 /** One retained generated image of a session. */
