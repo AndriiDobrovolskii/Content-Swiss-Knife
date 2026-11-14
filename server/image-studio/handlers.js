@@ -18,9 +18,8 @@
 import { describeError } from '../utils/describe-error.js';
 import { findImageModel } from '../providers/model-support.js';
 import { PriceNotConfiguredError } from '../usage/pricing.js';
-import { classifyResponse } from './classify-response.js';
 import { ImageStudioError } from './errors.js';
-import { isFileMissing } from './file-missing.js';
+import { runSlots, reduceSlots } from './fan-out.js';
 import { detectImageType } from './magic-bytes.js';
 import { parseGenerateRequest, parseUploadRequest } from './request-schema.js';
 import { runWithRetry } from './retry-loop.js';
@@ -155,12 +154,13 @@ function toContent(turn) {
 /**
  * POST /api/image-studio/generate. Order (FR-27), the first failing check answers and later steps neither run
  * nor count: body validation 400 -> key check 501 -> size trim and byte test 413 -> token trim and token
- * test 413 -> the ATOMIC limiter step 429 -> Gemini generate under the retry loop -> classification ->
- * price -> usage row -> response.
+ * test 413 -> the ATOMIC limiter step 429 -> `granted` parallel Gemini generate calls, each under the retry
+ * loop -> classification -> price -> one usage row per successful call -> response.
  *
- * `deps.limiter.tryConsume(ip)` is called exactly once, outside the retry loop (DD-8); `deps.price(modelId,
- * resolution, nonThoughtImageCount)` throws PriceNotConfiguredError for an unpriced pair; `deps.insertUsage(row)` writes
- * the one usage row, whose failure is logged and never changes the 200.
+ * `deps.limiter.tryConsume(ip)` (one image) or `deps.limiter.tryConsumeUpTo(ip, N)` (US-10.6, N > 1) is called
+ * exactly once, outside the retry loop (DD-8); `deps.price(modelId, resolution, nonThoughtImageCount)` throws
+ * PriceNotConfiguredError for an unpriced pair; `deps.insertUsage(row)` writes each usage row, whose failure is
+ * logged and never changes the 200. The response carries `batch` only when more than one image was requested.
  */
 export function createGenerateHandler(deps) {
   const { getGemini, hasGeminiKey, sleep, limiter, insertUsage, price, log } = deps;
@@ -176,7 +176,7 @@ export function createGenerateHandler(deps) {
 
       // The price-pair check precedes every upstream call and the limiter (US-10.6 OD-15, plan 5.2 step 2): an
       // unpriced pair is refused here, so no count call, no limiter unit, no generate call and no row happen.
-      priceOrRefuse(price, log, model, resolution, 1);
+      const unitPrice = priceOrRefuse(price, log, model, resolution, 1);
 
       const gemini = await getGemini();
       const newTurn = { id: request.newTurn.id, role: 'user', parts: request.newTurn.parts };
@@ -198,30 +198,43 @@ export function createGenerateHandler(deps) {
       });
       const { trimmedTurnIds } = trimmed;
 
-      // The atomic limiter step: one unit per request, outside the retry loop (FR-66, FR-68).
-      const gate = limiter.tryConsume(req.ip);
-      if (!gate.allowed) {
-        res.set('Retry-After', String(gate.retryAfterSeconds));
-        throw new ImageStudioError('RATE_LIMIT_EXCEEDED');
+      // The atomic limiter step, outside the retry loop (FR-66, FR-68, DD-8). One image (imageCount omitted or 1) is
+      // the unchanged `tryConsume` path; more than one asks `tryConsumeUpTo` for a partial grant of N units in one
+      // synchronous step (US-10.6 FR-8, OD-5). A grant of 0 is the existing 429.
+      const requested = request.imageCount ?? 1;
+      let granted;
+      if (requested === 1) {
+        const gate = limiter.tryConsume(req.ip);
+        if (!gate.allowed) {
+          res.set('Retry-After', String(gate.retryAfterSeconds));
+          throw new ImageStudioError('RATE_LIMIT_EXCEEDED');
+        }
+        granted = 1;
+      } else {
+        const gate = limiter.tryConsumeUpTo(req.ip, requested);
+        if (gate.granted === 0) {
+          res.set('Retry-After', String(gate.retryAfterSeconds));
+          throw new ImageStudioError('RATE_LIMIT_EXCEEDED');
+        }
+        granted = gate.granted;
       }
 
       const contents = [...trimmed.history, newTurn].map(toContent);
       const requestCarriedFileUri = carriesFileUri(contents);
-      let response;
-      try {
-        response = await runWithRetry(
-          () => logged(log, 'generate', () => gemini.generateImage({ model, contents, aspectRatio, resolution, signal })),
-          { sleep, signal },
-        );
-      } catch (error) {
-        if (!signal.aborted && isFileMissing({ requestCarriedFileUri, status: error?.status, message: String(error?.message ?? '') })) {
-          throw new ImageStudioError('FILE_MISSING');
-        }
-        throw error;
-      }
+
+      // `granted` single-image upstream calls run in parallel under the one abort signal (plan 5.0, 5.2). Each is
+      // its own retry run; a failed slot is an outcome, not an exception (a FILE_MISSING signature included).
+      const slots = await runSlots({
+        granted,
+        call: () => logged(log, 'generate', () => gemini.generateImage({ model, contents, aspectRatio, resolution, signal })),
+        sleep,
+        signal,
+        requestCarriedFileUri,
+      });
+      // Cancel discards the whole action (G-2): no row, no body, once the response is gone.
       if (signal.aborted) return;
 
-      const result = classifyResponse(response);
+      const result = reduceSlots({ slots, requested, unitPrice });
       if (result.class === 'safety') {
         res.status(200).json({ kind: 'safety', reason: result.reason, trimmedTurnIds });
         return;
@@ -232,24 +245,25 @@ export function createGenerateHandler(deps) {
       }
       if (result.class === 'failed') throw new ImageStudioError('EMPTY_RESPONSE');
 
-      // Class 2 (images). A missing price outranks the success (FR-26 precedence): no row, no cost.
-      const costUsd = priceOrRefuse(price, log, model, resolution, result.imageCount);
+      // Class 2 (images). A missing price outranks the success (FR-26 precedence): no row, no cost. One row per
+      // successful call (one upstream call = one slot), priced at that call's own image count (plan 5.0, FR-9 (d)).
+      const successful = slots.filter((slot) => slot.outcome.class === 'images');
+      const slotCosts = successful.map((slot) => priceOrRefuse(price, log, model, resolution, slot.outcome.imageCount));
+      const costUsd = priceOrRefuse(price, log, model, resolution, result.succeeded);
 
-      const row = buildUsageRow({ model, presetId, resolution, usageMetadata: response?.usageMetadata, costUsd });
-      try {
-        await insertUsage(row);
-      } catch (error) {
-        // Persistence must never fail the generation response (FR-69).
-        log(`[ImageStudio] generate: failed to record usage: ${redact(describeError(error))}`);
+      for (const [i, slot] of successful.entries()) {
+        const row = buildUsageRow({ model, presetId, resolution, usageMetadata: slot.outcome.usageMetadata, costUsd: slotCosts[i] });
+        try {
+          await insertUsage(row);
+        } catch (error) {
+          // Persistence must never fail the generation response (FR-69).
+          log(`[ImageStudio] generate: failed to record usage: ${redact(describeError(error))}`);
+        }
       }
 
-      res.status(200).json({
-        kind: 'images',
-        parts: result.parts,
-        costUsd,
-        usage: { inputTokens: row.inputTokens, outputTokens: row.outputTokens },
-        trimmedTurnIds,
-      });
+      const responseBody = { kind: 'images', parts: result.parts, costUsd, usage: result.usage, trimmedTurnIds };
+      if (result.batch) responseBody.batch = result.batch;
+      res.status(200).json(responseBody);
     } catch (error) {
       answerError(res, error, { signal, log, route: 'generate' });
     }
