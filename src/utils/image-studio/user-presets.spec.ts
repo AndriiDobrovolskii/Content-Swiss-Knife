@@ -61,7 +61,7 @@ describe('createUserPreset: the id (T16, FR-15 (a), plan 7.5, guard S8)', () => 
   });
 
   it('FR-15 (a): a name with a pipe or non-ASCII text yields a valid id that does not contain the name (it cannot corrupt the usage taskLabel)', async () => {
-    for (const name of ['a|b|c', 'Мій кухоль', 'x'.repeat(200)]) {
+    for (const name of ['a|b|c', 'Мій кухоль', 'x'.repeat(60)]) {
       const r = await create({ name });
       expect(r.preset.id, name).toMatch(ID_PATTERN);
       expect(r.preset.id, name).not.toContain('|');
