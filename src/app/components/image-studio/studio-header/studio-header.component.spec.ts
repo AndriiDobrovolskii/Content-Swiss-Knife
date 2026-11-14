@@ -172,3 +172,106 @@ describe('FR-86 / D-23 / SD-41 / D-24 (moved from the session list, D-4): creati
     expect(h.store.sessions()).toHaveLength(20);
   });
 });
+import { TestBed } from '@angular/core/testing';
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T37 - the header shows "Today $X · month $Y" (AC-12, FR-18, FR-19; owner copy X-53, placement: the right end of the header; G-8 OD-13).
+// PINNED CONTRACT: the header only RENDERS SpendService.state (the root service, src/services/image-studio/spend.service.ts) and fetches nothing itself (the container triggers
+// the fetches, T38). While loading, before any refresh and after a failed fetch it shows NO figure (no `$` amount, in particular never "$0.00" for an unknown value); once ready it
+// shows "Today $X · month $Y" with two decimals; a month with no Image Studio rows shows $0.00 for both. The spec drives SpendService.refresh() itself and answers /api/usage.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('AC-12 / FR-18: the spend figures in the header (T37)', () => {
+  const NOW = Date.UTC(2026, 10, 14, 12, 0);
+  const row = (ts: number, costUsd: number, over: Record<string, unknown> = {}) => ({
+    id: ts, ts, provider: 'gemini', model: 'gemini-3.1-flash-image', mode: null, taskLabel: 'image-studio|none|1K', productName: null, store: null, lang: null,
+    inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, costUsd, ...over,
+  });
+  const USAGE_URL = (r: { url: string }) => r.url === '/api/usage';
+
+  async function renderHeader(lang: 'en' | 'uk' = 'en') {
+    const h = await renderStudio(StudioHeaderComponent, { lang, sessions: [makeSession('s1')] });
+    h.clock.set(NOW);
+    const spendPath = '../../../../services/image-studio/spend.service';
+    const { SpendService } = await import(/* @vite-ignore */ spendPath);
+    const spend = TestBed.inject(SpendService) as unknown as { refresh(): Promise<void> };
+    return { h, spend };
+  }
+  const headerEl = (h: Harness) => h.view.container.querySelector('header') as HTMLElement;
+
+  it('rendering the header alone issues NO usage request and shows no amount', async () => {
+    const { h } = await renderHeader();
+    h.http.expectNone(USAGE_URL);
+    expect(headerEl(h).textContent).not.toMatch(/\$/);
+  });
+
+  it('AC-12: after a refresh the header reads "Today $0.25 · month $1.00" - Image Studio rows only, text-generation rows excluded, UTC day and month', async () => {
+    const { h, spend } = await renderHeader();
+    const refreshing = spend.refresh();
+    const req = h.http.expectOne(USAGE_URL);
+    req.flush({ rows: [
+      row(Date.UTC(2026, 10, 14, 9), 0.25),
+      row(Date.UTC(2026, 10, 3, 8), 0.75),
+      row(Date.UTC(2026, 10, 14, 10), 1000, { provider: 'anthropic', mode: 'generator', taskLabel: 'task-a' }),
+      row(Date.UTC(2026, 9, 30, 23), 500),
+    ] });
+    await refreshing;
+    await h.settle();
+    expect(headerEl(h).textContent).toContain('Today $0.25 · month $1.00');
+  });
+
+  it('FR-19 / AC-12: the request starts at the UTC start of the current month', async () => {
+    const { h, spend } = await renderHeader();
+    const refreshing = spend.refresh();
+    const req = h.http.expectOne(USAGE_URL);
+    expect(req.request.params.get('from')).toBe(String(Date.UTC(2026, 10, 1)));
+    req.flush({ rows: [] });
+    await refreshing;
+  });
+
+  it('FR-18: a month with no Image Studio rows shows $0.00 for both figures (a known zero, not a placeholder)', async () => {
+    const { h, spend } = await renderHeader();
+    const refreshing = spend.refresh();
+    h.http.expectOne(USAGE_URL).flush({ rows: [] });
+    await refreshing;
+    await h.settle();
+    expect(headerEl(h).textContent).toContain('Today $0.00 · month $0.00');
+  });
+
+  it('FR-18 (d): while the request is pending the header shows no amount', async () => {
+    const { h, spend } = await renderHeader();
+    const refreshing = spend.refresh();
+    await h.settle();
+    expect(headerEl(h).textContent).not.toMatch(/\$/);
+    h.http.expectOne(USAGE_URL).flush({ rows: [] });
+    await refreshing;
+  });
+
+  it('FR-18 (d): after a FAILED fetch the header shows no amount - never "$0.00" - and the rest of the header still works', async () => {
+    const { h, spend } = await renderHeader();
+    const refreshing = spend.refresh();
+    h.http.expectOne(USAGE_URL).flush({ error: 'x' }, { status: 500, statusText: 'Server Error' });
+    await refreshing;
+    await h.settle();
+    expect(headerEl(h).textContent).not.toMatch(/\$/);
+    expect(screen.getByRole('button', { name: LABELS.en.newSession })).toBeDefined();
+  });
+
+  it('UA copy: "Сьогодні $0.25 · місяць $1.00"', async () => {
+    const { h, spend } = await renderHeader('uk');
+    const refreshing = spend.refresh();
+    h.http.expectOne(USAGE_URL).flush({ rows: [row(Date.UTC(2026, 10, 14, 9), 0.25), row(Date.UTC(2026, 10, 3, 8), 0.75)] });
+    await refreshing;
+    await h.settle();
+    expect(headerEl(h).textContent).toContain('Сьогодні $0.25 · місяць $1.00');
+  });
+
+  it('FR-18 (f): the per-session total is not replaced - the header text is a plain text, not a role="status"', async () => {
+    const { h, spend } = await renderHeader();
+    const refreshing = spend.refresh();
+    h.http.expectOne(USAGE_URL).flush({ rows: [] });
+    await refreshing;
+    await h.settle();
+    expect(screen.queryAllByRole('status')).toHaveLength(0);
+  });
+});

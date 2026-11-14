@@ -378,17 +378,17 @@ describe('US-10.5 FR-15 / FR-16 / FR-26 / FR-27: the restyled composer layout (T
     expect(byName.product('en')).toBeDefined();
   });
 
-  it('FR-8 / AC-10 absence: no "Images 1/2/4" selector, no reference-role selector, no cost or time estimate, no "Save current as preset"', async () => {
+  // US-10.6 (OD-16 completion, G-6): the Images selector (4th combobox), the Product / Style ref label, "Save current as preset" and the "≈ $X for N images" estimate are now IN scope (AC-3, AC-6, AC-10, AC-13)
+  // and are asserted present in the US-10.6 describes; a literal "1/2/4" string, a "Reference role" selector and time wording stay absent.
+  it('FR-8 / AC-10 absence (narrowed by US-10.6): no literal "Images 1/2/4" text, no "Reference role" selector, no time estimate wording', async () => {
     h = await renderStudio(StudioComposerComponent, { sessions: [makeSession('s1', { pairs: 1 })] });
     const text = h.view.container.textContent ?? '';
     expect(text).not.toMatch(/Images\s*1\s*\/\s*2\s*\/\s*4|1\s*\/\s*2\s*\/\s*4/);
-    expect(text).not.toMatch(/Product ref|Style ref|Reference role/i);
-    expect(text).not.toMatch(/estimate|Estimated|≈|~\s?\$|\bseconds?\b/i);
-    expect(text).not.toMatch(/Save (current )?as preset/i);
-    expect(screen.queryByRole('button', { name: /Save.*preset/i })).toBeNull();
-    // the only comboboxes are the three selects of FR-16: ratio, resolution, model
-    expect(screen.getAllByRole('combobox')).toHaveLength(3);
-    expect(screen.queryByRole('combobox', { name: /images|count|reference|role/i })).toBeNull();
+    expect(text).not.toMatch(/Reference role/i);
+    expect(text).not.toMatch(/estimate|Estimated|~\s?\$|\bseconds?\b/i);
+    // the comboboxes are the three selects of FR-16 (ratio, resolution, model) plus the Images selector of US-10.6 (AC-3)
+    expect(screen.getAllByRole('combobox')).toHaveLength(4);
+    expect(screen.queryByRole('combobox', { name: /reference|role/i })).toBeNull();
   });
 
   it('FR-8 absence in the preset row: it offers exactly the five presets and nothing else in the group', async () => {
@@ -589,5 +589,278 @@ describe('US-10.5 FR-14 (i)/(c): the check mark is conveyed programmatically and
     h = await renderStudio(StudioComposerComponent);
     const all = within(screen.getByRole('group', { name: t('X-13', 'en') })).getAllByRole('button');
     expect(all.filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(0);
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T33 - the Images selector and the pre-send estimate next to Generate (FR-4, FR-20, FR-21; AC-3, AC-13; owner rulings SM-7 i, placement as proposed,
+// UA copy as proposed, G-8 OD-14 a/d).
+// PINNED DOM CONTRACT: a <select> (role combobox) named X-47 ("Images" / "Кількість") with the options 1, 2, 4, default 1, placed BEFORE the aspect-ratio, resolution
+// and model selects; the estimate is plain text (X-54 family, T24) placed BEFORE the Generate button, NOT role="status"; it makes no request; it updates with the
+// image count, the resolution and the model; changing the count changes draft().imageCount and the request that is sent.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('AC-3 / FR-4: the Images selector (T33)', () => {
+  const imagesSelect = (lang: 'en' | 'uk' = 'en') => screen.getByRole('combobox', { name: t('X-47', lang) }) as HTMLSelectElement;
+
+  it('AC-3: a combobox named "Images" offers exactly 1, 2 and 4 and defaults to 1', async () => {
+    h = await renderStudio(StudioComposerComponent);
+    const select = imagesSelect();
+    expect(within(select).getAllByRole('option').map((o) => o.textContent!.trim())).toEqual(['1', '2', '4']);
+    expect(select.value).toBe('1');
+  });
+
+  it('placement (owner ruling): the Images select comes before the aspect ratio, resolution and model selects in the controls row', async () => {
+    h = await renderStudio(StudioComposerComponent);
+    for (const id of ['X-4', 'X-5', 'X-6']) {
+      expect(imagesSelect().compareDocumentPosition(byName.select(id, 'en')) & Node.DOCUMENT_POSITION_FOLLOWING, id).toBeTruthy();
+    }
+  });
+
+  it('AC-3: choosing 4 sets the draft count, and the Generate request carries imageCount 4', async () => {
+    h = await renderStudio(StudioComposerComponent, { sessions: [makeSession('s1')] });
+    await h.user.selectOptions(imagesSelect(), '4');
+    expect((h.store.draft() as any).imageCount).toBe(4);
+    await h.user.type(byName.textarea('en'), 'a white mug');
+    await h.user.click(byName.button(t('X-1', 'en')));
+    const body = expectGenerate(h).request.body as { imageCount?: number };
+    expect(body.imageCount).toBe(4);
+  });
+
+  it('FR-4: with 1 selected the request carries no imageCount field [characterization]', async () => {
+    h = await renderStudio(StudioComposerComponent, { sessions: [makeSession('s1')] });
+    await h.user.type(byName.textarea('en'), 'a white mug');
+    await h.user.click(byName.button(t('X-1', 'en')));
+    expect('imageCount' in (expectGenerate(h).request.body as object)).toBe(false);
+  });
+
+  it('the label follows the language: "Кількість" in Ukrainian', async () => {
+    h = await renderStudio(StudioComposerComponent, { lang: 'uk' });
+    expect(imagesSelect('uk')).toBeDefined();
+  });
+});
+
+describe('AC-13 / FR-20: the estimate next to Generate (T33)', () => {
+  const estimate = () => screen.getByText(/^≈ \$/);
+
+  it('AC-13: for the default Flash 1K and 1 image it reads "≈ $0.07 for 1 image" (0.067 rounded for display only)', async () => {
+    h = await renderStudio(StudioComposerComponent);
+    expect(estimate().textContent!.trim()).toBe('≈ $0.07 for 1 image');
+  });
+
+  it('AC-13: it updates with the image count - 4 images read "≈ $0.27 for 4 images" (0.067 x 4 = 0.268)', async () => {
+    h = await renderStudio(StudioComposerComponent);
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '4');
+    expect(estimate().textContent!.trim()).toBe('≈ $0.27 for 4 images');
+  });
+
+  it('AC-13: it updates with the resolution - Flash 2K x 4 = 0.404 reads "≈ $0.40 for 4 images"', async () => {
+    h = await renderStudio(StudioComposerComponent);
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '4');
+    await h.user.selectOptions(byName.select('X-5', 'en'), '2K');
+    expect(estimate().textContent!.trim()).toBe('≈ $0.40 for 4 images');
+  });
+
+  it('AC-13: it updates with the model - Pro 1K x 2 = 0.268 reads "≈ $0.27 for 2 images", and Pro 4K x 4 = 0.96', async () => {
+    h = await renderStudio(StudioComposerComponent);
+    await h.user.selectOptions(byName.select('X-6', 'en'), MODEL_LABEL.pro);
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '2');
+    expect(estimate().textContent!.trim()).toBe('≈ $0.27 for 2 images');
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '4');
+    await h.user.selectOptions(byName.select('X-5', 'en'), '4K');
+    expect(estimate().textContent!.trim()).toBe('≈ $0.96 for 4 images');
+  });
+
+  it('SM-7 i / FR-20 (c): the Ukrainian estimate uses "зображення" for 1, 2 and 4 - "≈ $0.07 за 1 зображення"', async () => {
+    h = await renderStudio(StudioComposerComponent, { lang: 'uk' });
+    expect(estimate().textContent!.trim()).toBe('≈ $0.07 за 1 зображення');
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'uk') }), '4');
+    expect(estimate().textContent!.trim()).toBe('≈ $0.27 за 4 зображення');
+  });
+
+  it('placement (owner ruling): the estimate is to the left of the Generate button (earlier in document order) and is not a status region', async () => {
+    h = await renderStudio(StudioComposerComponent);
+    const generate = byName.button(t('X-29', 'en'));
+    expect(estimate().compareDocumentPosition(generate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(estimate().closest('[role="status"]')).toBeNull();
+    expect(screen.queryAllByRole('status')).toHaveLength(0);
+  });
+
+  it('FR-20: the estimate needs no request - choosing a count, a resolution and a model issues no HTTP call', async () => {
+    h = await renderStudio(StudioComposerComponent);
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '2');
+    await h.user.selectOptions(byName.select('X-5', 'en'), '2K');
+    h.http.expectNone(() => true);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T35 - the presets row: user presets, "+ Save current as preset", delete (FR-15..FR-17; AC-10, AC-10a, AC-11; owner rulings SM-6, G-8 OD-12, placement as proposed).
+// PINNED DOM CONTRACT: the registry group (role group named X-13) stays EXACTLY the five registry buttons (its existing cases are unchanged); the user presets and the last
+// (dashed) "+ Save current as preset" pill (button named X-50) are siblings of that group in the same row, AFTER it - not inside it. Clicking the pill shows a textbox named X-51
+// ("Preset name"); Enter saves the current prompt, ratio, resolution and model under the typed name; a user preset is a button named by its name that applies like a registry
+// preset (aria-pressed marks it); each has a delete button named X-52 ("Delete preset "{name}"") that is in the accessibility tree, tabbable and not hidden; registry
+// presets have none. Storage goes through the USER_PRESET_STORAGE_PORT token (here a spec-local in-memory fake shared across renders, the "page reload").
+// ---------------------------------------------------------------------------------------------------------------------
+describe('AC-10 / AC-10a / AC-11: user presets in the presets row (T35)', () => {
+  function makePort(initial: unknown = []) {
+    const state = { stored: { ok: true as boolean, presets: initial as unknown }, failSaves: false, saveCalls: 0 };
+    return {
+      state,
+      load: () => state.stored,
+      save: (presets: unknown[]) => {
+        state.saveCalls += 1;
+        if (state.failSaves) return { ok: false };
+        state.stored = { ok: true, presets: structuredClone(presets) };
+        return { ok: true };
+      },
+    };
+  }
+  async function render(port: ReturnType<typeof makePort>, opts: { lang?: 'en' | 'uk'; sessions?: ReturnType<typeof makeSession>[] } = {}) {
+    const tokens = await import('../../../../services/image-studio/image-studio.tokens') as Record<string, unknown>;
+    return renderStudio(StudioComposerComponent, {
+      ...(opts.lang ? { lang: opts.lang } : {}),
+      sessions: opts.sessions ?? [makeSession('s1')],
+      extraProviders: [{ provide: tokens['USER_PRESET_STORAGE_PORT'], useValue: port }],
+    });
+  }
+  const saveBtn = (lang: 'en' | 'uk' = 'en') => byName.button(t('X-50', lang));
+  async function saveAs(name: string, lang: 'en' | 'uk' = 'en') {
+    await h.user.click(saveBtn(lang));
+    const input = await screen.findByRole('textbox', { name: t('X-51', lang) });
+    await h.user.type(input, `${name}{Enter}`);
+    await h.settle();
+  }
+  const registryGroup = (lang: 'en' | 'uk' = 'en') => screen.getByRole('group', { name: t('X-13', lang) });
+  const deleteBtn = (name: string, lang: 'en' | 'uk' = 'en') => screen.getByRole('button', { name: t('X-52', lang, { name }) });
+
+  it('AC-10: the pill "+ Save current as preset" is the last pill of the row, after the registry group and outside it', async () => {
+    h = await render(makePort());
+    const pill = saveBtn();
+    expect(pill.closest('[role="group"]')).not.toBe(registryGroup());
+    expect(registryGroup().contains(pill)).toBe(false);
+    expect(registryGroup().compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(registryGroup()).getAllByRole('button')).toHaveLength(5);
+  });
+
+  it('AC-10: saving stores the current prompt, ratio, resolution and model under the typed name; it appears as a pill after the registry group', async () => {
+    h = await render(makePort());
+    await h.user.type(byName.textarea('en'), 'A mug on a desk, soft light');
+    await h.user.selectOptions(byName.select('X-4', 'en'), '4:5');
+    await h.user.selectOptions(byName.select('X-5', 'en'), '2K');
+    await saveAs('My mug shot');
+    const pill = screen.getByRole('button', { name: 'My mug shot' });
+    expect(registryGroup().contains(pill)).toBe(false);
+    expect(registryGroup().compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('AC-10: choosing the saved preset applies it exactly like a registry one - prompt, ratio, resolution filled and the pill marked pressed', async () => {
+    h = await render(makePort());
+    await h.user.type(byName.textarea('en'), 'A mug on a desk, soft light');
+    await h.user.selectOptions(byName.select('X-4', 'en'), '4:5');
+    await h.user.selectOptions(byName.select('X-5', 'en'), '2K');
+    await saveAs('My mug shot');
+    await h.user.clear(byName.textarea('en'));
+    await h.user.selectOptions(byName.select('X-4', 'en'), '1:1');
+    await h.user.click(screen.getByRole('button', { name: 'My mug shot' }));
+    expect(byName.textarea('en').value).toBe('A mug on a desk, soft light');
+    expect(byName.select('X-4', 'en').value).toBe('4:5');
+    expect(byName.select('X-5', 'en').value).toBe('2K');
+    expect(screen.getByRole('button', { name: 'My mug shot' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('AC-10 (survives a reload): a new render over the same storage shows the saved preset', async () => {
+    const port = makePort();
+    h = await render(port);
+    await h.user.type(byName.textarea('en'), 'A mug');
+    await saveAs('Keeps after reload');
+    h.view.fixture.destroy();
+    document.body.innerHTML = '';
+    h = await render(port);
+    expect(screen.getByRole('button', { name: 'Keeps after reload' })).toBeDefined();
+  });
+
+  it('AC-10a: each user preset has a delete button named "Delete preset "{name}"" that is in the accessibility tree, tabbable and not hidden; registry presets have none', async () => {
+    h = await render(makePort());
+    await h.user.type(byName.textarea('en'), 'A mug');
+    await saveAs('My mug');
+    const del = deleteBtn('My mug');
+    expect(del.hasAttribute('hidden')).toBe(false);
+    expect(del.closest('[aria-hidden="true"]')).toBeNull();
+    expect(del.tabIndex).toBeGreaterThanOrEqual(0);
+    del.focus();
+    expect(document.activeElement).toBe(del);
+    expect(screen.getAllByRole('button', { name: /^Delete preset/ })).toHaveLength(1);
+    expect(within(registryGroup()).queryAllByRole('button', { name: /^Delete preset/ })).toHaveLength(0);
+  });
+
+  it('AC-10a: deleting removes it from the row and from storage (immediately, no confirmation, OD-12 f); the registry group is untouched (AC-11)', async () => {
+    const port = makePort();
+    h = await render(port);
+    await h.user.type(byName.textarea('en'), 'A mug');
+    await saveAs('Doomed');
+    await h.user.click(deleteBtn('Doomed'));
+    await h.settle();
+    expect(screen.queryByRole('button', { name: 'Doomed' })).toBeNull();
+    expect((port.state.stored.presets as unknown[]).length).toBe(0);
+    expect(h.confirmPort.asked).toEqual([]);
+    expect(within(registryGroup()).getAllByRole('button').map((b) => b.textContent!.trim())).toEqual([
+      'Product on white', 'Lifestyle scene', 'Category banner', 'Social', 'Detail close-up',
+    ]);
+  });
+
+  it('OD-12 (f): deleting the preset that is currently checked unchecks it and leaves the composer fields as they are', async () => {
+    h = await render(makePort());
+    await h.user.type(byName.textarea('en'), 'Keep this text');
+    await saveAs('Checked one');
+    await h.user.click(screen.getByRole('button', { name: 'Checked one' }));
+    await h.user.click(deleteBtn('Checked one'));
+    await h.settle();
+    expect(h.store.draft().checkedPresetId).toBeNull();
+    expect(byName.textarea('en').value).toBe('Keep this text');
+  });
+
+  it('FR-15 (d): a save that cannot be stored shows no new preset', async () => {
+    const port = makePort();
+    port.state.failSaves = true;
+    h = await render(port);
+    await h.user.type(byName.textarea('en'), 'A mug');
+    await saveAs('Not stored');
+    expect(screen.queryByRole('button', { name: 'Not stored' })).toBeNull();
+  });
+
+  it('FR-15 (c): an empty name saves nothing', async () => {
+    const port = makePort();
+    h = await render(port);
+    await h.user.click(saveBtn());
+    await h.user.type(await screen.findByRole('textbox', { name: t('X-51', 'en') }), '{Enter}');
+    await h.settle();
+    expect(port.state.saveCalls).toBe(0);
+  });
+
+  it('SM-6: a name of 61 characters is not saved; one of 60 is', async () => {
+    const port = makePort();
+    h = await render(port);
+    await h.user.type(byName.textarea('en'), 'A mug');
+    await saveAs('x'.repeat(61));
+    expect(screen.queryByRole('button', { name: 'x'.repeat(61) })).toBeNull();
+    await saveAs('y'.repeat(60));
+    expect(screen.getByRole('button', { name: 'y'.repeat(60) })).toBeDefined();
+  });
+
+  it('UA copy: the pill reads "+ Зберегти як пресет", the name field "Назва пресета" and the delete control "Видалити пресет «{name}»"', async () => {
+    h = await render(makePort(), { lang: 'uk' });
+    await h.user.type(byName.textarea('uk'), 'Кухоль');
+    await saveAs('Мій кухоль', 'uk');
+    expect(deleteBtn('Мій кухоль', 'uk').getAttribute('aria-label') ?? deleteBtn('Мій кухоль', 'uk').textContent).toContain('Видалити пресет «Мій кухоль»');
+  });
+
+  it('AC-11: user presets never reach the empty state starter cards (STARTER_PRESET_IDS consumers see registry presets only)', async () => {
+    const port = makePort();
+    h = await render(port);
+    await h.user.type(byName.textarea('en'), 'A mug');
+    await saveAs('Mine only');
+    const { PROMPT_PRESETS } = await import('../../../../prompt-core/prompt-presets');
+    expect(PROMPT_PRESETS.map((p) => p.name.en)).not.toContain('Mine only');
   });
 });

@@ -382,3 +382,98 @@ describe('US-10.5 D-11 / FR-21: the dictionary copy of the preset names follows 
     }
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T24 - every new studio text in uk and en (FR-25; owner ruling 2026-11-14 "UA copy as proposed", docs/decisions/US-10.6-open-decisions.md
+// "UA copy as proposed (OD-11)"). The literals below are the owner's accepted table, copied verbatim; they are the criteria, NOT read back from the code.
+//
+// PINNED IDS (the ruling gives texts, not ids; the ids continue the X-n sequence after X-44 and are fixed here by the test writer):
+//   X-45 Upscale 4K | X-46 Variation | X-47 Images | X-48 Product | X-49 Style ref | X-50 + Save current as preset | X-51 Preset name
+//   X-52 Delete preset "{name}" | X-53 Today ${today} . month ${month} | X-54.one/.few/.many the estimate | X-55 rate-limit warning {n} {requested}
+//   X-56 partial failure {k} {N} | X-57..X-60 the four causes | X-61 second Style ref rejected | X-62 sixth Product rejected (FR-12)
+// X-53 and X-54 carry the amount WITHOUT the dollar sign in their params ({today}, {month}, {amount}); the dollar sign is part of the text.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('US-10.6 T24: the new studio texts, exactly as the owner accepted them (FR-25)', () => {
+  const NEW: Array<[string, string, string]> = [
+    ['X-45', 'Збільшити до 4K', 'Upscale 4K'],
+    ['X-46', 'Варіація', 'Variation'],
+    ['X-47', 'Кількість', 'Images'],
+    ['X-48', 'Товар', 'Product'],
+    ['X-49', 'Референс стилю', 'Style ref'],
+    ['X-50', '+ Зберегти як пресет', '+ Save current as preset'],
+    ['X-51', 'Назва пресета', 'Preset name'],
+  ];
+
+  for (const [id, uk, en] of NEW) {
+    it(`${id}: en is "${en}" and uk is "${uk}" - exact, and the two differ`, async () => {
+      const { studioText } = await load('./studio-texts');
+      expect(studioText(id, 'en')).toBe(en);
+      expect(studioText(id, 'uk')).toBe(uk);
+      expect(studioText(id, 'uk')).not.toBe(studioText(id, 'en'));
+    });
+  }
+
+  it('X-52: the delete control name carries the preset name, in both languages (Видалити пресет «{name}»)', async () => {
+    const { studioText } = await load('./studio-texts');
+    expect(studioText('X-52', 'en', { name: 'My mug' })).toBe('Delete preset "My mug"');
+    expect(studioText('X-52', 'uk', { name: 'Мій кухоль' })).toBe('Видалити пресет «Мій кухоль»');
+  });
+
+  it('X-53: the spend header reads "Today $X . month $Y" / "Сьогодні $X . місяць $Y" with the middle dot of the Story', async () => {
+    const { studioText } = await load('./studio-texts');
+    expect(studioText('X-53', 'en', { today: '1.20', month: '3.40' })).toBe('Today $1.20 · month $3.40');
+    expect(studioText('X-53', 'uk', { today: '1.20', month: '3.40' })).toBe('Сьогодні $1.20 · місяць $3.40');
+  });
+
+  it('X-55: the rate-limit warning of the Story with the numbers filled (en fixed by the Story, uk by the ruling)', async () => {
+    const { studioText } = await load('./studio-texts');
+    expect(studioText('X-55', 'en', { n: 2, requested: 4 })).toBe('Rate limit reached. Generated 2 of 4 images.');
+    expect(studioText('X-55', 'uk', { n: 2, requested: 4 })).toBe('Ліміт вичерпано. Згенеровано 2 із 4 зображень.');
+  });
+
+  it('X-56: the partial-failure message', async () => {
+    const { studioText } = await load('./studio-texts');
+    expect(studioText('X-56', 'en', { k: 2, N: 4 })).toBe('Could not generate 2 of 4 images.');
+    expect(studioText('X-56', 'uk', { k: 2, N: 4 })).toBe('Не вдалося згенерувати 2 із 4 зображень.');
+  });
+
+  const CAUSES: Array<[string, string, string]> = [
+    ['X-57', 'blocked by the safety filter', 'заблоковано фільтром безпеки'],
+    ['X-58', 'empty response', 'порожня відповідь'],
+    ['X-59', 'no answer after retries', 'сервіс не відповів після повторних спроб'],
+    ['X-60', 'input file no longer available, attach it again', 'вхідний файл недоступний, прикріпіть його знову'],
+  ];
+  for (const [id, en, uk] of CAUSES) {
+    it(`${id}: the failure cause "${en}" / "${uk}"`, async () => {
+      const { studioText } = await load('./studio-texts');
+      expect(studioText(id, 'en')).toBe(en);
+      expect(studioText(id, 'uk')).toBe(uk);
+    });
+  }
+
+  it('X-61 and X-62: the two role rejections (a second Style ref; a sixth Product, FR-11 and FR-12), exact in both languages', async () => {
+    const { studioText } = await load('./studio-texts');
+    expect(studioText('X-61', 'en')).toBe('Only one image can be a style reference per generation.');
+    expect(studioText('X-61', 'uk')).toBe('Лише одне зображення може бути референсом стилю.');
+    expect(studioText('X-62', 'en')).toBe('You can attach no more than 5 product images.');
+    expect(studioText('X-62', 'uk')).toBe('До одного повідомлення можна додати не більше 5 зображень товару.');
+  });
+
+  it('every new id has a non-empty en and a non-empty uk that differs from the en, and no placeholder is left unfilled when the params are given', async () => {
+    const { STUDIO_TEXTS } = await load('./studio-texts');
+    const ids = [...NEW.map((r) => r[0]), 'X-52', 'X-53', 'X-55', 'X-56', ...CAUSES.map((r) => r[0]), 'X-61', 'X-62'];
+    for (const id of ids) {
+      expect(STUDIO_TEXTS[id], id).toBeDefined();
+      expect(STUDIO_TEXTS[id].en.trim().length, id).toBeGreaterThan(0);
+      expect(STUDIO_TEXTS[id].uk.trim().length, id).toBeGreaterThan(0);
+      expect(STUDIO_TEXTS[id].uk, id).not.toBe(STUDIO_TEXTS[id].en);
+    }
+  });
+
+  it('studioText still throws for an unfilled placeholder of a new text (no silent fallback)', async () => {
+    const { studioText, STUDIO_TEXTS } = await load('./studio-texts');
+    expect(STUDIO_TEXTS['X-55']).toBeDefined();
+    expect(() => studioText('X-55', 'en', { n: 2 })).toThrow(/placeholder/);
+  });
+});

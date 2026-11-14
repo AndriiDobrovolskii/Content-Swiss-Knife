@@ -81,3 +81,25 @@ describe('FR-23 / P-9: only a core-field failure rejects a row (T1)', () => {
     expect(fromTurnRecord({ sessionId: 's1', id: 'm1', role: 'system', parts: [] })).toBeNull();
   });
 });
+
+// US-10.6 T9 - the Style-ref tag persists through the row mapping with no change to the adapter (FR-14, plan 2).
+// CHARACTERIZATION (expected green from the start, not red evidence): toTurnRecord spreads the whole turn and fromTurnRecord passes it through
+// parseStoredTurn (.passthrough()), so the new optional field already survives. Kept as a regression guard for the claim the plan rests on.
+describe('FR-14: a user turn with styleRefPartIndex survives a write and a read (T9)', () => {
+  const tagged = {
+    id: 'u1', role: 'user', parts: [{ text: 'blend' }, { fileData: { fileUri: 'files/a', mimeType: 'image/png' } }],
+    styleRefPartIndex: 1,
+  } as Turn;
+
+  it('the tag is written on the row and read back field for field [characterization]', () => {
+    const row = toTurnRecord('s1', tagged) as unknown as Record<string, unknown>;
+    expect(row['styleRefPartIndex']).toBe(1);
+    expect(fromTurnRecord(row)).toEqual(tagged);
+  });
+
+  it('a user turn without the tag adds no styleRefPartIndex key on write or read [characterization]', () => {
+    const plain: Turn = { id: 'u1', role: 'user', parts: [{ text: 'x' }] };
+    expect(Object.keys(toTurnRecord('s1', plain)).sort()).toEqual(['id', 'parts', 'role', 'sessionId']);
+    expect(Object.keys(fromTurnRecord(toTurnRecord('s1', plain)) as object).sort()).toEqual(['id', 'parts', 'role']);
+  });
+});

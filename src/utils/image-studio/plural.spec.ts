@@ -78,3 +78,31 @@ describe('FR-2 / FR-4: studioCount fills {N} with the right form (T6)', () => {
     expect(() => studioCount('X-999', 'en', 1)).toThrow();
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T24 - the estimate text is a plural family (FR-20 (c), owner ruling "UA copy as proposed"): X-54.one / X-54.few / X-54.many with {amount} and {N}.
+// English: "≈ $X for 1 image" (singular for N = 1, FR-20 (c)) and "≈ $X for N images"; Ukrainian: the word is ALWAYS "зображення" for N = 1, 2 and 4.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('US-10.6 T24: studioCount("X-54") - the estimate text (FR-20 (c))', () => {
+  it('en: N = 1 is singular, N = 2 and N = 4 are plural', async () => {
+        expect(studioCount('X-54', 'en', 1, { amount: '0.07' })).toBe('≈ $0.07 for 1 image');
+    expect(studioCount('X-54', 'en', 2, { amount: '0.27' })).toBe('≈ $0.27 for 2 images');
+    expect(studioCount('X-54', 'en', 4, { amount: '0.54' })).toBe('≈ $0.54 for 4 images');
+  });
+
+  it('uk: the word is "зображення" for N = 1, 2 and 4, as the owner accepted ("≈ $X за N зображення")', async () => {
+        expect(studioCount('X-54', 'uk', 1, { amount: '0.07' })).toBe('≈ $0.07 за 1 зображення');
+    expect(studioCount('X-54', 'uk', 2, { amount: '0.27' })).toBe('≈ $0.27 за 2 зображення');
+    expect(studioCount('X-54', 'uk', 4, { amount: '0.54' })).toBe('≈ $0.54 за 4 зображення');
+  });
+
+  it('the family exists in all three categories in both languages and uk differs from en', async () => {
+    const { STUDIO_TEXTS } = await import('./studio-texts');
+    for (const category of ['one', 'few', 'many']) {
+      const entry = STUDIO_TEXTS[`X-54.${category}`];
+      expect(entry, category).toBeDefined();
+      expect(entry.uk).not.toBe(entry.en);
+    }
+  });
+});

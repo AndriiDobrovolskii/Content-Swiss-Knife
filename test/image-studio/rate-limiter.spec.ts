@@ -164,3 +164,112 @@ describe('createRateLimiter - Retry-After (SD-16)', () => {
     expect(retryAfterSeconds).toBeGreaterThan(0);
   });
 });
+
+/**
+ * US-10.6 T5 - tryConsumeUpTo: an atomic PARTIAL grant (FR-8, NFR-6, AC-4; plan 5.2 step 4). New cases only; the cases above are untouched.
+ *
+ * PINNED CONTRACT (server/image-studio/rate-limiter.js):
+ *   tryConsumeUpTo(key, n) -> { granted: number, retryAfterSeconds: number }
+ *     - grants min(remaining, n) units in ONE synchronous check-and-increment (no await between check and increment);
+ *     - granted 0 (nothing left) carries retryAfterSeconds = whole seconds left in the window, rounded up (as tryConsume's refusal, SD-16),
+ *       and is not counted and does not move the window;
+ *     - granted units are counted exactly like tryConsume units (same key, same window, same limit);
+ *     - tryConsume itself is unchanged.
+ * The AC-4 example is driven here with the REAL limiter, not a fake: 28 already used, 4 asked -> 2 granted.
+ */
+describe('createRateLimiter.tryConsumeUpTo - the partial grant (US-10.6 T5, FR-8, AC-4)', () => {
+  const useUp = (rl: any, key: string, units: number) => { for (let i = 0; i < units; i++) expect(rl.tryConsume(key).allowed, `unit ${i + 1}`).toBe(true); };
+
+  it('AC-4: with 28 units already used, asking for 4 grants exactly 2 (the request is not rejected as a whole)', async () => {
+    const { rl } = await limiter();
+    useUp(rl, 'k', 28);
+    const grant = rl.tryConsumeUpTo('k', 4);
+    expect(grant.granted).toBe(2);
+  });
+
+  it('FR-8: the granted units are counted - after the partial grant of 2, the key is at its limit', async () => {
+    const { rl } = await limiter();
+    useUp(rl, 'k', 28);
+    rl.tryConsumeUpTo('k', 4);
+    expect(rl.tryConsume('k').allowed).toBe(false);
+    expect(rl.tryConsumeUpTo('k', 1).granted).toBe(0);
+  });
+
+  it('FR-8: with plenty left, all N requested units are granted (N = 1, 2, 4) and each is counted', async () => {
+    for (const n of [1, 2, 4]) {
+      const { rl } = await limiter();
+      expect(rl.tryConsumeUpTo('k', n).granted, `n=${n}`).toBe(n);
+      let allowed = 0;
+      while (rl.tryConsume('k').allowed) allowed += 1;
+      expect(allowed, `n=${n} remaining`).toBe(30 - n);
+    }
+  });
+
+  it('FR-8 / OD-5 (b): with 30 used, nothing is granted and the refusal carries retryAfterSeconds', async () => {
+    const { rl } = await limiter();
+    useUp(rl, 'k', 30);
+    const grant = rl.tryConsumeUpTo('k', 4);
+    expect(grant.granted).toBe(0);
+    expect(grant.retryAfterSeconds).toBe(3600);
+  });
+
+  it('SD-16: retryAfterSeconds of a zero grant is the whole seconds left in the window, rounded UP', async () => {
+    const { rl, clock } = await limiter();
+    useUp(rl, 'k', 30);
+    clock.advance(1_500);
+    expect(rl.tryConsumeUpTo('k', 2).retryAfterSeconds).toBe(3599);
+  });
+
+  it('FR-67: a zero grant is not counted and does not move the window - the window still ends one hour after the first counted unit', async () => {
+    const { rl, clock } = await limiter(makeFakeClock(10_000));
+    useUp(rl, 'k', 30);
+    clock.advance(HOUR - 1);
+    expect(rl.tryConsumeUpTo('k', 4).granted).toBe(0);
+    clock.advance(2);
+    expect(rl.tryConsumeUpTo('k', 4).granted).toBe(4);
+  });
+
+  it('D-1: a partial grant that opens a window starts it at the grant, and after the window the allowance is full again', async () => {
+    const { rl, clock } = await limiter();
+    expect(rl.tryConsumeUpTo('k', 4).granted).toBe(4);
+    clock.advance(HOUR + 1);
+    expect(rl.tryConsumeUpTo('k', 4).granted).toBe(4);
+    let allowed = 0;
+    while (rl.tryConsume('k').allowed) allowed += 1;
+    expect(allowed).toBe(26);
+  });
+
+  it('NFR-6: concurrent partial grants never hand out more than 30 units in the window (single atomic check-and-increment)', async () => {
+    const { rl } = await limiter();
+    const grants = await Promise.all(Array.from({ length: 16 }, async () => rl.tryConsumeUpTo('9.9.9.9', 4)));
+    const total = grants.reduce((sum: number, g: any) => sum + g.granted, 0);
+    expect(total).toBe(30);
+    expect(grants.every((g: any) => g.granted >= 0 && g.granted <= 4)).toBe(true);
+    expect(rl.tryConsume('9.9.9.9').allowed).toBe(false);
+  });
+
+  it('NFR-6: single-unit and multi-unit consumers share one counter - together they never pass 30', async () => {
+    const { rl } = await limiter();
+    const singles = await Promise.all(Array.from({ length: 12 }, async () => rl.tryConsume('k')));
+    const batches = await Promise.all(Array.from({ length: 6 }, async () => rl.tryConsumeUpTo('k', 4)));
+    const used = singles.filter((s: any) => s.allowed).length + batches.reduce((sum: number, g: any) => sum + g.granted, 0);
+    expect(used).toBe(30);
+  });
+
+  it('FR-66: two keys are isolated - exhausting one does not reduce the grant of the other', async () => {
+    const { rl } = await limiter();
+    useUp(rl, 'a', 30);
+    expect(rl.tryConsumeUpTo('a', 4).granted).toBe(0);
+    expect(rl.tryConsumeUpTo('b', 4).granted).toBe(4);
+  });
+
+  it('FR-67: entries are still swept on access - tracked keys do not grow past the keys active inside the window', async () => {
+    const { rl, clock } = await limiter();
+    rl.tryConsumeUpTo('a', 2);
+    rl.tryConsumeUpTo('b', 2);
+    expect(rl.trackedKeys()).toBe(2);
+    clock.advance(HOUR + 1);
+    rl.tryConsumeUpTo('c', 1);
+    expect(rl.trackedKeys()).toBe(1);
+  });
+});

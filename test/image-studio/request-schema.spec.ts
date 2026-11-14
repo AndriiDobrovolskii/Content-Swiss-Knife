@@ -223,3 +223,46 @@ describe('parseUploadRequest', () => {
     }
   });
 });
+
+/**
+ * US-10.6 T6 - an optional `imageCount` in the generate request (FR-4, FR-6 (c), AC-3). New cases only.
+ * PINNED: `imageCount` is optional; when present it must be one of the shared contract's imageCounts [1, 2, 4] (a number, not a string);
+ * a request that omits it parses exactly as before and the parsed result then has NO `imageCount` key (a one-image request is byte-identical to today).
+ * Both runtimes strip unknown keys silently (impact S1), so the keep-the-field assertion below is the one that fails if the server schema
+ * is not taught the field.
+ */
+describe('parseGenerateRequest - imageCount (US-10.6 T6)', () => {
+  it('AC-3 / FR-4: imageCount 1, 2 and 4 are accepted and KEPT on the parsed request', async () => {
+    for (const n of [1, 2, 4]) {
+      const parsed = await parse(base({ imageCount: n }));
+      expect(parsed.imageCount, `imageCount ${n}`).toBe(n);
+    }
+  });
+
+  it('FR-4: an omitted imageCount parses as today and leaves the parsed request without the field [characterization]', async () => {
+    const parsed = await parse(base());
+    expect('imageCount' in parsed).toBe(false);
+    expect(parsed.model).toBe(FLASH);
+    expect(parsed.newTurn.parts).toHaveLength(1);
+  });
+
+  it('FR-4: values outside {1, 2, 4} are INVALID_REQUEST 400 (0, 3, 5, 8, negatives, fractions, NaN)', async () => {
+    for (const n of [0, 3, 5, 8, -1, 2.5, Number.NaN]) {
+      const e = await rejected(base({ imageCount: n }));
+      expect(e?.code, `imageCount ${String(n)}`).toBe('INVALID_REQUEST');
+      expect(e?.status, `imageCount ${String(n)}`).toBe(400);
+    }
+  });
+
+  it('FR-4: a non-number imageCount is INVALID_REQUEST (the string 2 is not the number 2; null, objects and booleans are refused)', async () => {
+    for (const v of ['2', '4', null, {}, [2], true]) {
+      const e = await rejected(base({ imageCount: v }));
+      expect(e?.code, JSON.stringify(v)).toBe('INVALID_REQUEST');
+    }
+  });
+
+  it('FR-4: imageCount does not loosen any other rule - an invalid aspect ratio still fails with a valid imageCount [characterization]', async () => {
+    const e = await rejected(base({ imageCount: 2, aspectRatio: '2:1' }));
+    expect(e?.code).toBe('INVALID_REQUEST');
+  });
+});

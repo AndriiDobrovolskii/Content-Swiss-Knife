@@ -469,3 +469,69 @@ describe('GenerationRunner: session scoping and snapshot discipline (SD-22, SD-2
   });
 });
 
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T22 - the generation runner carries the batch report (FR-9, FR-24 / OD-6e; AC-3, AC-5). New describe only.
+//
+// PINNED: the `images` outcome carries the VALIDATED response, and that response keeps the optional `batch` report
+// ({ requested, granted, succeeded, failures: [{ cause }] }) - so `outcome.response.batch` equals the server's batch. The runner announces
+// exactly twice (T-16, then T-17 with the HIGHEST new number) however many images and failures the response holds, and still makes ONE generate call.
+// NOTE (finding): the outcome already carries `response`, so the carrying itself needs no runner code once the client schema stops stripping `batch`
+// (T9); these cases are red until T9 and stay the runner-level proof that nothing in the runner drops the report.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('GenerationRunner: the batch report and many images (T22)', () => {
+  const batchOf = (requested: number, granted: number, succeeded: number, failures: Array<{ cause: string }> = []) => ({ requested, granted, succeeded, failures });
+  const four = () => Array.from({ length: 4 }, (_, i) => imagePart({ thoughtSignature: `b-${i + 1}` }));
+
+  it('AC-3: a 4-image response with its batch is returned as an images outcome whose response carries the batch unchanged', async () => {
+    const { h, runner, input } = await setup({ pairs: 2 });
+    const response = imagesResponse({ parts: four(), costUsd: 0.16, batch: batchOf(4, 4, 4) });
+    h.script.generate = [async () => okBody(response)];
+
+    const out = await runner.run(input());
+
+    expect(out.type).toBe('images');
+    expect(out.response.batch).toEqual(batchOf(4, 4, 4));
+    expect(out.response.parts).toHaveLength(4);
+    expect(h.generateCalls).toHaveLength(1);
+  });
+
+  it('AC-5: a partial result keeps its failure causes on the outcome', async () => {
+    const { h, runner, input } = await setup({ pairs: 2 });
+    const batch = batchOf(4, 4, 2, [{ cause: 'safety' }, { cause: 'empty' }]);
+    h.script.generate = [async () => okBody(imagesResponse({ parts: four().slice(0, 2), costUsd: 0.08, batch }))];
+
+    const out = await runner.run(input());
+
+    expect(out.type).toBe('images');
+    expect(out.response.batch).toEqual(batch);
+  });
+
+  it('FR-24: 4 images after v1..v2 announce exactly twice - T-16 and then the HIGHEST number (v6) once, not one announcement per image [characterization]', async () => {
+    const { h, runner, input } = await setup({ pairs: 2 });
+    h.script.generate = [async () => okBody(imagesResponse({ parts: four(), costUsd: 0.16, batch: batchOf(4, 4, 4) }))];
+
+    await runner.run(input());
+
+    expect(h.announcer.announced).toEqual(['Generating…', 'Version v6 is ready']);
+  });
+
+  it('FR-24 (OD-6e): a mixed outcome (2 of 4) announces the success with the highest number (v4) and nothing about the failures - the failure belongs to the alert [characterization]', async () => {
+    const { h, runner, input } = await setup({ pairs: 2 });
+    h.script.generate = [async () => okBody(imagesResponse({ parts: four().slice(0, 2), costUsd: 0.08, batch: batchOf(4, 4, 2, [{ cause: 'safety' }, { cause: 'empty' }]) }))];
+
+    await runner.run(input());
+
+    expect(h.announcer.announced).toEqual(['Generating…', 'Version v4 is ready']);
+  });
+
+  it('a response without a batch (a one-image generation) has no batch on the outcome [characterization]', async () => {
+    const { h, runner, input } = await setup({ pairs: 2 });
+    h.script.generate = [async () => okBody(imagesResponse())];
+
+    const out = await runner.run(input());
+
+    expect('batch' in out.response).toBe(false);
+  });
+});

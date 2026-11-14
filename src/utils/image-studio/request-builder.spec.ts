@@ -284,3 +284,168 @@ describe('US-10.5 FR-23 / NFR-1: history is the {id, role, parts} projection of 
     expect(body).not.toContain('futureField');
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T20 - the image count and the empty-history derived turn (FR-1, FR-3, FR-4, FR-6; AC-1, AC-2, AC-3). New describes only.
+//
+// PINNED CONTRACT (plan 7.2, breakdown T20): BuildInput gains
+//   imageCount?: number      emitted on the request ONLY when greater than 1 (a one-image request is byte-identical to today)
+//   omitHistory?: boolean    the request carries an EMPTY history; the new turn is built as always (text, uploads, then the attached version inline)
+// ---------------------------------------------------------------------------------------------------------------------
+describe('buildGenerateRequest: imageCount is emitted only when greater than 1 (T20)', () => {
+  const base = { newTurnId: 'n-new', text: 'a white mug', model: 'gemini-3.1-flash-image', aspectRatio: '1:1', resolution: '1K' };
+
+  it('FR-4 / AC-3: imageCount 2 and 4 are carried on the request', async () => {
+    const { buildGenerateRequest } = await mod();
+    for (const n of [2, 4]) expect(buildGenerateRequest(makeSession('s1', { pairs: 1 }), { ...base, imageCount: n }).request.imageCount, `n=${n}`).toBe(n);
+  });
+
+  it('FR-4: imageCount 1 and an omitted imageCount leave NO imageCount key - the request is byte-identical to a request built without the field [characterization]', async () => {
+    const { buildGenerateRequest } = await mod();
+    const snap = makeSession('s1', { pairs: 1 });
+    const plain = buildGenerateRequest(snap, base).request;
+    const one = buildGenerateRequest(snap, { ...base, imageCount: 1 }).request;
+    expect('imageCount' in plain).toBe(false);
+    expect('imageCount' in one).toBe(false);
+    expect(JSON.stringify(one)).toBe(JSON.stringify(plain));
+  });
+
+  it('FR-4: imageCount does not alter the history, the parts or the protected set [characterization]', async () => {
+    const { buildGenerateRequest } = await mod();
+    const snap = makeSession('s1', { pairs: 2 });
+    const plain = buildGenerateRequest(snap, base);
+    const four = buildGenerateRequest(snap, { ...base, imageCount: 4 });
+    expect(four.request.history).toEqual(plain.request.history);
+    expect(four.request.newTurn).toEqual(plain.request.newTurn);
+    expect(four.protectedTurnIds).toEqual(plain.protectedTurnIds);
+  });
+});
+
+describe('buildGenerateRequest: omitHistory builds the derived-action request (T20)', () => {
+  const source = { mimeType: 'image/png', data: PNG_B64 };
+  const base = { newTurnId: 'n-new', model: 'gemini-3-pro-image', aspectRatio: '4:5', resolution: '4K' };
+
+  it('FR-1 / AC-1: with omitHistory the history is EMPTY even when the session has turns, and the new turn holds the source version inline', async () => {
+    const { buildGenerateRequest } = await mod();
+    const snap = makeSession('s1', { pairs: 3 });
+    const { request } = buildGenerateRequest(snap, { ...base, omitHistory: true, attachedVersion: source });
+    expect(request.history).toEqual([]);
+    expect(request.newTurn.parts).toEqual([{ inlineData: source }]);
+    expect(request.resolution).toBe('4K');
+    expect(request.model).toBe('gemini-3-pro-image');
+  });
+
+  it('FR-3 / AC-2: with text the new turn is the text part then the source inline (the existing order: text, uploads, attached version)', async () => {
+    const { buildGenerateRequest } = await mod();
+    const { request } = buildGenerateRequest(makeSession('s1', { pairs: 2 }), { ...base, text: 'a white mug', omitHistory: true, attachedVersion: source });
+    expect(request.history).toEqual([]);
+    expect(request.newTurn.parts).toEqual([{ text: 'a white mug' }, { inlineData: source }]);
+  });
+
+  it('an image-only derived turn is valid - no EmptyMessageError and no invented filler text [characterization]', async () => {
+    const { buildGenerateRequest } = await mod();
+    expect(() => buildGenerateRequest(makeSession('s1', { pairs: 1 }), { ...base, omitHistory: true, attachedVersion: source })).not.toThrow();
+  });
+
+  it('without omitHistory the history is every retained turn as before [characterization]', async () => {
+    const { buildGenerateRequest } = await mod();
+    const { request } = buildGenerateRequest(makeSession('s1', { pairs: 3 }), { ...base, attachedVersion: source });
+    expect(request.history.map((t: any) => t.id)).toEqual(['u1', 'm1', 'u2', 'm2', 'u3', 'm3']);
+  });
+
+  it('omitHistory never mutates the snapshot and the request shares no object with it [characterization]', async () => {
+    const { buildGenerateRequest } = await mod();
+    const snap = makeSession('s1', { pairs: 2 });
+    const before = structuredClone(snap);
+    const { request } = buildGenerateRequest(snap, { ...base, omitHistory: true, attachedVersion: source });
+    request.newTurn.parts.push({ text: 'appended' });
+    expect(snap).toEqual(before);
+  });
+
+  it('omitHistory + imageCount: a Variation request is empty-history, source inline, imageCount carried', async () => {
+    const { buildGenerateRequest } = await mod();
+    const { request } = buildGenerateRequest(makeSession('s1', { pairs: 1 }), { ...base, resolution: '2K', text: 'prompt 1', imageCount: 2, omitHistory: true, attachedVersion: source });
+    expect(request.history).toEqual([]);
+    expect(request.imageCount).toBe(2);
+    expect(request.newTurn.parts).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T21 - the Style-ref sentence, ONLY the placement-independent part (FR-13, FR-14; AC-9; plan 7.2 and 7.4).
+//
+// PINNED CONTRACT: BuildInput.uploads entries gain `role?: 'product' | 'style-ref'`; buildGenerateRequest additionally returns `styleRefPartIndex`
+// (the index in newTurn.parts of the ONE Style ref image part; absent when there is none). The sentence is STYLE_REF_INSTRUCTION (T10), sent as a
+// text part of the same turn next to its image. No role field is ever placed on a Part.
+//
+// SM-2 is RULED (2026-11-14): the sentence goes immediately AFTER its image part, so its index is styleRefPartIndex + 1.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('buildGenerateRequest: the Style-ref sentence immediately AFTER its image, SM-2 (T21)', () => {
+  const style = { fileUri: 'files/style', mimeType: 'image/jpeg', role: 'style-ref' };
+  const prod = { fileUri: 'files/prod', mimeType: 'image/png', role: 'product' };
+  const base = { newTurnId: 'n-new', text: 'a white mug', model: 'gemini-3.1-flash-image', aspectRatio: '1:1', resolution: '1K' };
+  const SENTENCE = 'Use this image purely as a stylistic reference, do not copy the product from it';
+
+  it('AC-9 / SM-2: a request with a Style ref image contains the AC-9 sentence exactly once, as the text part immediately AFTER the Style ref image part', async () => {
+    const { buildGenerateRequest } = await mod();
+    const out = buildGenerateRequest(makeSession('s1', { pairs: 1 }), { ...base, uploads: [prod, style] });
+    const parts = out.request.newTurn.parts;
+    const sentenceAt = parts.map((p: Part, i: number) => (p.text === SENTENCE ? i : -1)).filter((i: number) => i >= 0);
+    expect(sentenceAt).toHaveLength(1);
+    expect(typeof out.styleRefPartIndex).toBe('number');
+    expect(parts[out.styleRefPartIndex].fileData?.fileUri).toBe('files/style');
+    expect(sentenceAt[0]).toBe(out.styleRefPartIndex + 1); // SM-2 (owner ruling 2026-11-14): the sentence goes immediately AFTER its image part
+  });
+
+  it('SM-2: when the Style ref image comes FIRST the order is text, Style ref image, sentence, Product image - the sentence still follows its own image directly', async () => {
+    const { buildGenerateRequest } = await mod();
+    const out = buildGenerateRequest(makeSession('s1', { pairs: 1 }), { ...base, uploads: [style, prod] });
+    const parts = out.request.newTurn.parts;
+    expect(out.styleRefPartIndex).toBe(1);
+    expect(parts.map((p: Part) => p.text ?? p.fileData?.fileUri)).toEqual(['a white mug', 'files/style', SENTENCE, 'files/prod']);
+  });
+
+  it('AC-9: the sentence is the one exported by the prompt-core file (English, whatever the UI language)', async () => {
+    const instructions = await load('../../prompt-core/image-studio-instructions');
+    expect(instructions.STYLE_REF_INSTRUCTION).toBe(SENTENCE);
+    const { buildGenerateRequest } = await mod();
+    const out = buildGenerateRequest(makeSession('s1', { pairs: 1 }), { ...base, uploads: [style] });
+    expect(out.request.newTurn.parts.some((p: Part) => p.text === instructions.STYLE_REF_INSTRUCTION)).toBe(true);
+  });
+
+  it('FR-13: the composer text stays and the Product image gets NO instruction - only the Style ref image does', async () => {
+    const { buildGenerateRequest } = await mod();
+    const parts = buildGenerateRequest(makeSession('s1', { pairs: 1 }), { ...base, uploads: [prod, style] }).request.newTurn.parts;
+    expect(parts.filter((p: Part) => p.text === 'a white mug')).toHaveLength(1);
+    expect(parts.filter((p: Part) => p.fileData?.fileUri === 'files/prod')).toHaveLength(1);
+    expect(parts.filter((p: Part) => typeof p.text === 'string')).toHaveLength(2);
+  });
+
+  it('FR-13: a request with no Style ref image does not contain the sentence and reports no styleRefPartIndex [characterization]', async () => {
+    const { buildGenerateRequest } = await mod();
+    const out = buildGenerateRequest(makeSession('s1', { pairs: 1 }), { ...base, uploads: [prod] });
+    expect(JSON.stringify(out.request)).not.toContain('stylistic reference');
+    expect(out.styleRefPartIndex).toBeUndefined();
+  });
+
+  it('S3 / FR-13 (c): NO part sent to the model carries a role field - the Product and Style ref uploads are plain fileData parts with only fileUri and mimeType [characterization]', async () => {
+    const { buildGenerateRequest } = await mod();
+    const parts = buildGenerateRequest(makeSession('s1', { pairs: 1 }), { ...base, uploads: [prod, style] }).request.newTurn.parts;
+    for (const part of parts) {
+      expect(Object.keys(part), JSON.stringify(part)).not.toContain('role');
+      if (part.fileData) {
+        expect(Object.keys(part)).toEqual(['fileData']);
+        expect(Object.keys(part.fileData).sort()).toEqual(['fileUri', 'mimeType']);
+      }
+    }
+  });
+
+  it('FR-14 / S3: the stored Turn-level tag never rides into history - a stored user turn with styleRefPartIndex is projected to { id, role, parts } only [characterization]', async () => {
+    const { buildGenerateRequest } = await mod();
+    const snap = makeSession('s1', { pairs: 1 });
+    (snap.turns[0] as any).styleRefPartIndex = 1;
+    const history = buildGenerateRequest(snap, { newTurnId: 'n2', text: 'next', model: 'gemini-3.1-flash-image', aspectRatio: '1:1', resolution: '1K' }).request.history;
+    expect(Object.keys(history[0]).sort()).toEqual(['id', 'parts', 'role']);
+  });
+});
