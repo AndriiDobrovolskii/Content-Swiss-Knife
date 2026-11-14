@@ -137,7 +137,7 @@ function toContent(turn) {
  * price -> usage row -> response.
  *
  * `deps.limiter.tryConsume(ip)` is called exactly once, outside the retry loop (DD-8); `deps.price(modelId,
- * nonThoughtImageCount)` throws PriceNotConfiguredError for an unpriced model; `deps.insertUsage(row)` writes
+ * resolution, nonThoughtImageCount)` throws PriceNotConfiguredError for an unpriced pair; `deps.insertUsage(row)` writes
  * the one usage row, whose failure is logged and never changes the 200.
  */
 export function createGenerateHandler(deps) {
@@ -208,7 +208,7 @@ export function createGenerateHandler(deps) {
       // Class 2 (images). A missing price outranks the success (FR-26 precedence): no row, no cost.
       let costUsd;
       try {
-        costUsd = price(model, result.imageCount);
+        costUsd = price(model, resolution, result.imageCount);
       } catch (error) {
         if (error instanceof PriceNotConfiguredError) {
           log(`[ImageStudio] generate: no per-image price configured for model ${model}`);
