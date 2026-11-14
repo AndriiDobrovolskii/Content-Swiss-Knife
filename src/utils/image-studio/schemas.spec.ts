@@ -553,9 +553,16 @@ describe('FR-14: readTurnExtras reads the stored Style-ref tag (T9)', () => {
   });
 
   it('FR-14: a turn whose parts are missing or not an array yields no tag and does not throw [characterization]', async () => {
-    for (const noParts of [undefined, null, 'x', {}]) {
-      const out = await read({ styleRefPartIndex: 1 }, noParts);
-      expect(Object.prototype.hasOwnProperty.call(out, 'styleRefPartIndex')).toBe(false);
+    const { readTurnExtras } = await load('./schemas');
+    // The turn without any `parts` property is built explicitly: passing `undefined` through `read`
+    // would be swallowed by its default parameter and run with the full valid parts instead.
+    const turns: Array<Record<string, unknown>> = [
+      { id: 'u1', role: 'user', styleRefPartIndex: 1 },
+      ...[null, 'x', {}].map((noParts) => ({ id: 'u1', role: 'user', parts: noParts, styleRefPartIndex: 1 })),
+    ];
+    for (const turn of turns) {
+      const out = readTurnExtras(turn) as Record<string, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(out, 'styleRefPartIndex'), JSON.stringify(turn)).toBe(false);
     }
   });
 
