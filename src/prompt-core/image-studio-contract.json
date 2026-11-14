@@ -14,5 +14,11 @@
   },
   "aspectRatios": ["1:1", "4:3", "3:4", "4:5", "16:9", "9:16"],
   "resolutions": ["1K", "2K", "4K"],
-  "responseKinds": ["images", "text", "safety"]
+  "responseKinds": ["images", "text", "safety"],
+  "imageCounts": [1, 2, 4],
+  "imageFailureCauses": ["safety", "empty", "retries_exhausted", "file_missing"],
+  "imagePrices": {
+    "gemini-3.1-flash-image": { "1K": 0.067, "2K": 0.101 },
+    "gemini-3-pro-image": { "1K": 0.134, "2K": 0.134, "4K": 0.24 }
+  }
 }
