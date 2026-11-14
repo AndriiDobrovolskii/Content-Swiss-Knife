@@ -18,6 +18,8 @@ export interface StudioText {
  * additional texts of the plan (SD-29). T-22 is one table row of six control labels, held under six keys that
  * start with "T-22". Placeholders: {V} {M} {I} (T-9), {N} (T-17, T-22.downloadAll, X-32..X-35, X-38, X-39), {M} (X-36), {amount} (X-10),
  * {n} (X-27, X-31), {T} (X-43). X-32..X-34 are plural families (`.one` / `.few` / `.many`, resolved by `studioCount`).
+ * US-10.6 adds X-45..X-62: {name} (X-52), {today} {month} (X-53, the "$" is part of the text), {amount} {N} (X-54 plural family),
+ * {n} {requested} (X-55), {k} {N} (X-56).
  *
  * Model-facing text is NOT in this file (it is English only, SD-21). The control label of the navigation entry
  * (X-28) lives in app.component.ts.
@@ -108,6 +110,27 @@ export const STUDIO_TEXTS: Readonly<Record<string, StudioText>> = {
   "X-42": { en: "Before and after comparison", uk: "Порівняння до і після" },
   "X-43": { en: "{T} s", uk: "{T} с" },
   "X-44": { en: "The background could not be set to pure white (#FFFFFF); the original image is shown.", uk: "Не вдалося зробити фон чисто білим (#FFFFFF); показано оригінальне зображення." },
+  // US-10.6 FR-25: the owner's accepted copy (docs/decisions/US-10.6-open-decisions.md, "UA copy as proposed (OD-11)").
+  "X-45": { en: "Upscale 4K", uk: "Збільшити до 4K" },
+  "X-46": { en: "Variation", uk: "Варіація" },
+  "X-47": { en: "Images", uk: "Кількість" },
+  "X-48": { en: "Product", uk: "Товар" },
+  "X-49": { en: "Style ref", uk: "Референс стилю" },
+  "X-50": { en: "+ Save current as preset", uk: "+ Зберегти як пресет" },
+  "X-51": { en: "Preset name", uk: "Назва пресета" },
+  "X-52": { en: "Delete preset \"{name}\"", uk: "Видалити пресет «{name}»" },
+  "X-53": { en: "Today ${today} · month ${month}", uk: "Сьогодні ${today} · місяць ${month}" },
+  "X-54.one": { en: "≈ ${amount} for {N} image", uk: "≈ ${amount} за {N} зображення" },
+  "X-54.few": { en: "≈ ${amount} for {N} images", uk: "≈ ${amount} за {N} зображення" },
+  "X-54.many": { en: "≈ ${amount} for {N} images", uk: "≈ ${amount} за {N} зображень" },
+  "X-55": { en: "Rate limit reached. Generated {n} of {requested} images.", uk: "Ліміт вичерпано. Згенеровано {n} із {requested} зображень." },
+  "X-56": { en: "Could not generate {k} of {N} images.", uk: "Не вдалося згенерувати {k} із {N} зображень." },
+  "X-57": { en: "blocked by the safety filter", uk: "заблоковано фільтром безпеки" },
+  "X-58": { en: "empty response", uk: "порожня відповідь" },
+  "X-59": { en: "no answer after retries", uk: "сервіс не відповів після повторних спроб" },
+  "X-60": { en: "input file no longer available, attach it again", uk: "вхідний файл недоступний, прикріпіть його знову" },
+  "X-61": { en: "Only one image can be a style reference per generation.", uk: "Лише одне зображення може бути референсом стилю." },
+  "X-62": { en: "You can attach no more than 5 product images.", uk: "До одного повідомлення можна додати не більше 5 зображень товару." },
 };
 
 export type StudioLanguage = 'en' | 'uk';
