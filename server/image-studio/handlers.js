@@ -32,6 +32,12 @@ export const FIXED_API_ERROR = 'Помилка API';
 
 const MAX_LOGGED_DETAIL = 300;
 
+/**
+ * The one closed code answered for an unpriced (model, resolution) pair, both by the pre-call check and by the
+ * post-call cost lookup (US-10.6 OD-15, SM-8 i). It is an existing code (500); no new error code is introduced.
+ */
+export const UNPRICED_PAIR_CODE = 'PRICE_NOT_CONFIGURED';
+
 /** Remove the API key (and any `key=` query value) from text bound for a log line (NFR-3). */
 function redact(text) {
   let out = String(text);
@@ -120,6 +126,22 @@ export function createUploadHandler(deps) {
   };
 }
 
+/**
+ * `price(model, resolution, count)`, with a missing price turned into the closed `UNPRICED_PAIR_CODE` answer.
+ * Only the model id is logged (FR-70); the typed error carries no upstream text.
+ */
+function priceOrRefuse(price, log, model, resolution, count) {
+  try {
+    return price(model, resolution, count);
+  } catch (error) {
+    if (error instanceof PriceNotConfiguredError) {
+      log(`[ImageStudio] generate: no per-image price configured for model ${model}`);
+      throw new ImageStudioError(UNPRICED_PAIR_CODE);
+    }
+    throw error;
+  }
+}
+
 /** True when any part of any turn is a Files API reference (FR-17 condition 1). */
 function carriesFileUri(turns) {
   return turns.some((turn) => turn.parts.some((part) => part !== null && typeof part === 'object' && 'fileData' in part));
@@ -151,6 +173,11 @@ export function createGenerateHandler(deps) {
       if (!hasGeminiKey()) throw new ImageStudioError('GEMINI_KEY_MISSING');
 
       const { model, aspectRatio, resolution, presetId } = request;
+
+      // The price-pair check precedes every upstream call and the limiter (US-10.6 OD-15, plan 5.2 step 2): an
+      // unpriced pair is refused here, so no count call, no limiter unit, no generate call and no row happen.
+      priceOrRefuse(price, log, model, resolution, 1);
+
       const gemini = await getGemini();
       const newTurn = { id: request.newTurn.id, role: 'user', parts: request.newTurn.parts };
 
@@ -206,16 +233,7 @@ export function createGenerateHandler(deps) {
       if (result.class === 'failed') throw new ImageStudioError('EMPTY_RESPONSE');
 
       // Class 2 (images). A missing price outranks the success (FR-26 precedence): no row, no cost.
-      let costUsd;
-      try {
-        costUsd = price(model, resolution, result.imageCount);
-      } catch (error) {
-        if (error instanceof PriceNotConfiguredError) {
-          log(`[ImageStudio] generate: no per-image price configured for model ${model}`);
-          throw new ImageStudioError('PRICE_NOT_CONFIGURED');
-        }
-        throw error;
-      }
+      const costUsd = priceOrRefuse(price, log, model, resolution, result.imageCount);
 
       const row = buildUsageRow({ model, presetId, resolution, usageMetadata: response?.usageMetadata, costUsd });
       try {
