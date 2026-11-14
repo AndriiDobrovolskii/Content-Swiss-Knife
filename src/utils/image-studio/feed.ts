@@ -22,6 +22,8 @@ export interface FeedSummary {
 export interface FeedThumb {
   turnId: string;
   partIndex: number;
+  /** `'style-ref'` only when the referenced user turn's stored tag points at this part (US-10.6 FR-14); absent means Product. */
+  role?: 'style-ref';
 }
 
 /** One generated image of a card. `editOf` is present only for a valid stored edit source (FR-9, FR-23). */
@@ -105,7 +107,11 @@ export function buildFeed(session: StoredSession, deps: FeedDeps): Feed {
     if (extras.cost !== undefined) summary.cost = extras.cost;
     if (extras.durationMs !== undefined) summary.durationMs = extras.durationMs;
 
-    const thumbs = (extras.inputRefs ?? []).filter(isImagePartOf);
+    const thumbs: FeedThumb[] = (extras.inputRefs ?? []).filter(isImagePartOf).map((ref) => {
+      const sourceTurn = turnById.get(ref.turnId);
+      const tag = sourceTurn === undefined ? undefined : readTurnExtras(sourceTurn).styleRefPartIndex;
+      return tag === ref.partIndex ? { ...ref, role: 'style-ref' as const } : ref;
+    });
     const images: FeedImage[] = own.map((version) => {
       const image: FeedImage = { number: version.number, partIndex: version.partIndex };
       const editOf = readEditSource(version, versions);
