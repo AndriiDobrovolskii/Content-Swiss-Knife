@@ -78,6 +78,14 @@
             (click)="retryAttachment(attachment.id)"
             class="absolute inset-x-0 bottom-0 bg-amber-700 text-white text-[10px] font-semibold">{{ tx('T-22.retry') }}</button>
         }
+        @if (attachment.state === 'ready') {
+          <!-- The role toggle (FR-10 to FR-12): its name is the CURRENT role; a click switches Product and Style ref -->
+          <button
+            type="button"
+            (click)="toggleRole(attachment.id, attachment.role)"
+            [disabled]="!store.inputEnabled()"
+            class="absolute inset-x-0 bottom-0 bg-slate-900/70 text-white text-[10px] text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50">{{ tx(attachment.role === 'style-ref' ? 'X-49' : 'X-48') }}</button>
+        }
         <button
           type="button"
           (click)="removeAttachment(attachment.id)"

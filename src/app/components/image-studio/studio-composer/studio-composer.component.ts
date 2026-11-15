@@ -16,7 +16,7 @@ import { ingestImage, type IngestResult } from '../../../../utils/image-studio/i
 import { detectImageType } from '../../../../utils/image-studio/magic-bytes';
 import { normalizeImageCount } from '../../../../utils/image-studio/image-count';
 import { studioText, type StudioLanguage, type StudioTextParams } from '../../../../utils/image-studio/studio-texts';
-import { canAttachUpload } from '../../../../utils/image-studio/upload-rules';
+import { type AttachmentRole, decideAttach } from '../../../../utils/image-studio/attachment-roles';
 
 /** Base64 of a byte array, built in slices so a multi-megabyte image does not overflow the call stack. */
 function toBase64(bytes: Uint8Array): string {
@@ -207,6 +207,18 @@ export class StudioComposerComponent {
     this.attachFiles(files);
   }
 
+  /**
+   * The Product / Style ref toggle on an uploaded image (FR-10 to FR-12): the store decides through the role invariant. A refusal
+   * (X-61 second Style ref, X-62 sixth Product) is shown in this component's alert and the image keeps its role.
+   */
+  protected toggleRole(id: string, current: AttachmentRole | undefined): void {
+    this.attachMessage.set(null);
+    const decision = this.store.setAttachmentRole(id, current === 'style-ref' ? 'product' : 'style-ref');
+    // The compiler configuration does not narrow a boolean discriminant, so the reason is read through a cast.
+    const reason = (decision as { reason?: string }).reason;
+    if (reason) this.attachMessage.set({ textId: reason });
+  }
+
   protected removeAttachment(id: string): void {
     this.store.removeAttachment(id);
   }
@@ -235,13 +247,14 @@ export class StudioComposerComponent {
     this.attachMessage.set(null);
     for (const file of files) {
       const current = this.store.draft().attachments;
-      if (!canAttachUpload(current.map(() => ({ kind: 'upload' as const }))).ok) {
+      // Role-aware (FR-12 (b)): a Style ref image is outside the five Product uploads, the attached version is not in the draft's list.
+      if (!decideAttach(current.map((a) => ({ id: a.id, kind: 'upload' as const, role: a.role }))).ok) {
         this.attachMessage.set({ textId: 'T-3' });
         break;
       }
       const id = this.ids.next();
       this.store.setDraft({
-        attachments: [...current, { id, fileName: file.name, fileUri: '', mimeType: file.type, state: 'uploading' }],
+        attachments: [...current, { id, fileName: file.name, fileUri: '', mimeType: file.type, state: 'uploading', role: 'product' }],
       });
       void this.runIngest(id, file, sessionId);
     }
