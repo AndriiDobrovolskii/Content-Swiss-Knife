@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { RESOLUTIONS } from '../../prompt-core/image-studio-contract';
-import { findImageModel } from '../../prompt-core/model-catalog';
+import { findImageModel, IMAGE_MODELS } from '../../prompt-core/model-catalog';
 import { applyProduct, type PromptPreset } from '../../prompt-core/prompt-presets';
 import { applyResponse, InvalidResponseError } from '../../utils/image-studio/apply-response';
 import type { BuildInput } from '../../utils/image-studio/request-builder';
@@ -25,6 +25,7 @@ import { studioText, type StudioLanguage } from '../../utils/image-studio/studio
 import { describeBatchOutcome, type BatchOutcomeInput } from '../../utils/image-studio/batch-outcome';
 import { fromBase64, toBase64 } from '../../utils/image-studio/base64';
 import type { GenerateResponse } from '../../utils/image-studio/schemas';
+import { checkUserPresetForApply, type UserPreset } from '../../utils/image-studio/user-presets';
 import { needsWhiteBackground } from '../../utils/image-studio/white-background';
 import { LlmService } from '../llm.service';
 import {
@@ -333,6 +334,33 @@ export class ImageStudioStore {
       aspectRatio: preset.defaults.aspectRatio,
       resolution: preset.defaults.resolution,
       ...(this.versions().length === 0 ? { model: preset.defaults.model } : {}),
+    });
+  }
+
+  /**
+   * Applying a saved user preset (US-10.6 FR-15, AC-10; owner ruling G-8 OD-12). It follows `applyPreset` except that the saved prompt is
+   * LITERAL (no `{product}` substitution), and marks the user id as both the wire and the checked preset, so the next send carries it
+   * as the preset id. A user id is never `white-bg`, so it never starts the white-background flow. The model is set only while the session
+   * holds no version (US-10.1 FR-28). A model or resolution the catalogue no longer offers is applied through `checkUserPresetForApply`
+   * (SM-5 i): the model's default resolution, or the default model with its default resolution; the preset is never refused. Sends nothing.
+   */
+  applyUserPreset(preset: UserPreset): void {
+    const checked = checkUserPresetForApply(
+      preset,
+      IMAGE_MODELS.map((m) => ({ id: m.id, resolutions: m.resolutions })),
+    );
+    const applied = 'fallback' in checked ? checked.fallback : { model: preset.model, resolution: preset.resolution };
+    const noVersion = this.versions().length === 0;
+    // With a version the model stays; a resolution that model does not offer falls to its default, as `switchModel` does.
+    const offered = findImageModel(noVersion ? applied.model : this.draft().model)?.resolutions ?? [];
+    const resolution = offered.length > 0 && !offered.includes(applied.resolution) ? offered[0] : applied.resolution;
+    this.setDraft({
+      text: preset.prompt,
+      presetId: preset.id,
+      checkedPresetId: preset.id,
+      aspectRatio: preset.aspectRatio,
+      resolution,
+      ...(noVersion ? { model: applied.model } : {}),
     });
   }
 
