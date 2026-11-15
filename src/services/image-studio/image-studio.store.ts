@@ -3,6 +3,7 @@ import { RESOLUTIONS } from '../../prompt-core/image-studio-contract';
 import { findImageModel, IMAGE_MODELS } from '../../prompt-core/model-catalog';
 import { applyProduct, type PromptPreset } from '../../prompt-core/prompt-presets';
 import { applyResponse, InvalidResponseError } from '../../utils/image-studio/apply-response';
+import { planDerivedAction, type DerivedActionKind } from '../../utils/image-studio/derived-action';
 import type { BuildInput } from '../../utils/image-studio/request-builder';
 import { createGenerationRunner, type RunOutcome } from '../../utils/image-studio/generation-runner';
 import { normalizeImageCount, type ImageCount } from '../../utils/image-studio/image-count';
@@ -124,6 +125,20 @@ interface RetryTurn {
    * is in the history and a retry of the same action must send a NEW turn id.
    */
   freshTurnId?: boolean;
+  /** US-10.6 FR-1..FR-3: set when the turn is an Upscale or a Variation, so a Retry runs the same derived action. */
+  derived?: DerivedContext;
+}
+
+/**
+ * What an Upscale or a Variation records beyond the request it sent (US-10.6 FR-1, FR-3; plan 7.2 and 8). `editOfVersion` names the
+ * source version; `storedPrompt` is the SOURCE version's prompt, recorded as the new version's `prompt` in place of the sent text
+ * (an Upscale sends none), and `sourceFormat` is the source version's input format. A derived action leaves the composer and the
+ * session's selected model untouched.
+ */
+interface DerivedContext {
+  editOfVersion: number;
+  storedPrompt: string;
+  sourceFormat: ImageMime;
 }
 
 function defaultDraft(model: string): ComposerDraft {
@@ -502,7 +517,56 @@ export class ImageStudioStore {
     this.eventLog.update((all) => all.filter((e) => e.turnId !== retry.buildInput.newTurnId));
     // After a partial result the first turn is committed and its id is in the history: the retry draws a new one.
     const buildInput = retry.freshTurnId ? { ...retry.buildInput, newTurnId: this.ids.next() } : retry.buildInput;
-    await this.execute(session, buildInput, retry.draft);
+    await this.execute(session, buildInput, retry.draft, retry.derived);
+  }
+
+  /**
+   * Upscale 4K of one version (US-10.6 FR-1, AC-1): one request with an empty history and the source version inline, at 4K on the
+   * model that offers 4K (SM-1 ii: the supporting model serves it, the session's selected model is not changed). It goes through the
+   * existing `execute()`, so Cancel, the deadline, Retry, the blocked state, storage and announcements are the send path's. A version
+   * that is already 4K, or one that does not exist, sends nothing.
+   */
+  async upscale(versionNumber: number): Promise<void> {
+    await this.runDerived('upscale', versionNumber);
+  }
+
+  /**
+   * Variation of one version (US-10.6 FR-3, AC-2): the source version inline plus its own stored prompt (none when blank), the
+   * Images value at the click as K, at the source's own resolution and aspect ratio. The composer is left as the operator set it.
+   */
+  async variation(versionNumber: number): Promise<void> {
+    await this.runDerived('variation', versionNumber);
+  }
+
+  private async runDerived(kind: DerivedActionKind, versionNumber: number): Promise<void> {
+    const session = this.current();
+    if (!session || this.generating()) return;
+    const source = session.meta.versions.find((v) => v.number === versionNumber);
+    const image = this.versionImage(session, versionNumber);
+    if (!source || !image) return;
+    const draft = this.draft();
+    const plan = planDerivedAction({
+      kind,
+      version: {
+        number: source.number,
+        prompt: source.prompt,
+        aspectRatio: source.aspectRatio,
+        resolution: source.resolution,
+        model: source.model,
+        image: { mimeType: image.mimeType, data: image.data },
+      },
+      sessionModel: draft.model,
+      imageCount: draft.imageCount,
+      catalogue: IMAGE_MODELS.map((m) => ({ id: m.id, resolutions: m.resolutions })),
+    });
+    if (!plan.enabled) return;
+    const { editOfVersion, ...planned } = plan.buildInput;
+    const buildInput: BuildInput = { ...planned, newTurnId: this.ids.next() };
+    await this.execute(session, buildInput, structuredClone(draft), {
+      editOfVersion,
+      storedPrompt: plan.storedPrompt,
+      sourceFormat: source.inputFormat,
+    });
   }
 
   /** Cancel (FR-21): aborts the in-flight call; the runner ends the action as `cancelled`. */
@@ -510,7 +574,12 @@ export class ImageStudioStore {
     this.running()?.controller.abort();
   }
 
-  private async execute(session: StoredSession, buildInput: BuildInput, draftSnapshot: ComposerDraft): Promise<void> {
+  private async execute(
+    session: StoredSession,
+    buildInput: BuildInput,
+    draftSnapshot: ComposerDraft,
+    derived?: DerivedContext,
+  ): Promise<void> {
     // FR-24: Send and Retry both enter here, so the duration of a Retry is measured from the Retry click.
     const startedAt = this.clock.now();
     const sessionId = session.meta.id;
@@ -519,13 +588,14 @@ export class ImageStudioStore {
     this.retryTurn.set(null);
     this.blockedSessionId.set(null);
     this.running.set({ sessionId, controller });
-    this.setDraftOf(sessionId, { ...draftSnapshot, text: '', attachments: [], attachedVersion: null });
+    // A derived action sends nothing from the composer, so it leaves the composer as the operator set it.
+    if (derived === undefined) this.setDraftOf(sessionId, { ...draftSnapshot, text: '', attachments: [], attachedVersion: null });
 
     try {
       const outcome = await this.runner.run({ sessionId, snapshot: session, buildInput }, controller.signal);
       // The call has ended; from here on only the commit remains, which Cancel can no longer stop.
       this.running.set(null);
-      await this.applyOutcome(outcome, sessionId, buildInput, draftSnapshot, startedAt);
+      await this.applyOutcome(outcome, sessionId, buildInput, draftSnapshot, startedAt, derived);
     } finally {
       this.running.set(null);
     }
@@ -537,6 +607,7 @@ export class ImageStudioStore {
     buildInput: BuildInput,
     draft: ComposerDraft,
     startedAt: number,
+    derived?: DerivedContext,
   ): Promise<void> {
     switch (outcome.type) {
       case 'discarded':
@@ -545,7 +616,7 @@ export class ImageStudioStore {
       case 'images':
       case 'text':
       case 'safety':
-        await this.commitResponse(outcome, sessionId, buildInput, draft, startedAt);
+        await this.commitResponse(outcome, sessionId, buildInput, draft, startedAt, derived);
         return;
       case 'cancelled':
         this.restoreDraft(sessionId, draft);
@@ -559,7 +630,7 @@ export class ImageStudioStore {
       case 'failed':
         this.restoreDraft(sessionId, draft);
         this.pending.set({ textId: outcome.textId, region: 'alert' });
-        if (outcome.retry) this.retryTurn.set({ sessionId, buildInput, draft });
+        if (outcome.retry) this.retryTurn.set({ sessionId, buildInput, draft, ...(derived ? { derived } : {}) });
         return;
     }
   }
@@ -571,6 +642,7 @@ export class ImageStudioStore {
     buildInput: BuildInput,
     draft: ComposerDraft,
     startedAt: number,
+    derived?: DerivedContext,
   ): Promise<void> {
     const stored = await this.loadValid(sessionId);
     if (!stored) {
@@ -584,15 +656,19 @@ export class ImageStudioStore {
       parts: outcome.request.newTurn.parts,
       ...(outcome.styleRefPartIndex !== undefined ? { styleRefPartIndex: outcome.styleRefPartIndex } : {}),
     };
-    const uploadedFormats = draft.attachments.map((a) => a.mimeType as ImageMime);
-    const attachedFormat = draft.attachedVersion
-      ? stored.meta.versions.find((v) => v.number === draft.attachedVersion?.fromVersion)?.inputFormat
-      : undefined;
+    // A derived action sends no upload and no composer version: its input format is the source version's.
+    const uploadedFormats = derived ? [] : draft.attachments.map((a) => a.mimeType as ImageMime);
+    const attachedFormat = derived
+      ? derived.sourceFormat
+      : draft.attachedVersion
+        ? stored.meta.versions.find((v) => v.number === draft.attachedVersion?.fromVersion)?.inputFormat
+        : undefined;
     const latest = stored.meta.versions.reduce<Version | undefined>((best, v) => (!best || v.number > best.number ? v : best), undefined);
     // FR-9 (plan F-1): the edit source is stored only when the attached version names a version of THIS session; a
     // seed carried over from another session (switchModel, blocked editVersion) names none that exists here.
-    const editOfVersion =
-      draft.attachedVersion && stored.meta.versions.some((v) => v.number === draft.attachedVersion?.fromVersion)
+    const editOfVersion = derived
+      ? derived.editOfVersion
+      : draft.attachedVersion && stored.meta.versions.some((v) => v.number === draft.attachedVersion?.fromVersion)
         ? draft.attachedVersion.fromVersion
         : undefined;
     // FR-24 (SQ-6-A): the clock is read once here; the interval ends at the hand-off to the port, so the write is not in it.
@@ -609,11 +685,12 @@ export class ImageStudioStore {
         now,
         durationMs: Math.max(0, now - startedAt),
         ...(editOfVersion !== undefined ? { editOfVersion } : {}),
-        ...(draft.checkedPresetId !== null ? { presetId: draft.checkedPresetId } : {}),
+        ...(draft.checkedPresetId !== null && !derived ? { presetId: draft.checkedPresetId } : {}),
         model: buildInput.model,
         aspectRatio: buildInput.aspectRatio,
         resolution: buildInput.resolution,
-        prompt: buildInput.text ?? '',
+        // N-8 (plan 8): a derived version records the SOURCE version's prompt; a normal send records the text it sent.
+        prompt: derived?.storedPrompt ?? buildInput.text ?? '',
         inputFormat: outputFormat({ uploadedFormats, attachedVersionFormat: attachedFormat, latestVersionFormat: latest?.inputFormat }),
       });
     } catch (error) {
@@ -625,11 +702,12 @@ export class ImageStudioStore {
       return;
     }
     if (!applied.batch) {
-      this.recordNonHistoryReply(outcome, sessionId, buildInput, draft);
+      this.recordNonHistoryReply(outcome, sessionId, buildInput, draft, derived);
       return;
     }
 
-    applied.batch.meta.model = buildInput.model;
+    // SM-1 ii: a derived action may run on the supporting model; the session's selected model stays as it was.
+    if (!derived) applied.batch.meta.model = buildInput.model;
     try {
       await this.port.commit(sessionId, applied.batch);
     } catch (error) {
@@ -650,10 +728,10 @@ export class ImageStudioStore {
     if (batch !== undefined && batch.succeeded < batch.requested) {
       // A partial result (FR-9 (b)): the images stay and Retry applies to the whole action, so the composer gets the content back.
       this.restoreDraft(sessionId, draft);
-      this.retryTurn.set({ sessionId, buildInput, draft, freshTurnId: true });
+      this.retryTurn.set({ sessionId, buildInput, draft, freshTurnId: true, ...(derived ? { derived } : {}) });
     }
 
-    if (outcome.type !== 'images') this.recordNonHistoryReply(outcome, sessionId, buildInput, draft);
+    if (outcome.type !== 'images') this.recordNonHistoryReply(outcome, sessionId, buildInput, draft, derived);
     // The schema's batch is complete when present; the project's non-strict tsconfig only infers its fields as optional.
     const lines = this.batchLines(batch as BatchOutcomeInput | undefined);
     const linesPart = lines.length > 0 ? { lines } : {};
@@ -717,6 +795,7 @@ export class ImageStudioStore {
     sessionId: string,
     buildInput: BuildInput,
     draft: ComposerDraft,
+    derived?: DerivedContext,
   ): void {
     const response = outcome.response;
     const turnId = buildInput.newTurnId;
@@ -727,7 +806,7 @@ export class ImageStudioStore {
       this.pending.set({ textId: 'T-4', region: 'alert' });
     }
     this.restoreDraft(sessionId, draft);
-    this.retryTurn.set({ sessionId, buildInput, draft });
+    this.retryTurn.set({ sessionId, buildInput, draft, ...(derived ? { derived } : {}) });
   }
 
   // ---- internals ----------------------------------------------------------------------------------------------
