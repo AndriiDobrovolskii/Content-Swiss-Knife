@@ -17,14 +17,17 @@
  *     and returns null for zero versions.
  */
 import '@angular/compiler';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Injector, createEnvironmentInjector, ɵINJECTOR_SCOPE as INJECTOR_SCOPE, type EnvironmentInjector, type InjectionToken } from '@angular/core';
 import JSZip from 'jszip';
-import { LOCAL_OFFSET_PORT, ARCHIVE_BUILDER_PORT } from './image-studio.tokens';
+import { LOCAL_OFFSET_PORT, ARCHIVE_BUILDER_PORT, USER_PRESET_STORAGE_PORT, CLOCK_PORT } from './image-studio.tokens';
+import { createBrowserUserPresetStorage, USER_PRESETS_STORAGE_KEY } from './browser-ports';
+import { UserPresetsService } from './user-presets.service';
+import { createUserPreset, type UserPreset } from '../../utils/image-studio/user-presets';
 import { formatRowDate } from '../../utils/image-studio/format';
 import { buildFileName } from '../../utils/image-studio/file-name';
 import type { LocalOffset } from '../../utils/image-studio/ports';
-import { makeFakeLocalOffset, makeRaster, type ImageCodec, type ArchiveBuilder } from '../../../test/image-studio/helpers/fakes';
+import { makeFakeLocalOffset, makeFakeClock, makeRaster, type ImageCodec, type ArchiveBuilder } from '../../../test/image-studio/helpers/fakes';
 
 /** The default of a `providedIn: 'root'` token, resolved from a root-scoped environment injector (nothing provided). */
 function rootDefault<T>(token: InjectionToken<T>): T {
@@ -119,5 +122,152 @@ describe('US-10.5 DD-6 / D-8: the ARCHIVE_BUILDER_PORT root default builds a val
   it('zero versions give null (no empty archive is ever produced)', async () => {
     const build = rootDefault(ARCHIVE_BUILDER_PORT) as ArchiveBuilder;
     expect(await build([], { codec: throwingCodec, productName: '' })).toBeNull();
+  });
+});
+
+/*
+ * US-10.6 loop-back 1 (reconciliation B-1): the user-preset localStorage adapter, `createBrowserUserPresetStorage()`.
+ *
+ * Every other US-10.6 spec injects an in-memory fake port, so the localStorage half of AC-10 ("survives a page reload") and of AC-10a
+ * ("removes it ... from localStorage") was unproven. These cases drive the REAL adapter over the happy-dom `window.localStorage` of the
+ * logic runner (the runner is `happy-dom`, so `window` exists; no Angular compilation is needed, and this file is not named
+ * `*.component.spec.ts`). They are written from the documented contract of the adapter (its doc comment, the port interface and the
+ * Specification NFR-10) and are [characterization] cases: the implementation already exists, so they are green on arrival and guard it.
+ */
+describe('US-10.6 NFR-10 / AC-10 / AC-10a: the user-preset localStorage adapter (loop-back 1, B-1)', () => {
+  const KEY = 'image-studio.user-presets.v1';
+  const sample = (): UserPreset[] => {
+    const a = createUserPreset({ name: 'Mug shot', prompt: 'A mug on a desk', aspectRatio: '4:5', resolution: '2K', model: 'gemini-3-pro-image' }, [], 1_700_000_000_000);
+    const b = createUserPreset({ name: 'Lamp', prompt: 'A lamp at night', aspectRatio: '1:1', resolution: '1K', model: 'gemini-3-pro-image' }, a.ok ? [a.preset] : [], 1_700_000_000_500);
+    if (!a.ok || !b.ok) throw new Error('fixture presets must be valid');
+    return [a.preset, b.preset];
+  };
+
+  /*
+   * Failure injection: `window.localStorage` is replaced (observed: spying on `Storage.prototype` has NO effect in happy-dom, whose
+   * storage object answers its methods itself, so such a spy would let the "throwing" cases pass or fail vacuously). The replacement
+   * delegates everything to the real storage except the named methods, and `restoreStorage()` puts the original property back.
+   */
+  const originalDescriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  const realStorage = window.localStorage;
+  const failOn = (methods: Partial<Pick<Storage, 'getItem' | 'setItem'>>) => {
+    const replacement = {
+      getItem: (key: string) => realStorage.getItem(key),
+      setItem: (key: string, value: string) => realStorage.setItem(key, value),
+      ...methods,
+    };
+    Object.defineProperty(window, 'localStorage', { configurable: true, get: () => replacement });
+  };
+  const restoreStorage = () => {
+    if (originalDescriptor) Object.defineProperty(window, 'localStorage', originalDescriptor);
+  };
+  const quotaFull = () => { throw new DOMException('quota', 'QuotaExceededError'); };
+
+  beforeEach(() => { realStorage.clear(); });
+  afterEach(() => { restoreStorage(); realStorage.clear(); });
+
+  it('[characterization] the storage key is the documented `image-studio.user-presets.v1`', () => {
+    expect(USER_PRESETS_STORAGE_KEY).toBe(KEY);
+  });
+
+  it('[characterization] AC-10: save(list) writes the list as JSON under the documented key, and a fresh adapter load() returns the same list (a page reload)', () => {
+    const list = sample();
+    expect(createBrowserUserPresetStorage().save(list)).toEqual({ ok: true });
+
+    const stored = window.localStorage.getItem(KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored as string)).toEqual(JSON.parse(JSON.stringify(list)));
+
+    const reloaded = createBrowserUserPresetStorage().load();
+    expect(reloaded).toEqual({ ok: true, presets: JSON.parse(JSON.stringify(list)) });
+  });
+
+  it('[characterization] an empty store loads as { ok: true, presets: [] } and loading writes nothing', () => {
+    expect(createBrowserUserPresetStorage().load()).toEqual({ ok: true, presets: [] });
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('[characterization] non-JSON text under the key loads as { ok: false } and the text is left in place, not deleted', () => {
+    window.localStorage.setItem(KEY, 'this is {not json');
+    expect(createBrowserUserPresetStorage().load()).toEqual({ ok: false });
+    expect(window.localStorage.getItem(KEY)).toBe('this is {not json');
+  });
+
+  it('[characterization] a throwing getItem gives { ok: false } from load() instead of an exception', () => {
+    failOn({ getItem: () => { throw new Error('storage blocked'); } });
+    expect(createBrowserUserPresetStorage().load()).toEqual({ ok: false });
+  });
+
+  it('[characterization] a throwing setItem (quota full) gives { ok: false } from save() instead of an exception, and nothing is stored', () => {
+    failOn({ setItem: quotaFull });
+    expect(createBrowserUserPresetStorage().save(sample())).toEqual({ ok: false });
+    restoreStorage();
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('[characterization] blocked storage where reading window.localStorage itself throws gives { ok: false } for both load() and save()', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', { configurable: true, get: () => { throw new Error('access denied'); } });
+    try {
+      const adapter = createBrowserUserPresetStorage();
+      expect(adapter.load()).toEqual({ ok: false });
+      expect(adapter.save(sample())).toEqual({ ok: false });
+    } finally {
+      if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+      else delete (window as unknown as Record<string, unknown>)['localStorage'];
+    }
+  });
+
+  describe('through UserPresetsService with the REAL adapter (no fake port)', () => {
+    const CURRENT = { prompt: 'A mug on a desk', aspectRatio: '4:5', resolution: '2K', model: 'gemini-3-pro-image' };
+    const makeService = () =>
+      Injector.create({
+        providers: [
+          { provide: USER_PRESET_STORAGE_PORT, useValue: createBrowserUserPresetStorage() },
+          { provide: CLOCK_PORT, useValue: makeFakeClock(1_700_000_000_000) },
+          { provide: UserPresetsService, useClass: UserPresetsService },
+        ],
+      }).get(UserPresetsService);
+    const storedIds = (): string[] => (JSON.parse(window.localStorage.getItem(KEY) ?? '[]') as { id: string }[]).map((p) => p.id);
+
+    it('[characterization] AC-10: a saved preset is in localStorage, and a second service created afterwards (a reload) shows it with the same id, name and fields', () => {
+      const first = makeService();
+      const r = first.save('My mug shot', CURRENT);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(storedIds()).toEqual([r.preset.id]);
+
+      const reloaded = makeService();
+      expect(reloaded.presets()).toHaveLength(1);
+      expect(reloaded.presets()[0]).toMatchObject({ id: r.preset.id, name: 'My mug shot', ...CURRENT });
+    });
+
+    it('[characterization] AC-10a: after save then remove, the stored item no longer contains that preset and a reload shows none', () => {
+      const service = makeService();
+      const keep = service.save('Keep me', CURRENT);
+      const drop = service.save('Delete me', { ...CURRENT, prompt: 'Something else' });
+      expect(keep.ok && drop.ok).toBe(true);
+      if (!keep.ok || !drop.ok) return;
+      expect(storedIds()).toEqual([keep.preset.id, drop.preset.id]);
+
+      expect(service.remove(drop.preset.id)).toEqual({ ok: true });
+      expect(storedIds()).toEqual([keep.preset.id]);
+      expect(window.localStorage.getItem(KEY)).not.toContain(drop.preset.id);
+
+      expect(service.remove(keep.preset.id)).toEqual({ ok: true });
+      expect(storedIds()).toEqual([]);
+      expect(makeService().presets()).toEqual([]);
+    });
+
+    it('[characterization] AC-10a: a removal the browser could not store reports { ok: false } and the preset stays in localStorage and in the list', () => {
+      const service = makeService();
+      const saved = service.save('Stays', CURRENT);
+      if (!saved.ok) throw new Error('save must succeed');
+      failOn({ setItem: quotaFull });
+      expect(service.remove(saved.preset.id)).toEqual({ ok: false });
+      restoreStorage();
+      expect(storedIds()).toEqual([saved.preset.id]);
+      expect(service.presets().map((p) => p.id)).toEqual([saved.preset.id]);
+    });
   });
 });
