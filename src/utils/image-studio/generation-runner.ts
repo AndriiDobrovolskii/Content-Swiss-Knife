@@ -44,10 +44,18 @@ export interface RunInput {
   buildInput: BuildInput;
 }
 
+/**
+ * US-10.6 FR-14: the index of the Style ref image part of the sent turn, as the request builder found it. The runner only carries it so
+ * the store can write it onto the stored USER turn; it never reaches the model. The key is absent when the send had no Style ref image.
+ */
+interface StyleRefTag {
+  styleRefPartIndex?: number;
+}
+
 export type RunOutcome =
-  | { type: 'images'; sessionId: string; request: GenerateRequest; response: GenerateResponse }
-  | { type: 'text'; sessionId: string; request: GenerateRequest; response: GenerateResponse }
-  | { type: 'safety'; sessionId: string; request: GenerateRequest; response: GenerateResponse }
+  | ({ type: 'images'; sessionId: string; request: GenerateRequest; response: GenerateResponse } & StyleRefTag)
+  | ({ type: 'text'; sessionId: string; request: GenerateRequest; response: GenerateResponse } & StyleRefTag)
+  | ({ type: 'safety'; sessionId: string; request: GenerateRequest; response: GenerateResponse } & StyleRefTag)
   | { type: 'failed'; textId: string; retry: boolean; restore: true; retryAfterSeconds?: number }
   | { type: 'blocked'; textId: 'T-14'; restore: true }
   | { type: 'cancelled'; restore: true }
@@ -104,7 +112,8 @@ export function createGenerationRunner(deps: RunnerDeps): GenerationRunner {
   return {
     async run(input: RunInput, cancelSignal?: AbortSignal): Promise<RunOutcome> {
       // Built from the snapshot before any append. An empty message throws here: nothing is announced or sent.
-      const { request } = buildGenerateRequest(input.snapshot, input.buildInput);
+      const { request, styleRefPartIndex } = buildGenerateRequest(input.snapshot, input.buildInput);
+      const styleRefTag: StyleRefTag = styleRefPartIndex !== undefined ? { styleRefPartIndex } : {};
 
       deps.announcer.announce(studioText('T-16', deps.uiLanguage()));
 
@@ -168,12 +177,12 @@ export function createGenerationRunner(deps: RunnerDeps): GenerationRunner {
             const created = response.parts.filter(isVersionPart).length;
             const highest = input.snapshot.meta.nextVersionNumber + created - 1;
             finish(
-              { type: 'images', sessionId: input.sessionId, request: sent, response },
+              { type: 'images', sessionId: input.sessionId, request: sent, response, ...styleRefTag },
               studioText('T-17', deps.uiLanguage(), { N: highest }),
             );
             return;
           }
-          finish({ type: response.kind, sessionId: input.sessionId, request: sent, response });
+          finish({ type: response.kind, sessionId: input.sessionId, request: sent, response, ...styleRefTag });
         };
 
         /**

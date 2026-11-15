@@ -8,6 +8,7 @@
  *
  * This file declares interfaces and one error class only.
  */
+import type { UserPreset } from './user-presets';
 
 /** The image formats the studio accepts and produces. */
 export type ImageMime = 'image/png' | 'image/jpeg' | 'image/webp';
@@ -128,6 +129,11 @@ export interface Turn {
   presetId?: string;
   /** The input images of the send: the user-turn parts it used. */
   inputRefs?: { turnId: string; partIndex: number }[];
+  /**
+   * US-10.6 FR-14: the index in `parts` of the image sent as a Style reference. The role tag lives at turn level and
+   * never on a Part, so it is never sent to the model; absent means every image is Product.
+   */
+  styleRefPartIndex?: number;
 }
 
 /** One retained generated image of a session. */
@@ -192,6 +198,17 @@ export interface SessionStorePort {
   /** Replace file URIs inside stored turns and re-key the sent bytes. `map` is oldUri -> newUri. */
   remapFileUris(sessionId: string, map: Record<string, string>): Promise<void>;
   deleteSession(id: string): Promise<void>;
+}
+
+/**
+ * Where the user's saved presets live (US-10.6 T18, FR-15 (d), NFR-10): the browser's own storage, per browser, never the
+ * server. `load` answers `{ ok: false }` when the storage cannot be read at all (unavailable, blocked, unparseable text) and
+ * otherwise the raw stored value, which the caller validates (`parseStoredPresets`). `save` writes the WHOLE list and
+ * answers `{ ok: false }` when it could not be stored (full, blocked); neither method ever throws.
+ */
+export interface UserPresetStoragePort {
+  load(): { ok: true; presets: unknown } | { ok: false };
+  save(presets: UserPreset[]): { ok: boolean };
 }
 
 /** Thrown by a storage adapter when the browser's storage quota is exceeded (FR-81). */

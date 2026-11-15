@@ -56,3 +56,38 @@ describe('image model ids agree across the catalogue, the price table and the pr
     }
   });
 });
+
+/**
+ * US-10.6 T3 (OD-16 row, additive; FR-21, FR-22, AC-14, AC-14a) - the same consistency check gains the RESOLUTION dimension.
+ * The assertions above are unchanged. No price value is pinned (T1 check 5 is unrecorded); only which pairs are priced and the 4K ordering.
+ */
+const catalogueImageModels = (): Array<{ id: string; resolutions: string[] }> => (catalog as any).providers.flatMap((pr: any) => pr.models)
+  .filter((m: any) => (m.modalities ?? []).includes('image')).map((m: any) => ({ id: m.id, resolutions: m.resolutions as string[] }));
+
+describe('US-10.6 the price table covers the resolution dimension of the catalogue', () => {
+  it('FR-21 / AC-14a: every (model, resolution) pair of the catalogue has a price, and no pair outside the catalogue has one', () => {
+    const table = (pricing as any).IMAGE_PRICES ?? {};
+    for (const model of catalogueImageModels()) {
+      expect(Object.keys(table[model.id] ?? {}).sort(), model.id).toEqual([...model.resolutions].sort());
+    }
+  });
+
+  it('AC-14a: for each model that offers 4K, its 4K price is greater than its 1K price and than its 2K price', () => {
+    const table = (pricing as any).IMAGE_PRICES ?? {};
+    const with4k = catalogueImageModels().filter((m) => m.resolutions.includes('4K'));
+    expect(with4k.length).toBeGreaterThan(0);
+    for (const model of with4k) {
+      expect(table[model.id]?.['4K'], `${model.id} 4K above 1K`).toBeGreaterThan(table[model.id]?.['1K']);
+      expect(table[model.id]?.['4K'], `${model.id} 4K above 2K`).toBeGreaterThan(table[model.id]?.['2K']);
+    }
+  });
+
+  it('FR-21 / FR-28: every preset default (model, resolution) pair is a priced pair - choosing a preset can never produce an unpriced request', async () => {
+    const { PROMPT_PRESETS } = await load('../../src/prompt-core/prompt-presets');
+    const table = (pricing as any).IMAGE_PRICES ?? {};
+    for (const preset of PROMPT_PRESETS) {
+      const { model, resolution } = preset.defaults;
+      expect(typeof table[model]?.[resolution], `${preset.id}: ${model} ${resolution}`).toBe('number');
+    }
+  });
+});

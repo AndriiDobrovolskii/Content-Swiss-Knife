@@ -3,7 +3,7 @@
  *
  * Contract:
  *   parseGenerateRequest(body) -> the validated generate request
- *       { model, aspectRatio, resolution, presetId?, history, newTurn }
+ *       { model, aspectRatio, resolution, presetId?, imageCount?, history, newTurn }
  *   parseUploadRequest(body)   -> { data } (base64 text; its bytes are inspected by the upload handler)
  *
  * Both throw `ImageStudioError('INVALID_REQUEST')` (400) for every violation. The error carries only the
@@ -52,11 +52,15 @@ const newTurnSchema = z.object({
   parts: z.array(partSchema),
 });
 
+/** US-10.6 FR-4: the images asked for in one request, one of the shared contract's `imageCounts` (a number, never a string). */
+const imageCountSchema = z.number().refine(count => contract.imageCounts.includes(count));
+
 const generateRequestSchema = z.object({
   model: z.string(),
   aspectRatio: z.enum(contract.aspectRatios),
   resolution: z.enum(contract.resolutions),
   presetId: z.string().regex(PRESET_ID_PATTERN).optional(),
+  imageCount: imageCountSchema.optional(),
   history: z.array(turnSchema),
   newTurn: newTurnSchema,
 });

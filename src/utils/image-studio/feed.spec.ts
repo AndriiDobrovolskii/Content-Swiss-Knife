@@ -323,3 +323,66 @@ describe('NB-2 hardening: a card never carries more than 10 input thumbnails (T4
     expect(card.thumbs).toEqual(Array.from({ length: 10 }, () => ({ turnId: 'u1', partIndex: 1 })));
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T23 - the role of an input thumbnail (FR-14, AC-9; plan 2). New describe only.
+//
+// PINNED CONTRACT: a stored USER turn may carry `styleRefPartIndex` (a non-negative integer pointing at one of its IMAGE parts; Turn level, never on a
+// Part). buildFeed gives the matching thumbnail an optional `role: 'style-ref'`; every other thumbnail has NO `role` key. A session without the tag renders
+// exactly as before, and a stored value that is not valid is read as "absent" (the image stays Product) without an error - through readTurnExtras.
+// The "Style ref" LABEL text (UA / EN copy and placement) is the component task's (T32, SM-10) and is not asserted here.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('FR-14 / AC-9: buildFeed marks the Style ref thumbnail from the stored turn tag (T23)', () => {
+  /** u1 holds [text, file a (1), inline image (2)]; the model turn m1 references parts 1 and 2 of u1 as its inputs. */
+  function sentWithTag(tag: unknown): StoredSession {
+    const s = makeSession('s1', { pairs: 1 });
+    s.turns[0] = turn('u1', 'user', textPart('blend'), filePart('files/a'), inlineImagePart('image/png', toBase64(makeRaster({ format: 'png', width: 4, height: 4 }))));
+    if (tag !== 'absent') (s.turns[0] as any).styleRefPartIndex = tag;
+    return withTurnExtras(s, 'm1', { inputRefs: [{ turnId: 'u1', partIndex: 1 }, { turnId: 'u1', partIndex: 2 }] as unknown as [] });
+  }
+
+  it('AC-9: the thumbnail at the tagged part index gets role "style-ref" and the other thumbnail has no role', async () => {
+    const [card] = (await feed(sentWithTag(2))).cards;
+    expect(card.thumbs).toEqual([{ turnId: 'u1', partIndex: 1 }, { turnId: 'u1', partIndex: 2, role: 'style-ref' }]);
+    expect(has(card.thumbs[0], 'role')).toBe(false);
+  });
+
+  it('FR-14: tagging the other image marks that one instead - the role follows the stored index', async () => {
+    const [card] = (await feed(sentWithTag(1))).cards;
+    expect(card.thumbs).toEqual([{ turnId: 'u1', partIndex: 1, role: 'style-ref' }, { turnId: 'u1', partIndex: 2 }]);
+  });
+
+  it('FR-14: a session saved before this Story (no tag) renders exactly as before - every thumbnail is Product, no role key anywhere [characterization]', async () => {
+    const [card] = (await feed(sentWithTag('absent'))).cards;
+    expect(card.thumbs).toEqual([{ turnId: 'u1', partIndex: 1 }, { turnId: 'u1', partIndex: 2 }]);
+    for (const thumb of card.thumbs) expect(has(thumb, 'role')).toBe(false);
+  });
+
+  it('FR-14 failure path: an invalid stored value (negative, fractional, a string, out of range, or pointing at the TEXT part) yields no role and no error [characterization]', async () => {
+    for (const bad of [-1, 1.5, '2', null, 9, 0, Number.NaN, {}, [2]]) {
+      const [card] = (await feed(sentWithTag(bad))).cards;
+      expect(card.thumbs, JSON.stringify(bad)).toEqual([{ turnId: 'u1', partIndex: 1 }, { turnId: 'u1', partIndex: 2 }]);
+    }
+  });
+
+  it('FR-14: a card whose tagged index has no thumbnail (the model turn did not reference that part) shows no role at all [characterization]', async () => {
+    const s = sentWithTag(2);
+    withTurnExtras(s, 'm1', { inputRefs: [{ turnId: 'u1', partIndex: 1 }] as unknown as [] });
+    const [card] = (await feed(s)).cards;
+    expect(card.thumbs).toEqual([{ turnId: 'u1', partIndex: 1 }]);
+  });
+
+  it('plan 3.2 / R-9: a merged N-image turn renders one card whose summary count equals the images billed [characterization]', async () => {
+    const s = makeSession('s1', { pairs: 1 });
+    const img = (n: number) => inlineImagePart('image/png', toBase64(makeRaster({ format: 'png', width: 8, height: 8, size: 100 + n })));
+    s.turns[1] = turn('m1', 'model', img(1), img(2), img(3), img(4));
+    s.meta.versions = [1, 2, 3, 4].map((n) => ({ number: n, turnId: 'm1', partIndex: n - 1, model: 'gemini-3.1-flash-image', resolution: '1K', aspectRatio: '1:1', prompt: 'p', inputFormat: 'image/png' as const, downloaded: false }));
+    s.meta.nextVersionNumber = 5;
+    withTurnExtras(s, 'm1', { cost: 0.16 });
+    const out = await feed(s);
+    expect(out.cards).toHaveLength(1);
+    expect(out.cards[0].summary).toEqual({ count: 4, cost: 0.16 });
+    expect(out.cards[0].images.map((i: any) => i.number)).toEqual([1, 2, 3, 4]);
+  });
+});

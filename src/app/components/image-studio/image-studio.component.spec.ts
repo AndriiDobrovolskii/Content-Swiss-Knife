@@ -631,10 +631,12 @@ describe('US-10.5 FR-10 / FR-33 (T23): the single full-view dialog is a sibling 
 });
 
 describe('US-10.5 FR-8 (T33): nothing out of scope is rendered anywhere in the studio', () => {
-  it('no Upscale 4K, Variation, Alt text, Ctrl+K search, spend total, Save as preset, ref role selector, Images 1/2/4 or estimate', async () => {
+  // US-10.6 (OD-16 completion, G-6): Upscale 4K, Variation, the spend total, "Save current as preset" and the Product / Style ref label are now IN scope (AC-1, AC-2, AC-10, AC-12, AC-6)
+  // and are asserted PRESENT in the US-10.6 describes; what stays out of scope (Alt text, Ctrl+K search, a literal "Images 1/2/4" string, the word estimate) is still asserted absent here.
+  it('no Alt text, Ctrl+K search, "Images 1/2/4" text or "estimate" wording anywhere in the studio', async () => {
     const h = await renderStudio(ImageStudioComponent, { sessions: [makeSession('s1', { pairs: 1, costUsd: 0.12 })] });
     const text = h.view.container.textContent ?? '';
-    for (const re of [/Upscale/i, /Variation/i, /Alt text/i, /Ctrl\s*\+?\s*K/i, /Today|This month/i, /Save (current )?as preset/i, /Product ref|Style ref/i, /Images\s*1\s*\/\s*2\s*\/\s*4/, /Estimated|estimate/i]) {
+    for (const re of [/Alt text/i, /Ctrl\s*\+?\s*K/i, /Images\s*1\s*\/\s*2\s*\/\s*4/, /Estimated|estimate/i]) {
       expect(text, String(re)).not.toMatch(re);
     }
   });
@@ -651,4 +653,238 @@ describe('US-10.5 FR-7 (T33): the size probe runs once per distinct image howeve
     await h.settle();
     expect(h.codec.probeCalls).toBe(first);
   });
+});
+
+const PRO_MODEL = 'gemini-3-pro-image';
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T38 - the container wires the new controls: the spend fetch triggers, Upscale 4K / Variation from a tile, the batch alert, the single status and the focus matrix
+// (AC-1, AC-2, AC-3, AC-4, AC-5, AC-12, AC-16; FR-18 (c), FR-24; owner rulings G-2 A, SM-1 ii, SM-9 i, UA copy as proposed).
+// PINNED CONTRACT: the container calls SpendService.refresh() ONCE when the studio opens and again after each action that ended with at least one image (it observes the store's
+// imageActionsCompleted signal); a failed, cancelled or text-only action does not refetch. The tile outputs `upscale` / `variation` are wired to store.upscale / store.variation. The
+// batch warning and failure lines render inside the ONE role="alert" element (never a second role="status"). When ANY action ends - started from Generate or from an image button,
+// on success, partial result, error, Cancel or the 120 s timeout - focus is in the prompt field, wherever focus was during the wait.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('FR-18 (c) / AC-12: the container triggers the spend fetches (T38)', () => {
+  const usage = (h: Harness) => h.http.match((r) => r.url === '/api/usage');
+  const withVersion = () => makeSession('s1', { pairs: 1 });
+
+  it('opening the studio makes exactly ONE /api/usage request', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [withVersion()] });
+    await h.settle();
+    expect(usage(h)).toHaveLength(1);
+  });
+
+  it('AC-12: the header then shows the figures the request returned - "Today $1.00 · month $1.00" for two Image Studio rows of the current UTC day', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [withVersion()] });
+    await h.settle();
+    const now = h.clock.now();
+    const rows = [
+      { id: 1, ts: now - 1000, provider: 'gemini', model: 'm', mode: null, taskLabel: 'image-studio|none|1K', productName: null, store: null, lang: null, inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, costUsd: 0.25 },
+      { id: 2, ts: now - 2000, provider: 'gemini', model: 'm', mode: null, taskLabel: 'image-studio|none|1K', productName: null, store: null, lang: null, inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, costUsd: 0.75 },
+    ];
+    usage(h)[0].flush({ rows });
+    await h.settle();
+    expect(h.view.container.querySelector('header')!.textContent).toContain('Today $1.00 · month $1.00');
+  });
+
+  it('a successful generation makes ONE more request; a failed generation, a cancel and a text-only answer make none', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
+    await h.settle();
+    usage(h)[0].flush({ rows: [] });
+    await typeAndSend(h, 'first');
+    await flushGenerate(h, imagesBody());
+    expect(usage(h)).toHaveLength(1);
+    await typeAndSend(h, 'second');
+    await flushGenerate(h, { error: 'UPSTREAM_RETRIES_EXHAUSTED' }, { status: 502, statusText: 'x' });
+    await typeAndSend(h, 'third');
+    await flushGenerate(h, { kind: 'text', text: 'words only', trimmedTurnIds: [] });
+    await typeAndSend(h, 'fourth');
+    expectGenerate(h);
+    await h.user.click(byName.button(LABELS.en.cancel));
+    await h.settle();
+    expect(usage(h)).toHaveLength(0);
+  });
+});
+
+describe('AC-1 / AC-2: Upscale 4K and Variation from a tile reach the server (T38)', () => {
+  const withVersion = () => makeSession('s1', { pairs: 1 });
+  const tileButton = (name: string) => within(tileLabelled(1)[0]).getByRole('button', { name });
+  const generateBody = (h: Harness) => expectGenerate(h).request.body as Record<string, any>;
+
+  it('AC-1 / SM-1 ii: Upscale 4K on v1 of a Flash session posts an empty history with v1 inline at 4K to the PRO model, then v2 appears with the single status "Version v2 is ready"', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [withVersion()] });
+    await h.settle();
+    await vi.waitFor(() => expect(tileLabelled(1)).toHaveLength(1));
+    await h.user.click(tileButton(t('X-45', 'en')));
+    const req = expectGenerate(h);
+    const body = req.request.body as Record<string, any>;
+    expect(body['history']).toEqual([]);
+    expect(body['model']).toBe(PRO_MODEL);
+    expect(body['resolution']).toBe('4K');
+    expect(body['newTurn'].parts).toHaveLength(1);
+    expect(body['newTurn'].parts[0].inlineData).toBeDefined();
+    req.flush(imagesBody({ costUsd: 0.24 }));
+    await h.settle();
+    expect(tileLabelled(2)).toHaveLength(1);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(textOf(screen.getByRole('status'))).toBe('Version v2 is ready');
+  });
+
+  it('AC-2: Variation with the Images selector at 2 posts v1 inline with its original prompt and imageCount 2, then two new consecutive tiles appear', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [withVersion()] });
+    await h.settle();
+    await vi.waitFor(() => expect(tileLabelled(1)).toHaveLength(1));
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '2');
+    await h.user.click(tileButton(t('X-46', 'en')));
+    const req = expectGenerate(h);
+    const body = req.request.body as Record<string, any>;
+    expect(body['history']).toEqual([]);
+    expect(body['imageCount']).toBe(2);
+    expect(body['newTurn'].parts.map((p: Record<string, any>) => p['text'] ?? 'image')).toEqual(['prompt 1', 'image']);
+    req.flush({ ...imagesBody({ count: 2, costUsd: 0.2 }), batch: { requested: 2, granted: 2, succeeded: 2, failures: [] } });
+    await h.settle();
+    expect(tileLabelled(2)).toHaveLength(1);
+    expect(tileLabelled(3)).toHaveLength(1);
+    expect(textOf(screen.getByRole('status'))).toBe('Version v3 is ready');
+  });
+
+  it('FR-1 failure path: a failed Upscale adds no tile, shows the failure in the alert and refetches no spend', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [withVersion()] });
+    await h.settle();
+    h.http.match((r) => r.url === '/api/usage').forEach((r) => r.flush({ rows: [] }));
+    await vi.waitFor(() => expect(tileLabelled(1)).toHaveLength(1));
+    await h.user.click(tileButton(t('X-45', 'en')));
+    await flushGenerate(h, { error: 'EMPTY_RESPONSE' }, { status: 502, statusText: 'x' });
+    expect(tileLabelled(2)).toHaveLength(0);
+    expect(alertsText()).toContain('The model returned an empty or truncated response. Please try again.');
+    expect(h.http.match((r) => r.url === '/api/usage')).toHaveLength(0);
+  });
+});
+
+describe('AC-3 / AC-4 / AC-5: the batch warning and failure lines in the one alert (T38)', () => {
+  const batchBody = (count: number, batch: Record<string, unknown>, costUsd = 0.1) => ({ ...imagesBody({ count, costUsd }), batch });
+  const alertWith = (needle: string) => screen.getAllByRole('alert').find((a) => textOf(a).includes(needle));
+
+  it('AC-4: 2 of 4 granted shows the 2 images and "Rate limit reached. Generated 2 of 4 images." in role="alert"', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '4');
+    await typeAndSend(h, 'four mugs');
+    await flushGenerate(h, batchBody(2, { requested: 4, granted: 2, succeeded: 2, failures: [] }));
+    expect(tileLabelled(1)).toHaveLength(1);
+    expect(tileLabelled(2)).toHaveLength(1);
+    expect(alertWith('Rate limit reached. Generated 2 of 4 images.')).toBeDefined();
+  });
+
+  it('AC-5: 2 of 4 fail -> the 2 successes are shown and ONE alert holds the summary and a line per cause; the status announces only the highest version', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
+    const w = watchStatus();
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '4');
+    await typeAndSend(h, 'four mugs');
+    await flushGenerate(h, batchBody(2, { requested: 4, granted: 4, succeeded: 2, failures: [{ cause: 'safety' }, { cause: 'empty' }] }));
+    const alert = alertWith('Could not generate 2 of 4 images.');
+    expect(alert).toBeDefined();
+    expect(textOf(alert!)).toContain('blocked by the safety filter');
+    expect(textOf(alert!)).toContain('empty response');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(w.announcements()).toEqual(['Generating…', 'Version v2 is ready']);
+    w.stop();
+  });
+
+  it('UA copy: the same partial result in Ukrainian - "Не вдалося згенерувати 2 із 4 зображень." and the cause lines', async () => {
+    const h = await renderStudio(ImageStudioComponent, { lang: 'uk', sessions: [EMPTY()] });
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'uk') }), '4');
+    await typeAndSend(h, 'чотири кухлі', 'uk');
+    await flushGenerate(h, batchBody(2, { requested: 4, granted: 4, succeeded: 2, failures: [{ cause: 'safety' }, { cause: 'empty' }] }));
+    const alert = alertWith('Не вдалося згенерувати 2 із 4 зображень.');
+    expect(alert).toBeDefined();
+    expect(textOf(alert!)).toContain('заблоковано фільтром безпеки');
+    expect(textOf(alert!)).toContain('порожня відповідь');
+  });
+
+  it('a clean 4-of-4 batch shows four tiles and no alert at all', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [EMPTY()] });
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '4');
+    await typeAndSend(h, 'four mugs');
+    await flushGenerate(h, batchBody(4, { requested: 4, granted: 4, succeeded: 4, failures: [] }, 0.27));
+    expect([1, 2, 3, 4].map((n) => tileLabelled(n).length)).toEqual([1, 1, 1, 1]);
+    expect(screen.queryAllByRole('alert')).toHaveLength(0);
+  });
+});
+
+describe('AC-16: exactly one role="status" and focus in the prompt field after every ending (T38)', () => {
+  const withVersion = () => makeSession('s1', { pairs: 1 });
+  const promptField = () => byName.textarea('en');
+
+  it('AC-16: the studio with the new controls rendered (Images selector, role toggle, preset pills, tile actions, spend, estimate) has exactly one role="status" element', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [withVersion()] });
+    await h.settle();
+    await vi.waitFor(() => expect(tileLabelled(1)).toHaveLength(1));
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('combobox', { name: t('X-47', 'en') })).toBeDefined();
+    expect(screen.getByRole('button', { name: t('X-50', 'en') })).toBeDefined();
+    expect(screen.getByRole('button', { name: t('X-45', 'en') })).toBeDefined();
+  });
+
+  it('AC-16: it stays exactly one after a single-image success, a multi-image success, an Upscale and a Variation', async () => {
+    const h = await renderStudio(ImageStudioComponent, { sessions: [withVersion()] });
+    await h.settle();
+    await vi.waitFor(() => expect(tileLabelled(1)).toHaveLength(1));
+    await typeAndSend(h, 'one');
+    await flushGenerate(h, imagesBody());
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '4');
+    await typeAndSend(h, 'four');
+    await flushGenerate(h, { ...imagesBody({ count: 4, costUsd: 0.27 }), batch: { requested: 4, granted: 4, succeeded: 4, failures: [] } });
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    await h.user.click(within(tileLabelled(1)[0]).getByRole('button', { name: t('X-45', 'en') }));
+    await flushGenerate(h, imagesBody());
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    await h.user.click(within(tileLabelled(1)[0]).getByRole('button', { name: t('X-46', 'en') }));
+    await flushGenerate(h, { ...imagesBody({ count: 4, costUsd: 0.27 }), batch: { requested: 4, granted: 4, succeeded: 4, failures: [] } });
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
+  type Start = 'generate' | 'upscale' | 'variation';
+  type Ending = 'success' | 'partial' | 'error' | 'cancel' | 'timeout';
+  const CASES: Array<[Start, Ending]> = [
+    ['generate', 'success'], ['generate', 'partial'], ['generate', 'error'], ['generate', 'cancel'], ['generate', 'timeout'],
+    ['upscale', 'success'], ['upscale', 'error'], ['upscale', 'cancel'], ['upscale', 'timeout'],
+    ['variation', 'success'], ['variation', 'partial'], ['variation', 'error'], ['variation', 'cancel'], ['variation', 'timeout'],
+  ];
+
+async function runEnding(start: Start, ending: Ending) {
+
+    const h = await renderStudio(ImageStudioComponent, { sessions: [withVersion()] });
+    await h.settle();
+    await vi.waitFor(() => expect(tileLabelled(1)).toHaveLength(1));
+    const partialBatch = { requested: 4, granted: 4, succeeded: 2, failures: [{ cause: 'safety' }, { cause: 'empty' }] };
+    if (start === 'generate') {
+      if (ending === 'partial') await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '4');
+      await typeAndSend(h, 'a mug');
+    } else {
+      if (start === 'variation' && ending === 'partial') await h.user.selectOptions(screen.getByRole('combobox', { name: t('X-47', 'en') }), '4');
+      const name = start === 'upscale' ? t('X-45', 'en') : t('X-46', 'en');
+      await h.user.click(within(tileLabelled(1)[0]).getByRole('button', { name }));
+    }
+    const req = expectGenerate(h);
+    byName.button(LABELS.en.cancel); // the Cancel control is present while the call runs
+    (screen.getByRole('button', { name: LABELS.en.newSession }) as HTMLElement).focus(); // focus wanders during the wait
+    if (ending === 'success') req.flush(imagesBody());
+    else if (ending === 'partial') req.flush({ ...imagesBody({ count: 2, costUsd: 0.1 }), batch: partialBatch });
+    else if (ending === 'error') req.flush({ error: 'UPSTREAM_RETRIES_EXHAUSTED' }, { status: 502, statusText: 'x' });
+    else if (ending === 'cancel') await h.user.click(byName.button(LABELS.en.cancel));
+    else h.scheduler.advance(120_000);
+    await h.settle();
+    expect(document.activeElement).toBe(promptField());
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  }
+
+  const EXISTING = CASES.filter(([start, ending]) => start === 'generate' && ending !== 'partial');
+  const NEW = CASES.filter(([start, ending]) => !(start === 'generate' && ending !== 'partial'));
+
+  it.each(EXISTING)('AC-16 / US-10.1 FR-76: an action started from %s and ended by %s leaves focus in the prompt field and one status [characterization]', async (start, ending) => { await runEnding(start, ending); });
+
+  it.each(NEW)('AC-16 / US-10.1 FR-76: an action started from %s and ended by %s leaves focus in the prompt field - even when focus was moved elsewhere during the wait', async (start, ending) => { await runEnding(start, ending); });
 });

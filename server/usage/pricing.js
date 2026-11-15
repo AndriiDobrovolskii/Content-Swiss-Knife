@@ -1,4 +1,5 @@
 import { findImageModel } from '../providers/model-support.js';
+import contract from '../../src/prompt-core/image-studio-contract.json' with { type: 'json' };
 
 // $ per 1M tokens, per Claude model. Update here when Anthropic changes prices —
 // past usage_log rows keep the cost computed at insert time, so this only affects new rows.
@@ -67,39 +68,47 @@ function getPrices(model, now = new Date()) {
   return FALLBACK_PRICE;
 }
 
-// --- Image Studio (US-10.1, FR-70, DD-12) ---------------------------------------------------------
+// --- Image Studio (US-10.1, FR-70, DD-12; pair-keyed since US-10.6, FR-22) -------------------------
 // Image models are billed per returned NON-thought image, not per token, so their prices live in a
-// table of their own, keyed by the EXACT catalogue model id. They are deliberately absent from
-// DEFAULT_PRICES: the image path never calls getPrices(), so it can never reach the substring loop
-// or FALLBACK_PRICE (which would silently bill an image at a text-token rate).
+// table of their own, keyed by the EXACT catalogue model id and then by resolution. They are
+// deliberately absent from DEFAULT_PRICES: the image path never calls getPrices(), so it can never
+// reach the substring loop or FALLBACK_PRICE (which would silently bill an image at a text-token rate).
 //
-// $ per generated image. Source: V-5 of docs/evidence/US-10.1-pre-implementation-checks.md
-// (Gemini Developer API image tier pricing, recorded 2026-11-01). Update here and in the catalogue
-// together; test/image-studio/image-model-consistency.spec.ts fails until the two agree.
-const IMAGE_PRICES = {
-  'gemini-3.1-flash-image': 0.03,
-  'gemini-3-pro-image': 0.06,
-};
+// $ per generated image, per (model, resolution) pair. The values are `imagePrices` in the shared
+// contract JSON (src/prompt-core/image-studio-contract.json, owner-accepted prices of OD-2, evidence
+// docs/evidence/US-10.6-vendor-facts-evidence.md); the browser estimate reads the same table, so the
+// server and the client can never disagree on a unit price. There is no model-only entry and no
+// fallback: a pair that is not in the table is unpriced.
+const IMAGE_PRICES = contract.imagePrices;
 
-// Thrown when an image model has no per-image price. The generate handler maps it to a 500
-// PRICE_NOT_CONFIGURED before any usage row is written (FR-26 precedence, FR-70).
+// Thrown when an image (model, resolution) pair has no per-image price. The generate handler maps it
+// to a 500 PRICE_NOT_CONFIGURED before any usage row is written (FR-26 precedence, FR-70).
 class PriceNotConfiguredError extends Error {
-  constructor(modelId) {
-    super(`No per-image price configured for model "${modelId}"`);
+  constructor(modelId, resolution) {
+    super(`No per-image price configured for model "${modelId}" at resolution "${resolution}"`);
     this.name = 'PriceNotConfiguredError';
     this.modelId = modelId;
+    this.resolution = resolution;
   }
 }
 
-// Exact key only: a near-miss or unknown id throws instead of matching by substring.
-function getImagePrice(modelId) {
-  if (typeof modelId === 'string' && Object.hasOwn(IMAGE_PRICES, modelId)) return IMAGE_PRICES[modelId];
-  throw new PriceNotConfiguredError(modelId);
+// Exact keys only, both required: a near-miss, an unknown model, an unknown resolution for a known
+// model, or a missing resolution throws instead of matching by substring or falling back to another
+// resolution (a stale one-argument caller cannot bill a 4K image at a 1K price).
+function getImagePrice(modelId, resolution) {
+  if (
+    typeof modelId === 'string' && Object.hasOwn(IMAGE_PRICES, modelId) &&
+    typeof resolution === 'string' && Object.hasOwn(IMAGE_PRICES[modelId], resolution)
+  ) {
+    return IMAGE_PRICES[modelId][resolution];
+  }
+  throw new PriceNotConfiguredError(modelId, resolution);
 }
 
 // `nonThoughtImageCount` is the classifier's imageCount (thought images are already excluded, FR-84).
-function computeImageCost(modelId, nonThoughtImageCount) {
-  const unit = getImagePrice(modelId);
+// Cost is unit * count, not rounded (Rule A, OD-18).
+function computeImageCost(modelId, resolution, nonThoughtImageCount) {
+  const unit = getImagePrice(modelId, resolution);
   return unit * nonThoughtImageCount;
 }
 

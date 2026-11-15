@@ -67,7 +67,8 @@ async function setup(over: Over = {}) {
   const logs = makeLogSpy();
   const limiter = over.limiter ?? { tryConsume: vi.fn(() => { order.push('limiter'); return { allowed: true, retryAfterSeconds: 0 }; }) };
   const insertUsage = over.insertUsage ?? vi.fn();
-  const price = over.price ?? vi.fn((_id: string, n: number) => n * 0.03);
+  // US-10.6 T3 (OD-16): the fake takes the count as its LAST argument, so it works with the (model, count) and the (model, resolution, count) arity alike.
+  const price = over.price ?? vi.fn((...args: unknown[]) => (args[args.length - 1] as number) * 0.03);
   const getGemini = vi.fn(() => gemini);
   const hasGeminiKey = vi.fn(() => over.hasKey ?? true);
   const handler = createGenerateHandler({ getGemini, hasGeminiKey, now: () => 1_700_000_000_000, sleep: sleeper.sleep, limiter, insertUsage, price, log: logs.log });
@@ -220,14 +221,14 @@ describe('generate handler - the three 200 variants (FR-24, FR-26, FR-62, FR-63,
   it('FR-70: costUsd is the per-image price x the number of images; two images cost twice the unit price', async () => {
     const s = await setup({ script: { generateImage: () => sdk([IMG, IMG2]) } });
     const res = await call(s, body());
-    expect(s.price).toHaveBeenCalledWith(FLASH, 2);
+    expect(s.price).toHaveBeenCalledWith(FLASH, '1K', 2); // US-10.6 T3 (OD-16): pair arity, same count
     expect((res.body as any).costUsd).toBeCloseTo(0.06, 10);
   });
 
   it('FR-84: a thought image is not priced, not counted and not a version - one thought image plus one final image costs ONE unit, the thought part stays in parts', async () => {
     const s = await setup({ script: { generateImage: () => sdk([THOUGHT_IMG, IMG]) } });
     const res = await call(s, body());
-    expect(s.price).toHaveBeenCalledWith(FLASH, 1);
+    expect(s.price).toHaveBeenCalledWith(FLASH, '1K', 1); // US-10.6 T3 (OD-16): pair arity, same count
     expect((res.body as any).costUsd).toBeCloseTo(0.03, 10);
     expect((res.body as any).parts).toEqual([THOUGHT_IMG, IMG]);
   });
@@ -237,18 +238,21 @@ describe('generate handler - the three 200 variants (FR-24, FR-26, FR-62, FR-63,
     const res = await call(s, body());
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ kind: 'text', text: 'only words', trimmedTurnIds: [] });
-    expect(s.price).not.toHaveBeenCalled();
+    // US-10.6 T4 (OD-16 row, OD-15 pre-call, SM-8): the ONLY price consultation is the pre-call pair check (count 1); no cost is looked up for a text answer
+    expect(s.price).toHaveBeenCalledTimes(1);
+    expect(s.price).toHaveBeenCalledWith(FLASH, '1K', 1);
     expect(s.insertUsage).not.toHaveBeenCalled();
   });
 
-  it('FR-62 / AC-38: a safety-finished candidate is 200 { kind: safety, reason } even if it holds an image; no cost, no row, no price lookup, history untouched', async () => {
-    const price = vi.fn(() => { throw new Error('price must not be consulted for a safety block'); });
-    const s = await setup({ price, script: { generateImage: () => sdk([IMG], 'IMAGE_PROHIBITED_CONTENT') } });
+  it('FR-62 / AC-38: a safety-finished candidate is 200 { kind: safety, reason } even if it holds an image; no cost, no row, no cost lookup (only the pre-call pair check), history untouched', async () => {
+    const s = await setup({ script: { generateImage: () => sdk([IMG], 'IMAGE_PROHIBITED_CONTENT') } });
     const res = await call(s, body());
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ kind: 'safety', reason: 'IMAGE_PROHIBITED_CONTENT', trimmedTurnIds: [] });
     expect(s.insertUsage).not.toHaveBeenCalled();
-    expect(price).not.toHaveBeenCalled();
+    // US-10.6 T4 (OD-16 row, OD-15 pre-call, SM-8): price is consulted once, before the call, for the pair (count 1) - never for the blocked answer
+    expect(s.price).toHaveBeenCalledTimes(1);
+    expect(s.price).toHaveBeenCalledWith(FLASH, '1K', 1);
   });
 
   it('FR-62: a prompt-level block with no candidate is 200 { kind: safety } carrying the blockReason', async () => {
@@ -265,7 +269,9 @@ describe('generate handler - the three 200 variants (FR-24, FR-26, FR-62, FR-63,
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ kind: 'text', text: 'Please describe the product.', trimmedTurnIds: [] });
     expect(s.insertUsage).not.toHaveBeenCalled();
-    expect(s.price).not.toHaveBeenCalled();
+    // US-10.6 T4 (OD-16 row, OD-15 pre-call, SM-8): only the pre-call pair check consults price; a text answer is not priced
+    expect(s.price).toHaveBeenCalledTimes(1);
+    expect(s.price).toHaveBeenCalledWith(FLASH, '1K', 1);
   });
 
   it('FR-64 / SD-15: an empty or truncated reply (class 4) is 502 EMPTY_RESPONSE with no trimmedTurnIds, no cost, no row - and it was counted', async () => {
@@ -279,7 +285,7 @@ describe('generate handler - the three 200 variants (FR-24, FR-26, FR-62, FR-63,
     }
   });
 
-  it('FR-70 / SD-26 / N-11: a paid image with no resolvable price is 500 PRICE_NOT_CONFIGURED - no row, no costUsd, no trimmedTurnIds, model id logged server-side, still a counted request', async () => {
+  it('FR-70 / SD-26 / N-11 (US-10.6 T4, OD-15 pre-call, SM-8 i): an unpriced (model, resolution) pair is 500 PRICE_NOT_CONFIGURED BEFORE the paid call - no upstream call at all, no limiter unit, no row, no costUsd, no trimmedTurnIds, model id logged server-side', async () => {
     const pricing = await load(PRICING);
     let noPrice: unknown;
     try { pricing.computeImageCost('gemini-9-image', 1); } catch (e) { noPrice = e; }
@@ -290,7 +296,8 @@ describe('generate handler - the three 200 variants (FR-24, FR-26, FR-62, FR-63,
     expect(res.statusCode).toBe(500);
     expect(res.body).toEqual({ error: 'PRICE_NOT_CONFIGURED' });
     expect(s.insertUsage).not.toHaveBeenCalled();
-    expect(s.limiter.tryConsume).toHaveBeenCalledTimes(1);
+    expect(s.gemini.calls).toHaveLength(0); // US-10.6 T4: refused before the paid call - not even a token count is made
+    expect(s.limiter.tryConsume).not.toHaveBeenCalled(); // plan 5.2 step 2: the check precedes the limiter, so no unit is consumed
     expect(s.logs.text()).toContain(FLASH); // FR-70: the model id is logged server-side
   });
 

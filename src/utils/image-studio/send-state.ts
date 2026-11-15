@@ -7,17 +7,21 @@
  * Pure, and typed over a structural subset of the draft so this util does not import the store type.
  */
 
+import type { AttachmentRole } from './attachment-roles';
+
 /** The part of a draft the predicate reads. */
 export interface SendableContentDraft {
   readonly text: string;
-  readonly attachments: ReadonlyArray<{ readonly state: 'uploading' | 'ready' | 'failed' }>;
+  /** `role` is optional: a role-less attachment (written before US-10.6) is Product. */
+  readonly attachments: ReadonlyArray<{ readonly state: 'uploading' | 'ready' | 'failed'; readonly role?: AttachmentRole }>;
   readonly attachedVersion: unknown | null;
 }
 
 /**
- * True when the draft carries something to send: non-blank text, at least one READY upload, or an attached earlier
- * version. An uploading or failed attachment alone does not count.
+ * True when the draft carries something to send: non-blank text, at least one READY Product upload, or an attached
+ * earlier version. An uploading or failed attachment alone does not count, and neither does a READY Style-ref upload:
+ * a style reference is guidance, not content, so a send whose only content is one is refused (US-10.6 FR-13, SM-4 i).
  */
 export function hasSendableContent(d: SendableContentDraft): boolean {
-  return d.text.trim() !== '' || d.attachments.some(a => a.state === 'ready') || d.attachedVersion !== null;
+  return d.text.trim() !== '' || d.attachments.some(a => a.state === 'ready' && a.role !== 'style-ref') || d.attachedVersion !== null;
 }

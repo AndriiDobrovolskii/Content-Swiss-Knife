@@ -417,3 +417,143 @@ describe('US-10.5 FR-17: a blank prompt with attachments - label, enablement and
     await h.settle();
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T34 - the Product / Style ref toggle on each uploaded-image thumbnail, its two rejection alerts, and the sentence in the request
+// (FR-10, FR-11, FR-12, FR-13; AC-6, AC-7, AC-8, AC-9; owner rulings: the label is an INTERACTIVE TOGGLE BUTTON on uploaded-image thumbnails only (not on the attached version, SM-3 i),
+// SM-4 i, SM-2 after, UA copy as proposed).
+// PINNED DOM CONTRACT: every ready upload's <li> holds a <button> whose accessible name is the CURRENT role label - "Product" (X-48) or "Style ref" (X-49); clicking it switches the image
+// between the two roles; the rejection of a second Style ref (X-61) and of a change to Product beyond five Product uploads (X-62) is shown in a role="alert" element - never in a
+// role="status"; the attached "Edit this" version's <li> has no such button.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('AC-6 / AC-7 / AC-8: the role toggle on an uploaded thumbnail (T34)', () => {
+  const productLabel = (lang: 'en' | 'uk' = 'en') => t('X-48', lang);
+  const styleLabel = (lang: 'en' | 'uk' = 'en') => t('X-49', lang);
+  const toggleOf = (li: HTMLElement, name: string) => within(li).getByRole('button', { name });
+  async function attachN(h: Harness, n: number) {
+    const files = Array.from({ length: n }, (_, i) => fileOf(`img${i + 1}.png`, png(64, 48, 2048 + i)));
+    await attach(h, files, files.map((_, i) => `files/f${i + 1}`));
+  }
+
+  it('AC-6: each newly attached image is Product - its thumbnail carries a button named "Product"', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await attachN(h, 2);
+    expect(thumbs()).toHaveLength(2);
+    for (const li of thumbs()) expect(toggleOf(li, productLabel())).toBeDefined();
+  });
+
+  it('AC-6: clicking the toggle makes the image Style ref (the button is then named "Style ref") and clicking again returns it to Product', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await attachN(h, 1);
+    await h.user.click(toggleOf(thumbs()[0], productLabel()));
+    expect(toggleOf(thumbs()[0], styleLabel())).toBeDefined();
+    expect((h.store.draft() as any).attachments[0].role).toBe('style-ref');
+    await h.user.click(toggleOf(thumbs()[0], styleLabel()));
+    expect(toggleOf(thumbs()[0], productLabel())).toBeDefined();
+  });
+
+  it('AC-7: marking a SECOND image as Style ref is rejected with the explanatory message in role="alert", and the first stays marked', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await attachN(h, 2);
+    await h.user.click(toggleOf(thumbs()[0], productLabel()));
+    await h.user.click(toggleOf(thumbs()[1], productLabel()));
+    expect(alertsText()).toContain('Only one image can be a style reference per generation.');
+    expect(screen.getAllByRole('alert').length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('status')).toHaveLength(0);
+    expect(toggleOf(thumbs()[0], styleLabel())).toBeDefined();
+    expect(toggleOf(thumbs()[1], productLabel())).toBeDefined();
+  });
+
+  it('AC-7: removing the Style ref image makes the role available again for the other image', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await attachN(h, 2);
+    await h.user.click(toggleOf(thumbs()[0], productLabel()));
+    await h.user.click(within(thumbs()[0]).getByRole('button', { name: t('X-14', 'en') }));
+    await h.user.click(toggleOf(thumbs()[0], productLabel()));
+    expect(toggleOf(thumbs()[0], styleLabel())).toBeDefined();
+  });
+
+  it('AC-8: five Product uploads plus one Style ref are accepted together (six uploads), and a further Product upload is refused as today (T-3)', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await attachN(h, 5);
+    await h.user.click(toggleOf(thumbs()[4], productLabel()));
+    const fresh = fileOf('sixth.png', png(64, 48, 3000));
+    await h.user.upload(fileInput(h), fresh);
+    const reqs = await collectUploads(h, 1);
+    reqs[0].flush({ fileUri: 'files/f6', mimeType: 'image/png' });
+    await h.settle();
+    expect(thumbs()).toHaveLength(6);
+    await h.user.upload(fileInput(h), fileOf('seventh.png', png(64, 48, 3100)));
+    await h.settle();
+    expect(alertsText()).toContain(t('T-3', 'en'));
+    expect(thumbs()).toHaveLength(6);
+    h.http.expectNone(UPLOAD_URL);
+  });
+
+  it('AC-8 / FR-12: with five Products and one Style ref, changing the Style ref to Product is rejected in role="alert" ("You can attach no more than 5 product images.") and the image stays Style ref', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await attachN(h, 5);
+    await h.user.click(toggleOf(thumbs()[4], productLabel()));
+    await h.user.upload(fileInput(h), fileOf('sixth.png', png(64, 48, 3000)));
+    const reqs = await collectUploads(h, 1);
+    reqs[0].flush({ fileUri: 'files/f6', mimeType: 'image/png' });
+    await h.settle();
+    await h.user.click(toggleOf(thumbs()[4], styleLabel()));
+    expect(alertsText()).toContain('You can attach no more than 5 product images.');
+    expect(toggleOf(thumbs()[4], styleLabel())).toBeDefined();
+    expect(screen.queryAllByRole('status')).toHaveLength(0);
+  });
+
+  it('SM-3 i: the attached "Edit this" version has no Product / Style ref button', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [makeSession('s1', { pairs: 1 })] });
+    await h.store.editVersion(1);
+    await h.settle();
+    const list = screen.getByRole('list', { name: t('X-25', 'en') });
+    const li = within(list).getAllByRole('listitem')[0];
+    expect(within(li).queryByRole('button', { name: productLabel() })).toBeNull();
+    expect(within(li).queryByRole('button', { name: styleLabel() })).toBeNull();
+  });
+
+  it('UA copy: the toggle reads "Товар" and "Референс стилю"', async () => {
+    const h = await renderStudio(StudioComposerComponent, { lang: 'uk', sessions: [EMPTY()] });
+    await h.user.upload(fileInput(h), fileOf('a.png', png()));
+    const reqs = await collectUploads(h, 1);
+    reqs[0].flush({ fileUri: 'files/f1', mimeType: 'image/png' });
+    await h.settle();
+    // Under lang 'uk' the list is named by its Ukrainian label (FR-77), so look it up by that name.
+    const ukThumbs = () => within(screen.getByRole('list', { name: t('X-25', 'uk') })).queryAllByRole('listitem');
+    await h.user.click(toggleOf(ukThumbs()[0], 'Товар'));
+    expect(toggleOf(ukThumbs()[0], 'Референс стилю')).toBeDefined();
+  });
+});
+
+describe('AC-9 / FR-13 / SM-4 i: sending with a Style ref image (T34)', () => {
+  async function twoImages(h: Harness) {
+    const files = [fileOf('product.png', png(64, 48, 2048)), fileOf('style.png', png(64, 48, 2049))];
+    await attach(h, files, ['files/p', 'files/s']);
+  }
+
+  it('SM-4 i: a draft whose only content is a Style ref image cannot be sent - the send button stays disabled (label "Write a prompt to start")', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await h.user.upload(fileInput(h), fileOf('style.png', png()));
+    const reqs = await collectUploads(h, 1);
+    reqs[0].flush({ fileUri: 'files/s', mimeType: 'image/png' });
+    await h.settle();
+    await h.user.click(within(thumbs()[0]).getByRole('button', { name: t('X-48', 'en') }));
+    expect((byName.button(t('X-29', 'en')) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('AC-9 / SM-2: the outbound turn is text, product image, Style ref image, then the AC-9 sentence - the sentence immediately AFTER the Style ref image, no role on any part', async () => {
+    const h = await renderStudio(StudioComposerComponent, { sessions: [EMPTY()] });
+    await twoImages(h);
+    await h.user.click(within(thumbs()[1]).getByRole('button', { name: t('X-48', 'en') }));
+    await h.user.type(byName.textarea('en'), 'a mug');
+    await h.user.click(byName.button(t('X-1', 'en')));
+    const parts = (expectGenerate(h).request.body as { newTurn: { parts: Array<Record<string, any>> } }).newTurn.parts;
+    expect(parts.map((p) => p['text'] ?? p['fileData']?.fileUri)).toEqual([
+      'a mug', 'files/p', 'files/s', 'Use this image purely as a stylistic reference, do not copy the product from it',
+    ]);
+    for (const part of parts) expect(Object.keys(part)).not.toContain('role');
+  });
+});

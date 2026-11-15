@@ -109,3 +109,55 @@ describe('FR-4 failure path: joinSummary drops a missing segment together with i
     expect(line).not.toMatch(/NaN|undefined|\$0\.00|·\s*$/);
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T25 - the money formatter and the estimate text (AC-13; owner ruling SM-7 i: TWO decimals, display rounds, storage never does).
+//
+// PINNED CONTRACT (src/utils/image-studio/format.ts):
+//   formatMoney(amount: unknown, decimals: number): string | null     '$' + toFixed(decimals) for a finite number >= 0; null otherwise (like formatCost)
+//   formatEstimate(amount: number | null, n: number, lang: 'en' | 'uk'): string | null
+//       the estimate text through the plural family X-54 (T24) with {amount} = formatMoney(amount, 2) without its dollar sign: "≈ $0.27 for 2 images";
+//       null when the amount is null (an unpriced pair shows no number, FR-20 failure path). The amount passed in is the UNROUNDED estimate (Rule A).
+// The existing formatCost cases of this file are unchanged.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('US-10.6 T25: formatMoney and formatEstimate (SM-7 i, two decimals)', () => {
+  it('formatMoney rounds only for display, to the requested decimals, with a leading dollar sign', async () => {
+    const { formatMoney } = await import(/* @vite-ignore */ './format') as any;
+    expect(formatMoney(0.268, 2)).toBe('$0.27');
+    expect(formatMoney(0.067, 2)).toBe('$0.07');
+    expect(formatMoney(0.404, 2)).toBe('$0.40');
+    expect(formatMoney(0.96, 2)).toBe('$0.96');
+    expect(formatMoney(0, 2)).toBe('$0.00');
+    expect(formatMoney(0.268, 3)).toBe('$0.268');
+  });
+
+  it('formatMoney is null for anything that is not a finite number >= 0 (no number is invented)', async () => {
+    const { formatMoney } = await import(/* @vite-ignore */ './format') as any;
+    for (const bad of [null, undefined, -0.01, Number.NaN, Number.POSITIVE_INFINITY, '0.27', {}]) expect(formatMoney(bad, 2), String(bad)).toBeNull();
+  });
+
+  it('AC-13 (SM-7 i): the English estimate shows two decimals - 2 Pro 1K images (0.134 x 2 = 0.268) read "≈ $0.27 for 2 images"', async () => {
+    const { formatEstimate } = await import(/* @vite-ignore */ './format') as any;
+    expect(formatEstimate(0.134 * 2, 2, 'en')).toBe('≈ $0.27 for 2 images');
+    expect(formatEstimate(0.101 * 4, 4, 'en')).toBe('≈ $0.40 for 4 images');
+    expect(formatEstimate(0.24 * 4, 4, 'en')).toBe('≈ $0.96 for 4 images');
+  });
+
+  it('FR-20 (c): N = 1 is singular in English - "≈ $0.07 for 1 image"', async () => {
+    const { formatEstimate } = await import(/* @vite-ignore */ './format') as any;
+    expect(formatEstimate(0.067, 1, 'en')).toBe('≈ $0.07 for 1 image');
+  });
+
+  it('the Ukrainian estimate always uses "зображення" for N = 1, 2 and 4', async () => {
+    const { formatEstimate } = await import(/* @vite-ignore */ './format') as any;
+    expect(formatEstimate(0.067, 1, 'uk')).toBe('≈ $0.07 за 1 зображення');
+    expect(formatEstimate(0.134 * 2, 2, 'uk')).toBe('≈ $0.27 за 2 зображення');
+    expect(formatEstimate(0.24 * 4, 4, 'uk')).toBe('≈ $0.96 за 4 зображення');
+  });
+
+  it('FR-20 failure path: a null amount (an unpriced pair) gives no text', async () => {
+    const { formatEstimate } = await import(/* @vite-ignore */ './format') as any;
+    expect(formatEstimate(null, 2, 'en')).toBeNull();
+  });
+});

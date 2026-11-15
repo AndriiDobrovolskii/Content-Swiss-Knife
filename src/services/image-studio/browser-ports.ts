@@ -1,5 +1,5 @@
 import saveAs from 'file-saver';
-import type { AlertPort, ClipboardPort, Clock, ConfirmPort, IdSource, LocalOffset, SavePort, Scheduler } from '../../utils/image-studio/ports';
+import type { AlertPort, ClipboardPort, Clock, ConfirmPort, IdSource, LocalOffset, SavePort, Scheduler, UserPresetStoragePort } from '../../utils/image-studio/ports';
 
 /**
  * The thin browser implementations of the Image Studio ports (US-10.1 DD-15, NFR-14). Each adapter is a one-statement
@@ -54,4 +54,35 @@ export function createBrowserSavePort(): SavePort {
  */
 export function createBrowserLocalOffset(): LocalOffset {
   return { offsetMinutes: (epochMs) => -new Date(epochMs).getTimezoneOffset() };
+}
+
+/** The `localStorage` key of the saved user presets (US-10.6 T18). */
+export const USER_PRESETS_STORAGE_KEY = 'image-studio.user-presets.v1';
+
+/**
+ * The user-preset storage (US-10.6 T18, NFR-10): one JSON array in `localStorage`, per browser. Every access is inside a
+ * `try/catch` because the property read itself can throw (blocked storage) and `setItem` throws when the quota is full;
+ * either way the answer is `{ ok: false }`, never an exception. Nothing stored is `{ ok: true, presets: [] }`; text that
+ * is not JSON is `{ ok: false }` and is left in place, not deleted.
+ */
+export function createBrowserUserPresetStorage(): UserPresetStoragePort {
+  return {
+    load: () => {
+      try {
+        const raw = window.localStorage.getItem(USER_PRESETS_STORAGE_KEY);
+        if (raw === null) return { ok: true, presets: [] };
+        return { ok: true, presets: JSON.parse(raw) as unknown };
+      } catch {
+        return { ok: false };
+      }
+    },
+    save: (presets) => {
+      try {
+        window.localStorage.setItem(USER_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+        return { ok: true };
+      } catch {
+        return { ok: false };
+      }
+    },
+  };
 }

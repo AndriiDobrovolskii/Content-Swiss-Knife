@@ -394,3 +394,53 @@ describe('US-10.5 FR-23 / FR-24 / FR-9: applyResponse writes the stored display 
     expect(out.batch.putTurns).toEqual([]);
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T27 - applyResponse with N-image merged turns (AC-3, FR-7 (b), plan 7.2: "apply-response.ts: no behavioural change; its spec gains N-image cases").
+// CHARACTERIZATION (review N-7): these cases are EXPECTED GREEN from the start - applyResponse already numbers a multi-image turn image by image - and are
+// the regression guard for the plan's claim that no code change is needed. They are not red evidence. A case that is red when the task starts is a stop.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('applyResponse: a merged N-image model turn (T27)', () => {
+  it('AC-3 [characterization]: 4 images are numbered consecutively after the existing versions, all in the SAME model turn at their own part index', async () => {
+    const { applyResponse } = await mod();
+    const snap = makeSession('s1', { pairs: 2, costUsd: 0.06 });
+    const parts = [1, 2, 3, 4].map((n) => imagePart({ thoughtSignature: `m-${n}` }));
+    const out = applyResponse(snap, imagesResponse({ parts, costUsd: 0.16 }), ctx({}, 'u3'));
+    const created = out.batch.meta.versions.filter((v: any) => v.number > 2);
+    expect(created.map((v: any) => v.number)).toEqual([3, 4, 5, 6]);
+    expect(new Set(created.map((v: any) => v.turnId)).size).toBe(1);
+    expect(created.map((v: any) => v.partIndex)).toEqual([0, 1, 2, 3]);
+    expect(out.batch.meta.nextVersionNumber).toBe(7);
+  });
+
+  it('FR-7 (b) [characterization]: the merged model turn holds the returned parts exactly (thought signatures echoed as received) and carries the TOTAL cost', async () => {
+    const { applyResponse } = await mod();
+    const snap = makeSession('s1', { pairs: 1, costUsd: 0.03 });
+    const parts = [{ text: 'here are four' }, imagePart({ thoughtSignature: 'a' }), imagePart({ thoughtSignature: 'b' })];
+    const out = applyResponse(snap, imagesResponse({ parts, costUsd: 0.08 }), ctx({}, 'u2'));
+    const modelTurn = out.batch.putTurns[1];
+    expect(modelTurn.parts).toEqual(parts);
+    expect(modelTurn.cost).toBeCloseTo(0.08, 10);
+    expect(out.batch.meta.costUsd).toBeCloseTo(0.11, 10);
+  });
+
+  it('plan 5.0 / B-1 [characterization]: a merged turn whose image count EXCEEDS the requested count is stored in full - no paid image is clamped out', async () => {
+    const { applyResponse } = await mod();
+    const snap = makeSession('s1', { pairs: 1 });
+    // the operator asked for 2 images; the response (a call returned two images) holds 3
+    const parts = [1, 2, 3].map((n) => imagePart({ thoughtSignature: `x-${n}` }));
+    const out = applyResponse(snap, imagesResponse({ parts, costUsd: 0.12, batch: { requested: 2, granted: 2, succeeded: 3, failures: [] } }), ctx({}, 'u2'));
+    expect(out.batch.meta.versions.filter((v: any) => v.number > 1).map((v: any) => v.number)).toEqual([2, 3, 4]);
+  });
+
+  it('FR-84 [characterization]: thought images inside a merged turn take no number - [thought, A, thought, B] creates exactly two versions', async () => {
+    const { applyResponse } = await mod();
+    const snap = makeSession('s1', { pairs: 1 });
+    const parts = [imagePart({ thought: true }), imagePart({ thoughtSignature: 'A' }), imagePart({ thought: true }), imagePart({ thoughtSignature: 'B' })];
+    const out = applyResponse(snap, imagesResponse({ parts, costUsd: 0.08 }), ctx({}, 'u2'));
+    const created = out.batch.meta.versions.filter((v: any) => v.number > 1);
+    expect(created.map((v: any) => v.number)).toEqual([2, 3]);
+    expect(created.map((v: any) => v.partIndex)).toEqual([1, 3]);
+  });
+});

@@ -72,7 +72,8 @@ describe('image-studio-contract.json (DD-1, SD-1, SD-2, FR-19)', () => {
   });
 
   it('DD-1: holds only closed shared values - no BFF-only limit and no client deadline leaked into the shared file', () => {
-    expect(Object.keys(readJson()).sort()).toEqual(['aspectRatios', 'errorCodes', 'resolutions', 'responseKinds']);
+    // US-10.6 T2 (OD-16 closed table, FR-4 / FR-9 (a) / FR-21): the three closed lists the Story adds are shared values both runtimes read.
+    expect(Object.keys(readJson()).sort()).toEqual(['aspectRatios', 'errorCodes', 'imageCounts', 'imageFailureCauses', 'imagePrices', 'resolutions', 'responseKinds']);
   });
 });
 
@@ -140,5 +141,96 @@ describe('image-studio-contract.ts typed accessors (FR-61, SD-2, NFR-13)', () =>
     for (const r of ['8K', '1k', '', 1024, undefined]) expect(m.isResolution(r), String(r)).toBe(false);
     for (const k of ['images', 'text', 'safety']) expect(m.isResponseKind(k), k).toBe(true);
     for (const k of ['image', 'error', '', null]) expect(m.isResponseKind(k), String(k)).toBe(false);
+  });
+});
+
+/**
+ * US-10.6 T2 - the shared contract gains imageCounts, imageFailureCauses and imagePrices (FR-4, FR-9 (a), FR-21, FR-22, AC-3, AC-5, AC-14, AC-14a).
+ *
+ * PINNED CONTRACT (the plan names the three JSON keys and says "typed accessors"; the accessor names are fixed here):
+ *   JSON  imageCounts: number[]                       exactly [1, 2, 4]
+ *         imageFailureCauses: string[]                exactly ["safety", "empty", "retries_exhausted", "file_missing"] (no "text" member)
+ *         imagePrices: { "<model id>": { "<resolution>": <usd per image> } }
+ *   TS    IMAGE_COUNTS, IMAGE_FAILURE_CAUSES: readonly arrays equal to the JSON
+ *         IMAGE_PRICES: the imagePrices object (same content as the JSON)
+ *
+ * VALUES: pinned from the owner's OD-2 ruling of 2026-11-14 (evidence docs/evidence/US-10.6-vendor-facts-evidence.md v1); the other cases assert STRUCTURE
+ * (which pairs have a price, positive finite numbers, 4K above 1K and 2K - AC-14a).
+ */
+const IMAGE_CATALOGUE = (): Array<{ id: string; resolutions: string[] }> =>
+  (JSON.parse(readFileSync(resolve(process.cwd(), 'src/prompt-core/model-catalog.json'), 'utf8')) as any).providers
+    .flatMap((p: any) => p.models)
+    .filter((m: any) => (m.modalities ?? []).includes('image'))
+    .map((m: any) => ({ id: m.id, resolutions: m.resolutions }));
+
+describe('image-studio-contract.json: the US-10.6 lists (T2)', () => {
+  it('FR-4 / AC-3: imageCounts is exactly [1, 2, 4]', () => {
+    expect(readJson().imageCounts).toEqual([1, 2, 4]);
+  });
+
+  it('FR-9 (a) / AC-5: imageFailureCauses is exactly the four cause classes and has no "text" member', () => {
+    expect(readJson().imageFailureCauses).toEqual(['safety', 'empty', 'retries_exhausted', 'file_missing']);
+  });
+
+  it('FR-22 / AC-14a: imagePrices has an entry for every (model, resolution) pair the catalogue allows, and for no other pair', () => {
+    const prices = readJson().imagePrices ?? {};
+    const catalogue = IMAGE_CATALOGUE();
+    expect(catalogue.length).toBeGreaterThanOrEqual(2);
+    expect(Object.keys(prices).sort()).toEqual(catalogue.map((m) => m.id).sort());
+    for (const model of catalogue) {
+      expect(Object.keys(prices[model.id] ?? {}).sort(), model.id).toEqual([...model.resolutions].sort());
+    }
+  });
+
+  it('FR-22: every price is a positive finite number of dollars per image', () => {
+    const prices = readJson().imagePrices ?? {};
+    expect(Object.keys(prices).length).toBeGreaterThan(0);
+    for (const [model, byRes] of Object.entries<Record<string, unknown>>(prices)) {
+      for (const [resolution, unit] of Object.entries(byRes)) {
+        expect(typeof unit, `${model} ${resolution}`).toBe('number');
+        expect(Number.isFinite(unit as number) && (unit as number) > 0, `${model} ${resolution}`).toBe(true);
+      }
+    }
+  });
+
+  it('OD-2 (owner ruling 2026-11-14): imagePrices holds exactly the accepted USD-per-generated-image values - Flash 1K 0.067 / 2K 0.101, Pro 1K 0.134 / 2K 0.134 / 4K 0.24', () => {
+    expect(readJson().imagePrices).toEqual({
+      'gemini-3.1-flash-image': { '1K': 0.067, '2K': 0.101 },
+      'gemini-3-pro-image': { '1K': 0.134, '2K': 0.134, '4K': 0.24 },
+    });
+  });
+
+  it('AC-14a: for every model that offers 4K, the 4K price is greater than the 1K price and greater than the 2K price', () => {
+    const prices = readJson().imagePrices ?? {};
+    const with4k = IMAGE_CATALOGUE().filter((m) => m.resolutions.includes('4K'));
+    expect(with4k.length).toBeGreaterThan(0);
+    for (const model of with4k) {
+      const byRes = prices[model.id] ?? {};
+      expect(byRes['4K'], `${model.id} 4K above 1K`).toBeGreaterThan(byRes['1K']);
+      expect(byRes['4K'], `${model.id} 4K above 2K`).toBeGreaterThan(byRes['2K']);
+    }
+  });
+
+  it('FR-23 / AC-15: the pinned errorCodes table is unchanged - no new error code is introduced by this Story [characterization]', () => {
+    expect(readJson().errorCodes).toEqual(SD2);
+  });
+});
+
+describe('image-studio-contract.ts: the US-10.6 accessors (T2)', () => {
+  it('FR-4: IMAGE_COUNTS equals the JSON list [1, 2, 4]', async () => {
+    const m = await load('./image-studio-contract');
+    expect([...(m.IMAGE_COUNTS ?? [])]).toEqual([1, 2, 4]);
+    expect([...(m.IMAGE_COUNTS ?? [])]).toEqual(readJson().imageCounts);
+  });
+
+  it('FR-9 (a): IMAGE_FAILURE_CAUSES equals the JSON list', async () => {
+    const m = await load('./image-studio-contract');
+    expect([...(m.IMAGE_FAILURE_CAUSES ?? [])]).toEqual(['safety', 'empty', 'retries_exhausted', 'file_missing']);
+  });
+
+  it('FR-21: IMAGE_PRICES carries the same content the server reads from the JSON (one source, no second copy)', async () => {
+    const m = await load('./image-studio-contract');
+    expect(m.IMAGE_PRICES).toBeDefined();
+    expect(m.IMAGE_PRICES).toEqual(readJson().imagePrices);
   });
 });

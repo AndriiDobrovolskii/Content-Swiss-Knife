@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IMAGE_FAILURE_CAUSES } from '../../prompt-core/image-studio-contract';
 import type { SessionMeta, Turn } from './ports';
 
 /**
@@ -28,12 +29,27 @@ function isValidImagePart(part: Record<string, unknown>): boolean {
 /** The ids the BFF dropped from the history; always present, every id a non-empty string (D-6). */
 const TrimmedTurnIds = z.array(nonEmpty);
 
+/**
+ * The batch report of a multi-image generation (US-10.6 FR-9, plan 5.0). `succeeded` counts images and `granted` counts
+ * upstream calls, so a call that returned two images makes `succeeded` exceed `granted`: no ordering is imposed between
+ * the counters. A failure `cause` is a closed enum derived from the shared contract (IMAGE_FAILURE_CAUSES), so the list
+ * lives in one place and the server and the client cannot drift apart.
+ */
+const BatchFailureCauseSchema = z.enum(IMAGE_FAILURE_CAUSES as unknown as [string, ...string[]]);
+const BatchSchema = z.object({
+  requested: z.number().int().min(0),
+  granted: z.number().int().min(0),
+  succeeded: z.number().int().min(0),
+  failures: z.array(z.object({ cause: BatchFailureCauseSchema })),
+});
+
 const ImagesResponse = z.object({
   kind: z.literal('images'),
   parts: z.array(PartSchema).refine((parts) => parts.some(isValidImagePart), 'at least one valid image part is required'),
   costUsd: z.number().finite().nonnegative(),
   usage: z.object({ inputTokens: z.number(), outputTokens: z.number() }).passthrough(),
   trimmedTurnIds: TrimmedTurnIds,
+  batch: BatchSchema.optional(),
 });
 
 const TextResponse = z.object({
@@ -136,13 +152,22 @@ export interface TurnExtras {
   durationMs?: number;
   presetId?: string;
   inputRefs?: { turnId: string; partIndex: number }[];
+  /** The index of the user-turn part the Style-ref role tag points at (US-10.6 FR-14); absent means Product. */
+  styleRefPartIndex?: number;
 }
 
 /**
- * The most `inputRefs` entries `readTurnExtras` keeps per turn (NB-2). The real maximum is 6: `MAX_UPLOADS` = 5 uploads
- * (`upload-rules.ts`) plus the one attached earlier version, which is outside the five. 10 leaves head-room of four.
+ * The most `inputRefs` entries `readTurnExtras` keeps per turn (NB-2). The real maximum is 7: `MAX_UPLOADS` = 5 Product uploads
+ * (`upload-rules.ts`), one Style ref and the one attached earlier version, which are outside the five. 10 leaves head-room of three.
  */
 export const MAX_INPUT_REFS = 10;
+
+/** True for a part that carries an image: inline bytes or an uploaded file reference. */
+function isImageReferencePart(part: unknown): boolean {
+  if (typeof part !== 'object' || part === null) return false;
+  const { inlineData, fileData } = part as { inlineData?: unknown; fileData?: unknown };
+  return (typeof inlineData === 'object' && inlineData !== null) || (typeof fileData === 'object' && fileData !== null);
+}
 
 const isNonNegativeNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -154,6 +179,8 @@ const isNonNegativeNumber = (value: unknown): value is number =>
  * checked here: the feed does that, so this module imports no registry.
  */
 export function readTurnExtras(turn: {
+  parts?: unknown;
+  styleRefPartIndex?: unknown;
   cost?: unknown;
   durationMs?: unknown;
   presetId?: unknown;
@@ -174,6 +201,10 @@ export function readTurnExtras(turn: {
       }
     }
     out.inputRefs = refs;
+  }
+  const tag = turn.styleRefPartIndex;
+  if (typeof tag === 'number' && Number.isInteger(tag) && tag >= 0 && Array.isArray(turn.parts) && isImageReferencePart(turn.parts[tag])) {
+    out.styleRefPartIndex = tag;
   }
   return out;
 }

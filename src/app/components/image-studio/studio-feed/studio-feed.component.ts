@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { findPreset } from '../../../../prompt-core/prompt-presets';
 import { ImageStudioStore } from '../../../../services/image-studio/image-studio.store';
 import { StudioDeliveryService } from '../../../../services/image-studio/studio-delivery.service';
@@ -31,6 +31,9 @@ import { StudioVersionStripComponent } from '../studio-version-strip/studio-vers
 })
 export class StudioFeedComponent {
   readonly lang = input.required<StudioLanguage>();
+  /** Upscale 4K / Variation of an image, passed up from the turn cards (US-10.6 AC-1, AC-2); the container wires them to the store. */
+  readonly upscale = output<number>();
+  readonly variation = output<number>();
 
   protected readonly store = inject(ImageStudioStore);
   protected readonly delivery = inject(StudioDeliveryService);

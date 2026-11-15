@@ -343,3 +343,51 @@ describe('FR-5 / FR-14 (owner ruling OI-B, option 1): Reuse prompt clears the ch
     expect(h.store.draft().checkedPresetId).toBeNull();
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T32 - the card shows the "Style ref" label on the Style ref input thumbnail (FR-14, AC-9; owner copy X-49 "Style ref" / "Референс стилю").
+// PINNED CONTRACT: a thumbnail whose feed role is 'style-ref' (T23) carries the text X-49 in the SAME wrapper element as its <img>; a Product thumbnail
+// shows no label (as today). The label is plain text (the interactive toggle exists only on the COMPOSER's thumbnails, not on a stored card).
+// ---------------------------------------------------------------------------------------------------------------------
+describe('FR-14 / AC-9: the Style ref label on an input thumbnail (T32)', () => {
+  function taggedSession(tag: unknown): StoredSession {
+    const png = (n: number) => toBase64(makeRaster({ format: 'png', width: 4, height: 4, size: 180 + n }));
+    const s = makeSession('s1', { pairs: 1 });
+    s.turns[0] = turn('u1', 'user', textPart('blend'), inlineImagePart('image/png', png(1)), inlineImagePart('image/png', png(2)));
+    if (tag !== 'absent') (s.turns[0] as unknown as Record<string, unknown>)['styleRefPartIndex'] = tag;
+    withTurnExtras(s, 'm1', { inputRefs: [{ turnId: 'u1', partIndex: 1 }, { turnId: 'u1', partIndex: 2 }] });
+    return s;
+  }
+  const inputImg = (n: number, lang: Lang = 'en') => within(article()).getByAltText(t('X-31', lang, { n }));
+
+  it('AC-9: after a reload the thumbnail at the tagged part shows "Style ref" next to it and the other thumbnail shows no label (en)', async () => {
+    const session = taggedSession(2);
+    const h = await renderStudio(StudioTurnCardComponent, { sessions: [session], inputs: { card: cardsOf(session)[0] } });
+    await h.settle();
+    expect(text(inputImg(2).parentElement as HTMLElement)).toContain('Style ref');
+    expect(text(inputImg(1).parentElement as HTMLElement)).not.toContain('Style ref');
+  });
+
+  it('the label follows the language: "Референс стилю" in Ukrainian', async () => {
+    const session = taggedSession(1);
+    const h = await renderStudio(StudioTurnCardComponent, { lang: 'uk', sessions: [session], inputs: { card: cardsOf(session)[0] } });
+    await h.settle();
+    expect(text(inputImg(1, 'uk').parentElement as HTMLElement)).toContain('Референс стилю');
+  });
+
+  it('FR-14: a session saved before this Story (no tag) renders exactly as before - no Style ref label anywhere on the card [characterization]', async () => {
+    const session = taggedSession('absent');
+    const h = await renderStudio(StudioTurnCardComponent, { sessions: [session], inputs: { card: cardsOf(session)[0] } });
+    await h.settle();
+    expect(text(article())).not.toContain('Style ref');
+  });
+
+  it.each([[-1], [1.5], ['1'], [9], [0]])('FR-14 failure path: an invalid stored tag (%j) renders the image as Product - no label, no error [characterization]', async (bad) => {
+    const session = taggedSession(bad);
+    const h = await renderStudio(StudioTurnCardComponent, { sessions: [session], inputs: { card: cardsOf(session)[0] } });
+    await h.settle();
+    expect(text(article())).not.toContain('Style ref');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

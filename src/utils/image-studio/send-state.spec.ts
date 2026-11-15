@@ -55,3 +55,39 @@ describe('FR-17: hasSendableContent truth table (T8)', () => {
     expect(hasSendableContent(draft({ text: 'go', attachments: [{ state: 'uploading' }], attachedVersion: VERSION }))).toBe(true);
   });
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T26 - a send whose ONLY content is a Style-ref image is refused (FR-13 failure path; owner ruling SM-4 i).
+// PINNED: an attachment may carry `role?: 'product' | 'style-ref'` (a role-less attachment is Product). A READY Style-ref upload does not count as
+// sendable content on its own; every other clause of the truth table above is unchanged.
+// ---------------------------------------------------------------------------------------------------------------------
+describe('FR-13 / SM-4 i: a Style-ref-only send is not sendable (T26)', () => {
+  type A = { state: 'uploading' | 'ready' | 'failed'; role?: 'product' | 'style-ref' };
+  const d = (over: Partial<{ text: string; attachments: A[]; attachedVersion: unknown }> = {}) => ({ text: '', attachments: [] as A[], attachedVersion: null, ...over });
+
+  it('a blank prompt with only a ready Style-ref upload has nothing to send', () => {
+    expect(hasSendableContent(d({ attachments: [{ state: 'ready', role: 'style-ref' }] }))).toBe(false);
+  });
+
+  it('a Style-ref upload with non-blank text is sendable [characterization]', () => {
+    expect(hasSendableContent(d({ text: 'a mug in this style', attachments: [{ state: 'ready', role: 'style-ref' }] }))).toBe(true);
+  });
+
+  it('a Style-ref upload together with a ready Product upload is sendable (the Product image is content) [characterization]', () => {
+    expect(hasSendableContent(d({ attachments: [{ state: 'ready', role: 'style-ref' }, { state: 'ready', role: 'product' }] }))).toBe(true);
+  });
+
+  it('a Style-ref upload with the attached "Edit this" version is sendable (the attached version is content) [characterization]', () => {
+    expect(hasSendableContent(d({ attachments: [{ state: 'ready', role: 'style-ref' }], attachedVersion: VERSION }))).toBe(true);
+  });
+
+  it('an explicit Product upload and a role-less upload are both still sendable on their own [characterization]', () => {
+    expect(hasSendableContent(d({ attachments: [{ state: 'ready', role: 'product' }] }))).toBe(true);
+    expect(hasSendableContent(d({ attachments: [{ state: 'ready' }] }))).toBe(true);
+  });
+
+  it('a Style-ref upload that is still uploading or failed adds nothing either [characterization]', () => {
+    expect(hasSendableContent(d({ attachments: [{ state: 'uploading', role: 'style-ref' }, { state: 'failed', role: 'product' }] }))).toBe(false);
+  });
+});

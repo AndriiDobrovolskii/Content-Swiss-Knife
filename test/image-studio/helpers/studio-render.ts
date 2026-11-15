@@ -99,6 +99,11 @@ export interface RenderOptions {
    * studio components themselves (they have no `@defer`), so their renders are unchanged.
    */
   deferBlockBehavior?: DeferBlockBehavior;
+  /**
+   * US-10.6 (additive, T35/T37): extra providers appended to the harness providers, e.g. a spec-local fake for the user-preset storage token. A spec resolves a token that
+   * does not exist yet through a dynamic import of the tokens module, so this file stays type-clean before the token exists.
+   */
+  extraProviders?: unknown[];
 }
 
 export async function renderStudio<T>(component: Type<T>, opts: RenderOptions = {}) {
@@ -136,6 +141,7 @@ export async function renderStudio<T>(component: Type<T>, opts: RenderOptions = 
       // In production only the container provides these two (container-scoped, plan DD-6); an isolated component render
       // has no container, so the harness provides them (plan DD-6, "test infrastructure").
       StudioDeliveryService, StudioMediaService,
+      ...((opts.extraProviders ?? []) as never[]),
     ],
   });
   const store = TestBed.inject(ImageStudioStore);

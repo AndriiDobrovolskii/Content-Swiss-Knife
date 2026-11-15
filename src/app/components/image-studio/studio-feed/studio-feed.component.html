@@ -33,7 +33,7 @@
       </div>
     } @else {
       @for (card of cards(); track card.key) {
-        <app-studio-turn-card [lang]="lang()" [card]="card" />
+        <app-studio-turn-card [lang]="lang()" [card]="card" (upscale)="upscale.emit($event)" (variation)="variation.emit($event)" />
         @if (card.holdsMain) {
           <app-studio-version-strip [lang]="lang()" />
         }

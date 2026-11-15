@@ -1,4 +1,7 @@
+import { STYLE_REF_INSTRUCTION } from '../../prompt-core/image-studio-instructions';
 import { CHIP_INSTRUCTIONS } from '../../prompt-core/prompt-presets';
+import { normalizeImageCount } from './image-count';
+import type { AttachmentRole } from './attachment-roles';
 import type { Part, StoredSession, Turn } from './ports';
 
 /**
@@ -7,8 +10,10 @@ import type { Part, StoredSession, Turn } from './ports';
  * The snapshot is the session as it is BEFORE the new turn is appended (SD-27). The function never mutates it and the
  * returned request shares no object with it, so a later append to the session cannot change the request. The history
  * is every retained turn in `turnOrder` order with its parts untouched (`thoughtSignature`, thought parts, `fileData`
- * and inline versions all survive, FR-35). The new turn's parts are ordered text, then one `fileData` part per upload,
- * then the attached version inline (FR-25, FR-37). No filler text is ever invented.
+ * and inline versions all survive, FR-35). The new turn's parts are ordered text, then one `fileData` part per upload
+ * (a Style ref upload is followed at once by the Style-ref sentence, US-10.6 SM-2), then the attached version inline
+ * (FR-25, FR-37). `styleRefPartIndex` is the index of the Style ref image part, for the stored Turn-level tag. No filler
+ * text is ever invented.
  */
 export interface BuildInput {
   /** Id of the new user turn, from the IdSource (SD-20). */
@@ -17,14 +22,28 @@ export interface BuildInput {
   text?: string;
   /** A quick-edit chip (FR-31): its English model-facing instruction becomes the text. */
   chipId?: string;
-  /** User uploads already on the Files API (FR-16). */
-  uploads?: Array<{ fileUri: string; mimeType: string }>;
+  /**
+   * User uploads already on the Files API (FR-16). `role` (US-10.6 FR-13): an upload with the role 'style-ref' is followed
+   * by the Style-ref sentence as its own text part (SM-2); a missing or any other role is Product. The role is read here
+   * and never copied onto the part, so it cannot reach the model (FR-14, impact S3).
+   */
+  uploads?: Array<{ fileUri: string; mimeType: string; role?: AttachmentRole }>;
   /** The version attached under FR-37: inline base64, never a `file_uri`. */
   attachedVersion?: { mimeType: string; data: string };
   model: string;
   aspectRatio: string;
   resolution: string;
   presetId?: string;
+  /**
+   * US-10.6 FR-4: the images asked for in this ONE request. Emitted only when greater than 1, so a one-image request is
+   * byte-identical to one built without the field. A value outside the shared contract's counts is treated as 1.
+   */
+  imageCount?: number;
+  /**
+   * US-10.6 FR-1, FR-3 (Upscale and Variation): the request carries an EMPTY history; the new turn is built as always
+   * (text, uploads, then the attached version inline), so the source version travels in the turn, not in the history.
+   */
+  omitHistory?: boolean;
 }
 
 export interface GenerateRequest {
@@ -32,6 +51,7 @@ export interface GenerateRequest {
   aspectRatio: string;
   resolution: string;
   presetId?: string;
+  imageCount?: number;
   history: Turn[];
   newTurn: { id: string; parts: Part[] };
 }
@@ -82,12 +102,18 @@ function toResendTurn(turn: Turn): Turn {
 export function buildGenerateRequest(
   snapshot: StoredSession,
   input: BuildInput,
-): { request: GenerateRequest; protectedTurnIds: string[] } {
+): { request: GenerateRequest; protectedTurnIds: string[]; styleRefPartIndex?: number } {
   const parts: Part[] = [];
   const text = turnText(input);
   if (text !== undefined) parts.push({ text });
+  let styleRefPartIndex: number | undefined;
   for (const upload of input.uploads ?? []) {
     parts.push({ fileData: { fileUri: upload.fileUri, mimeType: upload.mimeType } });
+    // The role invariant allows ONE Style ref (attachment-roles.ts); only the first is tagged, so the sentence is sent once.
+    if (upload.role === 'style-ref' && styleRefPartIndex === undefined) {
+      styleRefPartIndex = parts.length - 1;
+      parts.push({ text: STYLE_REF_INSTRUCTION });
+    }
   }
   if (input.attachedVersion) {
     parts.push({ inlineData: { mimeType: input.attachedVersion.mimeType, data: input.attachedVersion.data } });
@@ -96,9 +122,11 @@ export function buildGenerateRequest(
 
   const byId = new Map(snapshot.turns.map((turn) => [turn.id, turn]));
   const history: Turn[] = [];
-  for (const id of snapshot.meta.turnOrder) {
-    const turn = byId.get(id);
-    if (turn) history.push(structuredClone(toResendTurn(turn)));
+  if (input.omitHistory !== true) {
+    for (const id of snapshot.meta.turnOrder) {
+      const turn = byId.get(id);
+      if (turn) history.push(structuredClone(toResendTurn(turn)));
+    }
   }
 
   const request: GenerateRequest = {
@@ -106,8 +134,13 @@ export function buildGenerateRequest(
     aspectRatio: input.aspectRatio,
     resolution: input.resolution,
     ...(input.presetId !== undefined ? { presetId: input.presetId } : {}),
+    ...(normalizeImageCount(input.imageCount) > 1 ? { imageCount: normalizeImageCount(input.imageCount) } : {}),
     history,
     newTurn: { id: input.newTurnId, parts },
   };
-  return { request, protectedTurnIds: protectedIds(snapshot) };
+  return {
+    request,
+    protectedTurnIds: protectedIds(snapshot),
+    ...(styleRefPartIndex !== undefined ? { styleRefPartIndex } : {}),
+  };
 }

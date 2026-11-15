@@ -186,12 +186,13 @@ describe('FR-9: the "Edit of v{N}" chip and the "Compare with v{N}" control (T27
 });
 
 describe('FR-8: nothing out of scope is rendered on a tile (T27)', () => {
-  it('no Upscale 4K, Variation or Alt text action, and no Save as preset', async () => {
+  // US-10.6 (OD-16 completion, G-6): Upscale 4K and Variation are now IN scope (AC-1, AC-2) and asserted present in the US-10.6 describe; Alt text and Save as preset stay absent.
+  it('no Alt text action, and no Save as preset', async () => {
     const { h } = await tile([{ api: 'png' }]);
-    for (const text of [/Upscale/i, /Variation/i, /Alt text/i, /Save (current )?as preset/i]) {
+    for (const text of [/Alt text/i, /Save (current )?as preset/i]) {
       expect(h.view.container.textContent).not.toMatch(text);
     }
-    expect(screen.queryByRole('button', { name: /Upscale|Variation|Alt text/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Alt text/i })).toBeNull();
   });
 
   it('a version whose bytes are unavailable still renders the label and the actions without throwing', async () => {
@@ -333,5 +334,89 @@ describe('NB-1 / NB-3 hardening: stored image data is not trusted at render time
     await renderStudio(StudioImageTileComponent, { sessions: [session], inputs: { versionNumber: 1 } });
     expect(within(figure()).getByAltText('prompt 1').getAttribute('src') ?? '').toContain('data:image/png;base64,');
     await vi.waitFor(() => expect(caption()).toBe('v1 · 40×30'));
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T36 - the tile's "Upscale 4K" and "Variation" actions (AC-1, AC-2, FR-2 (c)/(d); owner rulings SM-1 ii, placement as proposed, UA copy as proposed).
+// PINNED CONTRACT: in the action row, in this order: Download (X-8), "Upscale 4K" (X-45), "Variation" (X-46), "Edit this →"; each emits the tile's version number through a NEW
+// output - `upscale` and `variation` (the container wires them to store.upscale / store.variation, T38); an action is never absent from a generated image. SM-1 ii: a tile of a
+// Flash version keeps Upscale ENABLED (it runs on Pro). An already-4K version has Upscale present but DISABLED (a disabled action sends/emits nothing); its reason copy is not part
+// of the owner's accepted table, so only the disabled state is asserted. Variation stays enabled for a 4K version (it runs at 4K).
+// ---------------------------------------------------------------------------------------------------------------------
+describe('AC-1 / AC-2: Upscale 4K and Variation on a generated image (T36)', () => {
+  const sessionWith = (resolution: string, model = 'gemini-3.1-flash-image') => {
+    const { session, api } = sessionOf([{ api: 'png' }]);
+    Object.assign(session.meta.versions[0], { resolution, model });
+    return { session, api };
+  };
+  async function renderTile(resolution = '2K', model?: string, lang: 'en' | 'uk' = 'en') {
+    const { session } = sessionWith(resolution, model);
+    const h = await renderStudio(StudioImageTileComponent, { lang, sessions: [session], inputs: { versionNumber: 1 } });
+    await h.settle();
+    const instance = h.view.fixture.componentInstance as unknown as Record<string, { subscribe(fn: (v: unknown) => void): unknown }>;
+    const emitted = { upscale: [] as unknown[], variation: [] as unknown[] };
+    instance['upscale'].subscribe((v) => emitted.upscale.push(v));
+    instance['variation'].subscribe((v) => emitted.variation.push(v));
+    return { h, emitted };
+  }
+  const upscaleBtn = (lang: 'en' | 'uk' = 'en') => byName.button(t('X-45', lang)) as HTMLButtonElement;
+  const variationBtn = (lang: 'en' | 'uk' = 'en') => byName.button(t('X-46', lang)) as HTMLButtonElement;
+
+  it('AC-1 / AC-2: every generated image has an "Upscale 4K" and a "Variation" button', async () => {
+    await renderTile();
+    expect(upscaleBtn()).toBeDefined();
+    expect(variationBtn()).toBeDefined();
+  });
+
+  it('placement (owner ruling): the action row reads Download, Upscale 4K, Variation, Edit this → in that order', async () => {
+    await renderTile();
+    const names = within(screen.getByRole('figure')).getAllByRole('button').map((b) => b.textContent!.trim());
+    expect(names).toEqual([t('X-8', 'en'), 'Upscale 4K', 'Variation', LABELS.en.edit]);
+  });
+
+  it('AC-1: clicking Upscale 4K emits the version number once', async () => {
+    const { h, emitted } = await renderTile();
+    await h.user.click(upscaleBtn());
+    expect(emitted.upscale).toEqual([1]);
+    expect(emitted.variation).toEqual([]);
+  });
+
+  it('AC-2: clicking Variation emits the version number once', async () => {
+    const { h, emitted } = await renderTile();
+    await h.user.click(variationBtn());
+    expect(emitted.variation).toEqual([1]);
+    expect(emitted.upscale).toEqual([]);
+  });
+
+  it('SM-1 ii: the Upscale of a FLASH version is enabled (it runs on the supporting model) and emits', async () => {
+    const { h, emitted } = await renderTile('2K', 'gemini-3.1-flash-image');
+    expect(upscaleBtn().disabled).toBe(false);
+    await h.user.click(upscaleBtn());
+    expect(emitted.upscale).toEqual([1]);
+  });
+
+  it('FR-2 (d): an already-4K version keeps the Upscale action present but DISABLED, and a click emits nothing; its Variation stays enabled', async () => {
+    const { h, emitted } = await renderTile('4K', 'gemini-3-pro-image');
+    expect(upscaleBtn().disabled).toBe(true);
+    await h.user.click(upscaleBtn());
+    expect(emitted.upscale).toEqual([]);
+    expect(variationBtn().disabled).toBe(false);
+    await h.user.click(variationBtn());
+    expect(emitted.variation).toEqual([1]);
+  });
+
+  it('the actions are keyboard-operable: Enter on the focused Variation button emits', async () => {
+    const { h, emitted } = await renderTile();
+    variationBtn().focus();
+    await h.user.keyboard('{Enter}');
+    expect(emitted.variation).toEqual([1]);
+  });
+
+  it('UA copy: "Збільшити до 4K" and "Варіація"', async () => {
+    await renderTile('2K', undefined, 'uk');
+    expect(upscaleBtn('uk').textContent!.trim()).toBe('Збільшити до 4K');
+    expect(variationBtn('uk').textContent!.trim()).toBe('Варіація');
   });
 });

@@ -1,11 +1,12 @@
 import { InjectionToken } from '@angular/core';
 import type {
   AlertPort, ClipboardPort, Clock, ConfirmPort, IdSource, ImageBackgroundPort, ImageCodec, LocalOffset, SavePort, Scheduler,
-  SessionStorePort,
+  SessionStorePort, UserPresetStoragePort,
 } from '../../utils/image-studio/ports';
 import {
   createBrowserAlertPort, createBrowserClipboardPort, createBrowserClock, createBrowserConfirmPort,
   createBrowserIdSource, createBrowserLocalOffset, createBrowserSavePort, createBrowserScheduler,
+  createBrowserUserPresetStorage,
 } from './browser-ports';
 import { buildZip } from '../../utils/image-studio/zip';
 import { createBrowserBackgroundFlattener } from './browser-background-flattener';
@@ -83,4 +84,10 @@ export const LOCAL_OFFSET_PORT = new InjectionToken<LocalOffset>('IMAGE_STUDIO_L
 export const ARCHIVE_BUILDER_PORT = new InjectionToken<typeof buildZip>('IMAGE_STUDIO_ARCHIVE_BUILDER', {
   providedIn: 'root',
   factory: () => buildZip,
+});
+
+/** The user-preset storage port: the browser's `localStorage`, per browser (US-10.6 NFR-10); specs provide an in-memory fake. */
+export const USER_PRESET_STORAGE_PORT = new InjectionToken<UserPresetStoragePort>('IMAGE_STUDIO_USER_PRESET_STORAGE', {
+  providedIn: 'root',
+  factory: () => createBrowserUserPresetStorage(),
 });

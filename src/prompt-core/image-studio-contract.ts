@@ -25,6 +25,18 @@ export const RESOLUTIONS: readonly string[] = contract.resolutions;
 /** The discriminant of a generate response (SD-1). */
 export const RESPONSE_KINDS: readonly string[] = contract.responseKinds;
 
+/** The image counts the selector offers and the request schema accepts (US-10.6 FR-4). */
+export const IMAGE_COUNTS: readonly number[] = contract.imageCounts;
+
+/** The closed failure causes a batch report may carry (US-10.6 FR-9 (a)). */
+export const IMAGE_FAILURE_CAUSES: readonly string[] = contract.imageFailureCauses;
+
+/**
+ * USD per generated image, keyed by model id then resolution (US-10.6 FR-21, FR-22). The server prices usage
+ * from this same JSON; the client reads it here for the pre-send estimate.
+ */
+export const IMAGE_PRICES: Readonly<Record<string, Readonly<Record<string, number>>>> = contract.imagePrices;
+
 /** True when `x` is one of the closed BFF error codes. Case-sensitive; never true for a non-string. */
 export function isErrorCode(x: unknown): boolean {
   return typeof x === 'string' && Object.prototype.hasOwnProperty.call(ERROR_STATUS, x);

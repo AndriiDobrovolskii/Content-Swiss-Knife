@@ -12,11 +12,18 @@
     <div role="status" class="sr-only">{{ store.statusMessage() }}</div>
 
     <!-- The results feed (US-10.5 DD-7): the log, the version strip, the events and Retry, Download all and the SynthID notice. -->
-    <app-studio-feed [lang]="lang()" />
+    <app-studio-feed [lang]="lang()" (upscale)="store.upscale($event)" (variation)="store.variation($event)" />
 
     <!-- Errors and notices (FR-83): T-4, T-9, T-14, T-18 and every failure text. -->
-    @if (store.message(); as message) {
-      <div role="alert" class="text-sm text-red-700 dark:text-red-300">{{ tx(message.textId, message.params) }}</div>
+    @if (alert(); as message) {
+      <div role="alert" class="text-sm text-red-700 dark:text-red-300">
+        @if (message.textId !== '') {
+          <p>{{ tx(message.textId, message.params) }}</p>
+        }
+        @for (line of message.lines ?? []; track $index) {
+          <p>{{ line }}</p>
+        }
+      </div>
     }
 
     <!-- The one full-view dialog (FR-10, FR-33): a sibling of the feed's log, never inside it. -->

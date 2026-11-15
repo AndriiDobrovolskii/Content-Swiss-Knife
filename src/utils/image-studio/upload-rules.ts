@@ -51,11 +51,16 @@ export function checkSentBytes(size: number): { ok: true } | { ok: false; reason
 
 export interface AttachmentKind {
   kind: 'upload' | 'version';
+  /** US-10.6: a Style ref upload is outside the five Product uploads (AC-8). Absent means Product. */
+  role?: 'product' | 'style-ref';
 }
 
-/** How many of the attachments are user uploads; the attached version is outside the five (FR-10). */
+/**
+ * How many of the attachments are Product uploads; the attached version is outside the five (FR-10) and so is a
+ * Style ref image (US-10.6 AC-8). A role-less upload is Product, so role-less input counts exactly as before.
+ */
 export function countUploads(attachments: readonly AttachmentKind[]): number {
-  return attachments.filter((a) => a.kind === 'upload').length;
+  return attachments.filter((a) => a.kind === 'upload' && a.role !== 'style-ref').length;
 }
 
 /** Whether one more user upload may be attached; the 6th is refused with T-3. Does not touch the list. */

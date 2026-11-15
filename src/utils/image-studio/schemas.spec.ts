@@ -480,3 +480,112 @@ describe('NB-2 hardening: readTurnExtras caps inputRefs at 10 valid entries at r
     expect((out['inputRefs'] as unknown[]).length).toBe(CAP);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// US-10.6 T9 - the client keeps the batch report and the stored Style-ref tag (FR-9, FR-14; AC-5, AC-9; impact S2). New describes only.
+//
+// PINNED CONTRACT:
+//   ImagesResponse (via GenerateResponseSchema / parseGenerateResponse) gains the OPTIONAL
+//       batch: { requested: number, granted: number, succeeded: number, failures: Array<{ cause: <a member of the contract's imageFailureCauses> }> }
+//     so it is no longer stripped. The counters carry the plan 5.0 units (succeeded = images, granted = upstream calls); the schema imposes NO ordering
+//     between them (succeeded may exceed granted or requested). A response without a batch parses without the key.
+//   readTurnExtras(turn) additionally reads `styleRefPartIndex`: kept only when it is a non-negative integer that points at an IMAGE part (inlineData or
+//     fileData) of `turn.parts`; otherwise the key is ABSENT (the image is Product, nothing throws).
+// The end-to-end proof that the REAL server body survives is test/image-studio/wire-agreement.spec.ts (T9).
+// ---------------------------------------------------------------------------------------------------------------------
+describe('FR-9: the client response schema keeps the batch report (T9)', () => {
+  const batch = (over: Record<string, unknown> = {}) => ({ requested: 4, granted: 4, succeeded: 2, failures: [{ cause: 'safety' }, { cause: 'empty' }], ...over });
+
+  it('AC-5: an images response with a batch parses and the batch is returned unchanged', async () => {
+    const { GenerateResponseSchema } = await load('./schemas');
+    const r = GenerateResponseSchema.safeParse(images({ batch: batch() }));
+    expect(r.success).toBe(true);
+    expect(r.data.batch).toEqual(batch());
+  });
+
+  it('FR-9 (a): every cause of the closed contract list is accepted in a failure entry', async () => {
+    const { GenerateResponseSchema } = await load('./schemas');
+    const causes = ['safety', 'empty', 'retries_exhausted', 'file_missing'];
+    const r = GenerateResponseSchema.safeParse(images({ batch: batch({ failures: causes.map((cause) => ({ cause })) }) }));
+    expect(r.success).toBe(true);
+    expect(r.data.batch.failures.map((f: any) => f.cause)).toEqual(causes);
+  });
+
+  it('plan 5.0: no ordering is imposed between the counters - succeeded greater than granted (a call returned two images) still parses', async () => {
+    const { GenerateResponseSchema } = await load('./schemas');
+    const r = GenerateResponseSchema.safeParse(images({ batch: batch({ requested: 2, granted: 2, succeeded: 3, failures: [] }) }));
+    expect(r.success).toBe(true);
+    expect(r.data.batch.succeeded).toBe(3);
+  });
+
+  it('a response without a batch (a one-image generation) parses and has no batch key [characterization]', async () => {
+    const { GenerateResponseSchema } = await load('./schemas');
+    const r = GenerateResponseSchema.safeParse(images());
+    expect(r.success).toBe(true);
+    expect('batch' in r.data).toBe(false);
+  });
+
+  it('parseGenerateResponse returns the batch on the validated value', async () => {
+    const { parseGenerateResponse } = await load('./schemas');
+    const out = parseGenerateResponse(images({ batch: batch() }), 1);
+    expect(out.ok).toBe(true);
+    expect(out.value.batch).toEqual(batch());
+  });
+});
+
+describe('FR-14: readTurnExtras reads the stored Style-ref tag (T9)', () => {
+  const parts = [{ text: 'blend' }, { fileData: { fileUri: 'files/a', mimeType: 'image/png' } }, { inlineData: { mimeType: 'image/png', data: PNG } }];
+  const read = async (extra: Record<string, unknown>, withParts: unknown = parts) => {
+    const { readTurnExtras } = await load('./schemas');
+    return readTurnExtras({ id: 'u1', role: 'user', parts: withParts, ...extra }) as Record<string, unknown>;
+  };
+
+  it('AC-9: a valid index pointing at an image part is kept (a fileData part and an inlineData part)', async () => {
+    expect((await read({ styleRefPartIndex: 1 }))['styleRefPartIndex']).toBe(1);
+    expect((await read({ styleRefPartIndex: 2 }))['styleRefPartIndex']).toBe(2);
+  });
+
+  it('FR-14 failure path: an invalid stored value leaves the key ABSENT - negative, fractional, NaN, a string, null, out of range, or pointing at the text part [characterization]', async () => {
+    for (const bad of [-1, 1.5, Number.NaN, '1', null, {}, [1], 3, 99, 0]) {
+      const out = await read({ styleRefPartIndex: bad });
+      expect(Object.prototype.hasOwnProperty.call(out, 'styleRefPartIndex'), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('FR-14: a turn whose parts are missing or not an array yields no tag and does not throw [characterization]', async () => {
+    const { readTurnExtras } = await load('./schemas');
+    // The turn without any `parts` property is built explicitly: passing `undefined` through `read`
+    // would be swallowed by its default parameter and run with the full valid parts instead.
+    const turns: Array<Record<string, unknown>> = [
+      { id: 'u1', role: 'user', styleRefPartIndex: 1 },
+      ...[null, 'x', {}].map((noParts) => ({ id: 'u1', role: 'user', parts: noParts, styleRefPartIndex: 1 })),
+    ];
+    for (const turn of turns) {
+      const out = readTurnExtras(turn) as Record<string, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(out, 'styleRefPartIndex'), JSON.stringify(turn)).toBe(false);
+    }
+  });
+
+  it('FR-14: a session saved before this Story (no tag) yields no key at all and the other extras are unaffected [characterization]', async () => {
+    expect(Object.keys(await read({}))).toEqual([]);
+    expect(await read({ cost: 0.067, presetId: 'lifestyle' })).toEqual({ cost: 0.067, presetId: 'lifestyle' });
+  });
+
+  it('FR-14: one invalid tag never takes another valid field with it [characterization]', async () => {
+    const out = await read({ styleRefPartIndex: 'bad', cost: 0.067, inputRefs: [{ turnId: 'u1', partIndex: 1 }] });
+    expect(out).toEqual({ cost: 0.067, inputRefs: [{ turnId: 'u1', partIndex: 1 }] });
+  });
+
+  it('R-9: the inputRefs ceiling still holds and keeps the new maximum of 7 (5 Product uploads, 1 Style ref, 1 attached version) [characterization]', async () => {
+    const { MAX_INPUT_REFS } = await load('./schemas');
+    expect(MAX_INPUT_REFS).toBeGreaterThanOrEqual(7);
+    const refs = Array.from({ length: 7 }, (_, i) => ({ turnId: 'u1', partIndex: i }));
+    expect(((await read({ inputRefs: refs }))['inputRefs'] as unknown[]).length).toBe(7);
+  });
+
+  it('parseStoredTurn keeps the tag as stored (the stored turn schema passes unknown fields through) [characterization]', async () => {
+    const { parseStoredTurn } = await load('./schemas');
+    const t = parseStoredTurn({ id: 'u1', role: 'user', parts, styleRefPartIndex: 2 });
+    expect((t as unknown as Record<string, unknown>)['styleRefPartIndex']).toBe(2);
+  });
+});

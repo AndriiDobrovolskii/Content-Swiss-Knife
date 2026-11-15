@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { ASPECT_RATIOS } from '../../../../prompt-core/image-studio-contract';
+import {
+  afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, Injector, input, signal, untracked, viewChild,
+} from '@angular/core';
+import { ASPECT_RATIOS, IMAGE_COUNTS } from '../../../../prompt-core/image-studio-contract';
 import { findImageModel, IMAGE_MODELS } from '../../../../prompt-core/model-catalog';
 import {
   CHIP_INSTRUCTIONS, presetName, PROMPT_PRESETS, type ChipInstruction, type PromptPreset,
@@ -8,12 +10,17 @@ import { ImageStudioStore } from '../../../../services/image-studio/image-studio
 import {
   ALERT_PORT, ID_SOURCE_PORT, IMAGE_CODEC_PORT, SESSION_STORE_PORT,
 } from '../../../../services/image-studio/image-studio.tokens';
+import { UserPresetsService } from '../../../../services/image-studio/user-presets.service';
 import { LlmService } from '../../../../services/llm.service';
 import { dispatchError } from '../../../../utils/image-studio/error-dispatch';
+import { estimateCost } from '../../../../utils/image-studio/estimate';
+import { formatEstimate } from '../../../../utils/image-studio/format';
 import { ingestImage, type IngestResult } from '../../../../utils/image-studio/image-ingest';
 import { detectImageType } from '../../../../utils/image-studio/magic-bytes';
+import { normalizeImageCount } from '../../../../utils/image-studio/image-count';
 import { studioText, type StudioLanguage, type StudioTextParams } from '../../../../utils/image-studio/studio-texts';
-import { canAttachUpload } from '../../../../utils/image-studio/upload-rules';
+import { type AttachmentRole, decideAttach } from '../../../../utils/image-studio/attachment-roles';
+import type { UserPreset } from '../../../../utils/image-studio/user-presets';
 
 /** Base64 of a byte array, built in slices so a multi-megabyte image does not overflow the call stack. */
 function toBase64(bytes: Uint8Array): string {
@@ -52,15 +59,33 @@ export class StudioComposerComponent {
   private readonly sessionStore = inject(SESSION_STORE_PORT);
   private readonly ids = inject(ID_SOURCE_PORT);
   private readonly alerts = inject(ALERT_PORT);
+  private readonly userPresets = inject(UserPresetsService);
+  private readonly injector = inject(Injector);
 
   protected readonly presets = PROMPT_PRESETS;
+  /** The user's saved presets (FR-15..FR-17): shown after the registry group, never part of `PROMPT_PRESETS`. */
+  protected readonly userPresetList = this.userPresets.presets;
+  /** True while the "Preset name" field of the Save pill is open. */
+  protected readonly naming = signal(false);
+  private readonly nameField = viewChild<ElementRef<HTMLInputElement>>('presetNameField');
+  private readonly savePill = viewChild<ElementRef<HTMLButtonElement>>('savePill');
   protected readonly chips = CHIP_INSTRUCTIONS;
   protected readonly ratios = ASPECT_RATIOS;
   protected readonly models = IMAGE_MODELS;
+  /** The Images selector's options: the closed set from the shared contract (FR-4). */
+  protected readonly imageCounts = IMAGE_COUNTS;
   /** The resolutions the selected model accepts: 4K is offered only by Pro (FR-19). */
   protected readonly resolutions = computed(() => findImageModel(this.store.draft().model)?.resolutions ?? []);
   /** The send button's label follows the draft, not the reason it is disabled: "Generate" or "Write a prompt to start" (FR-17). */
   protected readonly sendLabelTextId = computed(() => (this.store.sendState().labelId === 'generate' ? 'X-1' : 'X-29'));
+  /**
+   * The pre-send estimate (FR-20): computed from the draft's model, resolution and count with no request; null (no
+   * text) when the pair is not priced.
+   */
+  protected readonly estimateText = computed(() => {
+    const draft = this.store.draft();
+    return formatEstimate(estimateCost(draft.model, draft.resolution, draft.imageCount), draft.imageCount, this.lang());
+  });
   /** Chips appear only once the session holds a version (FR-31). */
   protected readonly showChips = computed(() => this.store.versions().length > 0);
 
@@ -117,6 +142,10 @@ export class StudioComposerComponent {
     this.store.setDraft({ productName: (event.target as HTMLInputElement).value });
   }
 
+  protected onImageCount(event: Event): void {
+    this.store.setDraft({ imageCount: normalizeImageCount(Number((event.target as HTMLSelectElement).value)) });
+  }
+
   protected onRatio(event: Event): void {
     this.store.setDraft({ aspectRatio: (event.target as HTMLSelectElement).value });
   }
@@ -156,6 +185,44 @@ export class StudioComposerComponent {
     this.store.cancel();
   }
 
+  // ---- user presets (FR-15 to FR-17; AC-10, AC-10a, AC-11) ------------------------------------------------------
+
+  /** A user preset applies like a registry one, through the store (which keeps the saved prompt literal). */
+  protected applyUserPreset(preset: UserPreset): void {
+    this.store.applyUserPreset(preset);
+  }
+
+  protected openPresetName(): void {
+    this.naming.set(true);
+    afterNextRender(() => this.nameField()?.nativeElement.focus(), { injector: this.injector });
+  }
+
+  protected cancelPresetName(): void {
+    this.naming.set(false);
+    afterNextRender(() => this.savePill()?.nativeElement.focus(), { injector: this.injector });
+  }
+
+  /**
+   * Enter in the name field saves the composer's current prompt, ratio, resolution and model under the typed name. The
+   * service decides (empty or duplicate name, 60 characters, 30 presets, storage failure) and saves nothing on a refusal;
+   * no refusal text is shown because the owner has not accepted any copy for them. The field closes either way.
+   */
+  protected submitPresetName(event: Event): void {
+    event.preventDefault();
+    const name = (event.target as HTMLInputElement).value;
+    const draft = this.store.draft();
+    this.userPresets.save(name, {
+      prompt: draft.text, aspectRatio: draft.aspectRatio, resolution: draft.resolution, model: draft.model,
+    });
+    this.cancelPresetName();
+  }
+
+  /** Immediate delete, no confirmation (OD-12 f); deleting the checked preset unchecks it and leaves the fields alone. */
+  protected deleteUserPreset(preset: UserPreset): void {
+    if (!this.userPresets.remove(preset.id).ok) return;
+    if (this.store.draft().checkedPresetId === preset.id) this.store.setDraft({ checkedPresetId: null });
+  }
+
   // ---- attachments (FR-8, FR-10, FR-14 to FR-16, FR-73, FR-81) --------------------------------------------------
 
   protected onFilesChosen(event: Event): void {
@@ -190,6 +257,18 @@ export class StudioComposerComponent {
     this.attachFiles(files);
   }
 
+  /**
+   * The Product / Style ref toggle on an uploaded image (FR-10 to FR-12): the store decides through the role invariant. A refusal
+   * (X-61 second Style ref, X-62 sixth Product) is shown in this component's alert and the image keeps its role.
+   */
+  protected toggleRole(id: string, current: AttachmentRole | undefined): void {
+    this.attachMessage.set(null);
+    const decision = this.store.setAttachmentRole(id, current === 'style-ref' ? 'product' : 'style-ref');
+    // The compiler configuration does not narrow a boolean discriminant, so the reason is read through a cast.
+    const reason = (decision as { reason?: string }).reason;
+    if (reason) this.attachMessage.set({ textId: reason });
+  }
+
   protected removeAttachment(id: string): void {
     this.store.removeAttachment(id);
   }
@@ -218,13 +297,14 @@ export class StudioComposerComponent {
     this.attachMessage.set(null);
     for (const file of files) {
       const current = this.store.draft().attachments;
-      if (!canAttachUpload(current.map(() => ({ kind: 'upload' as const }))).ok) {
+      // Role-aware (FR-12 (b)): a Style ref image is outside the five Product uploads, the attached version is not in the draft's list.
+      if (!decideAttach(current.map((a) => ({ id: a.id, kind: 'upload' as const, role: a.role }))).ok) {
         this.attachMessage.set({ textId: 'T-3' });
         break;
       }
       const id = this.ids.next();
       this.store.setDraft({
-        attachments: [...current, { id, fileName: file.name, fileUri: '', mimeType: file.type, state: 'uploading' }],
+        attachments: [...current, { id, fileName: file.name, fileUri: '', mimeType: file.type, state: 'uploading', role: 'product' }],
       });
       void this.runIngest(id, file, sessionId);
     }
