@@ -114,5 +114,5 @@ stories:
     slug: image-studio-new-capabilities
     track: angular
     path: docs/stories/US-10.6-image-studio-new-capabilities.md
-    state: IN_PROGRESS
+    state: ARCHIVED
     created_at: 2026-11-08T10:00:00Z

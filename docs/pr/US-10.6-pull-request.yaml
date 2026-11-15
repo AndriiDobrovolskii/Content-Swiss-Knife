@@ -1,0 +1,57 @@
+---
+artifact: pull_request
+story: US-10.6
+version: 1
+status: ARCHIVED
+owner: so-pr-creator
+created_at: 2026-11-15T17:06:00Z
+updated_at: 2026-11-15T17:07:52Z
+supersedes: null
+inputs_consumed:
+  - key: story
+    version: 2
+  - key: pr_summary
+    version: 1
+open_decisions_blocking: false
+---
+# Record of the opened Pull Request. Opening it is not READY_FOR_PR and is not a review.
+repository: AndriiDobrovolskii/Content-Swiss-Knife
+remote: origin
+pull_request:
+  number: 157
+  url: https://github.com/AndriiDobrovolskii/Content-Swiss-Knife/pull/157
+  state: open
+  draft: false
+  opened_at: 2026-11-15T17:05:35Z
+  title_source: docs/pr/US-10.6-pr-summary.md#v1 (verbatim)
+  body_source: docs/pr/US-10.6-pr-summary.md#v1 (verbatim, including the "Not live-verified" banner and the open items; the draft already ended with the Claude Code session link)
+  title: "feat(US-10.6): add Upscale 4K, Variation, multi-image generation, Style ref, saved presets, spend totals and cost estimate to Image Studio"
+  verified_with: gh pr view 157 (title and body compared byte-for-byte with the draft; reviewRequests [], labels [], milestone null, autoMergeRequest null)
+branch:
+  head: feature/US-10.6-image-studio-new-capabilities
+  head_sha_pushed: 5b64aa9173aa9aac12429ff0603bf3edca637f52
+  base: main
+  base_sha_at_open: fde8c3ae61e9d27e7e59ac2f93481bc34654f474
+  merge_base: fde8c3ae61e9d27e7e59ac2f93481bc34654f474
+  commits_ahead_of_base: 48
+push:
+  command: git push -u origin feature/US-10.6-image-studio-new-capabilities
+  force: false
+  no_verify: false
+  remote_branch_existed_before: false
+authorisation: >
+  Human instruction in chat: "create the PR for US-10.6".
+open_items_carried_from_draft:
+  - "AGENTS.md section 6 item 9 live smoke (T40) was NOT run and no written waiver exists. The PR body says so in a 'Not live-verified' banner and an unchecked test-plan item."
+  - "Pre-send docs commit (5b64aa9) was already on the branch; the draft's 47-commit count is now 48."
+  - "Remaining owner items and non-blocking findings (NB-1..NB-4, OD-2 re-fetch discrepancy) are in the PR body under 'Security' and 'Not verified and open'."
+not_done:
+  - merge
+  - ready-for-review or approval marking
+  - reviewers, labels or milestone
+  - auto-merge
+notes:
+  - The PR was created with `gh pr create --body-file` rather than the github MCP server, to keep the body byte-identical to the draft (US-10.5 precedent).
+  - No .github/pull_request_template.md or .github/PULL_REQUEST_TEMPLATE/ exists in the repository (.github directory absent); the draft body was used as written.
+  - `git fetch origin` printed "failed to delete .git/worktrees/csk-pro-model-fix: Permission denied" (a stale-worktree prune); refs were fetched and origin/main was verified as fde8c3a afterwards.
+  - This file is written after the push and is not part of the pushed head SHA; it is left uncommitted.

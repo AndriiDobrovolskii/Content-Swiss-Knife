@@ -208,3 +208,19 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Open items: US-10.6 (new capabilities) is registered and not started; security O-5 (`versionImage` forwards a stored MIME without `isImageMime`) for a future
   hardening story; `app.component.html:955` still has `bg-amber-600`; `docs/decisions/US-10.5-open-decisions.md` (v4) is stale against the approved Specification;
   `.tmp.driveupload/` is not gitignored; open `cors()` and the Tailwind CDN without SRI are pre-existing.
+
+## US-10.6 — Image Studio new capabilities: Upscale 4K, Variation, several images per generation, Style ref, saved presets, spend totals and estimate (archived 2026-11-15T17:10:22Z)
+- Image Studio gains an "Images" select (1 / 2 / 4): one generate request carries `imageCount`, the BFF grants `min(units, N)` from the hourly limiter atomically, makes N
+  parallel upstream calls and returns one merged `images` response in slot order with a `batch` report (requested / granted / succeeded, closed failure causes). One usage row
+  per successful call, priced at that call's image count; Cancel discards the whole action. Rate-limit and partial-failure lines go into the one `role="alert"`.
+- Prices are a pair table (`imagePrices` in `src/prompt-core/image-studio-contract.json`, keyed by model and resolution: Flash 1K 0.067 / 2K 0.101, Pro 1K 0.134 / 2K 0.134 /
+  4K 0.24, owner-accepted Google list prices, input charges excluded). `getImagePrice` / `computeImageCost` need the resolution; an unpriced pair is `PRICE_NOT_CONFIGURED`
+  (500) before any paid call. The composer shows "≈ $X for N images" (two decimals, display only), equal to the server cost.
+- "Upscale 4K" and "Variation" sit on every generated image: they send the version inline with an empty history and no instruction text (Upscale on Pro, also from a Flash
+  session). Uploaded thumbnails have a Product / Style ref toggle (one Style ref, outside the five-upload limit; the sentence is sent once right after the image from
+  `src/prompt-core/image-studio-instructions.ts`; the tag is stored at Turn level as `styleRefPartIndex` and never sent to Gemini). Saved presets (`user-` ids, name cap 60,
+  30 presets, localStorage behind `USER_PRESET_STORAGE_PORT`) apply with a literal prompt and can be deleted. The header shows "Today $X · month $Y" from `GET /api/usage`.
+- New texts `X-45..X-62` in en and uk. Delivered by PR #157, merge commit `7640cea`. Summary: `docs/knowledge/US-10.6-delivery-summary.md`.
+- Open items: the AGENTS.md section 6 item 9 live smoke of the changed route (T40) was never run or waived; a 4K Pro request with 4 images returns about 70 MB with no
+  in-flight cap, and a cancelled batch may be paid but writes no usage row; UI copy still owed for the disabled-Upscale reason, preset refusals, the storage failure and the
+  spend placeholder; owner wording on "counted request", `X-62` and the partial-result retry; the AC-10a hover reveal is a manual check; `app.component.html:955` still has `bg-amber-600`.
