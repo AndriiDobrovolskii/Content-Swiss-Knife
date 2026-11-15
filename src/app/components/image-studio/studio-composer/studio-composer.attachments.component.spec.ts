@@ -521,8 +521,10 @@ describe('AC-6 / AC-7 / AC-8: the role toggle on an uploaded thumbnail (T34)', (
     const reqs = await collectUploads(h, 1);
     reqs[0].flush({ fileUri: 'files/f1', mimeType: 'image/png' });
     await h.settle();
-    await h.user.click(toggleOf(thumbs()[0], 'Товар'));
-    expect(toggleOf(thumbs()[0], 'Референс стилю')).toBeDefined();
+    // Under lang 'uk' the list is named by its Ukrainian label (FR-77), so look it up by that name.
+    const ukThumbs = () => within(screen.getByRole('list', { name: t('X-25', 'uk') })).queryAllByRole('listitem');
+    await h.user.click(toggleOf(ukThumbs()[0], 'Товар'));
+    expect(toggleOf(ukThumbs()[0], 'Референс стилю')).toBeDefined();
   });
 });
 
