@@ -16,7 +16,7 @@
  * in the test environment. Substituting it here would mean testing the mock instead of the
  * wiring between template, signals and service.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/angular';
 import userEvent from '@testing-library/user-event';
 import { ModelSettingsComponent } from './model-settings.component';
@@ -173,5 +173,206 @@ describe('ModelSettingsComponent with claude-sonnet-5-5 (US-4.1)', () => {
       expect(['Between tools', 'Extra high', 'Max']).not.toContain(shown);
       expect(screen.queryByText(id)).toBeNull();
     }
+  });
+});
+
+/**
+ * US-11.1 (T8, with T6 making the model list true) - FR-6, FR-7, FR-8, FR-9 and the UI half of FR-13 / AC-4.
+ * Written from the Specification: what the operator sees in the two model dropdowns, the cost/speed badge
+ * beside the selected model, and the thinking-level control. ModelSettingsService is the real signal store
+ * (see the file header); nothing here is mocked.
+ *
+ * Only FR-7 and FR-8 start red against code that already lists the models; the dropdown and slider cases are
+ * driven by the catalog and are pinned here so they cannot regress (task breakdown T8).
+ */
+describe('ModelSettingsComponent with the Gemini 4 models (US-11.1)', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  const GEMINI_LABELS = ['Gemini 4 Carbon', 'Gemini 3.1 Pro', 'Gemini 4 Hydrogen', 'Gemini 3.8 Flash'];
+  const GEMINI_IDS = ['gemini-4-carbon', 'gemini-3.1-pro-preview', 'gemini-4-hydrogen', 'gemini-3.8-flash'];
+
+  const deepSelect = () => screen.getAllByRole('combobox')[0] as HTMLSelectElement;
+  const fastSelect = () => screen.getAllByRole('combobox')[1] as HTMLSelectElement;
+  const slider = (index: 0 | 1) => screen.getAllByRole('slider')[index] as HTMLInputElement;
+  /** The badge sits right beside the model dropdown, inside the same row. */
+  const badgeOf = (select: HTMLSelectElement) => select.nextElementSibling as HTMLElement;
+  const optionLabels = (select: HTMLSelectElement) => Array.from(select.options).map(o => o.textContent!.trim());
+  const optionIds = (select: HTMLSelectElement) => Array.from(select.options).map(o => o.value);
+  /** The level text shown beside "Thinking level" for the deep (0) or fast (1) slot. */
+  const levelText = (index: 0 | 1) =>
+    (screen.getAllByText('Thinking level')[index].nextElementSibling as HTMLElement).textContent!.trim();
+  /** The two end labels printed under the slider. */
+  const endLabels = (index: 0 | 1) =>
+    Array.from(slider(index).nextElementSibling!.children).map(c => c.textContent!.trim());
+
+  async function openOnGemini() {
+    const view = await render(ModelSettingsComponent);
+    // Fast already runs on Gemini; switch Deep to Gemini through the provider button, as a user does.
+    await userEvent.setup().click(screen.getAllByRole('button', { name: 'Google Gemini' })[0]);
+    return view;
+  }
+  const choose = (select: HTMLSelectElement, id: string) => fireEvent.change(select, { target: { value: id } });
+
+  describe('model dropdown contents (FR-6, AC-2)', () => {
+    it('Deep slot on Gemini lists exactly Carbon, 3.1 Pro, Hydrogen, 3.8 Flash, in that order', async () => {
+      await openOnGemini();
+      await vi.waitFor(() => expect(optionLabels(deepSelect())).toEqual(GEMINI_LABELS));
+      expect(optionIds(deepSelect())).toEqual(GEMINI_IDS);
+    });
+
+    it('Fast slot on Gemini lists exactly the same four, in the same order', async () => {
+      await render(ModelSettingsComponent);
+      expect(optionLabels(fastSelect())).toEqual(GEMINI_LABELS);
+      expect(optionIds(fastSelect())).toEqual(GEMINI_IDS);
+    });
+
+    it('neither dropdown, nor any other text on the panel, mentions Gemini 3.7 Flash or Gemini 3.6 Flash', async () => {
+      await openOnGemini();
+      await vi.waitFor(() => expect(optionLabels(deepSelect())).toEqual(GEMINI_LABELS));
+      for (const select of [deepSelect(), fastSelect()]) {
+        expect(optionLabels(select)).not.toContain('Gemini 3.7 Flash');
+        expect(optionLabels(select)).not.toContain('Gemini 3.6 Flash');
+      }
+      expect(screen.queryByText(/Gemini 3\.[67] Flash/)).toBeNull();
+    });
+
+    it('the two image models are not offered in either dropdown', async () => {
+      await openOnGemini();
+      await vi.waitFor(() => expect(optionLabels(deepSelect())).toEqual(GEMINI_LABELS));
+      for (const select of [deepSelect(), fastSelect()]) {
+        expect(optionIds(select)).not.toContain('gemini-3.1-flash-image');
+        expect(optionIds(select)).not.toContain('gemini-3-pro-image');
+      }
+    });
+  });
+
+  describe('cost/speed badge text (FR-7, AC-3)', () => {
+    it('Deep slot: $$$ for Carbon and 3.1 Pro, $$ ⚡ for Hydrogen, $ ⚡ for 3.8 Flash', async () => {
+      await openOnGemini();
+      await vi.waitFor(() => expect(deepSelect().value).toBe('gemini-4-carbon'));
+      expect(badgeOf(deepSelect()).textContent!.trim()).toBe('$$$');
+
+      choose(deepSelect(), 'gemini-3.1-pro-preview');
+      await vi.waitFor(() => expect(badgeOf(deepSelect()).textContent!.trim()).toBe('$$$'));
+
+      choose(deepSelect(), 'gemini-4-hydrogen');
+      await vi.waitFor(() => expect(badgeOf(deepSelect()).textContent!.trim()).toBe('$$ ⚡'));
+
+      choose(deepSelect(), 'gemini-3.8-flash');
+      await vi.waitFor(() => expect(badgeOf(deepSelect()).textContent!.trim()).toBe('$ ⚡'));
+    });
+
+    it('Fast slot: the default gemini-3.8-flash reads $ ⚡, and Hydrogen, Carbon and 3.1 Pro read $$ ⚡, $$$, $$$', async () => {
+      await render(ModelSettingsComponent);
+      expect(fastSelect().value).toBe('gemini-3.8-flash');
+      expect(badgeOf(fastSelect()).textContent!.trim()).toBe('$ ⚡');
+
+      choose(fastSelect(), 'gemini-4-hydrogen');
+      await vi.waitFor(() => expect(badgeOf(fastSelect()).textContent!.trim()).toBe('$$ ⚡'));
+
+      choose(fastSelect(), 'gemini-4-carbon');
+      await vi.waitFor(() => expect(badgeOf(fastSelect()).textContent!.trim()).toBe('$$$'));
+
+      choose(fastSelect(), 'gemini-3.1-pro-preview');
+      await vi.waitFor(() => expect(badgeOf(fastSelect()).textContent!.trim()).toBe('$$$'));
+    });
+
+    // Characterization: green before this Story and it must stay green.
+    it('the Anthropic badges read exactly as before: $$$ for Sonnet 5.5 and Sonnet 5, $ ⚡ for Haiku 4.5', async () => {
+      await render(ModelSettingsComponent);
+      expect(deepSelect().value).toBe('claude-sonnet-5-5');
+      expect(badgeOf(deepSelect()).textContent!.trim()).toBe('$$$');
+
+      choose(deepSelect(), 'claude-sonnet-5');
+      await vi.waitFor(() => expect(badgeOf(deepSelect()).textContent!.trim()).toBe('$$$'));
+
+      choose(deepSelect(), 'claude-haiku-4-5');
+      await vi.waitFor(() => expect(badgeOf(deepSelect()).textContent!.trim()).toBe('$ ⚡'));
+    });
+  });
+
+  describe('badge colour sets (FR-8, AC-3)', () => {
+    const AMBER = ['bg-amber-100', 'dark:bg-amber-900/30', 'text-amber-700', 'dark:text-amber-300'];
+    const EMERALD = ['bg-emerald-100', 'dark:bg-emerald-900/30', 'text-emerald-700', 'dark:text-emerald-300'];
+
+    /** Class tokens of the Deep badge once the Deep slot (on Gemini) shows `modelId`. One render per test. */
+    async function deepBadgeClassesFor(modelId: string): Promise<string[]> {
+      await openOnGemini();
+      await vi.waitFor(() => expect(optionIds(deepSelect())).toContain(modelId));
+      choose(deepSelect(), modelId);
+      await vi.waitFor(() => expect(deepSelect().value).toBe(modelId));
+      return Array.from(badgeOf(deepSelect()).classList);
+    }
+    const light = (tokens: string[], colour: string) => tokens.filter(t => !t.startsWith('dark:') && t.includes(`-${colour}-`));
+    const dark = (tokens: string[], colour: string) => tokens.filter(t => t.startsWith('dark:') && t.includes(`-${colour}-`));
+
+    it('the balanced (Hydrogen) badge uses a sky set with both a light and a dark variant, and no amber or emerald class', async () => {
+      const tokens = await deepBadgeClassesFor('gemini-4-hydrogen');
+      expect(light(tokens, 'sky'), tokens.join(' ')).not.toHaveLength(0);
+      expect(dark(tokens, 'sky'), tokens.join(' ')).not.toHaveLength(0);
+      expect(tokens.filter(t => t.includes('amber') || t.includes('emerald')), tokens.join(' ')).toEqual([]);
+    });
+
+    it('the balanced set differs from both the premium (amber) set and the fast (emerald) set', async () => {
+      const balanced = await deepBadgeClassesFor('gemini-4-hydrogen');
+      for (const token of [...AMBER, ...EMERALD]) expect(balanced, `balanced badge reuses ${token}`).not.toContain(token);
+    });
+
+    // Characterization: green before this Story. The premium and fast badges keep their existing class sets.
+    it('the premium badge (Gemini 3.1 Pro) keeps its amber set', async () => {
+      const premium = await deepBadgeClassesFor('gemini-3.1-pro-preview');
+      for (const token of AMBER) expect(premium, `premium badge lacks ${token}`).toContain(token);
+      expect(premium.filter(t => t.includes('sky'))).toEqual([]);
+    });
+
+    it('the fast badge (Gemini 3.8 Flash) keeps its emerald set', async () => {
+      const fast = await deepBadgeClassesFor('gemini-3.8-flash');
+      for (const token of EMERALD) expect(fast, `fast badge lacks ${token}`).toContain(token);
+      expect(fast.filter(t => t.includes('sky'))).toEqual([]);
+    });
+  });
+
+  describe('thinking-level control (FR-9, FR-13 UI half, AC-4)', () => {
+    it.each(['gemini-4-carbon', 'gemini-4-hydrogen', 'gemini-3.8-flash'])(
+      '%s offers exactly Low to High on the Deep slider and never Minimal', async (id) => {
+        await openOnGemini();
+        await vi.waitFor(() => expect(optionIds(deepSelect())).toEqual(GEMINI_IDS));
+        choose(deepSelect(), id);
+        await vi.waitFor(() => expect(deepSelect().value).toBe(id));
+
+        expect(slider(0).min).toBe('0');
+        expect(slider(0).max).toBe('2');
+        expect(endLabels(0)).toEqual(['Low', 'High']);
+        expect(screen.queryByText('Minimal')).toBeNull();
+      });
+
+    it.each(['gemini-4-carbon', 'gemini-4-hydrogen', 'gemini-3.8-flash'])(
+      '%s offers exactly Low to High on the Fast slider and never Minimal', async (id) => {
+        await render(ModelSettingsComponent);
+        choose(fastSelect(), id);
+        await vi.waitFor(() => expect(fastSelect().value).toBe(id));
+
+        expect(slider(1).max).toBe('2');
+        expect(endLabels(1)).toEqual(['Low', 'High']);
+        expect(screen.queryByText('Minimal')).toBeNull();
+      });
+
+    it('selecting Gemini 4 Hydrogen in the Deep dropdown shows High on a full slider; selecting Carbon shows Medium', async () => {
+      await openOnGemini();
+      await vi.waitFor(() => expect(deepSelect().value).toBe('gemini-4-carbon'));
+      expect(levelText(0)).toBe('Medium');
+
+      fireEvent.input(slider(0), { target: { value: '0' } });   // the operator moves the slider to Low first
+      await vi.waitFor(() => expect(levelText(0)).toBe('Low'));
+
+      choose(deepSelect(), 'gemini-4-hydrogen');
+      await vi.waitFor(() => expect(levelText(0)).toBe('High'));
+      expect(slider(0).value).toBe('2');
+
+      fireEvent.input(slider(0), { target: { value: '0' } });
+      choose(deepSelect(), 'gemini-4-carbon');
+      await vi.waitFor(() => expect(levelText(0)).toBe('Medium'));
+      expect(slider(0).value).toBe('1');
+    });
   });
 });
