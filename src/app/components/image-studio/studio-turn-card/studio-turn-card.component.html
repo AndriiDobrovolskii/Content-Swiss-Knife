@@ -2,7 +2,12 @@
   @if (thumbs().length > 0) {
     <div class="flex flex-wrap gap-2">
       @for (thumb of thumbs(); track thumb.n) {
-        <img [attr.src]="thumb.src" [alt]="tx('X-31', { n: thumb.n })" class="h-16 w-16 rounded-lg border border-shell-line object-cover" />
+        <div class="relative h-16 w-16 overflow-hidden rounded-lg border border-shell-line">
+          <img [attr.src]="thumb.src" [alt]="tx('X-31', { n: thumb.n })" class="h-full w-full object-cover" />
+          @if (thumb.styleRef) {
+            <span class="absolute inset-x-0 bottom-0 bg-slate-900/70 text-white text-center text-[10px]">{{ tx('X-49') }}</span>
+          }
+        </div>
       }
     </div>
   }

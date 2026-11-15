@@ -14,6 +14,8 @@ import { StudioImageTileComponent, type TileEditOf } from '../studio-image-tile/
 interface InputThumb {
   src: string;
   n: number;
+  /** True only for the thumbnail the stored Style ref tag points at (US-10.6 FR-14); every other thumbnail is Product and shows no label. */
+  styleRef: boolean;
 }
 
 /**
@@ -23,7 +25,9 @@ interface InputThumb {
  * `FeedCard` the feed built from the stored turn, so a field an old session lacks is simply not rendered (no placeholder).
  * The card holds ids and values only; every text is a studio-texts id or the preset registry name resolved for `lang()` at
  * render time (FR-77). Input thumbnails are plain `<img>` outside any `<figure>` (only tiles are figures) whose alt is the
- * "Input image {n}" text, never the prompt; a reference whose bytes are gone is omitted without an error.
+ * "Input image {n}" text, never the prompt; a reference whose bytes are gone is omitted without an error. The Style ref
+ * thumbnail (feed role `style-ref`) carries the plain-text label X-49 at its bottom edge, in the same wrapper as its `<img>`;
+ * a Product thumbnail shows no label (US-10.6 FR-14, AC-9).
  * The "Reuse prompt" button (FR-5) exists only for a non-blank prompt, is disabled while the composer is, puts the card's
  * prompt, ratio and model into the composer through `store.reusePrompt` (which sends nothing and writes no preset field) and
  * then moves focus to the composer's prompt field, found by its accessible name once the field has rendered the new text.
@@ -77,16 +81,16 @@ export class StudioTurnCardComponent {
   protected readonly thumbs = computed<InputThumb[]>(() => {
     const session = this.store.currentSession();
     if (!session) return [];
-    const resolved: string[] = [];
+    const resolved: { src: string; styleRef: boolean }[] = [];
     for (const ref of this.card().thumbs) {
       const turn = session.turns.find((t) => t.id === ref.turnId);
       if (!turn) continue;
       // thumbFor fills a fresh signal synchronously for an inline part; that write must not happen inside this computed's reactive context.
       const url = untracked(() => this.media.thumbFor(session.meta.id, turn, ref.partIndex));
       const src = url();
-      if (src) resolved.push(src);
+      if (src) resolved.push({ src, styleRef: ref.role === 'style-ref' });
     }
-    return resolved.map((src, index) => ({ src, n: index + 1 }));
+    return resolved.map(({ src, styleRef }, index) => ({ src, n: index + 1, styleRef }));
   });
 
   private readonly editOfByNumber = computed(() => {
