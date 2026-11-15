@@ -8,6 +8,7 @@ import { createGenerationRunner, type RunOutcome } from '../../utils/image-studi
 import { normalizeImageCount, type ImageCount } from '../../utils/image-studio/image-count';
 import { outputFormat } from '../../utils/image-studio/output-format';
 import { hasSendableContent } from '../../utils/image-studio/send-state';
+import { decideRoleChange, type AttachmentRole, type RoleDecision } from '../../utils/image-studio/attachment-roles';
 import {
   StorageQuotaError,
   type Announcer,
@@ -54,7 +55,16 @@ export interface Attachment {
   fileUri: string;
   mimeType: string;
   state: 'uploading' | 'ready' | 'failed';
+  /**
+   * US-10.6 FR-10: `attach()` always sets it (Product), and the user may mark one upload as the Style ref. Optional like the role of
+   * `attachment-roles.ts` and `send-state.ts`, where an absent role is Product: the composer's `uploading` placeholder (T34's file)
+   * carries none. A draft attachment is never persisted.
+   */
+  role?: AttachmentRole;
 }
+
+/** The outcome of `setAttachmentRole`: the role invariant's decision, or a bare refusal for an id that is not in the draft. */
+export type RoleChangeResult = RoleDecision | { ok: false; reason?: undefined };
 
 export interface AttachedVersion {
   mimeType: string;
@@ -135,7 +145,7 @@ function sameTurnContent(a: ComposerDraft, b: ComposerDraft): boolean {
     a.aspectRatio === b.aspectRatio &&
     a.resolution === b.resolution &&
     a.imageCount === b.imageCount &&
-    a.attachments.map((x) => x.fileUri).join('\n') === b.attachments.map((x) => x.fileUri).join('\n') &&
+    a.attachments.map((x) => `${x.fileUri}|${x.role ?? 'product'}`).join('\n') === b.attachments.map((x) => `${x.fileUri}|${x.role ?? 'product'}`).join('\n') &&
     (a.attachedVersion?.fromVersion ?? null) === (b.attachedVersion?.fromVersion ?? null)
   );
 }
@@ -355,7 +365,7 @@ export class ImageStudioStore {
     const sessionId = this.currentSessionId();
     if (sessionId === null || entries.length === 0) return;
     const added: Attachment[] = entries.map((e) => ({
-      id: this.ids.next(), fileName: e.fileName, fileUri: e.fileUri, mimeType: e.mimeType, state: 'ready',
+      id: this.ids.next(), fileName: e.fileName, fileUri: e.fileUri, mimeType: e.mimeType, state: 'ready', role: 'product',
     }));
     this.setDraft({ attachments: [...this.draft().attachments, ...added] });
 
@@ -372,6 +382,28 @@ export class ImageStudioStore {
 
   removeAttachment(id: string): void {
     this.setDraft({ attachments: this.draft().attachments.filter((a) => a.id !== id) });
+  }
+
+  /**
+   * Marks an uploaded image as Product or as the one Style ref (FR-10..FR-12 (a)). `attachment-roles.ts` decides: a second Style ref is
+   * refused with X-61 and the first stays; a change to Product that would hold a sixth Product is refused with X-62 and the image stays
+   * Style ref. A refusal is shown in the store's one alert (never a second status). Nothing is sent and the composer is not cleared. The
+   * attached "Edit this" version has no role control and is not in the draft's attachments (SM-3 i); an id not in the draft changes nothing.
+   */
+  setAttachmentRole(id: string, role: AttachmentRole): RoleChangeResult {
+    const attachments = this.draft().attachments;
+    if (!attachments.some((a) => a.id === id)) return { ok: false };
+    const decision = decideRoleChange(
+      attachments.map((a) => ({ id: a.id, kind: 'upload' as const, role: a.role })),
+      id,
+      role,
+    );
+    if (decision.ok === false) {
+      this.pending.set({ textId: decision.reason, region: 'alert' });
+      return decision;
+    }
+    this.setDraft({ attachments: attachments.map((a) => (a.id === id ? { ...a, role } : a)) });
+    return decision;
   }
 
   /**
@@ -418,10 +450,12 @@ export class ImageStudioStore {
     const session = this.current();
     if (!session || this.generating()) return;
     const draft = this.draft();
+    // SM-4 i (FR-13): a draft whose only content is a Style-ref upload has nothing to send; refuse here, not only at the button.
+    if (!hasSendableContent(draft)) return;
     const buildInput: BuildInput = {
       newTurnId: this.ids.next(),
       text: draft.text,
-      uploads: draft.attachments.filter((a) => a.state === 'ready').map((a) => ({ fileUri: a.fileUri, mimeType: a.mimeType })),
+      uploads: draft.attachments.filter((a) => a.state === 'ready').map((a) => ({ fileUri: a.fileUri, mimeType: a.mimeType, role: a.role })),
       ...(draft.attachedVersion ? { attachedVersion: { mimeType: draft.attachedVersion.mimeType, data: draft.attachedVersion.data } } : {}),
       model: draft.model,
       aspectRatio: draft.aspectRatio,
@@ -515,7 +549,13 @@ export class ImageStudioStore {
       await this.refreshSessions();
       return;
     }
-    const userTurn: Turn = { id: outcome.request.newTurn.id, role: 'user', parts: outcome.request.newTurn.parts };
+    // FR-14: the Style-ref tag is a Turn-level field of the STORED user turn, never on a part and never resent (the builder projects history to { id, role, parts }).
+    const userTurn: Turn = {
+      id: outcome.request.newTurn.id,
+      role: 'user',
+      parts: outcome.request.newTurn.parts,
+      ...(outcome.styleRefPartIndex !== undefined ? { styleRefPartIndex: outcome.styleRefPartIndex } : {}),
+    };
     const uploadedFormats = draft.attachments.map((a) => a.mimeType as ImageMime);
     const attachedFormat = draft.attachedVersion
       ? stored.meta.versions.find((v) => v.number === draft.attachedVersion?.fromVersion)?.inputFormat
