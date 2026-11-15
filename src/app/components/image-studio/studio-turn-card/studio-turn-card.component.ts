@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { afterNextRender, ChangeDetectionStrategy, Component, computed, inject, Injector, input, untracked } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, inject, Injector, input, output, untracked } from '@angular/core';
 import { findImageModel } from '../../../../prompt-core/model-catalog';
 import { findPreset, presetName } from '../../../../prompt-core/prompt-presets';
 import { ImageStudioStore } from '../../../../services/image-studio/image-studio.store';
@@ -42,6 +42,9 @@ interface InputThumb {
 export class StudioTurnCardComponent {
   readonly lang = input.required<StudioLanguage>();
   readonly card = input.required<FeedCard>();
+  /** Upscale 4K / Variation of one of this card's images, passed up from its tile (US-10.6 AC-1, AC-2); the container wires them to the store. */
+  readonly upscale = output<number>();
+  readonly variation = output<number>();
 
   private readonly store = inject(ImageStudioStore);
   private readonly media = inject(StudioMediaService);
