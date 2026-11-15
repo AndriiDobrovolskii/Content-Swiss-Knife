@@ -12,6 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/angular';
+import { TestBed } from '@angular/core/testing';
 import { StudioComposerComponent } from './studio-composer.component';
 import {
   renderStudio, byName, t, LABELS, MODEL_LABEL, FLASH, PRO, imagesBody, expectGenerate, flushGenerate, GENERATE_URL, type Harness,
@@ -776,6 +777,8 @@ describe('AC-10 / AC-10a / AC-11: user presets in the presets row (T35)', () => 
     await saveAs('Keeps after reload');
     h.view.fixture.destroy();
     document.body.innerHTML = '';
+    // A second render() in one test needs a fresh test module; TestBed refuses to be configured again once instantiated.
+    TestBed.resetTestingModule();
     h = await render(port);
     expect(screen.getByRole('button', { name: 'Keeps after reload' })).toBeDefined();
   });
