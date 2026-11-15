@@ -6,12 +6,20 @@ import {
 
 const STORAGE_KEY = 'seo_gen_model_settings';
 
-/** Models removed from the catalog, mapped to the model a stored selection of them moves onto.
- *  Applied once in restore(). Deliberately the only migration: other stored choices (Sonnet 5,
- *  Gemini 3.7 / 3.6 Flash) are still in the catalog and stay exactly as the user left them. */
-const RETIRED_MODELS: Record<string, string> = {
-  'claude-sonnet-4-6': 'claude-sonnet-5-5',
-};
+/** What a stored selection of a retired model migrates onto. A `provider` makes the entry apply
+ *  only to a slot whose effective provider matches: a Gemini model id stored next to another
+ *  provider is just an unknown id for that provider and is not migrated. */
+interface RetiredModelTarget { model: string; provider?: ProviderId; }
+
+/** Retired models, mapped to the model a stored selection of them migrates onto. Applied once in
+ *  restore(). A Map, not an object literal: the stored id is untrusted browser storage, and a
+ *  plain-object lookup would answer for keys such as `constructor`. Sonnet 5 and the other
+ *  models still in the catalog are not listed: their stored selections are kept as they are. */
+const RETIRED_MODELS: ReadonlyMap<string, RetiredModelTarget> = new Map<string, RetiredModelTarget>([
+  ['claude-sonnet-4-6', { model: 'claude-sonnet-5-5' }],
+  ['gemini-3.7-flash', { model: 'gemini-3.8-flash', provider: 'gemini' }],
+  ['gemini-3.6-flash', { model: 'gemini-3.8-flash', provider: 'gemini' }],
+]);
 
 /** One slot's resolved configuration, as sent to the server. Each slot names its own
  *  provider: Deep on Claude and Fast on Gemini in the same run is a supported setup. */
@@ -206,19 +214,33 @@ export class ModelSettingsService {
     }
 
     let migrated = false;
-    const migrate = (slot: Partial<SlotSettings> | undefined) => {
-      const next = slot?.model ? RETIRED_MODELS[slot.model] : undefined;
-      if (!next) return slot;
+    const migrate = (slot: Partial<SlotSettings> | undefined, fallback: SlotSettings) => {
+      const target = slot?.model ? RETIRED_MODELS.get(slot.model) : undefined;
+      if (!target) return slot;
+      // The same effective provider validateSlot will use, so the gate and the validation agree.
+      if (target.provider && target.provider !== this.effectiveProvider(slot, stored.provider, fallback)) return slot;
       migrated = true;
-      return { ...slot, model: next };
+      return { ...slot, model: target.model };
     };
 
     this.apply({
-      deep: this.validateSlot(migrate(stored.deep), stored.provider, DEFAULTS.deep, 'premium'),
-      fast: this.validateSlot(migrate(stored.fast), stored.provider, DEFAULTS.fast, 'fast'),
+      deep: this.validateSlot(migrate(stored.deep, DEFAULTS.deep), stored.provider, DEFAULTS.deep, 'premium'),
+      fast: this.validateSlot(migrate(stored.fast, DEFAULTS.fast), stored.provider, DEFAULTS.fast, 'fast'),
     });
 
     if (migrated) this.persist();
+  }
+
+  /** The provider a stored slot runs on: its own, else the legacy top-level one, else the slot's
+   *  default. Shared by the retired-model gate and validateSlot so the two cannot disagree. */
+  private effectiveProvider(
+    slot: Partial<SlotSettings> | undefined,
+    legacyProvider: string | undefined,
+    fallback: SlotSettings,
+  ): ProviderId {
+    return findProvider(slot?.provider as string)?.id
+      ?? findProvider(legacyProvider as string)?.id
+      ?? fallback.provider;
   }
 
   private validateSlot(
@@ -227,9 +249,7 @@ export class ModelSettingsService {
     fallback: SlotSettings,
     preferTier: ModelSpec['tier'],
   ): SlotSettings {
-    const provider = findProvider(slot?.provider as string)?.id
-      ?? findProvider(legacyProvider as string)?.id
-      ?? fallback.provider;
+    const provider = this.effectiveProvider(slot, legacyProvider, fallback);
     const spec = findModel(provider, slot?.model ?? '') ?? this.pick(provider, preferTier);
     return {
       provider,
