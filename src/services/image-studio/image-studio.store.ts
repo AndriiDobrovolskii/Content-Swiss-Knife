@@ -21,6 +21,7 @@ import {
 import { parseStoredSession, parseStoredTurn } from '../../utils/image-studio/schemas';
 import { pickEvictionVictims, SESSION_CAP, touchOnEvent } from '../../utils/image-studio/session-lifecycle';
 import { studioText, type StudioLanguage } from '../../utils/image-studio/studio-texts';
+import { describeBatchOutcome, type BatchOutcomeInput } from '../../utils/image-studio/batch-outcome';
 import { fromBase64, toBase64 } from '../../utils/image-studio/base64';
 import type { GenerateResponse } from '../../utils/image-studio/schemas';
 import { needsWhiteBackground } from '../../utils/image-studio/white-background';
@@ -78,11 +79,18 @@ export interface ComposerDraft {
   imageCount: ImageCount;
 }
 
-/** The one pending error or notice, shown in the alert region. */
+/**
+ * The one pending error or notice, shown in the alert region.
+ *
+ * US-10.6 FR-8 (c), FR-9 (a), FR-24: `lines` are the ordered, already-localised batch lines (the rate-limit warning, the failure
+ * summary and one cause per line, from `describeBatchOutcome`), rendered inside this same alert, never as a second status. A message
+ * that carries only batch lines has `textId` '' (there is no headline text to look up).
+ */
 export interface StudioMessage {
   textId: string;
   params?: Record<string, string | number>;
   region: 'alert';
+  lines?: string[];
 }
 
 /** A reply that is not part of the history: a text-only answer or a safety block (FR-36, D-5). In memory only. */
@@ -578,8 +586,26 @@ export class ImageStudioStore {
     }
 
     if (outcome.type !== 'images') this.recordNonHistoryReply(outcome, sessionId, buildInput, draft);
-    if (applied.notice) this.pending.set({ textId: 'T-9', params: { ...applied.notice }, region: 'alert' });
-    else if (flattened.failed) this.pending.set({ textId: 'X-44', region: 'alert' });
+    // The schema's batch is complete when present; the project's non-strict tsconfig only infers its fields as optional.
+    const lines = this.batchLines(batch as BatchOutcomeInput | undefined);
+    const linesPart = lines.length > 0 ? { lines } : {};
+    if (applied.notice) this.pending.set({ textId: 'T-9', params: { ...applied.notice }, region: 'alert', ...linesPart });
+    else if (flattened.failed) this.pending.set({ textId: 'X-44', region: 'alert', ...linesPart });
+    else if (lines.length > 0) this.pending.set({ textId: '', region: 'alert', lines });
+  }
+
+  /**
+   * The batch warning and failure lines of a committed response (FR-8 (c), FR-9 (a)); `[]` when there is nothing to say. The images are
+   * already stored when this runs, so a batch report that cannot be turned into text (an unknown failure cause) must not hide them:
+   * the lines are dropped and the images stay.
+   */
+  private batchLines(batch: BatchOutcomeInput | undefined): string[] {
+    if (batch === undefined) return [];
+    try {
+      return describeBatchOutcome(batch, this.language());
+    } catch {
+      return [];
+    }
   }
 
   /**
