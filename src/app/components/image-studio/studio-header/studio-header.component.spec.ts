@@ -173,6 +173,7 @@ describe('FR-86 / D-23 / SD-41 / D-24 (moved from the session list, D-4): creati
   });
 });
 import { TestBed } from '@angular/core/testing';
+import { SpendService } from '../../../../services/image-studio/spend.service';
 
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -192,9 +193,7 @@ describe('AC-12 / FR-18: the spend figures in the header (T37)', () => {
   async function renderHeader(lang: 'en' | 'uk' = 'en') {
     const h = await renderStudio(StudioHeaderComponent, { lang, sessions: [makeSession('s1')] });
     h.clock.set(NOW);
-    const spendPath = '../../../../services/image-studio/spend.service';
-    const { SpendService } = await import(/* @vite-ignore */ spendPath);
-    const spend = TestBed.inject(SpendService) as unknown as { refresh(): Promise<void> };
+    const spend = TestBed.inject(SpendService);
     return { h, spend };
   }
   const headerEl = (h: Harness) => h.view.container.querySelector('header') as HTMLElement;
