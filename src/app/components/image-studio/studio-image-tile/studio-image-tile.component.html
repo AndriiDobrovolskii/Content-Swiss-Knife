@@ -17,6 +17,20 @@
       </button>
       <button
         type="button"
+        (click)="upscale.emit(item.version.number)"
+        [disabled]="generating() || !upscaleEnabled()"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-shell-line text-shell-text hover:bg-shell-hover disabled:opacity-50">
+        {{ tx('X-45') }}
+      </button>
+      <button
+        type="button"
+        (click)="variation.emit(item.version.number)"
+        [disabled]="generating() || !variationEnabled()"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-shell-line text-shell-text hover:bg-shell-hover disabled:opacity-50">
+        {{ tx('X-46') }}
+      </button>
+      <button
+        type="button"
         (click)="edit(item)"
         [disabled]="generating()"
         class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-shell-line text-shell-text hover:bg-shell-hover disabled:opacity-50">

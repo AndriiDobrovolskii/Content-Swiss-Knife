@@ -1,9 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { IMAGE_MODELS } from '../../../../prompt-core/model-catalog';
 import { ImageStudioStore } from '../../../../services/image-studio/image-studio.store';
 import { StudioDeliveryService, type DeliveryItem } from '../../../../services/image-studio/studio-delivery.service';
 import { StudioMediaService } from '../../../../services/image-studio/studio-media.service';
 import { buildAlt } from '../../../../utils/image-studio/alt-text';
 import { fromBase64 } from '../../../../utils/image-studio/base64';
+import { planDerivedAction, type DerivedActionKind } from '../../../../utils/image-studio/derived-action';
 import { studioText, type StudioLanguage, type StudioTextParams } from '../../../../utils/image-studio/studio-texts';
 
 /** The edit source of an image as the feed hands it over (US-10.5 FR-9): the source version and whether it is still retained. */
@@ -34,6 +36,9 @@ export class StudioImageTileComponent {
   readonly lang = input.required<StudioLanguage>();
   readonly versionNumber = input.required<number>();
   readonly editOf = input<TileEditOf | null>(null);
+  /** Upscale 4K / Variation of this version (US-10.6 AC-1, AC-2): each emits the version number; the container wires them to the store (T38). */
+  readonly upscale = output<number>();
+  readonly variation = output<number>();
 
   private readonly store = inject(ImageStudioStore);
   private readonly delivery = inject(StudioDeliveryService);
@@ -53,6 +58,34 @@ export class StudioImageTileComponent {
     const size = this.media.sizeOf(`${item.version.turnId}:${item.version.partIndex}`, () => (item.data ? fromBase64(item.data) : null))();
     return size ? `v${item.version.number} · ${size.width}×${size.height}` : `v${item.version.number}`;
   });
+
+  /**
+   * Whether Upscale 4K is available for this version, decided by `planDerivedAction` (the same seam the store uses). The action is always
+   * rendered; an already-4K version disables it. No reason text is rendered: the copy for the reason ids is not yet accepted by the owner.
+   */
+  protected readonly upscaleEnabled = computed(() => this.derivedEnabled('upscale'));
+  protected readonly variationEnabled = computed(() => this.derivedEnabled('variation'));
+
+  private derivedEnabled(kind: DerivedActionKind): boolean {
+    const item = this.item();
+    if (!item) return false;
+    const { version } = item;
+    const draft = this.store.draft();
+    return planDerivedAction({
+      kind,
+      version: {
+        number: version.number,
+        prompt: version.prompt,
+        aspectRatio: version.aspectRatio,
+        resolution: version.resolution,
+        model: version.model,
+        image: { mimeType: item.mime ?? '', data: item.data ?? '' },
+      },
+      sessionModel: draft.model,
+      imageCount: draft.imageCount,
+      catalogue: IMAGE_MODELS.map((m) => ({ id: m.id, resolutions: m.resolutions })),
+    }).enabled;
+  }
 
   protected tx(id: string, params?: StudioTextParams): string {
     return studioText(id, this.lang(), params);
