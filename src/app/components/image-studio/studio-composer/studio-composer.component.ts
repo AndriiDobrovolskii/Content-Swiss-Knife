@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { ASPECT_RATIOS } from '../../../../prompt-core/image-studio-contract';
+import { ASPECT_RATIOS, IMAGE_COUNTS } from '../../../../prompt-core/image-studio-contract';
 import { findImageModel, IMAGE_MODELS } from '../../../../prompt-core/model-catalog';
 import {
   CHIP_INSTRUCTIONS, presetName, PROMPT_PRESETS, type ChipInstruction, type PromptPreset,
@@ -10,8 +10,11 @@ import {
 } from '../../../../services/image-studio/image-studio.tokens';
 import { LlmService } from '../../../../services/llm.service';
 import { dispatchError } from '../../../../utils/image-studio/error-dispatch';
+import { estimateCost } from '../../../../utils/image-studio/estimate';
+import { formatEstimate } from '../../../../utils/image-studio/format';
 import { ingestImage, type IngestResult } from '../../../../utils/image-studio/image-ingest';
 import { detectImageType } from '../../../../utils/image-studio/magic-bytes';
+import { normalizeImageCount } from '../../../../utils/image-studio/image-count';
 import { studioText, type StudioLanguage, type StudioTextParams } from '../../../../utils/image-studio/studio-texts';
 import { canAttachUpload } from '../../../../utils/image-studio/upload-rules';
 
@@ -57,10 +60,20 @@ export class StudioComposerComponent {
   protected readonly chips = CHIP_INSTRUCTIONS;
   protected readonly ratios = ASPECT_RATIOS;
   protected readonly models = IMAGE_MODELS;
+  /** The Images selector's options: the closed set from the shared contract (FR-4). */
+  protected readonly imageCounts = IMAGE_COUNTS;
   /** The resolutions the selected model accepts: 4K is offered only by Pro (FR-19). */
   protected readonly resolutions = computed(() => findImageModel(this.store.draft().model)?.resolutions ?? []);
   /** The send button's label follows the draft, not the reason it is disabled: "Generate" or "Write a prompt to start" (FR-17). */
   protected readonly sendLabelTextId = computed(() => (this.store.sendState().labelId === 'generate' ? 'X-1' : 'X-29'));
+  /**
+   * The pre-send estimate (FR-20): computed from the draft's model, resolution and count with no request; null (no
+   * text) when the pair is not priced.
+   */
+  protected readonly estimateText = computed(() => {
+    const draft = this.store.draft();
+    return formatEstimate(estimateCost(draft.model, draft.resolution, draft.imageCount), draft.imageCount, this.lang());
+  });
   /** Chips appear only once the session holds a version (FR-31). */
   protected readonly showChips = computed(() => this.store.versions().length > 0);
 
@@ -115,6 +128,10 @@ export class StudioComposerComponent {
 
   protected onProductName(event: Event): void {
     this.store.setDraft({ productName: (event.target as HTMLInputElement).value });
+  }
+
+  protected onImageCount(event: Event): void {
+    this.store.setDraft({ imageCount: normalizeImageCount(Number((event.target as HTMLSelectElement).value)) });
   }
 
   protected onRatio(event: Event): void {
