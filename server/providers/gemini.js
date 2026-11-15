@@ -62,6 +62,18 @@ export class GeminiProvider {
     if (finish === 'SAFETY' || finish === 'PROHIBITED_CONTENT' || finish === 'BLOCKLIST') {
       throw new Error(`[gemini] ${what} blocked by safety filter (${finish}) on ${model}.`);
     }
+    // CONTINUATION means the model stopped part-way and expects a follow-up request to carry on. This
+    // provider makes single, non-streaming calls and never continues, so the text in hand is an
+    // unfinished answer: throw instead of returning it. The wording starts like the MAX_TOKENS message
+    // ("truncated: hit ...") so the Doc repair gate's isUnrepairableGenerationError matches it and stops
+    // at once, and it carries no `status` and none of the strings withRetry treats as transient, so the
+    // guard is not retried. All three entry points (generate, analyzeImage, extractFromPdf) read through here.
+    if (finish === 'CONTINUATION') {
+      throw new Error(
+        `[gemini] ${what} truncated: hit finishReason CONTINUATION on ${model}. ` +
+        `The response is an unfinished answer that this provider does not continue; the partial text is discarded.`
+      );
+    }
 
     // Explicit filter, not the SDK's `.text` convenience getter — mirrors AnthropicProvider's
     // own explicit `.filter(b => b.type === 'text')`. No `thinkingConfig` call in this file sets
