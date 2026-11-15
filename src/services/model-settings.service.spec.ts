@@ -688,3 +688,122 @@ describe('ModelSettingsService US-11.1 provider switches (FR-11, FR-12, AC-7)', 
     expect(s.deepModels().map(m => m.label)).toEqual(['Gemini 4 Carbon', 'Gemini 3.1 Pro', 'Gemini 4 Hydrogen', 'Gemini 3.8 Flash']);
   });
 });
+
+/**
+ * US-11.1 (T7) - FR-13 / AC-4 under the approver's ruling OD-4 reading 2 (docs/workflow/history.jsonl): selecting
+ * gemini-4-carbon or gemini-4-hydrogen in the model dropdown sets that model's defaultLevel (medium / high);
+ * every other model keeps the existing carry-over with a clamp, so Anthropic and Gemini 3.x behaviour is
+ * unchanged. A provider switch (FR-11, FR-12) is a different path and is covered above.
+ *
+ * The carry-over cases pick a starting level that differs from the target model's defaultLevel, so reading 1
+ * ("always reset to defaultLevel") would fail them: they discriminate reading 2 from reading 1.
+ */
+describe('ModelSettingsService US-11.1 dropdown selection and the Gemini 4 default level (FR-13, AC-4, OD-4 reading 2)', () => {
+  beforeEach(() => localStorage.clear());
+
+  /** A service with both slots on Gemini. */
+  function onGemini(): ModelSettingsService {
+    const s = boot();
+    s.setDeepProvider('gemini');
+    s.setFastProvider('gemini');
+    return s;
+  }
+
+  it('selecting Gemini 4 Hydrogen in the Deep slot sets high, whatever level was set before', () => {
+    const s = onGemini();
+    s.setDeepLevel('low');
+    s.setDeepModel('gemini-4-hydrogen');
+    expect(s.deepModel()).toBe('gemini-4-hydrogen');
+    expect(s.deepLevel()).toBe('high');
+  });
+
+  it('selecting Gemini 4 Carbon in the Deep slot sets medium, whatever level was set before', () => {
+    const s = onGemini();
+    s.setDeepModel('gemini-4-hydrogen');
+    expect(s.deepLevel()).toBe('high');
+    s.setDeepModel('gemini-4-carbon');
+    expect(s.deepModel()).toBe('gemini-4-carbon');
+    expect(s.deepLevel()).toBe('medium');
+  });
+
+  it('selecting Gemini 4 Carbon or Hydrogen in the Fast slot sets medium / high, from a Fast level of low', () => {
+    const s = onGemini();
+    expect(s.fastLevel()).not.toBe('medium');
+    s.setFastLevel('low');
+    s.setFastModel('gemini-4-carbon');
+    expect(s.fastModel()).toBe('gemini-4-carbon');
+    expect(s.fastLevel()).toBe('medium');
+
+    s.setFastLevel('low');
+    s.setFastModel('gemini-4-hydrogen');
+    expect(s.fastModel()).toBe('gemini-4-hydrogen');
+    expect(s.fastLevel()).toBe('high');
+  });
+
+  it('the Gemini 4 selection is persisted with its default level', () => {
+    const s = onGemini();
+    s.setDeepLevel('low');
+    s.setDeepModel('gemini-4-hydrogen');
+    expect(JSON.parse(localStorage.getItem(KEY)!).deep).toEqual({ provider: 'gemini', model: 'gemini-4-hydrogen', level: 'high' });
+  });
+
+  it('selecting gemini-3.1-pro-preview or gemini-3.8-flash keeps the carry-over with a clamp, not their default level', () => {
+    const s = onGemini();
+    s.setDeepModel('gemini-4-carbon');
+    expect(s.deepModel(), 'premise: Carbon is selectable').toBe('gemini-4-carbon');
+    s.setDeepLevel('low');
+    s.setDeepModel('gemini-3.1-pro-preview');          // Pro defaults to medium; carry-over keeps low
+    expect(s.deepModel()).toBe('gemini-3.1-pro-preview');
+    expect(s.deepLevel()).toBe('low');
+
+    s.setFastModel('gemini-4-hydrogen');                 // high
+    expect(s.fastModel(), 'premise: Hydrogen is selectable').toBe('gemini-4-hydrogen');
+    s.setFastModel('gemini-3.8-flash');                  // 3.8 Flash defaults to high; carry-over keeps high
+    expect(s.fastModel()).toBe('gemini-3.8-flash');
+    expect(s.fastLevel()).toBe('high');
+    s.setFastLevel('low');
+    s.setFastModel('gemini-3.1-pro-preview');
+    expect(s.fastLevel()).toBe('low');
+    s.setFastModel('gemini-3.8-flash');
+    expect(s.fastLevel()).toBe('low');                   // 3.8 Flash defaults to high, but the level is carried
+  });
+
+  it('selecting an Anthropic model keeps the carry-over with a clamp, exactly as before', () => {
+    const s = boot();                                    // Deep on claude-sonnet-5-5 at high
+    s.setDeepModel('claude-sonnet-5');                   // Sonnet 5 defaults to medium; carry-over keeps high
+    expect(s.deepLevel()).toBe('high');
+    s.setDeepModel('claude-haiku-4-5');                  // only level: disabled
+    expect(s.deepLevel()).toBe('disabled');
+    s.setDeepModel('claude-sonnet-5-5');                 // disabled is not offered: snaps to the nearest, between_tools
+    expect(s.deepLevel()).toBe('between_tools');
+  });
+
+  it('after ANY model selection in either slot the level is a member of the selected model\'s levels', () => {
+    for (const provider of ['anthropic', 'gemini'] as const) {
+      const models = MODEL_CATALOG.find(p => p.id === provider)!.models;
+      for (const target of models) {
+        for (const startLevel of ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh']) {
+          const s = boot();
+          s.setDeepProvider(provider);
+          s.setFastProvider(provider);
+          s.setDeepLevel(startLevel as never);
+          s.setFastLevel(startLevel as never);
+
+          s.setDeepModel(target.id);
+          s.setFastModel(target.id);
+
+          expect(s.deepModel(), `${provider}/${target.id}`).toBe(target.id);
+          expect(target.levels, `deep ${target.id} from ${startLevel}`).toContain(s.deepLevel());
+          expect(target.levels, `fast ${target.id} from ${startLevel}`).toContain(s.fastLevel());
+        }
+      }
+    }
+  });
+
+  it('selecting a Gemini 4 model while the slot is on anthropic is ignored (it is not that provider\'s model)', () => {
+    const s = boot();
+    const before = s.snapshot();
+    s.setDeepModel('gemini-4-hydrogen');
+    expect(s.snapshot()).toEqual(before);
+  });
+});
