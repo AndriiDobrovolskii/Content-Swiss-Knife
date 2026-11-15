@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { MODEL_CATALOG, clampLevel, defaultModel, findModel, findProvider } from './model-catalog';
 import * as catalogModule from './model-catalog';
 import * as serverSupport from '../../server/providers/model-support.js';
@@ -125,10 +125,25 @@ describe('clampLevel', () => {
 
 describe('resolveSlot (server-side request validation)', () => {
   it('accepts a valid slot unchanged', () => {
-    expect(serverSupport.resolveSlot('gemini', { model: 'gemini-3.6-flash', level: 'minimal' }))
-      .toEqual({ model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 65536 });
-    expect(serverSupport.resolveSlot('gemini', { model: 'gemini-3.7-flash', level: 'minimal' }))
-      .toEqual({ model: 'gemini-3.7-flash', level: 'minimal', maxOutputTokens: 65536 });
+    expect(serverSupport.resolveSlot('gemini', { model: 'gemini-3.8-flash', level: 'low' }))
+      .toEqual({ model: 'gemini-3.8-flash', level: 'low', maxOutputTokens: 65536 });
+    expect(serverSupport.resolveSlot('gemini', { model: 'gemini-3.1-pro-preview', level: 'high' }))
+      .toEqual({ model: 'gemini-3.1-pro-preview', level: 'high', maxOutputTokens: 65536 });
+  });
+
+  // US-11.1 (FR-19, T4): the two retired Flash ids used to come back unchanged from this call. They now
+  // come back as gemini-3.8-flash with the level clamped into its levels. (The full FR-19 matrix, the
+  // warning and the edge cases are in test/model-support.remap.spec.ts.)
+  it('US-11.1: remaps a retired Gemini Flash id to gemini-3.8-flash instead of returning it unchanged', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const retired of ['gemini-3.6-flash', 'gemini-3.7-flash']) {
+        expect(serverSupport.resolveSlot('gemini', { model: retired, level: 'minimal' }), retired)
+          .toEqual({ model: 'gemini-3.8-flash', level: 'low', maxOutputTokens: 65536 });
+      }
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   // A client on an older bundle must degrade, not break.

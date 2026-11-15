@@ -18,14 +18,14 @@ const resolve = (body: any, slot: string) => resolveRequest(body, slot, ENV_PROV
 
 const GEMINI_BODY = {
   deep: { provider: 'gemini', model: 'gemini-3.1-pro-preview', level: 'high' },
-  fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
+  fast: { provider: 'gemini', model: 'gemini-3.8-flash', level: 'low' },
 };
 
 /** What a browser on an older bundle still sends: one provider for both slots. */
 const LEGACY_BODY = {
   provider: 'gemini',
   deep: { model: 'gemini-3.1-pro-preview', level: 'high' },
-  fast: { model: 'gemini-3.6-flash', level: 'minimal' },
+  fast: { model: 'gemini-3.8-flash', level: 'low' },
 };
 
 describe('slotFor', () => {
@@ -45,7 +45,7 @@ describe('slot resolution', () => {
 
   it('resolves the fast slot for a plain call', () => {
     expect(resolve(GEMINI_BODY, slotFor('json')).slot)
-      .toEqual({ model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 65536 });
+      .toEqual({ model: 'gemini-3.8-flash', level: 'low', maxOutputTokens: 65536 });
   });
 
   it('returns no slot for a provider with no catalog entry, keeping its own defaults', () => {
@@ -59,7 +59,7 @@ describe('per-slot providers', () => {
   // The whole point: one run, Task A on Claude and the translations on Gemini.
   const MIXED_BODY = {
     deep: { provider: 'anthropic', model: 'claude-sonnet-5', level: 'medium' },
-    fast: { provider: 'gemini', model: 'gemini-3.6-flash', level: 'minimal' },
+    fast: { provider: 'gemini', model: 'gemini-3.8-flash', level: 'low' },
   };
 
   it('serves each slot from the provider that slot names', () => {
@@ -71,7 +71,7 @@ describe('per-slot providers', () => {
     expect(resolve(MIXED_BODY, 'deep').slot)
       .toEqual({ model: 'claude-sonnet-5', level: 'medium', maxOutputTokens: 64000 });
     expect(resolve(MIXED_BODY, 'fast').slot)
-      .toEqual({ model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 65536 });
+      .toEqual({ model: 'gemini-3.8-flash', level: 'low', maxOutputTokens: 65536 });
   });
 
   it('rejects an unknown provider on the slot being resolved', () => {
@@ -82,7 +82,7 @@ describe('per-slot providers', () => {
   it('honours the legacy top-level provider when the slot names none', () => {
     expect(resolve(LEGACY_BODY, 'deep').provider).toBe('gemini');
     expect(resolve(LEGACY_BODY, 'fast').slot)
-      .toEqual({ model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 65536 });
+      .toEqual({ model: 'gemini-3.8-flash', level: 'low', maxOutputTokens: 65536 });
   });
 
   it('lets the slot provider win over the legacy top-level one', () => {
@@ -201,5 +201,67 @@ describe('US-4.1 slot resolution for the new models', () => {
   it('FR-5: resolves a request with no settings to the new Fast and Deep catalog defaults per provider', () => {
     expect(resolve({ provider: 'gemini' }, 'fast').slot!.model).toBe('gemini-3.8-flash');
     expect(resolve({ provider: 'anthropic' }, 'deep').slot!.model).toBe('claude-sonnet-5-5');
+  });
+});
+
+/**
+ * US-11.1 (T4, FR-19 / AC-12) through the route boundary: a browser on an older bundle that still sends
+ * one of the retired Flash ids must reach the SDK as gemini-3.8-flash, in either slot, whichever way the
+ * body names the provider. The retired ids are literals here on purpose - this block exists to recognise
+ * them. (The resolveSlot matrix itself is test/model-support.remap.spec.ts.)
+ */
+describe('US-11.1 a stale client that still sends a retired Gemini Flash id', () => {
+  const RETIRED = ['gemini-3.7-flash', 'gemini-3.6-flash'];
+
+  it('the fast slot resolves to gemini-3.8-flash at low when the client asks for minimal', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const model of RETIRED) {
+        const body = { deep: { provider: 'anthropic', model: 'claude-sonnet-5' }, fast: { provider: 'gemini', model, level: 'minimal' } };
+        expect(resolve(body, 'fast').slot, model).toEqual({ model: 'gemini-3.8-flash', level: 'low', maxOutputTokens: 65536 });
+        expect(resolve(body, 'fast').provider, model).toBe('gemini');
+      }
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('the deep slot resolves to gemini-3.8-flash (not to the first premium model) and keeps a requested medium', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const model of RETIRED) {
+        const body = { deep: { provider: 'gemini', model, level: 'medium' } };
+        expect(resolve(body, 'deep').slot, model).toEqual({ model: 'gemini-3.8-flash', level: 'medium', maxOutputTokens: 65536 });
+      }
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('a legacy body with one top-level provider is remapped the same way in both slots', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const body = {
+        provider: 'gemini',
+        deep: { model: 'gemini-3.7-flash', level: 'high' },
+        fast: { model: 'gemini-3.6-flash', level: 'minimal' },
+      };
+      expect(resolve(body, 'deep').slot).toEqual({ model: 'gemini-3.8-flash', level: 'high', maxOutputTokens: 65536 });
+      expect(resolve(body, 'fast').slot).toEqual({ model: 'gemini-3.8-flash', level: 'low', maxOutputTokens: 65536 });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('a retired id with no level resolves to high (P-9b = A) and logs one warning naming the id', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { slot } = resolve({ fast: { provider: 'gemini', model: 'gemini-3.7-flash' } }, 'fast');
+      expect(slot).toEqual({ model: 'gemini-3.8-flash', level: 'high', maxOutputTokens: 65536 });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0].map(String).join(' ')).toContain('gemini-3.7-flash');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

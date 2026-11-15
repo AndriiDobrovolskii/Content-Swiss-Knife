@@ -82,14 +82,33 @@ export function clampLevel(provider, modelId, level) {
   }, model.levels[0]);
 }
 
+/** Gemini model ids that were retired, mapped to the model that replaces them. A browser on an
+ *  older bundle can still send one of these, so the id is remapped (with a warning) before the
+ *  catalog lookup instead of falling back by tier. A Map, not an object: `slot.model` is client
+ *  input, and a plain object would answer for keys such as 'constructor'. */
+const RETIRED_GEMINI_REMAP = new Map([
+  ['gemini-3.7-flash', 'gemini-3.8-flash'],
+  ['gemini-3.6-flash', 'gemini-3.8-flash'],
+]);
+
 /** Resolve one slot ({ model, level }) from a request body into a validated
  *  { model, level, maxOutputTokens } triple. An unknown or missing model falls back to a
  *  model of `preferTier` rather than erroring — a stale client should degrade, not break.
  *
+ *  A retired Gemini id is remapped to its replacement first (provider `gemini` only, one
+ *  console.warn per call). The requested level is then clamped into the replacement's levels;
+ *  with no requested level the replacement's own default applies.
+ *
  *  The tier matters: without it a request carrying no settings would route the Fast slot to
  *  the catalog's first entry (a premium model), quietly running translations on Sonnet. */
 export function resolveSlot(provider, slot, preferTier = 'premium') {
-  const model = findModel(provider, slot?.model)
+  let requestedId = slot?.model;
+  if (provider === 'gemini' && typeof requestedId === 'string' && RETIRED_GEMINI_REMAP.has(requestedId)) {
+    const replacement = RETIRED_GEMINI_REMAP.get(requestedId);
+    console.warn(`[model-support] Retired model "${requestedId}" requested; remapped to "${replacement}".`);
+    requestedId = replacement;
+  }
+  const model = findModel(provider, requestedId)
     ?? findProvider(provider)?.models.find(m => m.tier === preferTier)
     ?? defaultModel(provider);
   if (!model) throw new Error(`No models registered for provider "${provider}".`);
