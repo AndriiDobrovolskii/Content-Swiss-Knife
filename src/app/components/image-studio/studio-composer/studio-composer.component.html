@@ -1,23 +1,71 @@
 <div class="space-y-3">
 
-  <!-- Presets (FR-28 to FR-30): a pick goes through the store's applyPreset, like a starter card (FR-19) -->
-  <div role="group" [attr.aria-label]="tx('X-13')" class="flex flex-wrap gap-2">
-    @for (preset of presets; track preset.id) {
+  <!-- Presets row (FR-28 to FR-30; FR-15 to FR-17): the registry group, then the user presets, then the last (dashed) Save pill -->
+  <div class="flex flex-wrap items-center gap-2">
+    <div role="group" [attr.aria-label]="tx('X-13')" class="flex flex-wrap gap-2">
+      @for (preset of presets; track preset.id) {
+        <button
+          type="button"
+          (click)="store.applyPreset(preset)"
+          [attr.aria-pressed]="store.draft().checkedPresetId === preset.id"
+          [disabled]="!store.inputEnabled()"
+          [class.border-shell-accent]="store.draft().checkedPresetId === preset.id"
+          [class.border-shell-line]="store.draft().checkedPresetId !== preset.id"
+          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border bg-shell-bg text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+          @if (store.draft().checkedPresetId === preset.id) {
+            <!-- The check mark (FR-14 i): the pressed state is the accessible signal, the glyph is decorative -->
+            <svg aria-hidden="true" viewBox="0 0 16 16" class="w-3 h-3 text-shell-accent" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 8.5l3.5 3.5L13 4.5" />
+            </svg>
+          }
+          {{ presetLabel(preset) }}
+        </button>
+      }
+    </div>
+
+    <!-- User presets: siblings of the registry group; the delete control shows on hover and on focus (AC-10a) -->
+    @for (preset of userPresetList(); track preset.id) {
+      <span class="group inline-flex items-center gap-1">
+        <button
+          type="button"
+          (click)="applyUserPreset(preset)"
+          [attr.aria-pressed]="store.draft().checkedPresetId === preset.id"
+          [disabled]="!store.inputEnabled()"
+          [class.border-shell-accent]="store.draft().checkedPresetId === preset.id"
+          [class.border-shell-line]="store.draft().checkedPresetId !== preset.id"
+          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border bg-shell-bg text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+          @if (store.draft().checkedPresetId === preset.id) {
+            <svg aria-hidden="true" viewBox="0 0 16 16" class="w-3 h-3 text-shell-accent" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 8.5l3.5 3.5L13 4.5" />
+            </svg>
+          }
+          {{ preset.name }}
+        </button>
+        <button
+          type="button"
+          (click)="deleteUserPreset(preset)"
+          [attr.aria-label]="tx('X-52', { name: preset.name })"
+          class="w-5 h-5 rounded-full text-xs leading-none text-shell-muted hover:bg-shell-hover hover:text-shell-text opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent transition-opacity">&times;</button>
+      </span>
+    }
+
+    <!-- The last pill: "+ Save current as preset"; it opens the name field, Enter saves, Escape cancels -->
+    @if (naming()) {
+      <input
+        #presetNameField
+        type="text"
+        [attr.aria-label]="tx('X-51')"
+        (keydown.enter)="submitPresetName($event)"
+        (keydown.escape)="cancelPresetName()"
+        class="px-3 py-1.5 rounded-full text-xs border border-dashed border-shell-line bg-shell-bg text-shell-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent" />
+    } @else {
       <button
+        #savePill
         type="button"
-        (click)="store.applyPreset(preset)"
-        [attr.aria-pressed]="store.draft().checkedPresetId === preset.id"
+        (click)="openPresetName()"
         [disabled]="!store.inputEnabled()"
-        [class.border-shell-accent]="store.draft().checkedPresetId === preset.id"
-        [class.border-shell-line]="store.draft().checkedPresetId !== preset.id"
-        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border bg-shell-bg text-shell-text hover:bg-shell-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
-        @if (store.draft().checkedPresetId === preset.id) {
-          <!-- The check mark (FR-14 i): the pressed state is the accessible signal, the glyph is decorative -->
-          <svg aria-hidden="true" viewBox="0 0 16 16" class="w-3 h-3 text-shell-accent" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 8.5l3.5 3.5L13 4.5" />
-          </svg>
-        }
-        {{ presetLabel(preset) }}
+        class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-shell-line bg-shell-bg text-shell-muted hover:bg-shell-hover hover:text-shell-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shell-accent disabled:opacity-50 transition-colors">
+        {{ tx('X-50') }}
       </button>
     }
   </div>
