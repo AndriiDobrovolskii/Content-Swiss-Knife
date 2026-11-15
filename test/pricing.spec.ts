@@ -1,41 +1,17 @@
 /**
  * pricing.spec.ts
  *
- * Pins the one entry in server/usage/pricing.js that isn't a static lookup: Gemini 3.7 Flash's
- * introductory rate expires 2027-01-01, so getPrices() branches on the current date instead of
- * returning a fixed row. Everything else in the file is a plain object lookup and doesn't need
- * a test to prove it returns what it's told to return.
+ * Pins the entries in server/usage/pricing.js that are not static lookups: Gemini 3.8 Flash's
+ * introductory rate expires 2027-01-01 and Gemini 4 Carbon's expires 2026-12-01 (US-11.1), so
+ * getPrices() branches on the instant of the lookup instead of returning a fixed row. Everything
+ * else in the file is a plain object lookup; the cases below pin the ones a typo or a substring
+ * match could silently misprice.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { DEFAULT_PRICES, computeCost, getPrices } from '../server/usage/pricing.js';
-
-describe('getPrices — gemini-3.7-flash promo window', () => {
-  afterEach(() => vi.useRealTimers());
-
-  it('charges the introductory rate before the promo ends', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-12-31T23:59:59Z'));
-
-    expect(getPrices('gemini-3.7-flash')).toEqual({ in: 0.75, out: 3.75, cw: 0, cr: 0.075 });
-  });
-
-  it('charges the standard rate once the promo ends', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2027-01-01T00:00:00Z'));
-
-    expect(getPrices('gemini-3.7-flash')).toEqual({ in: 1.50, out: 7.50, cw: 0, cr: 0.15 });
-  });
-
-  // Regression guard: without an explicit entry, the substring-fallback in getPrices() cannot
-  // match 'gemini-3.7-flash' against 'gemini-3.6-flash' (neither contains the other), so a
-  // missing case here would silently bill every 3.7 call at FALLBACK_PRICE — 4x too high.
-  it('never falls through to FALLBACK_PRICE', () => {
-    const price = getPrices('gemini-3.7-flash');
-    expect(price.in).toBeLessThan(3.00);
-    expect(price.out).toBeLessThan(15.00);
-  });
-});
 
 /**
  * US-4.1 — FR-13..FR-15. Written from the Specification's rates, not from the implementation.
@@ -128,5 +104,161 @@ describe('getPrices — retired claude-sonnet-4-6 keeps its entry (FR-15)', () =
   it('returns its own entry, not the claude-sonnet-4 cache-write rate', () => {
     expect(getPrices('claude-sonnet-4-6')).toEqual({ in: 3.00, out: 15.00, cw: 6.00, cr: 0.30 });
     expect(Object.prototype.hasOwnProperty.call(DEFAULT_PRICES, 'claude-sonnet-4-6')).toBe(true);
+  });
+});
+
+/**
+ * US-11.1 (T3) - FR-26..FR-29, NFR-7. Written from the Specification's prices (owner-confirmed and recorded in
+ * docs/evidence/US-11.1-vendor-and-sdk-evidence.md, V2), not from the implementation.
+ *
+ * The clock is always injected (`getPrices(model, now)`) or driven with fake timers: no case reads the wall
+ * clock, so the Carbon price on either side of 2026-12-01T00:00:00Z is observed deterministically (NFR-7).
+ * Carbon's cutover is a UTC instant; the boundary instant itself returns the LATER price (FR-27).
+ */
+const FALLBACK = { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 }; // pricing.js FALLBACK_PRICE, the "unpriced model" answer
+const HYDROGEN = { in: 1.50, out: 7.50, cw: 0, cr: 0.075 };
+const CARBON_INTRO = { in: 2.00, out: 10.00, cw: 0, cr: 0.10 };
+const CARBON_STANDARD = { in: 4.00, out: 20.00, cw: 0, cr: 0.20 };
+const PRO_31 = { in: 2.00, out: 12.00, cw: 0, cr: 0.20 };
+
+describe('getPrices - gemini-4-hydrogen is flat (FR-26)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('prices Hydrogen at 1.50 / 7.50 / 0 / 0.075 at every instant, with no promo window', () => {
+    for (const instant of [
+      '2020-01-01T00:00:00.000Z', '2026-11-15T12:00:00.000Z', '2026-11-30T23:59:59.999Z',
+      '2026-12-01T00:00:00.000Z', '2027-01-01T00:00:00.000Z', '2035-06-01T00:00:00.000Z',
+    ]) {
+      expect(priceAt('gemini-4-hydrogen', new Date(instant)), instant).toEqual(HYDROGEN);
+    }
+  });
+
+  it('prices Hydrogen the same way when the lookup reads the system clock', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-15T12:00:00Z'));
+    expect(getPrices('gemini-4-hydrogen')).toEqual(HYDROGEN);
+    vi.setSystemTime(new Date('2028-03-01T00:00:00Z'));
+    expect(getPrices('gemini-4-hydrogen')).toEqual(HYDROGEN);
+  });
+
+  it('never returns FALLBACK_PRICE and never resolves to another Gemini model\'s entry', () => {
+    const price = priceAt('gemini-4-hydrogen', new Date('2026-11-15T12:00:00Z'));
+    expect(price).not.toEqual(FALLBACK);
+    expect(price).not.toEqual(PRO_31);
+    expect(price).not.toEqual(priceAt('gemini-4-carbon', new Date('2026-11-15T12:00:00Z')));
+    expect(price).not.toEqual(priceAt('gemini-3.8-flash', new Date('2026-11-15T12:00:00Z')));
+    expect(price).not.toEqual(priceAt('gemini-3.8-flash', new Date('2027-06-01T00:00:00Z')));
+  });
+
+  it('prices 1M tokens of each kind from the Hydrogen entry', () => {
+    const cost = computeCost('gemini-4-hydrogen', {
+      inputTokens: 1_000_000, outputTokens: 1_000_000, cacheWriteTokens: 0, cacheReadTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(1.50 + 7.50 + 0.075, 10);
+  });
+});
+
+describe('getPrices - gemini-4-carbon introductory window ends 2026-12-01T00:00:00Z (FR-27, NFR-7)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('charges the introductory rate one millisecond before the cutover (injected instant)', () => {
+    expect(priceAt('gemini-4-carbon', new Date('2026-11-30T23:59:59.999Z'))).toEqual(CARBON_INTRO);
+  });
+
+  it('charges the standard rate exactly at the cutover (injected instant)', () => {
+    expect(priceAt('gemini-4-carbon', new Date('2026-12-01T00:00:00.000Z'))).toEqual(CARBON_STANDARD);
+  });
+
+  it('charges the standard rate after the cutover and the introductory rate long before it', () => {
+    expect(priceAt('gemini-4-carbon', new Date('2027-03-01T00:00:00.000Z'))).toEqual(CARBON_STANDARD);
+    expect(priceAt('gemini-4-carbon', new Date('2026-11-15T12:00:00.000Z'))).toEqual(CARBON_INTRO);
+    expect(priceAt('gemini-4-carbon', new Date('2026-01-01T00:00:00.000Z'))).toEqual(CARBON_INTRO);
+  });
+
+  it('charges the introductory rate before the cutover (system clock)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-30T23:59:59.999Z'));
+    expect(getPrices('gemini-4-carbon')).toEqual(CARBON_INTRO);
+  });
+
+  it('charges the standard rate at the cutover (system clock)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-12-01T00:00:00Z'));
+    expect(getPrices('gemini-4-carbon')).toEqual(CARBON_STANDARD);
+  });
+
+  // The price must be chosen on every lookup. A price captured when the module loaded would answer the
+  // same on both sides of the boundary, and a long-running server would never switch.
+  it('reads the clock at each lookup, not at module load: one module instance shows both prices', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-15T00:00:00Z'));
+    expect(getPrices('gemini-4-carbon')).toEqual(CARBON_INTRO);
+    vi.setSystemTime(new Date('2026-12-01T00:00:00Z'));
+    expect(getPrices('gemini-4-carbon')).toEqual(CARBON_STANDARD);
+    vi.setSystemTime(new Date('2026-11-20T00:00:00Z'));
+    expect(getPrices('gemini-4-carbon')).toEqual(CARBON_INTRO);
+  });
+
+  it('never returns FALLBACK_PRICE and never resolves to another Gemini model\'s entry, on either side of the cutover', () => {
+    for (const instant of ['2026-11-15T12:00:00.000Z', '2026-12-01T00:00:00.000Z']) {
+      const price = priceAt('gemini-4-carbon', new Date(instant));
+      expect(price, instant).not.toEqual(FALLBACK);
+      expect(price, instant).not.toEqual(PRO_31);
+      expect(price, instant).not.toEqual(HYDROGEN);
+      expect(price, instant).not.toEqual(priceAt('gemini-3.8-flash', new Date(instant)));
+    }
+  });
+
+  it('prices 1M tokens of each kind from the introductory entry before the cutover', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-15T00:00:00Z'));
+    const cost = computeCost('gemini-4-carbon', {
+      inputTokens: 1_000_000, outputTokens: 1_000_000, cacheWriteTokens: 0, cacheReadTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(2.00 + 10.00 + 0.10, 10);
+  });
+
+  it('prices 1M tokens of each kind from the standard entry at and after the cutover', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-12-01T00:00:00Z'));
+    const cost = computeCost('gemini-4-carbon', {
+      inputTokens: 1_000_000, outputTokens: 1_000_000, cacheWriteTokens: 0, cacheReadTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(4.00 + 20.00 + 0.20, 10);
+  });
+});
+
+describe('getPrices - the existing Gemini prices are unchanged (FR-28)', () => {
+  // Characterization: green before this Story and it must stay green.
+  it('gemini-3.1-pro-preview is 2.00 / 12.00 / 0 / 0.20 at every instant', () => {
+    for (const instant of ['2026-01-01T00:00:00.000Z', '2026-12-01T00:00:00.000Z', '2027-01-01T00:00:00.000Z']) {
+      expect(priceAt('gemini-3.1-pro-preview', new Date(instant)), instant).toEqual(PRO_31);
+    }
+  });
+
+  it('gemini-3.8-flash keeps its 2027-01-01 cutover, not Carbon\'s', () => {
+    expect(priceAt('gemini-3.8-flash', new Date('2026-12-01T00:00:00.000Z'))).toEqual({ in: 0.75, out: 3.75, cw: 0, cr: 0.075 });
+    expect(priceAt('gemini-3.8-flash', new Date('2027-01-01T00:00:00.000Z'))).toEqual({ in: 1.50, out: 7.50, cw: 0, cr: 0.15 });
+  });
+});
+
+describe('pricing.js carries no price entry and no helper for the retired Gemini Flash models (FR-29)', () => {
+  const source = () => readFileSync(resolve(process.cwd(), 'server/usage/pricing.js'), 'utf8');
+
+  it('DEFAULT_PRICES has no key for gemini-3.6-flash or gemini-3.7-flash', () => {
+    expect(Object.keys(DEFAULT_PRICES)).not.toContain('gemini-3.6-flash');
+    expect(Object.keys(DEFAULT_PRICES)).not.toContain('gemini-3.7-flash');
+  });
+
+  // The pattern avoids the 3.75 price literal: it needs a model name around the digits.
+  it('the file names neither retired model, in an id, a helper name or a comment', () => {
+    expect(source()).not.toMatch(/gemini-3\.[67]|gemini3[67]|3\.[67] Flash|Flash 3\.[67]/i);
+  });
+
+  it('the Gemini 4 entries exist as exact entries or helpers of their own', () => {
+    const text = source();
+    expect(text).toContain('gemini-4-hydrogen');
+    expect(text).toContain('gemini-4-carbon');
+    expect(text).toContain('2026-12-01T00:00:00Z');
   });
 });
