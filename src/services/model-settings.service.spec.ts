@@ -55,7 +55,8 @@ describe('ModelSettingsService mixed providers', () => {
     s.setFastProvider('anthropic');
 
     expect(s.snapshot()).toEqual({
-      deep: { provider: 'gemini', model: 'gemini-3.1-pro-preview', level: 'medium' },
+      // US-11.1 (FR-11): a Deep provider switch to gemini lands on Gemini 4 Carbon at its default level.
+      deep: { provider: 'gemini', model: 'gemini-4-carbon', level: 'medium' },
       fast: { provider: 'anthropic', model: 'claude-haiku-4-5', level: 'disabled' },
     });
   });
@@ -74,7 +75,7 @@ describe('ModelSettingsService mixed providers', () => {
     s.setDeepProvider('gemini');
     s.setFastProvider('gemini');
 
-    expect(s.deepModel()).toBe('gemini-3.1-pro-preview');
+    expect(s.deepModel()).toBe('gemini-4-carbon');
     expect(s.fastModel()).toBe('gemini-3.8-flash');
   });
 
@@ -83,7 +84,7 @@ describe('ModelSettingsService mixed providers', () => {
     s.setFastProvider('gemini');
 
     expect(s.deepModels().map(m => m.id)).toEqual(['claude-sonnet-5-5', 'claude-sonnet-5', 'claude-haiku-4-5']);
-    expect(s.fastModels().map(m => m.id)).toEqual(['gemini-3.1-pro-preview', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash']);
+    expect(s.fastModels().map(m => m.id)).toEqual(['gemini-4-carbon', 'gemini-3.1-pro-preview', 'gemini-4-hydrogen', 'gemini-3.8-flash']);
   });
 
   it('ignores a model that does not belong to that slot provider', () => {
@@ -244,7 +245,7 @@ describe('ModelSettingsService storage failures', () => {
 
     expect(() => s.setDeepProvider('gemini')).not.toThrow();
     expect(s.deepProvider()).toBe('gemini');
-    expect(s.snapshot().deep.model).toBe('gemini-3.1-pro-preview');
+    expect(s.snapshot().deep.model).toBe('gemini-4-carbon'); // US-11.1: the first premium Gemini model
   });
 
   it('falls back to defaults when getItem throws', () => {
@@ -649,5 +650,41 @@ describe('ModelSettingsService US-11.1 defaults and reset (FR-18, AC-6)', () => 
     expect(s.fastSpec(), 'default Fast model missing from the catalog').toBeDefined();
     expect(s.deepSpec()!.levels).toContain(s.deepLevel());
     expect(s.fastSpec()!.levels).toContain(s.fastLevel());
+  });
+});
+
+/**
+ * US-11.1 (T6) - provider switches (FR-11, FR-12, AC-7). A Deep switch to gemini lands on the first premium
+ * Gemini model, which is now Gemini 4 Carbon; the new `balanced` tier must not move the Fast pick.
+ */
+describe('ModelSettingsService US-11.1 provider switches (FR-11, FR-12, AC-7)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('FR-11: switching the Deep slot to gemini selects gemini-4-carbon at medium and persists the choice', () => {
+    const s = boot();
+    s.setDeepProvider('gemini');
+    expect(s.deepModel()).toBe('gemini-4-carbon');
+    expect(s.deepLevel()).toBe('medium');
+    expect(JSON.parse(localStorage.getItem(KEY)!).deep).toEqual({ provider: 'gemini', model: 'gemini-4-carbon', level: 'medium' });
+  });
+
+  it('FR-12: switching the Fast slot to gemini selects gemini-3.8-flash, never Carbon or Hydrogen', () => {
+    const s = boot();
+    s.setFastProvider('anthropic');
+    s.setFastProvider('gemini');
+    expect(s.fastModel()).toBe('gemini-3.8-flash');
+    expect(s.fastModel()).not.toBe('gemini-4-carbon');
+    expect(s.fastModel()).not.toBe('gemini-4-hydrogen');
+    expect(s.fastSpec()!.tier).toBe('fast');
+  });
+
+  it('FR-6: with gemini selected, each slot lists Carbon, 3.1 Pro, Hydrogen, 3.8 Flash in that order and no retired model', () => {
+    const s = boot();
+    s.setDeepProvider('gemini');
+    s.setFastProvider('gemini');
+    const expected = ['gemini-4-carbon', 'gemini-3.1-pro-preview', 'gemini-4-hydrogen', 'gemini-3.8-flash'];
+    expect(s.deepModels().map(m => m.id)).toEqual(expected);
+    expect(s.fastModels().map(m => m.id)).toEqual(expected);
+    expect(s.deepModels().map(m => m.label)).toEqual(['Gemini 4 Carbon', 'Gemini 3.1 Pro', 'Gemini 4 Hydrogen', 'Gemini 3.8 Flash']);
   });
 });

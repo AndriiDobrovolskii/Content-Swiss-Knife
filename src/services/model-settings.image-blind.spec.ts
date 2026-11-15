@@ -47,7 +47,7 @@ describe('ModelSettingsService is blind to image models (FR-3, FR-4, NFR-6)', ()
     s.setDeepModel(PRO);
 
     expect(s.snapshot()).toEqual(before);
-    expect(s.deepModel()).toBe('gemini-3.1-pro-preview');
+    expect(s.deepModel()).toBe('gemini-4-carbon'); // US-11.1: the first premium Gemini model
     expect(localStorage.getItem(KEY)).toBe(stored);
   });
 

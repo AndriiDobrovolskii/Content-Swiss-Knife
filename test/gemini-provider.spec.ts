@@ -424,3 +424,177 @@ describe('GeminiProvider snaps minimal to low on gemini-3.8-flash (FR-8)', () =>
   });
 });
 
+/**
+ * US-11.1 (T6) - the request the Gemini provider builds for gemini-4-carbon and gemini-4-hydrogen
+ * (FR-20, FR-21, FR-22, NFR-3). Written from the Specification, not from the provider's source. No production
+ * code changes for these (the provider is verify-only); they go green because the two models exist.
+ *
+ * ANCHORING (task breakdown T6, plan D9 item 6, impact R-14): under the unknown-id fallback every in-range
+ * level yields the same thinkingLevel and the same 65536 cap, so the request assertions alone are green before
+ * the catalog swap for the wrong reason. Each slot is therefore taken from `resolveSlot('gemini', { model,
+ * level }, tier)` and the resolved id and catalog cap are asserted FIRST; that assertion is the red one.
+ *
+ * FR-22 per path: the 65536 clause belongs to the generate() text path ONLY. analyzeImage keeps min(8000, slot
+ * cap) = 8000 and extractFromPdf keeps 8192 (Specification v2 FR-22 / N-3); none of the three streams.
+ */
+const GEMINI_4 = ['gemini-4-carbon', 'gemini-4-hydrogen'] as const;
+const TIERS = [['premium', 'creative'], ['fast', 'text']] as const;
+
+function resolvedSlot(model: string, level: string, tier: 'premium' | 'fast') {
+  const slot = serverSupport.resolveSlot('gemini', { model, level }, tier);
+  expect(slot.model, `${model} must resolve through the catalog (an unknown id falls back to another model)`).toBe(model);
+  expect(slot.maxOutputTokens, `${model} catalog ceiling`).toBe(65536);
+  return slot;
+}
+
+/** Every property name that appears anywhere inside a request, however deep. */
+function keysOf(value: unknown, out = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) for (const item of value) keysOf(item, out);
+  else if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) { out.add(key); keysOf(child, out); }
+  }
+  return out;
+}
+
+const FORBIDDEN_KEYS = ['cachedContent', 'cachedContents', 'cached_content', 'temperature', 'topP', 'topK', 'top_p', 'top_k'];
+
+describe('GeminiProvider request for Gemini 4: thinkingLevel (FR-20, FR-10 at the provider)', () => {
+  beforeEach(() => {
+    calls.length = 0; streamCalls.length = 0; nextResponse = reply('<p>ok</p>');
+    withRetryMock.mockReset();
+    withRetryMock.mockImplementation((fn: any) => fn());
+  });
+
+  for (const model of GEMINI_4) {
+    for (const [tier, mode] of TIERS) {
+      it(`${model} on the ${tier} slot: thinkingLevel equals each level in the model's levels`, async () => {
+        const levels = serverSupport.findModel('gemini', model)?.levels;
+        expect(levels, `${model} missing from the catalog`).toEqual(['low', 'medium', 'high']);
+
+        for (const level of levels!) {
+          calls.length = 0;
+          await new GeminiProvider('k').generate(PAYLOAD, mode, resolvedSlot(model, level, tier));
+          expect(calls[0].model, `${model} ${level}`).toBe(model);
+          expect(calls[0].config.thinkingConfig, `${model} ${level}`).toEqual({ thinkingLevel: level });
+        }
+      });
+
+      it(`${model} on the ${tier} slot: a slot that carries minimal is sent as low, never minimal`, async () => {
+        const slot = { ...resolvedSlot(model, 'medium', tier), level: 'minimal' };
+        await new GeminiProvider('k').generate(PAYLOAD, mode, slot);
+        expect(calls[0].model).toBe(model);
+        expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+      });
+    }
+
+    it(`${model}: vision and pdf requests never carry minimal either`, async () => {
+      const slot = { ...resolvedSlot(model, 'medium', 'fast'), level: 'minimal' };
+      await new GeminiProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', false, slot);
+      await new GeminiProvider('k').extractFromPdf('PDF64', slot);
+      expect(calls[0].model).toBe(model);
+      expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+      expect(calls[1].model).toBe(model);
+      expect(calls[1].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+    });
+  }
+});
+
+describe('GeminiProvider request for Gemini 4: no cache reference, no sampling parameters (FR-21, NFR-3)', () => {
+  beforeEach(() => {
+    calls.length = 0; streamCalls.length = 0; nextResponse = reply('<p>ok</p>');
+    withRetryMock.mockReset();
+    withRetryMock.mockImplementation((fn: any) => fn());
+  });
+
+  for (const model of GEMINI_4) {
+    it(`${model}: generate, vision and pdf requests contain no cachedContent / cached_content and no temperature, topP or topK`, async () => {
+      const deep = resolvedSlot(model, 'high', 'premium');
+      const fast = resolvedSlot(model, 'low', 'fast');
+      await new GeminiProvider('k').generate(PAYLOAD, 'creative', deep);
+      nextResponse = reply('{"a":1}');                 // the json mode parses its reply
+      await new GeminiProvider('k').generate(PAYLOAD, 'json', fast);
+      nextResponse = reply('<p>ok</p>');
+      await new GeminiProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', true, deep);
+      await new GeminiProvider('k').extractFromPdf('PDF64', fast);
+
+      expect(calls).toHaveLength(4);
+      for (const [i, request] of calls.entries()) {
+        expect(request.model, `request ${i}`).toBe(model);
+        const keys = keysOf(request);
+        for (const forbidden of FORBIDDEN_KEYS) expect(keys.has(forbidden), `request ${i} carries ${forbidden}`).toBe(false);
+      }
+    });
+
+    it(`${model}: the system blocks stay in systemInstruction and are not collapsed into contents (implicit caching only)`, async () => {
+      await new GeminiProvider('k').generate(PAYLOAD, 'creative', resolvedSlot(model, 'medium', 'premium'));
+      expect(calls[0].model).toBe(model);
+      expect(calls[0].config.systemInstruction).toBe('MASTER\n\nTASK A');
+      expect(calls[0].contents).toBe('Product: Bambu X1C');
+      expect(calls[0].contents).not.toContain('MASTER');
+    });
+  }
+});
+
+describe('GeminiProvider calls for Gemini 4 are non-streaming and keep their per-path caps (FR-22, AC-13)', () => {
+  beforeEach(() => {
+    calls.length = 0; streamCalls.length = 0; nextResponse = reply('<p>ok</p>');
+    withRetryMock.mockReset();
+    withRetryMock.mockImplementation((fn: any) => fn());
+  });
+
+  for (const model of GEMINI_4) {
+    it(`${model}: generate() makes one non-streaming generateContent call carrying maxOutputTokens 65536`, async () => {
+      await new GeminiProvider('k').generate(PAYLOAD, 'creative', resolvedSlot(model, 'high', 'premium'));
+      expect(calls).toHaveLength(1);
+      expect(calls[0].model).toBe(model);
+      expect(calls[0].config.maxOutputTokens).toBe(65536);
+      expect(streamCalls).toHaveLength(0);
+    });
+
+    it(`${model}: analyzeImage() keeps its 8000 caption cap (not 65536) and does not stream`, async () => {
+      await new GeminiProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', false, resolvedSlot(model, 'low', 'fast'));
+      await new GeminiProvider('k').analyzeImage('B64', 'image/jpeg', 'Describe', true, resolvedSlot(model, 'high', 'premium'));
+      expect(calls).toHaveLength(2);
+      for (const request of calls) {
+        expect(request.model).toBe(model);
+        expect(request.config.maxOutputTokens).toBe(8000);
+      }
+      expect(streamCalls).toHaveLength(0);
+    });
+
+    it(`${model}: extractFromPdf() keeps its 8192 transcription cap (not 65536) and does not stream`, async () => {
+      await new GeminiProvider('k').extractFromPdf('PDF64', resolvedSlot(model, 'low', 'fast'));
+      expect(calls).toHaveLength(1);
+      expect(calls[0].model).toBe(model);
+      expect(calls[0].config.maxOutputTokens).toBe(8192);
+      expect(streamCalls).toHaveLength(0);
+    });
+  }
+});
+
+describe('GeminiProvider same-provider fallbacks stay as they are with a Gemini 4 primary (Out of scope)', () => {
+  beforeEach(() => {
+    calls.length = 0; streamCalls.length = 0; nextResponse = reply('<p>ok</p>');
+    withRetryMock.mockReset();
+    withRetryMock.mockImplementation((fn: any) => fn());
+  });
+
+  it('a Carbon Deep call builds a fallback that runs gemini-3.1-pro-preview', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    withRetryMock.mockImplementationOnce((fn: any, _m: any, _b: any, fallback: any) => (fallback ? fallback() : fn()));
+
+    await new GeminiProvider('k').generate(PAYLOAD, 'creative', resolvedSlot('gemini-4-carbon', 'high', 'premium'));
+
+    expect(calls[0].model).toBe('gemini-3.1-pro-preview');
+  });
+
+  it('a Hydrogen Fast call builds a fallback that runs gemini-3.8-flash at low', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    withRetryMock.mockImplementationOnce((fn: any, _m: any, _b: any, fallback: any) => (fallback ? fallback() : fn()));
+
+    await new GeminiProvider('k').generate(PAYLOAD, 'text', resolvedSlot('gemini-4-hydrogen', 'high', 'fast'));
+
+    expect(calls[0].model).toBe('gemini-3.8-flash');
+    expect(calls[0].config.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+  });
+});

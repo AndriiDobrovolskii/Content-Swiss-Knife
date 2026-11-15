@@ -22,8 +22,9 @@ export interface ModelSpec {
   /** Wire id sent to the SDK. */
   id: string;
   label: string;
-  /** Advisory cost/speed hint for the settings UI. Does not restrict which slot the model goes in. */
-  tier: 'premium' | 'fast';
+  /** Advisory cost/speed hint for the settings UI. Does not restrict which slot the model goes in.
+   *  'balanced' sits between 'premium' and 'fast' (Gemini 4 Hydrogen, US-11.1). */
+  tier: 'premium' | 'balanced' | 'fast';
   /** Exactly what this model's API accepts — the settings UI renders nothing else. */
   levels: ThinkingLevel[];
   defaultLevel: ThinkingLevel;
@@ -52,7 +53,7 @@ export interface ImageModelSpec {
   id: string;
   label: string;
   /** Advisory cost/speed hint, as for ModelSpec. */
-  tier: 'premium' | 'fast';
+  tier: 'premium' | 'balanced' | 'fast';
   modalities: ['image'];
   /** Input-token ceiling the BFF trim budgets against. */
   inputTokenLimit: number;
@@ -104,7 +105,9 @@ export function findModel(provider: string, modelId: string): ModelSpec | undefi
   return findProvider(provider)?.models.find(m => m.id === modelId);
 }
 
-/** The model a slot falls back to when the requested one isn't in the catalog. */
+/** The model a slot falls back to when the requested one isn't in the catalog: the first text model of the
+ *  provider. For Gemini that is Gemini 4 Carbon (also the first premium model, so an unknown Deep model and an
+ *  unknown model id in clampLevel both land on it), which moved here from Gemini 3.1 Pro in US-11.1. */
 export function defaultModel(provider: string): ModelSpec | undefined {
   return findProvider(provider)?.models[0];
 }
@@ -112,8 +115,9 @@ export function defaultModel(provider: string): ModelSpec | undefined {
 /** Snap `level` onto the nearest level the model actually accepts.
  *
  *  Nearest-neighbour on LEVEL_ORDER rather than "fall back to defaultLevel", because it
- *  preserves the user's intent across a model switch: Flash 3.6 @ minimal → Gemini 3.1 Pro
- *  becomes 'low' (still the cheapest Pro offers), not 'medium' (a silent cost increase).
+ *  preserves the user's intent across a model switch: a stored 'minimal' on a model that
+ *  once offered it → Gemini 3.1 Pro becomes 'low' (still the cheapest Pro offers), not 'medium' (a silent
+ *  cost increase).
  *  Ties resolve upward — never silently drop a user to no-thinking at all. */
 export function clampLevel(provider: string, modelId: string, level: unknown): ThinkingLevel {
   const model = findModel(provider, modelId) ?? defaultModel(provider);

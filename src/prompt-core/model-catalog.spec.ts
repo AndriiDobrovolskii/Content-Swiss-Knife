@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MODEL_CATALOG, clampLevel, defaultModel, findModel, findProvider } from './model-catalog';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import * as catalogModule from './model-catalog';
 import * as serverSupport from '../../server/providers/model-support.js';
 import rawCatalog from './model-catalog.json';
@@ -42,11 +44,16 @@ describe('model catalog integrity', () => {
 
   // The whole point of the catalog: Gemini 3.1 Pro's API rejects 'minimal', so the settings
   // menu must never render it. Regression guard against someone "unifying" the level lists.
-  it('excludes minimal from Gemini 3.1 Pro and 3.8 Flash but keeps it on 3.6 and 3.7 Flash', () => {
-    expect(findModel('gemini', 'gemini-3.8-flash')!.levels).not.toContain('minimal');
-    expect(findModel('gemini', 'gemini-3.1-pro-preview')!.levels).not.toContain('minimal');
-    expect(findModel('gemini', 'gemini-3.6-flash')!.levels).toContain('minimal');
-    expect(findModel('gemini', 'gemini-3.7-flash')!.levels).toContain('minimal');
+  // US-11.1 (FR-9): with Gemini 3.7 / 3.6 Flash retired, no Gemini text model offers 'minimal'.
+  // Each id is asserted present first, so a model that is missing from the catalog fails here
+  // instead of being skipped.
+  it('excludes minimal from every Gemini text model: 4 Carbon, 3.1 Pro, 4 Hydrogen and 3.8 Flash', () => {
+    for (const id of ['gemini-4-carbon', 'gemini-3.1-pro-preview', 'gemini-4-hydrogen', 'gemini-3.8-flash']) {
+      const model = findModel('gemini', id);
+      expect(model, `${id} missing from the catalog`).toBeDefined();
+      expect(model!.levels, id).not.toContain('minimal');
+    }
+    for (const m of findProvider('gemini')!.models) expect(m.levels, m.id).not.toContain('minimal');
   });
 
   // Gemini 3.1 Pro cannot turn thinking off at all.
@@ -82,8 +89,10 @@ describe('catalog is one file, not two copies', () => {
 
 describe('clampLevel', () => {
   it('passes through a level the model accepts', () => {
-    expect(clampLevel('gemini', 'gemini-3.6-flash', 'minimal')).toBe('minimal');
-    expect(clampLevel('gemini', 'gemini-3.7-flash', 'minimal')).toBe('minimal');
+    // Existence first: an unknown id falls back to the first Gemini model, which also accepts these levels.
+    expect(findModel('gemini', 'gemini-4-hydrogen'), 'gemini-4-hydrogen missing').toBeDefined();
+    expect(clampLevel('gemini', 'gemini-4-hydrogen', 'low')).toBe('low');
+    expect(clampLevel('gemini', 'gemini-3.8-flash', 'medium')).toBe('medium');
     expect(clampLevel('anthropic', 'claude-sonnet-5', 'high')).toBe('high');
   });
 
@@ -95,7 +104,11 @@ describe('clampLevel', () => {
 
   it('snaps disabled to low on Gemini, which cannot turn thinking off', () => {
     expect(clampLevel('gemini', 'gemini-3.1-pro-preview', 'disabled')).toBe('low');
-    expect(clampLevel('gemini', 'gemini-3.6-flash', 'disabled')).toBe('minimal');
+    // No Gemini model lists 'minimal' any more, so the floor of every one of them is 'low'.
+    for (const id of ['gemini-4-carbon', 'gemini-4-hydrogen', 'gemini-3.8-flash']) {
+      expect(findModel('gemini', id), `${id} missing`).toBeDefined();
+      expect(clampLevel('gemini', id, 'disabled'), id).toBe('low');
+    }
   });
 
   // Tie between 'disabled' and 'low' resolves upward — never silently drop a user to no thinking.
@@ -107,9 +120,15 @@ describe('clampLevel', () => {
     expect(clampLevel('anthropic', 'claude-haiku-4-5', 'high')).toBe('disabled');
   });
 
+  // The hydrogen and 3.8 Flash defaults ('high') differ from the default of the first Gemini model
+  // ('medium' for Pro or Carbon), which is what an unknown id falls back to, so a model that is
+  // missing from the catalog cannot pass this by coincidence.
   it('falls back to the model default for garbage input', () => {
-    expect(clampLevel('gemini', 'gemini-3.6-flash', 'turbo')).toBe('medium');
-    expect(clampLevel('gemini', 'gemini-3.6-flash', undefined)).toBe('medium');
+    expect(findModel('gemini', 'gemini-4-hydrogen'), 'gemini-4-hydrogen missing').toBeDefined();
+    expect(clampLevel('gemini', 'gemini-4-hydrogen', 'turbo')).toBe('high');
+    expect(clampLevel('gemini', 'gemini-4-hydrogen', undefined)).toBe('high');
+    expect(clampLevel('gemini', 'gemini-3.8-flash', 'turbo')).toBe('high');
+    expect(clampLevel('gemini', 'gemini-3.1-pro-preview', 'turbo')).toBe('medium');
   });
 
   it('matches the server implementation on every level/model pair', () => {
@@ -162,7 +181,8 @@ describe('resolveSlot (server-side request validation)', () => {
 
   it('falls back to a premium model for the deep slot', () => {
     expect(serverSupport.resolveSlot('anthropic', undefined, 'premium').model).toBe('claude-sonnet-5-5');
-    expect(serverSupport.resolveSlot('gemini', undefined, 'premium').model).toBe('gemini-3.1-pro-preview');
+    // US-11.1 (N-4): Gemini 4 Carbon is the first premium Gemini model, so it is the deep fallback.
+    expect(serverSupport.resolveSlot('gemini', undefined, 'premium').model).toBe('gemini-4-carbon');
   });
 
   it('clamps a level the model cannot do', () => {
@@ -234,15 +254,10 @@ describe('US-4.1 catalog entries (FR-1, FR-2, FR-3)', () => {
     expect(findModel('gemini', 'gemini-3.1-pro-preview')).toEqual(expect.objectContaining({
       tier: 'premium', levels: ['low', 'medium', 'high'], defaultLevel: 'medium', maxOutputTokens: 65536,
     }));
-    for (const id of ['gemini-3.7-flash', 'gemini-3.6-flash']) {
-      expect(findModel('gemini', id)).toEqual(expect.objectContaining({
-        tier: 'fast', levels: ['minimal', 'low', 'medium', 'high'], defaultLevel: 'medium', maxOutputTokens: 65536,
-      }));
-    }
   });
 
-  it('FR-5: tier fallbacks land on the new models by catalog position; gemini deep default unchanged', () => {
-    expect(defaultModel('gemini')!.id).toBe('gemini-3.1-pro-preview');
+  it('FR-5: tier fallbacks land on the new models by catalog position; the gemini deep default is Carbon (US-11.1)', () => {
+    expect(defaultModel('gemini')!.id).toBe('gemini-4-carbon');
     expect(serverSupport.resolveSlot('anthropic', undefined, 'premium').model).toBe('claude-sonnet-5-5');
     expect(serverSupport.resolveSlot('gemini', undefined, 'fast').model).toBe('gemini-3.8-flash');
   });
@@ -301,8 +316,6 @@ describe('US-4.1 clamp outcomes (FR-4, FR-4a)', () => {
 
   it('FR-4: keeps the existing outcomes on the other catalog models', () => {
     for (const [name, clamp] of both) {
-      expect(clamp('gemini', 'gemini-3.6-flash', 'disabled'), name).toBe('minimal');
-      expect(clamp('gemini', 'gemini-3.7-flash', 'disabled'), name).toBe('minimal');
       expect(clamp('gemini', 'gemini-3.1-pro-preview', 'minimal'), name).toBe('low');
       expect(clamp('anthropic', 'claude-sonnet-5', 'minimal'), name).toBe('low');
       expect(clamp('anthropic', 'claude-haiku-4-5', 'xhigh'), name).toBe('disabled');
@@ -327,7 +340,10 @@ describe('US-4.1 clamp outcomes (FR-4, FR-4a)', () => {
 
   it('FR-4a: client and server agree on the new models for every probe level', () => {
     const probes = ['disabled', 'between_tools', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'turbo', undefined];
-    for (const [provider, id] of [['anthropic', 'claude-sonnet-5-5'], ['gemini', 'gemini-3.8-flash']] as const) {
+    for (const [provider, id] of [
+      ['anthropic', 'claude-sonnet-5-5'], ['gemini', 'gemini-3.8-flash'],
+      ['gemini', 'gemini-4-carbon'], ['gemini', 'gemini-4-hydrogen'],
+    ] as const) {
       expect(findModel(provider, id), `${id} missing`).toBeDefined();
       for (const probe of probes) {
         expect(clampLevel(provider, id, probe as never), `${id} / ${probe}`)
@@ -347,12 +363,14 @@ describe('US-4.1 v3 max rows and clamp parity invariant (FR-4, FR-4a)', () => {
     ['anthropic', 'claude-sonnet-5', 'high'],
     ['gemini', 'gemini-3.1-pro-preview', 'high'],
     ['gemini', 'gemini-3.8-flash', 'high'],
-    ['gemini', 'gemini-3.7-flash', 'high'],
-    ['gemini', 'gemini-3.6-flash', 'high'],
+    ['gemini', 'gemini-4-carbon', 'high'],
+    ['gemini', 'gemini-4-hydrogen', 'high'],
     ['anthropic', 'claude-haiku-4-5', 'disabled'],
   ];
 
   it.each(MAX_ROWS)('FR-4: %s %s clamps max to %s on client and server', (provider, id, expected) => {
+    // Existence first: 'high' is also what the unknown-id fallback (the first Gemini model) would answer.
+    expect(findModel(provider, id), `${id} missing from the catalog`).toBeDefined();
     expect(clampLevel(provider, id, 'max'), 'client').toBe(expected);
     expect(serverSupport.clampLevel(provider, id, 'max'), 'server').toBe(expected);
   });
@@ -402,7 +420,7 @@ describe('US-10.1 image entries (FR-2, FR-4, SD-8)', () => {
     const lastText = Math.max(...rawGemini().map((m, i) => (isImageEntry(m) ? -1 : i)));
     expect(ids.indexOf(FLASH)).toBeGreaterThan(lastText);
     expect(ids.indexOf(PRO)).toBeGreaterThan(lastText);
-    expect(ids[0]).toBe('gemini-3.1-pro-preview');
+    expect(ids[0]).toBe('gemini-4-carbon'); // US-11.1: Carbon is the first Gemini entry
   });
 
   it('FR-4 / SD-8: each image entry carries modalities [image], tier, inputTokenLimit and resolutions, and no thinking fields', () => {
@@ -434,8 +452,8 @@ describe('US-10.1 image entries (FR-2, FR-4, SD-8)', () => {
     expect(exported).not.toContain(PRO);
     expect(findModel('gemini', FLASH)).toBeUndefined();
     expect(findModel('gemini', PRO)).toBeUndefined();
-    expect(findProvider('gemini')!.models[0].id).toBe('gemini-3.1-pro-preview');
-    expect(defaultModel('gemini')!.id).toBe('gemini-3.1-pro-preview');
+    expect(findProvider('gemini')!.models[0].id).toBe('gemini-4-carbon');
+    expect(defaultModel('gemini')!.id).toBe('gemini-4-carbon');
   });
 
   it('FR-3: clampLevel for an image id never throws and answers from the text default model', () => {
@@ -451,9 +469,9 @@ describe('US-10.1 image entries (FR-2, FR-4, SD-8)', () => {
     expect(rawGemini().map(m => m.id), 'premise: the image entries exist in the raw JSON').toContain(PRO);
     expect(serverSupport.findModel('gemini', FLASH)).toBeUndefined();
     expect(serverSupport.findModel('gemini', PRO)).toBeUndefined();
-    expect(serverSupport.defaultModel('gemini')!.id).toBe('gemini-3.1-pro-preview');
+    expect(serverSupport.defaultModel('gemini')!.id).toBe('gemini-4-carbon');
     expect(serverSupport.resolveSlot('gemini', { model: FLASH, level: 'high' }).model).not.toBe(FLASH);
-    expect(serverSupport.resolveSlot('gemini', { model: PRO }, 'premium').model).toBe('gemini-3.1-pro-preview');
+    expect(serverSupport.resolveSlot('gemini', { model: PRO }, 'premium').model).toBe('gemini-4-carbon');
     expect(serverSupport.resolveSlot('gemini', undefined, 'fast').model).toBe('gemini-3.8-flash');
   });
 
@@ -525,4 +543,172 @@ describe('US-10.1 textModelsOf over synthetic lists (FR-3, FR-4, P-16)', () => {
     expect(is(imageX)).toBe(true);
     expect(is(textA)).toBe(false);
   });
+});
+
+/**
+ * US-11.1 (T6) - the Gemini text-model swap, written from FR-1..FR-5 and FR-10 of the Specification (and
+ * Story AC-1, AC-3, AC-4), not from the catalog the plan proposes. Exact-value assertions: the Specification
+ * fixes the vendor values (ids, levels, defaults, the 65536 ceiling, the `balanced` tier), so a typo in the
+ * JSON must fail here rather than ship.
+ *
+ * ANCHORING (task breakdown, plan D9 item 6 / impact R-14): clampLevel and defaultModel fall back to the
+ * first Gemini model for an unknown id, so every assertion about `gemini-4-carbon` or `gemini-4-hydrogen`
+ * first proves the id is in the catalog. Without that, the assertion could pass before the swap for the
+ * wrong reason.
+ */
+const GEMINI_TEXT_ORDER = ['gemini-4-carbon', 'gemini-3.1-pro-preview', 'gemini-4-hydrogen', 'gemini-3.8-flash'];
+const rawGeminiEntries = () =>
+  (rawCatalog.providers as Array<{ id: string; models: Array<Record<string, unknown>> }>).find(p => p.id === 'gemini')!.models;
+
+describe('US-11.1 Gemini text-model list (FR-1, AC-1)', () => {
+  it('FR-1: the text models of provider gemini are, in this order, Carbon, 3.1 Pro, Hydrogen, 3.8 Flash', () => {
+    expect(findProvider('gemini')!.models.map(m => m.id)).toEqual(GEMINI_TEXT_ORDER);
+  });
+
+  it('FR-1: the raw file lists the four text models first and the two image models last, in that order', () => {
+    expect(rawGeminiEntries().map(m => m.id)).toEqual([
+      ...GEMINI_TEXT_ORDER, 'gemini-3.1-flash-image', 'gemini-3-pro-image',
+    ]);
+  });
+
+  it('FR-1: the server reads the same list in the same order (one catalog file, NFR-6)', () => {
+    expect(serverSupport.findProvider('gemini')!.models.map((m: { id: string }) => m.id)).toEqual(GEMINI_TEXT_ORDER);
+  });
+
+  it('FR-1: gemini-3.7-flash and gemini-3.6-flash are absent from the catalog file, from the client view and from the server view', () => {
+    const file = JSON.stringify(rawCatalog);
+    expect(file).not.toContain('gemini-3.7-flash');
+    expect(file).not.toContain('gemini-3.6-flash');
+    expect(file).not.toContain('Gemini 3.7 Flash');
+    expect(file).not.toContain('Gemini 3.6 Flash');
+    for (const id of ['gemini-3.7-flash', 'gemini-3.6-flash']) {
+      expect(findModel('gemini', id), `client ${id}`).toBeUndefined();
+      expect(serverSupport.findModel('gemini', id), `server ${id}`).toBeUndefined();
+    }
+  });
+});
+
+describe('US-11.1 Gemini 4 catalog entries (FR-2, FR-3, AC-1)', () => {
+  it('FR-2: gemini-4-carbon is premium with exactly low/medium/high, default medium and a 65536 ceiling', () => {
+    expect(findModel('gemini', 'gemini-4-carbon')).toEqual({
+      id: 'gemini-4-carbon',
+      label: 'Gemini 4 Carbon',
+      tier: 'premium',
+      levels: ['low', 'medium', 'high'],
+      defaultLevel: 'medium',
+      maxOutputTokens: 65536,
+    });
+  });
+
+  it('FR-3: gemini-4-hydrogen is balanced with exactly low/medium/high, default high and a 65536 ceiling', () => {
+    expect(findModel('gemini', 'gemini-4-hydrogen')).toEqual({
+      id: 'gemini-4-hydrogen',
+      label: 'Gemini 4 Hydrogen',
+      tier: 'balanced',
+      levels: ['low', 'medium', 'high'],
+      defaultLevel: 'high',
+      maxOutputTokens: 65536,
+    });
+  });
+
+  it('FR-2 / FR-3: neither Gemini 4 model lists minimal or xhigh', () => {
+    for (const id of ['gemini-4-carbon', 'gemini-4-hydrogen']) {
+      const model = findModel('gemini', id);
+      expect(model, `${id} missing from the catalog`).toBeDefined();
+      expect(model!.levels, id).not.toContain('minimal');
+      expect(model!.levels, id).not.toContain('xhigh');
+    }
+  });
+
+  it('FR-2 / FR-3: the server resolves both Gemini 4 models with the same levels, default and ceiling', () => {
+    for (const [id, defaultLevel] of [['gemini-4-carbon', 'medium'], ['gemini-4-hydrogen', 'high']] as const) {
+      expect(serverSupport.findModel('gemini', id), `server ${id} missing`).toEqual(
+        expect.objectContaining({ id, levels: ['low', 'medium', 'high'], defaultLevel, maxOutputTokens: 65536 }),
+      );
+    }
+  });
+
+  it('FR-3: Gemini 4 Hydrogen is the only balanced entry in the whole catalog', () => {
+    const all = (rawCatalog.providers as Array<{ models: Array<{ id: string; tier: string }> }>).flatMap(p => p.models);
+    expect(all.filter(m => m.tier === 'balanced').map(m => m.id)).toEqual(['gemini-4-hydrogen']);
+  });
+});
+
+describe('US-11.1 entries that stay unchanged (FR-4)', () => {
+  // Characterization: these are the values the file has BEFORE this Story. They pass now and must keep
+  // passing; a changed field on any of them is a defect of the swap, not a reason to edit this table.
+  const anthropicEntries = [
+    { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', tier: 'premium', levels: ['between_tools', 'low', 'medium', 'high', 'xhigh'], defaultLevel: 'high', maxOutputTokens: 128000 },
+    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', tier: 'premium', levels: ['disabled', 'low', 'medium', 'high'], defaultLevel: 'medium', maxOutputTokens: 64000 },
+    { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', tier: 'fast', levels: ['disabled'], defaultLevel: 'disabled', maxOutputTokens: 16000 },
+  ];
+
+  it('FR-4: every anthropic entry is exactly as before, in the same order', () => {
+    expect(findProvider('anthropic')!.models).toEqual(anthropicEntries);
+  });
+
+  it('FR-4: gemini-3.1-pro-preview and gemini-3.8-flash keep exactly their values', () => {
+    expect(findModel('gemini', 'gemini-3.1-pro-preview')).toEqual({
+      id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', tier: 'premium',
+      levels: ['low', 'medium', 'high'], defaultLevel: 'medium', maxOutputTokens: 65536,
+    });
+    expect(findModel('gemini', 'gemini-3.8-flash')).toEqual({
+      id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', tier: 'fast',
+      levels: ['low', 'medium', 'high'], defaultLevel: 'high', maxOutputTokens: 65536,
+    });
+  });
+
+  it('FR-4: the two image models keep exactly their entries and stay out of both slots dropdown lists', () => {
+    const images = rawGeminiEntries().filter(m => isImageEntry(m as { modalities?: string[] }));
+    expect(images).toEqual([
+      { id: 'gemini-3.1-flash-image', label: 'Nano Banana 2, Flash', tier: 'fast', modalities: ['image'], inputTokenLimit: 131072, resolutions: ['1K', '2K'] },
+      { id: 'gemini-3-pro-image', label: 'Nano Banana Pro, Pro', tier: 'premium', modalities: ['image'], inputTokenLimit: 65536, resolutions: ['1K', '2K', '4K'] },
+    ]);
+    expect(findProvider('gemini')!.models.map(m => m.id)).not.toContain('gemini-3.1-flash-image');
+    expect(findProvider('gemini')!.models.map(m => m.id)).not.toContain('gemini-3-pro-image');
+  });
+});
+
+describe('US-11.1 balanced is a valid tier in the type (FR-5, AC-3)', () => {
+  // Why this is a source scan and not a compile-time assertion: vitest transpiles without type-checking, and the
+  // Angular unit-test builder type-checks every spec under src/ in one program, so a spec line that does not
+  // compile before the swap (a "balanced" value typed as the tier) would stop the whole component runner from
+  // building. The catalog JSON is also cast through `unknown`, so adding a "balanced" entry never fails tsc by
+  // itself. The type declarations are therefore read directly.
+  it('FR-5: the tier union is premium | balanced | fast in both places the type is declared, and nowhere premium | fast', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/prompt-core/model-catalog.ts'), 'utf8');
+    expect(source.match(/tier: 'premium' \| 'balanced' \| 'fast';/g) ?? []).toHaveLength(2);
+    expect(source).not.toMatch(/tier: 'premium' \| 'fast'/);
+  });
+
+  it('FR-5: no image model uses balanced', () => {
+    const image = rawGeminiEntries().filter(m => isImageEntry(m as { modalities?: string[] }));
+    expect(image).toHaveLength(2);
+    for (const m of image) expect(m.tier, String(m.id)).not.toBe('balanced');
+  });
+});
+
+describe('US-11.1 clampLevel maps minimal to low for the three no-minimal Gemini models (FR-10, AC-4)', () => {
+  type Clamp = (p: string, m: string, l: unknown) => string;
+  const both: Array<[string, Clamp]> = [
+    ['client', clampLevel as Clamp],
+    ['server', serverSupport.clampLevel as Clamp],
+  ];
+
+  it.each(['gemini-4-carbon', 'gemini-4-hydrogen', 'gemini-3.8-flash'])(
+    'FR-10: clampLevel(gemini, %s, minimal) is low in the browser module and in the server module', (id) => {
+      expect(findModel('gemini', id), `${id} missing from the catalog`).toBeDefined();
+      expect(serverSupport.findModel('gemini', id), `${id} missing from the server view`).toBeDefined();
+      for (const [name, clamp] of both) expect(clamp('gemini', id, 'minimal'), `${name} ${id}`).toBe('low');
+    });
+
+  it.each(['gemini-4-carbon', 'gemini-4-hydrogen'])(
+    'FR-10: %s answers every level it lists unchanged and snaps xhigh and max down to high, on both modules', (id) => {
+      expect(findModel('gemini', id), `${id} missing from the catalog`).toBeDefined();
+      for (const [name, clamp] of both) {
+        for (const level of ['low', 'medium', 'high']) expect(clamp('gemini', id, level), `${name} ${id} ${level}`).toBe(level);
+        expect(clamp('gemini', id, 'xhigh'), `${name} ${id} xhigh`).toBe('high');
+        expect(clamp('gemini', id, 'max'), `${name} ${id} max`).toBe('high');
+      }
+    });
 });

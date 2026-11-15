@@ -129,7 +129,8 @@ describe('request validation', () => {
     expect(fast.slot!.level).toBe('high');
 
     const deep = resolve({ provider: 'gemini', deep: { model: 'gemini-99-ultra', level: 'high' } }, 'deep');
-    expect(deep.slot!.model).toBe('gemini-3.1-pro-preview');
+    // US-11.1 (N-4): Gemini 4 Carbon is the first premium Gemini model, so an unknown Deep model lands on it.
+    expect(deep.slot!.model).toBe('gemini-4-carbon');
   });
 
   it('clamps a level the requested model cannot accept', () => {
