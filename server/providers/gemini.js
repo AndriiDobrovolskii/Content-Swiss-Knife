@@ -24,19 +24,21 @@ export class GeminiProvider {
       apiKey,
       httpOptions: {
         // ⚠ DO NOT ADD `retryOptions` HERE. It looks like the way to disable the SDK's retry loop;
-        // it is the way to ENABLE it. `apiCall` (dist/node/index.mjs:13305) reads:
+        // it is the way to ENABLE it. `apiCall` (dist/node/index.mjs:14107 in @google/genai 2.32.0) reads:
         //
-        //     if (!httpOptions || !httpOptions.retryOptions) return fetch(url, requestInit);
+        //     if (!retryOptions) { return runFetch(); }
         //
         // so the loop is dormant unless the option exists — the typings' "attempts default to 5"
-        // is unreachable, and there was never a 15-attempt multiplier with withRetry's 3. Setting
-        // `{ attempts: 1 }` opted in, and inside the wrapper a retryable status becomes
-        // `throw new Error('Retryable HTTP Error: ' + statusText)` — a bare Error stripped of
-        // `status`, thrown before `throwErrorIfNotOK` can build the real ApiError. withRetry's
-        // `status === 504` branch then never fires. That silently un-retried a Gateway Timeout on
-        // 2026-08-02 and cost a live generation its specs grounding. Omitting the option keeps the
-        // loop off (architecture rule #5) AND preserves the status for the classifier and the
-        // error body the browser sees.
+        // is unreachable, and there is no 15-attempt multiplier with withRetry's 3. Setting
+        // `{ attempts: 1 }` opts in, and the wrapper then runs up to its own attempts under
+        // withRetry (architecture rule #5 wants exactly one retry loop, ours). On 1.52.0 the wrapper
+        // also turned a retryable status into `throw new Error('Retryable HTTP Error: ' + statusText)`
+        // — a bare Error stripped of `status`, thrown before `throwErrorIfNotOK` could build the real
+        // ApiError, so withRetry's `status === 504` branch never fired (a Gateway Timeout was
+        // silently un-retried on 2026-08-02 and cost a live generation its specs grounding). 2.32.0
+        // no longer has that message and keeps `status` even with `retryOptions` set, but the advice
+        // stands. Omitting the option keeps the loop off AND preserves the status for the classifier
+        // and the error body the browser sees.
         //
         // Client-level floor. Per-call config overrides it with the mode-appropriate value.
         timeout: DEEP_TIMEOUT_MS,
@@ -167,7 +169,7 @@ export class GeminiProvider {
    * Files API upload of already-validated image bytes; resolves the SDK File object unchanged.
    *
    * This method must NOT pass `config.httpOptions` (nor rely on `config.abortSignal`) to `files.upload`.
-   * In @google/genai 1.52.0 `ApiClient.uploadFile` -> `fetchUploadUrl` REPLACES the resumable-upload start
+   * In @google/genai 2.32.0 (unchanged since 1.52.0) `ApiClient.uploadFile` -> `fetchUploadUrl` REPLACES the resumable-upload start
    * headers with `config.httpOptions` whenever it is truthy (even `{}`), and Google then answers 404 with an
    * empty message; the upload path also never reads `config.abortSignal`. So the Cancel (FR-21) and the
    * UPSTREAM_TIMEOUT_MS deadline are enforced HERE, as a race around the SDK call:
