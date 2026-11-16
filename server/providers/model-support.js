@@ -99,6 +99,11 @@ const RETIRED_GEMINI_REMAP = new Map([
  *  console.warn per call). The requested level is then clamped into the replacement's levels;
  *  with no requested level the replacement's own default applies.
  *
+ *  Fallback consequence (US-11.1, N-4): an unknown id, or a retired id that is not remapped,
+ *  falls back to the FIRST catalog model of `preferTier`. For Gemini on the premium tier that
+ *  is now gemini-4-carbon (it was gemini-3.1-pro-preview before Carbon took the first premium
+ *  slot), so Carbon is the Deep-slot fallback. The Fast tier still lands on gemini-3.8-flash.
+ *
  *  The tier matters: without it a request carrying no settings would route the Fast slot to
  *  the catalog's first entry (a premium model), quietly running translations on Sonnet. */
 export function resolveSlot(provider, slot, preferTier = 'premium') {
