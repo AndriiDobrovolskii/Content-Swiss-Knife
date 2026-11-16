@@ -26,9 +26,9 @@ describe('image entries in model-catalog.json (FR-2, SD-8)', () => {
 
   it('FR-2: both are appended AFTER every existing Gemini entry, so neither is models[0]', () => {
     const ids = gemini.models.map((m: any) => m.id);
-    expect(ids[0]).toBe('gemini-3.1-pro-preview');
-    expect(ids.indexOf(FLASH)).toBeGreaterThan(ids.indexOf('gemini-3.6-flash'));
-    expect(ids.indexOf(PRO)).toBeGreaterThan(ids.indexOf('gemini-3.6-flash'));
+    expect(ids[0]).toBe('gemini-4-carbon'); // US-11.1: Carbon is the first Gemini entry
+    expect(ids.indexOf(FLASH)).toBeGreaterThan(ids.indexOf('gemini-3.8-flash'));
+    expect(ids.indexOf(PRO)).toBeGreaterThan(ids.indexOf('gemini-3.8-flash'));
     // Every non-image Gemini entry precedes every image entry.
     const lastText = Math.max(...gemini.models.map((m: any, i: number) => (m.modalities?.includes('image') ? -1 : i)));
     const firstImage = Math.min(...gemini.models.map((m: any, i: number) => (m.modalities?.includes('image') ? i : 999)));
@@ -89,9 +89,9 @@ describe('image entries on the server view (FR-3, plan DD-2)', () => {
     expect(support.findModel('gemini', PRO)).toBeUndefined();
   });
 
-  it('FR-3: defaultModel(gemini) is unchanged by the appended entries', () => {
+  it('FR-3: defaultModel(gemini) is the first text entry (Gemini 4 Carbon since US-11.1), unaffected by the appended image entries', () => {
     expect(rawById(FLASH)).toBeDefined();
-    expect((support.defaultModel('gemini') as any).id).toBe('gemini-3.1-pro-preview');
+    expect((support.defaultModel('gemini') as any).id).toBe('gemini-4-carbon');
   });
 
   it('FR-3: resolveSlot never selects an image entry, by id or by tier fallback (both tiers)', () => {
@@ -122,7 +122,7 @@ describe('image entries on the server view (FR-3, plan DD-2)', () => {
   it('FR-3: resolveImageModel rejects a text id with 400 INVALID_REQUEST even when image entries exist', () => {
     expect(mod.resolveImageModel(FLASH).id).toBe(FLASH); // premise
     let err: any = null;
-    try { mod.resolveImageModel('gemini-3.6-flash'); } catch (e) { err = e; }
+    try { mod.resolveImageModel('gemini-3.8-flash'); } catch (e) { err = e; }
     expect(err).not.toBeNull();
     expect(err.status).toBe(400);
     expect(err.code).toBe('INVALID_REQUEST');

@@ -34,33 +34,37 @@ const DEFAULT_PRICES = {
   // NOTE: Pro's >200k-token tier ($4.00 in / $18.00 out) is NOT modeled — prompts that large
   // will under-report here. Split the entry if that becomes a real usage pattern.
   'gemini-3.1-pro-preview': { in: 2.00, out: 12.00, cw: 0, cr: 0.20 },
-  'gemini-3.6-flash':       { in: 1.50, out:  7.50, cw: 0, cr: 0.15 },
+  // Gemini 4 Hydrogen — flat rate, no promo window. An exact entry of its own, so the id can never
+  // reach the substring loop below or FALLBACK_PRICE (which would overstate it 2x on input).
+  'gemini-4-hydrogen':      { in: 1.50, out:  7.50, cw: 0, cr: 0.075 },
 };
 
 const FALLBACK_PRICE = { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 };
 
-// Gemini 3.7 Flash — introductory rate through 2026-12-31, standard rate after.
-// Evaluated per lookup (not at module load) so a long-running server picks up the
-// switch without a restart.
-function gemini37FlashPrice(now) {
-  const standard = { in: 1.50, out: 7.50, cw: 0, cr: 0.15 };
-  const promo = { in: 0.75, out: 3.75, cw: 0, cr: 0.075 };
-  return now < new Date('2027-01-01T00:00:00Z') ? promo : standard;
-}
-
-// Gemini 3.8 Flash — same promo window and rates as 3.7 Flash. A helper of its own, so the
-// model can never fall through to FALLBACK_PRICE (which would overstate it 4x) or to another
-// Gemini entry in the substring loop.
+// Gemini 3.8 Flash — introductory rate through 2026-12-31, standard rate after. Evaluated per
+// lookup (not at module load) so a long-running server picks up the switch without a restart.
+// A helper of its own, so the model can never fall through to FALLBACK_PRICE (which would
+// overstate it 4x) or to another Gemini entry in the substring loop.
 function gemini38FlashPrice(now) {
   const standard = { in: 1.50, out: 7.50, cw: 0, cr: 0.15 };
   const promo = { in: 0.75, out: 3.75, cw: 0, cr: 0.075 };
   return now < new Date('2027-01-01T00:00:00Z') ? promo : standard;
 }
 
+// Gemini 4 Carbon — introductory rate before 2026-12-01T00:00:00Z, standard rate from that instant.
+// The cutover is a UTC instant (the boundary instant itself returns the standard rate). Evaluated per
+// lookup, like the helper above. Matched by the EXACT id only: a dated or suffixed Carbon id misses
+// this branch and is not priced here (accepted; not coded around).
+function gemini4CarbonPrice(now) {
+  const intro = { in: 2.00, out: 10.00, cw: 0, cr: 0.10 };
+  const standard = { in: 4.00, out: 20.00, cw: 0, cr: 0.20 };
+  return now < new Date('2026-12-01T00:00:00Z') ? intro : standard;
+}
+
 // `now` is an injectable clock for tests; production callers omit it.
 function getPrices(model, now = new Date()) {
-  if (model === 'gemini-3.7-flash') return gemini37FlashPrice(now);
   if (model === 'gemini-3.8-flash') return gemini38FlashPrice(now);
+  if (model === 'gemini-4-carbon') return gemini4CarbonPrice(now);
   if (DEFAULT_PRICES[model]) return DEFAULT_PRICES[model];
   for (const key of Object.keys(DEFAULT_PRICES)) {
     if (model.includes(key) || key.includes(model)) return DEFAULT_PRICES[key];

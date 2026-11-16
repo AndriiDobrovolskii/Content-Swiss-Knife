@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { formatCallStart, formatCallDone, formatCallError } from '../server/utils/call-log.js';
 
 const DEEP = { model: 'claude-sonnet-5', level: 'medium', maxOutputTokens: 64000 };
-const FAST = { model: 'gemini-3.6-flash', level: 'minimal', maxOutputTokens: 65536 };
+const FAST = { model: 'gemini-3.8-flash', level: 'low', maxOutputTokens: 65536 };
 
 describe('formatCallStart', () => {
   it('names the slot, provider, model and thinking level', () => {
@@ -29,13 +29,13 @@ describe('formatCallStart', () => {
     expect(formatCallStart({
       route: 'generate', taskLabel: 'Task C', lang: 'en-US', mode: 'json',
       slotName: 'fast', provider: 'gemini', slot: FAST,
-    })).toBe('[LLM] Task C · en-US · json → fast: gemini/gemini-3.6-flash (minimal)');
+    })).toBe('[LLM] Task C · en-US · json → fast: gemini/gemini-3.8-flash (low)');
   });
 
   // Vision and PDF carry neither a task label nor a language. They must not print `undefined`.
   it('falls back to the route name and drops absent fields', () => {
     expect(formatCallStart({ route: 'vision', slotName: 'fast', provider: 'gemini', slot: FAST }))
-      .toBe('[LLM] vision → fast: gemini/gemini-3.6-flash (minimal)');
+      .toBe('[LLM] vision → fast: gemini/gemini-3.8-flash (low)');
   });
 
   // OpenAI has no catalog entry, so resolveRequest returns slot: null and the provider keeps its
@@ -110,6 +110,6 @@ describe('formatCallError', () => {
 
   it('survives an error with no detail', () => {
     expect(formatCallError({ route: 'pdf', slotName: 'fast', provider: 'gemini', slot: FAST, ms: 100 }))
-      .toBe('[LLM] pdf → fast: gemini/gemini-3.6-flash (minimal) ✗ FAILED in 0.1s — unknown error');
+      .toBe('[LLM] pdf → fast: gemini/gemini-3.8-flash (low) ✗ FAILED in 0.1s — unknown error');
   });
 });

@@ -46,6 +46,19 @@ const LABELS = {
   },
 } as const;
 
+/** Badge text and colour per tier. Class strings are complete literals so Tailwind's content scan finds them. */
+const TIER_BADGE: Record<ModelSpec['tier'], string> = {
+  premium: '$$$',
+  balanced: '$$ ⚡',
+  fast: '$ ⚡',
+};
+
+const TIER_BADGE_CLASS: Record<ModelSpec['tier'], string> = {
+  premium: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+  balanced: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300',
+  fast: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+};
+
 @Component({
   selector: 'app-model-settings',
   standalone: true,
@@ -64,22 +77,20 @@ export class ModelSettingsComponent {
     return this.labels().levels[level] ?? level;
   }
 
-  /** Advisory cost/speed hint. Does not restrict which slot a model may go in. */
+  /** Advisory cost/speed hint. Does not restrict which slot a model may go in. An unknown spec keeps the `fast` look. */
   tierBadge(spec: ModelSpec | undefined): string {
-    return spec?.tier === 'premium' ? '$$$' : '$ ⚡';
+    return TIER_BADGE[spec?.tier ?? 'fast'];
   }
 
   tierBadgeClass(spec: ModelSpec | undefined): string {
-    return spec?.tier === 'premium'
-      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-      : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    return TIER_BADGE_CLASS[spec?.tier ?? 'fast'];
   }
 
   setDeepProvider(id: ProviderId) { this.settings.setDeepProvider(id); }
   setFastProvider(id: ProviderId) { this.settings.setFastProvider(id); }
 
-  /** The slider works on indices into the model's own `levels`, so it auto-sizes: 4 steps for
-   *  Gemini 3.6 Flash, 3 for Gemini 3.1 Pro (which has no Minimal), 1 for Haiku. */
+  /** The slider works on indices into the model's own `levels`, so it auto-sizes: three steps (Low to High)
+   *  for each Gemini model, one step for a model that runs without thinking. */
   deepIndex = computed(() => this.indexOf(this.settings.deepSpec(), this.settings.deepLevel()));
   fastIndex = computed(() => this.indexOf(this.settings.fastSpec(), this.settings.fastLevel()));
 

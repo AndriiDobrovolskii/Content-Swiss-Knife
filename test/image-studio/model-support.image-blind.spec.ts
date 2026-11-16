@@ -137,26 +137,26 @@ describe('resolveImageModel (rejection half; the accepting half needs the real e
 });
 
 describe('existing text resolution on the real catalogue (baseline-guard, NFR-6)', () => {
-  it('baseline-guard: defaultModel(gemini) is still the first Gemini entry and is a text model with levels', () => {
+  it('baseline-guard: defaultModel(gemini) is the first Gemini entry (Gemini 4 Carbon since US-11.1) and is a text model with levels', () => {
     const d = support.defaultModel('gemini') as any;
-    expect(d.id).toBe('gemini-3.1-pro-preview');
+    expect(d.id).toBe('gemini-4-carbon');
     expect(d.levels.length).toBeGreaterThan(0);
   });
 
   it('baseline-guard: findModel resolves a text id and returns undefined for an unknown id', () => {
-    expect((support.findModel('gemini', 'gemini-3.6-flash') as any).id).toBe('gemini-3.6-flash');
+    expect((support.findModel('gemini', 'gemini-3.8-flash') as any).id).toBe('gemini-3.8-flash');
     expect(support.findModel('gemini', 'nope')).toBeUndefined();
   });
 
   it('baseline-guard: resolveSlot falls back by tier for an unknown model (premium and fast)', () => {
-    expect(support.resolveSlot('gemini', { model: 'nope' }, 'premium').model).toBe('gemini-3.1-pro-preview');
+    expect(support.resolveSlot('gemini', { model: 'nope' }, 'premium').model).toBe('gemini-4-carbon');
     const fast = support.resolveSlot('gemini', { model: 'nope' }, 'fast');
-    expect(['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash']).toContain(fast.model);
+    expect(fast.model).toBe('gemini-3.8-flash'); // the only fast-tier Gemini text model once 3.7 and 3.6 Flash retire (US-11.1)
     expect((support.findModel('gemini', fast.model) as any).tier).toBe('fast');
   });
 
   it('baseline-guard: clampLevel snaps onto a level the model accepts and never throws for an unknown model id', () => {
-    expect(support.clampLevel('gemini', 'gemini-3.6-flash', 'minimal')).toBe('minimal');
+    expect(support.clampLevel('gemini', 'gemini-3.8-flash', 'minimal')).toBe('low'); // US-11.1: no Gemini model accepts minimal any more
     expect((support.findModel('gemini', 'gemini-3.1-pro-preview') as any).levels).toContain(
       support.clampLevel('gemini', 'gemini-3.1-pro-preview', 'minimal'),
     );
@@ -166,7 +166,7 @@ describe('existing text resolution on the real catalogue (baseline-guard, NFR-6)
   it('FR-3: a text request that names an image-model id takes the existing fallback (the id is "not found" for text paths)', () => {
     // The real image ids are added in T2; resolveSlot must already treat any unknown id, image or not, as a fallback.
     const slot = support.resolveSlot('gemini', { model: 'gemini-3.1-flash-image' }, 'premium');
-    expect(slot.model).toBe('gemini-3.1-pro-preview');
+    expect(slot.model).toBe('gemini-4-carbon');
     expect(slot.maxOutputTokens).toBeGreaterThan(0);
   });
 });

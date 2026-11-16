@@ -6,12 +6,20 @@ import {
 
 const STORAGE_KEY = 'seo_gen_model_settings';
 
-/** Models removed from the catalog, mapped to the model a stored selection of them moves onto.
- *  Applied once in restore(). Deliberately the only migration: other stored choices (Sonnet 5,
- *  Gemini 3.7 / 3.6 Flash) are still in the catalog and stay exactly as the user left them. */
-const RETIRED_MODELS: Record<string, string> = {
-  'claude-sonnet-4-6': 'claude-sonnet-5-5',
-};
+/** What a stored selection of a retired model migrates onto. A `provider` makes the entry apply
+ *  only to a slot whose effective provider matches: a Gemini model id stored next to another
+ *  provider is just an unknown id for that provider and is not migrated. */
+interface RetiredModelTarget { model: string; provider?: ProviderId; }
+
+/** Retired models, mapped to the model a stored selection of them migrates onto. Applied once in
+ *  restore(). A Map, not an object literal: the stored id is untrusted browser storage, and a
+ *  plain-object lookup would answer for keys such as `constructor`. A model that is in the
+ *  catalog is never listed here: its stored selection is kept as it is. */
+const RETIRED_MODELS: ReadonlyMap<string, RetiredModelTarget> = new Map<string, RetiredModelTarget>([
+  ['claude-sonnet-4-6', { model: 'claude-sonnet-5-5' }],
+  ['gemini-3.7-flash', { model: 'gemini-3.8-flash', provider: 'gemini' }],
+  ['gemini-3.6-flash', { model: 'gemini-3.8-flash', provider: 'gemini' }],
+]);
 
 /** One slot's resolved configuration, as sent to the server. Each slot names its own
  *  provider: Deep on Claude and Fast on Gemini in the same run is a supported setup. */
@@ -44,14 +52,20 @@ interface LegacySettings {
  * none route identically. This intentionally differs from the catalog `defaultLevel` (`high`),
  * which is what a provider switch in the settings UI lands on.
  *
- * A browser with no stored settings lands here directly. A stored Sonnet 4.6 choice (removed
- * from the catalog) is moved onto Sonnet 5.5 by the one-time migration in restore() below;
- * every other stored choice is left alone.
+ * A browser with no stored settings lands here directly. A stored selection of a retired model
+ * (Sonnet 4.6, and the two retired Gemini Flash models) is moved onto its replacement by the
+ * one-time migration in restore() below; every other stored choice is left alone.
  */
 const DEFAULTS: ModelSettings = {
   deep: { provider: 'anthropic', model: 'claude-sonnet-5-5', level: 'high' },
   fast: { provider: 'gemini', model: 'gemini-3.8-flash', level: 'low' },
 };
+
+/** Models whose thinking level is set to their catalog `defaultLevel` when picked in a model
+ *  dropdown (medium for Carbon, high for Hydrogen). Every other model keeps the carry-over with a
+ *  clamp. A named id list rather than a ModelSpec field: the rule is an operator ruling about
+ *  these two models, and this constant is its only coupling, so it deletes cleanly. */
+const DEFAULT_LEVEL_ON_SELECT_MODELS: ReadonlySet<string> = new Set(['gemini-4-carbon', 'gemini-4-hydrogen']);
 
 /**
  * Which provider/model/thinking level each of the two slots runs.
@@ -114,8 +128,7 @@ export class ModelSettingsService {
     const spec = findModel(this.deepProvider(), modelId);
     if (!spec) return;
     this.deepModel.set(spec.id);
-    // Carry the current level across if the new model accepts it, else snap to the nearest.
-    this.deepLevel.set(clampLevel(this.deepProvider(), spec.id, this.deepLevel()));
+    this.deepLevel.set(this.levelOnModelSelect(this.deepProvider(), spec, this.deepLevel()));
     this.persist();
   }
 
@@ -123,7 +136,7 @@ export class ModelSettingsService {
     const spec = findModel(this.fastProvider(), modelId);
     if (!spec) return;
     this.fastModel.set(spec.id);
-    this.fastLevel.set(clampLevel(this.fastProvider(), spec.id, this.fastLevel()));
+    this.fastLevel.set(this.levelOnModelSelect(this.fastProvider(), spec, this.fastLevel()));
     this.persist();
   }
 
@@ -159,6 +172,14 @@ export class ModelSettingsService {
     return models.find(m => m.tier === preferTier) ?? models[0];
   }
 
+  /** The level a slot lands on after its model is picked in the dropdown. Carbon and Hydrogen
+   *  take their own default level whatever the slot held before; every other model carries the
+   *  current level across if it accepts it, else snaps to the nearest one it does. */
+  private levelOnModelSelect(provider: ProviderId, spec: ModelSpec, current: ThinkingLevel): ThinkingLevel {
+    if (DEFAULT_LEVEL_ON_SELECT_MODELS.has(spec.id)) return spec.defaultLevel;
+    return clampLevel(provider, spec.id, current);
+  }
+
   private apply(settings: ModelSettings) {
     this.deepProvider.set(settings.deep.provider);
     this.deepModel.set(settings.deep.model);
@@ -177,11 +198,14 @@ export class ModelSettingsService {
    * A payload written before providers went per-slot carries one top-level `provider`; it is
    * read as the provider of both slots, which is exactly what that user had configured.
    *
-   * One-time migration: a stored slot (either one) on a model in RETIRED_MODELS
-   * (`claude-sonnet-4-6`) is moved onto its replacement (`claude-sonnet-5-5`) before
-   * validation, then re-persisted so this only fires once per browser. The stored level is then
-   * clamped into the replacement's levels like any other level (`disabled` becomes
-   * `between_tools`, `minimal` becomes `low`, `medium` is kept).
+   * One-time migration: a stored slot (either one) on a model in RETIRED_MODELS is moved onto
+   * its replacement before validation, then re-persisted so this only fires once per browser.
+   * An entry with a provider constraint applies only when the slot's effective provider (its own,
+   * else the legacy top-level one, else the slot default) matches, so a Gemini id stored next to
+   * another provider is just an unknown id and is not migrated. The stored level is then clamped
+   * into the replacement's levels like any other level (for Sonnet 5.5 `disabled` becomes
+   * `between_tools`; for Gemini 3.8 Flash `minimal` becomes `low`; `medium` is kept). A migrated
+   * slot with no stored level resolves to the replacement's default level.
    *
    * A stored `max` (no catalog model lists it) restores as `xhigh` on Sonnet 5.5 through
    * validateSlot -> clampLevel. Level-only corrections like this are applied in memory and
@@ -206,19 +230,33 @@ export class ModelSettingsService {
     }
 
     let migrated = false;
-    const migrate = (slot: Partial<SlotSettings> | undefined) => {
-      const next = slot?.model ? RETIRED_MODELS[slot.model] : undefined;
-      if (!next) return slot;
+    const migrate = (slot: Partial<SlotSettings> | undefined, fallback: SlotSettings) => {
+      const target = slot?.model ? RETIRED_MODELS.get(slot.model) : undefined;
+      if (!target) return slot;
+      // The same effective provider validateSlot will use, so the gate and the validation agree.
+      if (target.provider && target.provider !== this.effectiveProvider(slot, stored.provider, fallback)) return slot;
       migrated = true;
-      return { ...slot, model: next };
+      return { ...slot, model: target.model };
     };
 
     this.apply({
-      deep: this.validateSlot(migrate(stored.deep), stored.provider, DEFAULTS.deep, 'premium'),
-      fast: this.validateSlot(migrate(stored.fast), stored.provider, DEFAULTS.fast, 'fast'),
+      deep: this.validateSlot(migrate(stored.deep, DEFAULTS.deep), stored.provider, DEFAULTS.deep, 'premium'),
+      fast: this.validateSlot(migrate(stored.fast, DEFAULTS.fast), stored.provider, DEFAULTS.fast, 'fast'),
     });
 
     if (migrated) this.persist();
+  }
+
+  /** The provider a stored slot runs on: its own, else the legacy top-level one, else the slot's
+   *  default. Shared by the retired-model gate and validateSlot so the two cannot disagree. */
+  private effectiveProvider(
+    slot: Partial<SlotSettings> | undefined,
+    legacyProvider: string | undefined,
+    fallback: SlotSettings,
+  ): ProviderId {
+    return findProvider(slot?.provider as string)?.id
+      ?? findProvider(legacyProvider as string)?.id
+      ?? fallback.provider;
   }
 
   private validateSlot(
@@ -227,9 +265,7 @@ export class ModelSettingsService {
     fallback: SlotSettings,
     preferTier: ModelSpec['tier'],
   ): SlotSettings {
-    const provider = findProvider(slot?.provider as string)?.id
-      ?? findProvider(legacyProvider as string)?.id
-      ?? fallback.provider;
+    const provider = this.effectiveProvider(slot, legacyProvider, fallback);
     const spec = findModel(provider, slot?.model ?? '') ?? this.pick(provider, preferTier);
     return {
       provider,
