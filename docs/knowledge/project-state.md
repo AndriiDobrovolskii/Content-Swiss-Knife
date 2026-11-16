@@ -224,3 +224,19 @@ Capabilities delivered through the story workflow. Updated by so-orchestrator at
 - Open items: the AGENTS.md section 6 item 9 live smoke of the changed route (T40) was never run or waived; a 4K Pro request with 4 images returns about 70 MB with no
   in-flight cap, and a cancelled batch may be paid but writes no usage row; UI copy still owed for the disabled-Upscale reason, preset refusals, the storage failure and the
   spend placeholder; owner wording on "counted request", `X-62` and the partial-result retry; the AC-10a hover reveal is a manual check; `app.component.html:955` still has `bg-amber-600`.
+
+## US-11.1 — Gemini 4 Carbon and Hydrogen replace Gemini 3.6 / 3.7 Flash in the model settings (archived 2026-11-16T06:20:35Z)
+- The Gemini text models are now Gemini 4 Carbon (`gemini-4-carbon`, premium, medium default), Gemini 3.1 Pro, Gemini 4 Hydrogen (`gemini-4-hydrogen`, new `balanced` tier, high
+  default) and Gemini 3.8 Flash, in that order; levels are low / medium / high only, no text model offers `minimal`. `ModelSpec` / `ImageModelSpec` tier is
+  `premium | balanced | fast`; the panel badge reads `$$$`, `$$ ⚡`, `$ ⚡`. Selecting Carbon or Hydrogen in a dropdown sets its default level; other models carry the level across with
+  a clamp. Defaults are unchanged (Deep claude-sonnet-5-5 at high, Fast gemini-3.8-flash at low). The unknown-id fallback on the premium tier is now Carbon, not 3.1 Pro.
+- A stored `gemini-3.7-flash` / `gemini-3.6-flash` migrates to `gemini-3.8-flash` (provider gemini only, `minimal` becomes `low`, no level resolves to high) in the browser restore
+  and in the server `resolveSlot` (with a `console.warn`). The retired-id table exists twice, in `src/services/model-settings.service.ts` and `server/providers/model-support.js`, both
+  as `Map`s; add a future retired id to both. The catalog JSON never contains a retired id.
+- Pricing: `server/usage/pricing.js` prices Hydrogen flat and Carbon by the instant of each lookup (introductory rate before 2026-12-01T00:00:00Z, standard from then).
+- `@google/genai` is `^2.32.0` (installed 2.32.0). `GeminiProvider#readText` throws on `finishReason === 'CONTINUATION'` for all three entry points (`generate` keeps 65536;
+  `analyzeImage` 8000 and `extractFromPdf` 8192 are unchanged). `test/active-docs-models.spec.ts` keeps the active docs and sources free of the retired names.
+- Delivered by PR #159, merge commit `34fb14a`. Summary: `docs/knowledge/US-11.1-delivery-summary.md`.
+- Open items: the AGENTS.md section 6 item 9 live smoke was waived and never run (real Carbon call, one Image Studio upload on SDK 2.32.0, the real `CONTINUATION` wire value, SDK
+  2.x undici dispatcher); Story AC-13 (65536 on Gemini 4 calls) is broader than the approved Specification v2 FR-22 (`generate()` only); PR #159 text drifted (10 commits / 25 files vs 11 / 45);
+  possible pre-existing double billing of cached tokens; the Carbon introductory price ends 2026-12-01; `app.component.html:955` still has `bg-amber-600`.
